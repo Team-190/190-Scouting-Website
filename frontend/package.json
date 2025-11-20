@@ -17,6 +17,7 @@
     "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.80.0",
     "ag-grid-community": "^34.3.1",
-    "echarts": "^6.0.0"
+    "echarts": "^6.0.0",
+    "svelte-routing": "^2.13.0"
   }
 }
