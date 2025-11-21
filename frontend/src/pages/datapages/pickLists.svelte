@@ -1,5 +1,11 @@
 <script>
+    import baseX from 'base-x';
     import Team from '../../components/Team.svelte';
+
+    const BASE85_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~';
+    const bs85 = baseX(BASE85_CHARS);
+    const textEncoder = new TextEncoder();
+    const textDecoder = new TextDecoder();
 
     let events = $state([]);
     let selectedEvent = $state('');
@@ -10,18 +16,79 @@
     let draggedItem = $state(null);
     let newPickListName = $state('');
     let pickedTeams = $state({});
+    let importData = $state('');
+    let editingPicklistId = $state(null);
+    let editingPicklistName = $state('');
+
+    async function exportPicklists() {
+        const dataToShare = {
+            picklists: picklists,
+            pickedTeams: pickedTeams
+        };
+        const dataString = JSON.stringify(dataToShare);
+        const buffer = textEncoder.encode(dataString);
+        const encodedData = bs85.encode(buffer);
+        try {
+            await navigator.clipboard.writeText(encodedData);
+            alert('Picklists copied to clipboard!');
+        } catch (err) {
+            console.error('Failed to copy text: ', err);
+            alert('Failed to copy picklists.');
+        }
+    }
+
+    function importPicklists() {
+        if (!importData) {
+            alert('Please paste the data to import.');
+            return;
+        }
+        try {
+            const buffer = bs85.decode(importData);
+            const decodedData = textDecoder.decode(buffer);
+            const parsedData = JSON.parse(decodedData);
+            if (parsedData.picklists && parsedData.pickedTeams) {
+                picklists = parsedData.picklists;
+                pickedTeams = parsedData.pickedTeams;
+                importData = '';
+                alert('Picklists imported successfully!');
+            } else {
+                alert('Invalid import data format.');
+            }
+        } catch (error) {
+            alert('Failed to parse import data. Please check the format.');
+            console.error('Import error:', error);
+        }
+    }
 
     function toggleTeamPicked(teamNumber) {
         pickedTeams[teamNumber] = !pickedTeams[teamNumber];
     }
 
     function createPickList() {
-        if (newPickListName && !picklists[newPickListName]) {
-            picklists[newPickListName] = { name: newPickListName, teams: [] };
+        if (newPickListName && !Object.values(picklists).some(p => p.name === newPickListName)) {
+            const newId = `picklist_${Date.now()}`;
+            picklists[newId] = { name: newPickListName, teams: [] };
             newPickListName = '';
-        } else if (picklists[newPickListName]) {
+        } else if (Object.values(picklists).some(p => p.name === newPickListName)) {
             alert('Picklist with that name already exists.');
         }
+    }
+
+    function startEditing(id, currentName) {
+        editingPicklistId = id;
+        editingPicklistName = currentName;
+    }
+
+    function finishEditing(id) {
+        if (editingPicklistId === null) return;
+
+        if (editingPicklistName && !Object.values(picklists).some(p => p.name === editingPicklistName && id !== p.id)) {
+            picklists[id].name = editingPicklistName;
+        } else {
+            alert('Picklist name cannot be empty or already exist.');
+        }
+        editingPicklistId = null;
+        editingPicklistName = '';
     }
 
     function deletePickList(key) {
@@ -122,6 +189,89 @@
         }
     }
 
+    async function createOprPicklist() {
+        if (!selectedEvent) {
+            alert('Please select an event first.');
+            return;
+        }
+
+        const response = await fetch(`https://www.thebluealliance.com/api/v3/event/${selectedEvent}/oprs`, {
+            headers: {
+                'X-TBA-Auth-Key': tbaApiKey
+            }
+        });
+
+        if (!response.ok) {
+            alert('Could not fetch OPRs for this event. They may not be available.');
+            return;
+        }
+
+        const oprs = await response.json();
+        if (!oprs || !oprs.oprs) {
+            alert('OPRs not available for this event.');
+            return;
+        }
+
+        const picklistName = 'OPR Rank';
+        if (Object.values(picklists).some(p => p.name === picklistName)) {
+            alert(`A picklist named "${picklistName}" already exists.`);
+            return;
+        }
+
+        if (teams.length === 0) {
+            await getTeams();
+        }
+
+        const sortedTeamNumbers = Object.keys(oprs.oprs).sort((a, b) => oprs.oprs[b] - oprs.oprs[a]);
+        
+        const sortedTeams = sortedTeamNumbers.map(teamNumber => {
+            const teamKey = teamNumber.replace('frc', '');
+            return teams.find(t => t.team_number == teamKey);
+        }).filter(Boolean);
+
+        const newId = `picklist_${Date.now()}`;
+        picklists[newId] = { name: picklistName, teams: sortedTeams };
+    }
+
+    async function createEpaPicklist() {
+        if (!selectedEvent) {
+            alert('Please select an event first.');
+            return;
+        }
+
+        const response = await fetch(`https://api.statbotics.io/v3/team_events?event=${selectedEvent}`);
+
+        if (!response.ok) {
+            alert('Could not fetch EPA data for this event. They may not be available.');
+            return;
+        }
+
+        const eventData = await response.json();
+        if (!eventData || !Array.isArray(eventData)) {
+            alert('EPA data not available for this event.');
+            return;
+        }
+
+        const picklistName = 'EPA Rank';
+        if (Object.values(picklists).some(p => p.name === picklistName)) {
+            alert(`A picklist named "${picklistName}" already exists.`);
+            return;
+        }
+
+        if (teams.length === 0) {
+            await getTeams();
+        }
+
+        const sortedTeamStats = eventData.sort((a, b) => b.epa.stats.mean - a.epa.stats.mean);
+        
+        const sortedTeams = sortedTeamStats.map(teamStat => {
+            return teams.find(t => t.team_number == teamStat.team);
+        }).filter(Boolean);
+
+        const newId = `picklist_${Date.now()}`;
+        picklists[newId] = { name: picklistName, teams: sortedTeams };
+    }
+
 
 </script>
 
@@ -158,7 +308,21 @@
 
         {#each Object.entries(picklists) as [key, list]}
             <div class="picklist">
-                <h2>{list.name} <button on:click={() => deletePickList(key)}>X</button></h2>
+                <h2>
+                    {#if editingPicklistId === key}
+                        <input
+                            type="text"
+                            bind:value={editingPicklistName}
+                            on:blur={() => finishEditing(key)}
+                            on:keydown={(e) => e.key === 'Enter' && finishEditing(key)}
+                            on:focus={(e) => e.target.select()}
+                            autofocus
+                        />
+                    {:else}
+                        <span on:click={() => startEditing(key, list.name)}>{list.name}</span>
+                    {/if}
+                    <button on:click={() => deletePickList(key)}>X</button>
+                </h2>
                 <div class="list" on:dragover={handleDragOver} on:drop={() => handleDrop(key)} on:dragenter={(e) => handleDragEnter(e, key)}>
                     {#each list.teams as team (team.team_number)}
                         <Team {team} picked={!!pickedTeams[team.team_number]} on:click={() => toggleTeamPicked(team.team_number)} on:dragstart={() => handleDragStart(team, key)} />
@@ -170,6 +334,24 @@
     <div class="controls">
         <input type="text" bind:value={newPickListName} placeholder="New picklist name" />
         <button on:click={createPickList}>Create Picklist</button>
+    </div>
+
+    <div class="share-container">
+        <div class="share-controls">
+            <h2>Share & Import</h2>
+            <button on:click={exportPicklists}>Copy Picklists to Clipboard</button>
+        </div>
+        <div class="share-controls">
+            <h3>Import Picklists</h3>
+            <textarea bind:value={importData} rows="8" placeholder="Paste shared data here..."></textarea>
+            <br />
+            <button on:click={importPicklists}>Import</button>
+        </div>
+    </div>
+
+    <div class="fixed-buttons">
+        <button on:click={createOprPicklist}>Create OPR Picklist</button>
+        <button on:click={createEpaPicklist}>Create EPA Picklist</button>
     </div>
 
 </main>
@@ -197,5 +379,35 @@
         font-size: 0.8rem;
         margin-left: 10px;
         cursor: pointer;
+    }
+    h2 span {
+        cursor: pointer;
+    }
+    .share-container {
+        display: flex;
+        gap: 20px;
+        margin-top: 20px;
+    }
+    .share-controls {
+        flex: 1;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+    }
+    .share-controls textarea {
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 10px;
+    }
+    .share-controls button {
+        margin-top: 10px;
+    }
+    .fixed-buttons {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
     }
 </style>
