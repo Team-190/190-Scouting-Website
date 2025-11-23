@@ -1,0 +1,41 @@
+
+{
+    "teamview": [
+        {
+            "requirements": [
+                {
+                    "RecordType": "EndMatch"
+                }
+            ],
+            "columns": [
+                "Match",
+                "DriveStation",
+                "Defense",
+                "DefenseValue",
+                "Avoidance",
+                "ScouterError",
+                "Strategy",
+                "DZTime",
+                "AcqCoralS",
+                "AcqCoralF",
+                "AcqAlgaeR",
+                "AcqAlgaeF",
+                "DelCoral1",
+                "DelCoral2",
+                "DelCoral3",
+                "DelCoral4",
+                "DelCoralF",
+                "DelAlgaeP",
+                "DelAlgaeN",
+                "DelAlgaeF",
+                "ClimbT",
+                "EndState",
+                "CageAttempt",
+                "PointScored",
+                "DisAlg"
+            ]
+
+        }
+    ]
+}
+
