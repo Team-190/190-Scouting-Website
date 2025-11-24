@@ -5,7 +5,7 @@ const session = require("express-session");
 require("dotenv").config();
 
 const app = express();
-const PORT = 3000
+const PORT = process.env.PORT;
 
 
 const publicDir = path.join(__dirname, 'public');
