@@ -4,7 +4,7 @@ require("dotenv").config();
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
-async function teamView() {
+async function teamView(teamnumber) {
     console.log("Tea")
     const { createClient } = await import("@supabase/supabase-js");
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -18,22 +18,38 @@ async function teamView() {
     finaldata = [];
 
     for (i =0; i<config.teamview.length; i++) {
+        console.log(`Making new query for ${config.teamview[i].columns}`)
         let query = supabaseClient
             .from("Activity")
-            .select(config.teamview[i].columns)
-        console.log("Adding")
-        for (const { col, val } of config.teamview[i].requirements) {
-            console.log(col,val);
-            query = query.eq(col, val);
+            .select(config.teamview[i].columns.toString())
+
+        console.log(`Adding. ${JSON.stringify(config.teamview[i].requirements)}`)
+        
+        for (const obj of config.teamview[i].requirements) {
+            for (const [key, value] of Object.entries(obj)) {
+                console.log(key, value);
+                query = query.eq(key, value);
+
+            }
+
+        }
+        query = query.eq("Team", `frc${teamnumber}`);
+
+
+
+        const result = await query;
+        console.log(result);
+
+        matches = {};
+
+        for (let row of result.data) {
+            matches[row['Match']] = matches[row['Match']] || [];
+            matches[row['Match']].push(row);
         }
 
-        console.log(query);
-        
-        if (error) {
-            throw error;
-        } else {
-            finaldata = finaldata.concat(data);
-        }
+
+        console.log(matches);
+        return result;        
     }
 };
 

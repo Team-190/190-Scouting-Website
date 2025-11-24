@@ -36,13 +36,14 @@ app.use((req, res, next) => {
 });
 
 app.get("/", async (req,res) =>{
-    let result = await database.teamView();
-    console.log(result);
+    let result = await database.teamView(190);
     res.renderHtml("file.html")
 });
 
 app.get("/teamview", async (req, res) => {
-    let result = await database.teamView();
+    const teamnumber = req.query.teamnumber;
+    if (!teamnumber) res.sendStatus(400);
+    let result = await database.teamView(teamnumber);
     res.send(result);
 })
 
