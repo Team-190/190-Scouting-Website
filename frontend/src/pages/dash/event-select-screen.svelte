@@ -65,6 +65,15 @@
         return month === selectedMonth;
       });
     }
+
+    function handleSubmit() {
+        if (!selectedEvent) {
+            alert("Please select an event before submitting.");
+            return;
+        }
+    alert(`Submitted: ${selectedEvent}`);
+    }
+
   
     // this adjusts the dropdown based on the year input
     $: if (selectedYear) {
@@ -97,6 +106,15 @@
       margin-top: 20px;
       margin-bottom: 10px;
     }
+
+    .submit-button {
+    display: block;
+    margin: 20px auto 0 auto;
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+    cursor: pointer;
+    background-color: #23a0ed;
+    }
   </style>
   
   <h2>Event Selector</h2>
@@ -124,8 +142,10 @@
         {event.name} — {event.start_date}
       </option>
     {/each}
-  </select>
+  </select>  
   
   {#if selectedEvent}
     <p>You selected: {selectedEvent}</p>
   {/if}
+
+  <button class="submit-button" on:click={handleSubmit}>Submit</button>
