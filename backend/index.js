@@ -1,18 +1,29 @@
+// REQUIRED .env PARAMETERS:
+// SUPABASE_URL - Supabase API endpoint
+// SUPABASE_KEY - Supabase API key 
+// PORT - Localhost port to run server
+// SESSION_SECRET - Random string to sign off session cookies
+// TESTING - Binary value to indicate whether the code is in testing or production
+
 const express = require("express");
 const path = require("path");
 const database = require("./database.js");
 const session = require("express-session");
 require("dotenv").config();
 
-const test = require("./test.js");
-
 const app = express();
 const PORT = process.env.PORT;
+const testingMode = process.env.TESTING || 0;
 
-const publicDir = path.join(__dirname, 'public');
-
+let test;
 let eventCode;
 
+if (testingMode) { 
+    test = require("./test.js");
+    eventCode = "2025nhalt1";
+} 
+
+const publicDir = path.join(__dirname, 'public');
 app.use(express.static(path.join(__dirname, "public")));
 
 app.use(express.json());
@@ -43,8 +54,20 @@ app.get("/", async (req,res) =>{
 
 app.get("/login", (req, res) =>{
     res.renderHtml("login.html");
+
+    if (testingMode) test.test();
 });
 
+app.post("/postEventCode", async (req, res) => {
+    eventCode = req.body.eventCode;
+    if (!eventCode) {
+        console.log("Event code could not be retrieved");
+        res.sendStatus(400);
+    }
+    else {
+        console.log(`Event code retrieved, ${eventCode}`);
+    }
+})
 
 app.get("/getTeamView", async (req, res) => {
     const teamNumber = req.query.teamNumber;
@@ -54,10 +77,6 @@ app.get("/getTeamView", async (req, res) => {
     result.teamNumber = teamNumber;
     res.send(result);
 });
-
-app.post("/postEventCode", async (req, res) => {
-    eventCode = req.body.eventCode;
-})
 
 app.listen(PORT, () =>{
     console.log("Listening");
