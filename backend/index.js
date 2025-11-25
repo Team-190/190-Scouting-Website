@@ -13,7 +13,7 @@ app.use(express.static(path.join(__dirname, "public")));
 
 app.use(
     session({
-        secret: process.env.SESSION_SECRET,
+        secret: "something",
         resave: false,
         saveUninitialized: false,
         cookie: {
@@ -21,10 +21,6 @@ app.use(
         }
     })
 );
-
-app.get("/login", (req, res) =>{
-    res.renderHtml("login.html");
-});
 
 app.use((req, res, next) => {
     // if (!req.session.username) res.redirect("/login");
@@ -35,16 +31,25 @@ app.use((req, res, next) => {
     next();
 });
 
+app.get("/login", (req, res) =>{
+    res.renderHtml("login.html");
+});
+
 app.get("/", async (req,res) =>{
     let result = await database.teamView(190);
-    res.renderHtml("file.html")
+    res.renderHtml("file.html");
 });
 
 app.get("/teamview", async (req, res) => {
     const teamnumber = req.query.teamnumber;
     if (!teamnumber) res.sendStatus(400);
     let result = await database.teamView(teamnumber);
+    result.teamNumber = teamnumber;
     res.send(result);
+});
+
+app.get("/eventCode", async (req, res) => {
+    fetch("/eventCode");
 })
 
 app.listen(PORT, () =>{

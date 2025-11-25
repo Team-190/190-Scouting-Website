@@ -4,11 +4,11 @@ require("dotenv").config();
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
-async function teamView(teamnumber) {
-    console.log("Tea")
+async function teamView(eventCode, teamnumber) {
+    console.log("Tea");
     const { createClient } = await import("@supabase/supabase-js");
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
-    console.log("about to call")
+    console.log("about to call");
     const raw = await fs.readFile("config.json", 'utf8');
     const config = JSON.parse(raw);
 
@@ -20,10 +20,10 @@ async function teamView(teamnumber) {
     for (i =0; i<config.teamview.length; i++) {
         console.log(`Making new query for ${config.teamview[i].columns}`)
         let query = supabaseClient
-            .from("Activity")
-            .select(config.teamview[i].columns.toString())
+            .from(eventCode)
+            .select(config.teamview[i].columns.toString());
 
-        console.log(`Adding. ${JSON.stringify(config.teamview[i].requirements)}`)
+        console.log(`Adding. ${JSON.stringify(config.teamview[i].requirements)}`);
         
         for (const obj of config.teamview[i].requirements) {
             for (const [key, value] of Object.entries(obj)) {
@@ -38,7 +38,7 @@ async function teamView(teamnumber) {
 
 
         const result = await query;
-        console.log(result);
+        // console.log(result);
 
         matches = {};
 
@@ -48,7 +48,7 @@ async function teamView(teamnumber) {
         }
 
 
-        console.log(matches);
+        // console.log(matches);
         return result;        
     }
 };
