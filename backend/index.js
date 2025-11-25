@@ -38,7 +38,6 @@ app.use((req, res, next) => {
 });
 
 app.get("/", async (req,res) =>{
-    let result = await database.teamView(190);
     res.renderHtml("file.html");
 });
 
@@ -48,10 +47,11 @@ app.get("/login", (req, res) =>{
 
 
 app.get("/getTeamView", async (req, res) => {
-    const teamnumber = req.query.teamnumber;
-    if (!teamnumber) res.sendStatus(400);
-    let result = await database.teamView(teamnumber);
-    result.teamNumber = teamnumber;
+    const teamNumber = req.query.teamNumber;
+    if (!teamNumber) res.sendStatus(400);
+    if (!eventCode) res.sendStatus(403);
+    let result = await database.teamView(eventCode, teamNumber);
+    result.teamNumber = teamNumber;
     res.send(result);
 });
 
