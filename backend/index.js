@@ -4,16 +4,22 @@ const database = require("./database.js");
 const session = require("express-session");
 require("dotenv").config();
 
+const test = require("./test.js");
+
 const app = express();
 const PORT = process.env.PORT;
 
-
 const publicDir = path.join(__dirname, 'public');
+
+let eventCode;
+
 app.use(express.static(path.join(__dirname, "public")));
+
+app.use(express.json());
 
 app.use(
     session({
-        secret: "something",
+        secret: process.env.SESSION_SECRET,
         resave: false,
         saveUninitialized: false,
         cookie: {
@@ -31,16 +37,17 @@ app.use((req, res, next) => {
     next();
 });
 
-app.get("/login", (req, res) =>{
-    res.renderHtml("login.html");
-});
-
 app.get("/", async (req,res) =>{
     let result = await database.teamView(190);
     res.renderHtml("file.html");
 });
 
-app.get("/teamview", async (req, res) => {
+app.get("/login", (req, res) =>{
+    res.renderHtml("login.html");
+});
+
+
+app.get("/getTeamView", async (req, res) => {
     const teamnumber = req.query.teamnumber;
     if (!teamnumber) res.sendStatus(400);
     let result = await database.teamView(teamnumber);
@@ -48,8 +55,8 @@ app.get("/teamview", async (req, res) => {
     res.send(result);
 });
 
-app.get("/eventCode", async (req, res) => {
-    fetch("/eventCode");
+app.post("/postEventCode", async (req, res) => {
+    eventCode = req.body.eventCode;
 })
 
 app.listen(PORT, () =>{
