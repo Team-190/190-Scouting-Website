@@ -11,8 +11,7 @@ async function retrieveConfig(eventCode) {
         .from('event-configs')
         .download(`${eventCode}-config.json`);
 
-    if (error) return error;
-    return JSON.parse(await data.text());
+    return {data, error};
 }
 
 module.exports = {

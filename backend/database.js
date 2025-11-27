@@ -1,6 +1,7 @@
 const fs = require("fs").promises;
 const supabaseUtil = require("./supabaseUtil");
 const storage = require("./storage");
+require("dotenv").config();
 
 
 supabaseUtil.supabaseInit()
@@ -8,9 +9,21 @@ supabaseUtil.supabaseInit()
     .catch((error) => console.warn(error));
 
 
-async function teamView(eventCode, teamnumber) {
+async function teamView(eventCode, teamNumber) {
     console.log("About to call");
-    const config = await storage.retrieveConfig(eventCode);
+    const {data, error} = await storage.retrieveConfig(eventCode);
+
+    if (parseInt(process.env.USE_CUSTOM_CONFIG)) {
+        try {
+            const raw = await fs.readFile(`test/${eventCode}-config.json`, 'utf8');
+            config = JSON.parse(raw);
+        } catch (error) {
+            return error;
+        }
+    } else {
+        if (!error) config = JSON.parse(await data.text()) 
+        else return error;
+    }
 
     console.log(config);
 
@@ -28,17 +41,18 @@ async function teamView(eventCode, teamnumber) {
                 query = query.eq(key, value);
             }
         }
-        query = query.eq("Team", `frc${teamnumber}`);
+        query = query.eq("Team", `frc${teamNumber}`);
 
         const result = await query;
+        result.teamNumber = teamNumber
         // console.log(result);
 
-        matches = {};
+        // matches = {};
 
-        for (let row of result.data) {
-            matches[row['Match']] = matches[row['Match']] || [];
-            matches[row['Match']].push(row);
-        }
+        // for (let row of result.data) {
+        //     matches[row['Match']] = matches[row['Match']] || [];
+        //     matches[row['Match']].push(row);
+        // }
 
         // console.log(matches);
         return result;        
