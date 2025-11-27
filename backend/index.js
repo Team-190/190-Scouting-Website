@@ -18,9 +18,12 @@ require("dotenv").config();
 const app = express();
 const PORT = process.env.PORT;
 const testingMode = parseInt(process.env.TESTING) || 0;
+const DIR = process.env.DIR || "test/public";
 
 // Change later to be correct directory for Svelte files
-const publicDir = path.join(__dirname, process.env.DIR);
+const publicDir = path.join(__dirname, DIR);
+
+console.log(DIR);
 
 let eventCode = testingMode ? "2025nhalt1" : "";
 
