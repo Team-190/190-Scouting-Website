@@ -1,28 +1,18 @@
 const fs = require("fs").promises;
-require("dotenv").config();
-
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_KEY;
-
-let supabaseClient;
-
-async function supabaseInit() {
-    const { createClient } = (await import("@supabase/supabase-js"));
-    supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
-}
+const supabaseUtil = require("./supabaseUtil");
+const storage = require("./storage");
 
 
-supabaseInit();
+supabaseUtil.supabaseInit()
+    .then((value) => {supabaseClient = value})
+    .catch((error) => console.warn(error));
 
 
 async function teamView(eventCode, teamnumber) {
     console.log("About to call");
-    const raw = await fs.readFile("config.json", 'utf8');
-    const config = JSON.parse(raw);
+    const config = await storage.retrieveConfig(eventCode);
 
     console.log(config);
-
-    finaldata = [];
 
     for (let i = 0; i < config.teamView.length; i++) {
         console.log(`Making new query for ${config.teamView[i].columns}`)
