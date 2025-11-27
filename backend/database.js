@@ -1,28 +1,31 @@
 const fs = require("fs").promises;
+const supabaseUtil = require("./supabaseUtil");
+const storage = require("./storage");
 require("dotenv").config();
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
-let supabaseClient;
-
-async function supabaseInit() {
-    const { createClient } = (await import("@supabase/supabase-js"));
-    supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
-}
+supabaseUtil.supabaseInit()
+    .then((value) => {supabaseClient = value})
+    .catch((error) => console.warn(error));
 
 
-supabaseInit();
-
-
-async function teamView(eventCode, teamnumber) {
+async function teamView(eventCode, teamNumber) {
     console.log("About to call");
-    const raw = await fs.readFile("config.json", 'utf8');
-    const config = JSON.parse(raw);
+    const {data, error} = await storage.retrieveConfig(eventCode);
+
+    if (parseInt(process.env.USE_CUSTOM_CONFIG)) {
+        try {
+            const raw = await fs.readFile(`test/${eventCode}-config.json`, 'utf8');
+            config = JSON.parse(raw);
+        } catch (error) {
+            return error;
+        }
+    } else {
+        if (!error) config = JSON.parse(await data.text()) 
+        else return error;
+    }
 
     console.log(config);
-
-    finaldata = [];
 
     for (let i = 0; i < config.teamView.length; i++) {
         console.log(`Making new query for ${config.teamView[i].columns}`)
@@ -38,17 +41,18 @@ async function teamView(eventCode, teamnumber) {
                 query = query.eq(key, value);
             }
         }
-        query = query.eq("Team", `frc${teamnumber}`);
+        query = query.eq("Team", `frc${teamNumber}`);
 
         const result = await query;
+        result.teamNumber = teamNumber
         // console.log(result);
 
-        matches = {};
+        // matches = {};
 
-        for (let row of result.data) {
-            matches[row['Match']] = matches[row['Match']] || [];
-            matches[row['Match']].push(row);
-        }
+        // for (let row of result.data) {
+        //     matches[row['Match']] = matches[row['Match']] || [];
+        //     matches[row['Match']].push(row);
+        // }
 
         // console.log(matches);
         return result;        

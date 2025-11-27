@@ -3,29 +3,31 @@
 // SUPABASE_KEY - Supabase API key 
 // PORT - Localhost port to run server
 // SESSION_SECRET - Random string to sign off session cookies
+// DIR - Project directory where files to be served are
+
 // TESTING - Binary value to indicate whether the code is in testing or production
+// USE_CUSTOM_CONFIG - Binary value to allow developers to use custom config.json file
 
 const express = require("express");
 const path = require("path");
+const test = require("./test/test.js")
 const database = require("./database.js");
 const session = require("express-session");
 require("dotenv").config();
 
 const app = express();
 const PORT = process.env.PORT;
-const testingMode = process.env.TESTING || 0;
+const testingMode = parseInt(process.env.TESTING) || 0;
+const DIR = process.env.DIR || "test/public";
 
-let test;
-let eventCode;
+// Change later to be correct directory for Svelte files
+const publicDir = path.join(__dirname, DIR);
 
-if (testingMode) { 
-    test = require("./test.js");
-    eventCode = "2025nhalt1";
-} 
+console.log(DIR);
 
-const publicDir = path.join(__dirname, 'public');
-app.use(express.static(path.join(__dirname, "public")));
+let eventCode = testingMode ? "2025nhalt1" : "";
 
+app.use(express.static(publicDir));
 app.use(express.json());
 
 app.use(
@@ -48,14 +50,14 @@ app.use((req, res, next) => {
     next();
 });
 
-app.get("/", async (req,res) =>{
+app.get("/", async (req, res) =>{
     res.renderHtml("file.html");
 });
 
 app.get("/login", (req, res) =>{
     res.renderHtml("login.html");
 
-    if (testingMode) test.test();
+    test.test();
 });
 
 app.post("/postEventCode", async (req, res) => {
@@ -74,7 +76,6 @@ app.get("/getTeamView", async (req, res) => {
     if (!teamNumber) res.sendStatus(400);
     if (!eventCode) res.sendStatus(403);
     let result = await database.teamView(eventCode, teamNumber);
-    result.teamNumber = teamNumber;
     res.send(result);
 });
 
