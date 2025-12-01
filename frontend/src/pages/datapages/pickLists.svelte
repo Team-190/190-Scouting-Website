@@ -1,5 +1,6 @@
 <script>
     import baseX from 'base-x';
+    import pako from 'pako';
     import Team from '../../components/Team.svelte';
 
     const BASE85_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~';
@@ -34,6 +35,7 @@
     let newAllianceSelectionName = $state('');
     let editingAllianceSelectionId = $state(null);
     let editingAllianceSelectionName = $state('');
+    let allianceImportData = $state('');
 
     $effect(() => {
         if (allianceSelections[activeAllianceSelectionId]) {
@@ -50,16 +52,14 @@
     });
 
     async function exportPicklists() {
-        const dataToShare = {
-            picklists: picklists,
-            pickedTeams: pickedTeams
-        };
-        const dataString = JSON.stringify(dataToShare);
-        const buffer = textEncoder.encode(dataString);
-        const encodedData = bs85.encode(buffer);
+        const dataString = Object.values(picklists)
+            .map(list => `${list.name}:${list.teams.map(t => t.team_number).join(',')}`)
+            .join(';');
+        
+        const compressedData = pako.deflate(dataString);
+        const encodedData = bs85.encode(compressedData);
         try {
             await navigator.clipboard.writeText(encodedData);
-            alert('Picklists copied to clipboard!');
         } catch (err) {
             console.error('Failed to copy text: ', err);
             alert('Failed to copy picklists.');
@@ -72,17 +72,35 @@
             return;
         }
         try {
-            const buffer = bs85.decode(importData);
-            const decodedData = textDecoder.decode(buffer);
-            const parsedData = JSON.parse(decodedData);
-            if (parsedData.picklists && parsedData.pickedTeams) {
-                picklists = parsedData.picklists;
-                pickedTeams = parsedData.pickedTeams;
-                importData = '';
-                alert('Picklists imported successfully!');
-            } else {
-                alert('Invalid import data format.');
+            const decodedBuffer = bs85.decode(importData);
+            const decompressedData = pako.inflate(decodedBuffer, { to: 'string' });
+            
+            const newPicklists = {};
+            const importedLists = decompressedData.split(';');
+            
+            const allTeamNumbers = new Set(teams.map(t => t.team_number.toString()));
+
+            for (const listData of importedLists) {
+                if (!listData) continue;
+                const [name, teamNumbersStr] = listData.split(':');
+                if (!name) continue;
+
+                const teamNumbers = teamNumbersStr ? teamNumbersStr.split(',') : [];
+                const newTeams = teamNumbers
+                    .map(numStr => {
+                        if (allTeamNumbers.has(numStr)) {
+                            return teams.find(t => t.team_number.toString() === numStr);
+                        }
+                        return null;
+                    })
+                    .filter(Boolean); // Filter out any nulls if a team wasn't found
+
+                const newId = `picklist_${Date.now()}_${Math.random()}`;
+                newPicklists[newId] = { name, teams: newTeams };
             }
+
+            picklists = newPicklists;
+            importData = '';
         } catch (error) {
             alert('Failed to parse import data. Please check the format.');
             console.error('Import error:', error);
@@ -111,8 +129,19 @@
     function finishEditing(id) {
         if (editingPicklistId === null) return;
 
-        if (editingPicklistName && !Object.values(picklists).some(p => p.name === editingPicklistName && id !== p.id)) {
-            picklists[id].name = editingPicklistName;
+        const originalName = Object.entries(picklists).find(([pId]) => pId === id)?.[1].name;
+        const newName = editingPicklistName.trim();
+
+        // If name is unchanged, do nothing.
+        if (newName === originalName) {
+            editingPicklistId = null;
+            editingPicklistName = '';
+            return;
+        }
+
+        // If name is changed, validate it.
+        if (newName && !Object.values(picklists).some(p => p.name === newName)) {
+            picklists[id].name = newName;
         } else {
             alert('Picklist name cannot be empty or already exist.');
         }
@@ -142,12 +171,42 @@
 
     async function getTeams() {
         if (!selectedEvent) return;
-        const response = await fetch(`https://www.thebluealliance.com/api/v3/event/${selectedEvent}/teams/simple`, {
-            headers: {
-                'X-TBA-Auth-Key': tbaApiKey
-            }
-        });
-        teams = await response.json();
+        const teamPromise = fetch(`https://www.thebluealliance.com/api/v3/event/${selectedEvent}/teams/simple`, {
+            headers: { 'X-TBA-Auth-Key': tbaApiKey }
+        }).then(res => res.json());
+
+        const statusesPromise = fetch(`https://www.thebluealliance.com/api/v3/event/${selectedEvent}/teams/statuses`, {
+            headers: { 'X-TBA-Auth-Key': tbaApiKey }
+        }).then(res => res.ok ? res.json() : null);
+
+        const [teamList, statuses] = await Promise.all([teamPromise, statusesPromise]);
+
+        if (statuses) {
+            const teamRanks = Object.fromEntries(
+                Object.entries(statuses)
+                    .filter(([, status]) => status?.qual?.ranking?.rank != null)
+                    .map(([teamKey, status]) => [teamKey.replace('frc', ''), status.qual.ranking.rank])
+            );
+
+            teamList.sort((a, b) => {
+                const rankA = teamRanks[a.team_number];
+                const rankB = teamRanks[b.team_number];
+
+                if (rankA != null && rankB != null) {
+                    return rankA - rankB;
+                }
+                if (rankA != null) {
+                    return -1;
+                }
+                if (rankB != null) {
+                    return 1;
+                }
+                return a.team_number - b.team_number;
+            });
+        }
+
+        teams = teamList;
+
         // Reset picklists when new teams are fetched
         for (let list in picklists) {
             picklists[list].teams = [];
@@ -185,6 +244,46 @@
                 }
             }
             // Note: we don't remove from the main 'teams' list to allow adding to multiple picklists
+
+            draggedItem = null;
+        }
+    }
+
+    function handleDropToRemove(event) {
+        // Prevent this from firing on child drop zones
+        if (event.target !== event.currentTarget) {
+            return;
+        }
+
+        if (draggedItem) {
+            const { item, sourceList } = draggedItem;
+
+            // Remove from a picklist
+            if (sourceList && sourceList !== 'teams' && picklists[sourceList]) {
+                const source = picklists[sourceList];
+                const index = source.teams.findIndex(t => t.team_number === item.team_number);
+                if (index > -1) {
+                    source.teams.splice(index, 1);
+                    // Force svelte to update the view
+                    picklists = { ...picklists };
+                }
+            }
+            // Remove from an alliance
+            else if (sourceList.startsWith('alliance_')) {
+                const sourceAllianceId = parseInt(sourceList.split('_')[1]);
+                const sourceAlliance = alliances.find(a => a.id === sourceAllianceId);
+                if (sourceAlliance) {
+                    const index = sourceAlliance.teams.findIndex(t => t.team_number === item.team_number);
+                    if (index > -1) {
+                        sourceAlliance.teams.splice(index, 1);
+                        // Force svelte to update the view
+                        alliances = [...alliances];
+                        if (index === 0 && sourceAlliance.id <= 8) {
+                            updateAllianceCaptains();
+                        }
+                    }
+                }
+            }
 
             draggedItem = null;
         }
@@ -422,8 +521,6 @@
             alert('EPAs not available for this event.');
             return;
         }
-        
-        console.log(epas);
 
         const sortedTeamNumbers = epas.sort((a, b) => b.epa.total_points.mean - a.epa.total_points.mean);
         
@@ -749,9 +846,19 @@
     function finishEditingAllianceSelection() {
         if (editingAllianceSelectionId === null) return;
 
-        const trimmedName = editingAllianceSelectionName.trim();
-        if (trimmedName && !Object.values(allianceSelections).some(s => s.name === trimmedName && s.id !== editingAllianceSelectionId)) {
-            allianceSelections[editingAllianceSelectionId].name = trimmedName;
+        const originalName = allianceSelections[editingAllianceSelectionId]?.name;
+        const newName = editingAllianceSelectionName.trim();
+
+        // If name is unchanged, do nothing.
+        if (newName === originalName) {
+            editingAllianceSelectionId = null;
+            editingAllianceSelectionName = '';
+            return;
+        }
+
+        // If name is changed, validate it.
+        if (newName && !Object.values(allianceSelections).some(s => s.name === newName)) {
+            allianceSelections[editingAllianceSelectionId].name = newName;
         } else {
             alert('Alliance selection name cannot be empty or already exist.');
         }
@@ -775,10 +882,6 @@
         activeAllianceSelectionId = newId;
     }
 
-    function renameAllianceSelection() {
-        // This function is no longer needed as renaming is handled by start/finishEditingAllianceSelection
-    }
-
     function deleteAllianceSelection() {
         if (activeAllianceSelectionId === 'default') {
             alert('You cannot delete the Default selection.');
@@ -792,6 +895,77 @@
             const oldId = activeAllianceSelectionId;
             delete allianceSelections[oldId];
             activeAllianceSelectionId = Object.keys(allianceSelections)[0];
+        }
+    }
+
+    async function copyAllianceSelection() {
+        if (!activeAllianceSelectionId) return;
+
+        const selection = allianceSelections[activeAllianceSelectionId];
+        if (!selection) return;
+
+        const dataString = [
+            selection.name,
+            selection.isFourTeamAlliance ? '1' : '0',
+            selection.alliances.map(a => a.teams.map(t => t.team_number).join(',')).join(';')
+        ].join('|');
+
+        const compressedData = pako.deflate(dataString);
+        const encodedData = bs85.encode(compressedData);
+
+        try {
+            await navigator.clipboard.writeText(encodedData);
+        } catch (err) {
+            console.error('Failed to copy text: ', err);
+            alert('Failed to copy alliance selection.');
+        }
+    }
+
+    function pasteAllianceSelection() {
+        const importString = allianceImportData;
+        if (!importString) {
+            alert('Please paste the alliance selection data into the text box.');
+            return;
+        }
+
+        try {
+            const decodedBuffer = bs85.decode(importString);
+            const decompressedData = pako.inflate(decodedBuffer, { to: 'string' });
+            
+            const parts = decompressedData.split('|');
+            if (parts.length !== 3) {
+                throw new Error('Invalid data format');
+            }
+
+            const [name, isFourTeamStr, alliancesStr] = parts;
+
+            let newName = name;
+            let counter = 1;
+            while (Object.values(allianceSelections).some(s => s.name === newName)) {
+                newName = `${name} (${++counter})`;
+            }
+
+            const isFourTeamAlliance = isFourTeamStr === '1';
+            const allianceTeamStrs = alliancesStr.split(';');
+            const newAlliances = Array.from({ length: 8 }, (_, i) => {
+                const teamNumbers = (allianceTeamStrs[i] || '').split(',').filter(Boolean);
+                const newTeams = teamNumbers
+                    .map(numStr => teams.find(t => t.team_number.toString() === numStr))
+                    .filter(Boolean);
+                return { id: i + 1, teams: newTeams };
+            });
+
+            const newId = `selection_${Date.now()}`;
+            allianceSelections[newId] = {
+                name: newName,
+                alliances: newAlliances,
+                isFourTeamAlliance: isFourTeamAlliance
+            };
+            activeAllianceSelectionId = newId;
+            allianceImportData = ''; // Clear the input field
+        } catch (error) {
+            alert('Failed to parse alliance selection data. Please check the format.');
+            console.error('Alliance import error:', error);
         }
     }
 
@@ -843,7 +1017,7 @@
         </div>
     {/if}
 
-    <div class="main-content">
+    <div class="main-content" on:dragover={handleDragOver} on:drop|preventDefault={handleDropToRemove}>
         <div class="team-list-container">
             <h2>Teams</h2>
             <div class="team-list">
@@ -855,7 +1029,7 @@
             </div>
         </div>
 
-        <div class="view-container">
+        <div class="view-container" on:dragover={handleDragOver} on:drop|preventDefault={handleDropToRemove}>
             {#if activeView === 'picklists'}
                 <div class="picklist-view">
                     <div class="controls">
@@ -972,6 +1146,9 @@
                 {/each}
             </select>
             <button on:click={deleteAllianceSelection} disabled={Object.keys(allianceSelections).length <= 1 || activeAllianceSelectionId === 'default'}>Delete</button>
+            <button on:click={copyAllianceSelection}>Copy</button>
+            <input type="text" bind:value={allianceImportData} placeholder="Paste selection data..." />
+            <button on:click={pasteAllianceSelection}>Paste</button>
         </div>
     </div>
     {/if}
