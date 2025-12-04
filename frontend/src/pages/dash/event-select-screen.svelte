@@ -1,6 +1,7 @@
 <script>
     import { onMount } from "svelte";
-  
+    import "../../utils/api.js";
+
     let years = [];
     let months = [
       { value: 1, label: "January" },
