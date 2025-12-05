@@ -1,21 +1,21 @@
 /*
 insert a specific link to a route containing data where it says "link"
 
-function fetchData() {
+function fetchTeamView() {
     const route = link;
     let data = fetch(route);
     return data;
 }
 */
 
-function fetchData() {
-    const route = "/teamview";
+function fetchTeamView(teamNumber) {
+    const route = `/getTeamView?teamNumber=${teamNumber}`;
     let data = fetch(route);
     return data;
 }
 
-async function sendEventID(url, textData) {
-    const response = await fetch(url, {
+async function postEventCode(textData) {
+    const response = await fetch("/postEventCode", {
     method: 'POST',
     headers: {
         'Content-Type': 'text/plain'
@@ -33,4 +33,8 @@ async function sendEventID(url, textData) {
     console.log('Success:', result);
     return result;
 }
-sendEventID('https://example.com/api/saveText', 'Hello, world!');
+
+module.exports = {
+    postEventCode,
+    fetchTeamView
+}

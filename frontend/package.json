@@ -15,6 +15,7 @@
     "vite": "^7.1.7"
   },
   "dependencies": {
+    "@mateothegreat/svelte5-router": "^2.16.19",
     "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.80.0",
     "ag-grid-community": "^34.3.1",

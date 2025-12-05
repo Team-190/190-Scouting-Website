@@ -8,6 +8,8 @@
 
     import "ag-grid-community/styles/ag-grid.css";
     import "ag-grid-community/styles/ag-theme-quartz.css";
+    import "../../utils/api"
+    import Team from "../../components/Team.svelte";
 
     ModuleRegistry.registerModules([AllCommunityModule]);
     const TBA_KEY = "zhTqFG7csJoif1sNXt3aZngy0LB1X4LxMgTfXBvPscNG0P9FifZCa2uGJcUk2gKW";
@@ -102,8 +104,7 @@
     }
 
     async function loadTeamData(teamNumber) {
-        const res = await fetch(`/team${teamNumber}Data.json`);
-        const json = await res.json();
+        const json = fetchTeamView(teamNumber);
         buildGrid(json);
     }
 
