@@ -1,7 +1,7 @@
 <script>
     import {goto} from "@mateothegreat/svelte5-router";
     import { onMount } from "svelte";
-    import api from "../../utils/api";
+    import { postEventCode } from "../../utils/api";
 
     let years = [];
     let months = [
@@ -74,7 +74,7 @@
             return;
         }
     
-        await api.postEventCode(selectedEvent);
+        await postEventCode(selectedEvent);
         alert(`Submitted: ${selectedEvent}`);
         goto("/teamView");
     }

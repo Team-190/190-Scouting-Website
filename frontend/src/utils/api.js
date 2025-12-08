@@ -8,33 +8,28 @@ function fetchTeamView() {
 }
 */
 
-function fetchTeamView(teamNumber) {
-    const route = `/getTeamView?teamNumber=${teamNumber}`;
+export function fetchTeamView(teamNumber) {
+    const route = `http://localhost:8000/getTeamView?teamNumber=${teamNumber}`;
     let data = fetch(route);
     return data;
 }
 
-async function postEventCode(textData) {
-    const response = await fetch("/postEventCode", {
-    method: 'POST',
-    headers: {
-        'Content-Type': 'text/plain'
-    },
-    body: textData
+export async function postEventCode(eventCode) {
+    const response = await fetch("http://localhost:8000/postEventCode", {
+        method: 'POST',
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({eventCode})
     });
 
     if (!response.ok) {
-    // Handle HTTP errors, e.g., 404, 500 status codes
-    const errorText = await response.text();
-    throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+        // Handle HTTP errors, e.g., 404, 500 status codes
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
     }
 
     const result = await response.text(); // or response.json() if the server responds with JSON
     console.log('Success:', result);
     return result;
-}
-
-module.exports = {
-    postEventCode,
-    fetchTeamView
 }
