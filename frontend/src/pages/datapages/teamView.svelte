@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
     import { onMount } from "svelte";
     import {
         createGrid,
@@ -77,7 +77,8 @@
 
         // When selection changes → load data & refresh grid
         select.addEventListener("change", async (e) => {
-            const t = Number(e.target.value);
+            const target = e.target as HTMLSelectElement;
+            const t = Number(target.value);
             params.context.selectedTeam = t;
 
             await params.context.loadTeamData(t);
