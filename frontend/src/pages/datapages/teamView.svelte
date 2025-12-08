@@ -8,7 +8,7 @@
 
     import "ag-grid-community/styles/ag-grid.css";
     import "ag-grid-community/styles/ag-theme-quartz.css";
-    import "../../utils/api"
+    import { fetchTeamView } from "../../utils/api"
     import Team from "../../components/Team.svelte";
 
     ModuleRegistry.registerModules([AllCommunityModule]);
