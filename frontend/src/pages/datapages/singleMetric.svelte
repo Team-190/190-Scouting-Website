@@ -8,6 +8,7 @@
 
     import "ag-grid-community/styles/ag-grid.css";
     import "ag-grid-community/styles/ag-theme-quartz.css";
+    import { fetchAllTeams } from "../../utils/api"
 
     ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -57,7 +58,7 @@
 
     async function loadAllTeamData() {
         try {
-            const res = await fetch(``); //add file name with data
+            const res = await fetchAllTeams()
             if (!res.ok) {
                 throw new Error(`Failed to fetch dummyData.json (status ${res.status})`);
             }
