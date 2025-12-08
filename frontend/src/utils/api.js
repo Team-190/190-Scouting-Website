@@ -14,6 +14,12 @@ function fetchTeamView(teamNumber) {
     return data;
 }
 
+function fetchEventView(atribute) {
+    const route = `/getEventView?atribute=${atribute}`;
+    let data = fetch(route);
+    return data;
+}
+
 async function postEventCode(textData) {
     const response = await fetch("/postEventCode", {
     method: 'POST',
@@ -36,5 +42,6 @@ async function postEventCode(textData) {
 
 module.exports = {
     postEventCode,
-    fetchTeamView
+    fetchTeamView,
+    fetchEventView
 }
