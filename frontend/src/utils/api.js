@@ -14,8 +14,8 @@ export function fetchTeamView(teamNumber) {
     return data;
 }
 
-function fetchEventView(attribute) {
-    const route = `http://localhost:8000/getEventView?attribute=${attribute}`;
+export function fetchAllTeams(column) {
+    const route = `http://localhost:8000/getAllTeams?column=${column}`;
     let data = fetch(route);
     return data;
 }
