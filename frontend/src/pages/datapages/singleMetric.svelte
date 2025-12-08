@@ -13,9 +13,6 @@
 
     let domNode;
 
-    // Teams to load
-    const allTeams = [190, 254, 1678, 6328, 2056, 148, 118];
-
     let availableTeams = [];
     let teamData = {};          // { teamNumber: [ rows ] }
 
@@ -58,47 +55,63 @@
 
     /* ---------- data loading ---------- */
 
-    async function fetchTeamData(team) {
+    async function loadAllTeamData() {
         try {
-            const res = await fetch(`/team${team}Data.json`);
+            const res = await fetch(``); //add file name with data
             if (!res.ok) {
-                console.warn(`No JSON for team ${team} (status ${res.status})`);
-                return null;
+                throw new Error(`Failed to fetch dummyData.json (status ${res.status})`);
             }
             const json = await res.json();
-            return Array.isArray(json?.data) ? json.data : null;
-        } catch (e) {
-            console.error(`Failed to load data for team ${team}`, e);
-            return null;
-        }
-    }
+            const allRows = Array.isArray(json?.data) ? json.data : [];
 
-    async function loadAllTeamData() {
-        availableTeams = [];
-        teamData = {};
-
-        for (const t of allTeams) {
-            const data = await fetchTeamData(t);
-            if (data && data.length > 0) {
-                availableTeams = [...availableTeams, t];
-                teamData = { ...teamData, [t]: data };
+            if (allRows.length === 0) {
+                throw new Error("No data found in dummyData.json");
             }
+
+            availableTeams = [];
+            teamData = {};
+
+            // Group rows by team
+            for (const row of allRows) {
+                const teamNum = row.Team;
+                if (!teamNum) continue;
+
+                if (!availableTeams.includes(teamNum)) {
+                    availableTeams = [...availableTeams, teamNum];
+                }
+
+                if (!teamData[teamNum]) {
+                    teamData[teamNum] = [];
+                }
+                teamData[teamNum] = [...teamData[teamNum], row];
+            }
+
+            availableTeams = availableTeams.sort();
+        } catch (e) {
+            throw new Error(`Failed to load team data: ${e.message}`);
         }
     }
 
     function computeMetrics() {
         if (availableTeams.length === 0) return [];
 
-        const firstTeam = availableTeams[0];
-        const rows = teamData[firstTeam];
-        if (!rows || rows.length === 0) return [];
+        const metricSet = new Set();
+        
+        // Collect all numeric keys from all teams and rows
+        for (const team of availableTeams) {
+            const rows = teamData[team] || [];
+            for (const row of rows) {
+                Object.keys(row).forEach((k) => {
+                    if (k === "Match" || k === "Team") return;
+                    const n = Number(row[k]);
+                    if (!Number.isNaN(n)) {
+                        metricSet.add(k);
+                    }
+                });
+            }
+        }
 
-        const first = rows[0];
-        return Object.keys(first).filter((k) => {
-            if (k === "Match") return false;
-            const n = Number(first[k]);
-            return !Number.isNaN(n);
-        });
+        return Array.from(metricSet).sort();
     }
 
     /* ---------- grid building ---------- */
@@ -186,26 +199,31 @@
     }
 
     onMount(async () => {
-        await loadAllTeamData();
+        try {
+            await loadAllTeamData();
 
-        if (availableTeams.length === 0) {
-            error = "No team JSON files found for any of the configured teams.";
+            if (availableTeams.length === 0) {
+                error = "No team data found in dummyData.json.";
+                loading = false;
+                return;
+            }
+
+            metrics = computeMetrics();
+
+            if (metrics.length === 0) {
+                error = "Team data loaded, but no numeric metrics were found.";
+                loading = false;
+                return;
+            }
+
+            selectedMetric = metrics[0];
             loading = false;
-            return;
-        }
 
-        metrics = computeMetrics();
-
-        if (metrics.length === 0) {
-            error = "Team data loaded, but no numeric metrics were found.";
+            buildGrid();
+        } catch (e) {
+            error = e.message;
             loading = false;
-            return;
         }
-
-        selectedMetric = metrics[0];
-        loading = false;
-
-        buildGrid();
     });
 </script>
 
@@ -217,9 +235,9 @@
         {error}
     {:else}
         <label>Metric:</label>
-        <select on:change={onMetricChange} style="margin-left:10px; padding:5px;">
+        <select bind:value={selectedMetric} on:change={onMetricChange} style="margin-left:10px; padding:5px;">
             {#each metrics as m}
-                <option value={m} selected={m === selectedMetric}>{m}</option>
+                <option value={m}>{m}</option>
             {/each}
         </select>
     {/if}
