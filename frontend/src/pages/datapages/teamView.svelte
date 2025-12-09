@@ -105,14 +105,16 @@
     }
 
     async function loadTeamData(teamNumber) {
-        const json = fetchTeamView(teamNumber);
-        buildGrid(json);
+        const json = await fetchTeamView(teamNumber);
+        const teamData = await json.json()
+        buildGrid(teamData);
     }
 
     let gridInstance = null;
 
-    function buildGrid(json) {
-        const matches = json.data;
+    async function buildGrid(teamData) {
+        const matches = teamData.data;
+        console.log(matches);
         const matchNums = matches.map(m => m.Match);
         const qLabels = matchNums.map((_, i) => `Q${i + 1}`);
 

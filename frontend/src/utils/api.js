@@ -10,12 +10,13 @@ function fetchTeamView() {
 
 export function fetchTeamView(teamNumber) {
     const route = `http://localhost:8000/getTeamView?teamNumber=${teamNumber}`;
+    console.log(teamNumber);
     let data = fetch(route);
     return data;
 }
 
-export function fetchAllTeams(column) {
-    const route = `http://localhost:8000/getAllTeams?column=${column}`;
+export function fetchAllTeams() {
+    const route = `http://localhost:8000/getAllTeams`;
     let data = fetch(route);
     return data;
 }

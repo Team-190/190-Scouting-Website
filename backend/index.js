@@ -75,7 +75,7 @@ app.post("/postEventCode", async (req, res) => {
     }
     else {
         console.log(`Event code retrieved, ${eventCode}`);
-        res.status(200).json({ ok: true });
+        res.sendStatus(200);
     }
 })
 
@@ -88,10 +88,8 @@ app.get("/getTeamView", async (req, res) => {
 });
 
 app.get("/getAllTeams", async (req, res) => {
-    const column = req.query.attribute;
-    if (!column) res.sendStatus(400);
     if (!eventCode) res.sendStatus(403);
-    let result = await database.allTeamsView(eventCode, column);
+    let result = await database.allTeamsView(eventCode);
     res.send(result);
 });
 
