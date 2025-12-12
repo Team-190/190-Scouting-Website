@@ -14,7 +14,6 @@
         {path : "/pickLists", component: PickLists},
         {path : "/eventView", component: SingleMetric},
         {path : "/teamView", component: TeamView},
-        {path : "/singleMetric", component: SingleMetric},
     ];
 </script>
 

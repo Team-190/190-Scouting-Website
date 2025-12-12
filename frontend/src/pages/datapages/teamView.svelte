@@ -8,7 +8,7 @@
 
     import "ag-grid-community/styles/ag-grid.css";
     import "ag-grid-community/styles/ag-theme-quartz.css";
-    import { fetchTeamView } from "../../utils/api"
+    import { fetchTeamView, fetchAvailableTeams } from "../../utils/api"
     import Team from "../../components/Team.svelte";
 
     ModuleRegistry.registerModules([AllCommunityModule]);
@@ -100,7 +100,7 @@
     // load list of teams attending season (simplified)
     async function loadAllTeams() {
         // replace with your real source later
-        allTeams = [190, 254, 1678, 6328, 2056, 148, 118];
+        allTeams = await (await fetchAvailableTeams()).json();
         if (!selectedTeam) selectedTeam = allTeams[0];
     }
 
@@ -109,12 +109,11 @@
         const teamData = await json.json()
         buildGrid(teamData);
     }
-
+    
     let gridInstance = null;
-
+    
     async function buildGrid(teamData) {
         const matches = teamData.data;
-        console.log(matches);
         const matchNums = matches.map(m => m.Match);
         const qLabels = matchNums.map((_, i) => `Q${i + 1}`);
 

@@ -21,6 +21,12 @@ export function fetchAllTeams() {
     return data;
 }
 
+export function fetchAvailableTeams() {
+    const route = `http://localhost:8000/getAvailableTeams`;
+    let data = fetch(route);
+    return data;
+}
+
 export async function postEventCode(eventCode) {
     const response = await fetch("http://localhost:8000/postEventCode", {
         method: 'POST',

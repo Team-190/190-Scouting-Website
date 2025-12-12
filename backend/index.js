@@ -93,6 +93,12 @@ app.get("/getAllTeams", async (req, res) => {
     res.send(result);
 });
 
+app.get("/getAvailableTeams", async (req, res) => {
+    if (!eventCode) res.sendStatus(403);
+    let result = await database.availableTeamsView(eventCode);
+    res.send(result);
+});
+
 app.listen(PORT, () =>{
     console.log("Listening on port " + PORT);
 });
