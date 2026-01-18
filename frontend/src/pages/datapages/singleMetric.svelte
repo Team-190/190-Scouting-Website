@@ -184,7 +184,10 @@
                 headerName: "Team",
                 field: "team",
                 pinned: "left",
-                width: 120,
+                flex: 1,
+                minWidth: 120,
+                headerClass: "header-center",
+                cellClass: "cell-center",
                 cellStyle: {
                     background: "#7a1f1f",
                     color: "white",
@@ -195,7 +198,10 @@
             ...qLabels.map((q) => ({
                 headerName: q,
                 field: q,
-                width: 110,
+                flex: 1,
+                headerClass: "header-center",
+                minWidth: 80,
+                cellClass: "cell-center",
                 cellStyle: (params) => {
                     const v = params.value ?? 0;
 
@@ -209,24 +215,36 @@
             })),
             {
                 headerName: "Mean",
+                headerClass: "header-center",
                 field: "mean",
-                width: 100,
-                cellStyle: {
-                    background: "#2a4a2a",
-                    color: "white",
-                    fontWeight: "bold",
-                    textAlign: "center"
+                flex: 1,
+                minWidth: 80,
+                cellClass: "cell-center",
+                cellStyle: params => {
+                    const metricName = selectedMetric;
+                    return {
+                        background: colorFromStats(params.value, globalMean, globalSd),
+                        color: params.value === 0 ? "white" : "black",
+                        fontWeight: "bold",
+                        textAlign: "center"
+                    };
                 }
             },
             {
                 headerName: "Median",
                 field: "median",
-                width: 100,
-                cellStyle: {
-                    background: "#2a3a4a",
-                    color: "white",
-                    fontWeight: "bold",
-                    textAlign: "center"
+                flex: 1,
+                headerClass: "header-center",
+                minWidth: 80,
+                cellClass: "cell-center",
+                cellStyle: params => {
+                    const metricName = selectedMetric;
+                    return {
+                        background: colorFromStats(params.value, globalMean, globalSd),
+                        color: params.value === 0 ? "white" : "black",
+                        fontWeight: "bold",
+                        textAlign: "center"
+                    };
                 }
             }
         ];
@@ -287,16 +305,15 @@
 </script>
 
 <!-- Controls -->
-<div style="padding:10px; background:#111; color:white; display:flex; gap:20px; align-items:center;">
+<div class="controls">
     {#if loading}
         Loading team data...
     {:else if error}
         {error}
     {:else}
         <div>
-            <!-- svelte-ignore a11y_label_has_associated_control -->
-            <label>Metric:</label>
-            <select bind:value={selectedMetric} on:change={onMetricChange} style="margin-left:10px; padding:5px;">
+            <label for="metric-select">Metric:</label>
+            <select id="metric-select" bind:value={selectedMetric} on:change={onMetricChange}>
                 {#each metrics as m}
                     <option value={m}>{m}</option>
                 {/each}
@@ -304,9 +321,8 @@
         </div>
 
         <div>
-            <!-- svelte-ignore a11y_label_has_associated_control -->
-            <label>Colorblind Mode:</label>
-            <select bind:value={colorblindMode} on:change={onColorblindChange} style="margin-left:10px; padding:5px;">
+            <label for="colorblind-select">Colorblind Mode:</label>
+            <select id="colorblind-select" bind:value={colorblindMode} on:change={onColorblindChange}>
                 {#each Object.entries(colorModes) as [key, mode]}
                     <option value={key}>{mode.name}</option>
                 {/each}
@@ -316,8 +332,64 @@
 </div>
 
 <!-- Grid container -->
-<div
-    class="ag-theme-quartz"
-    style="height: calc(100vh - 50px); width: 100vw;"
-    bind:this={domNode}
-></div>
+<div class="grid-container ag-theme-quartz" bind:this={domNode}></div>
+
+<style>
+    :global(html), :global(body) {
+        margin: 0;
+        padding: 0;
+        background: #000;
+        overflow: hidden;
+        height: 100vh;
+        width: 100vw;
+    }
+
+    :global(*) {
+        box-sizing: border-box;
+    }
+
+    :global(select option:checked) {
+        background: #C81B00;
+        color: white;
+    }
+
+    :global(.ag-header-cell.header-center) {
+    justify-content: center;
+}
+
+    :global(.ag-header-cell.header-center .ag-header-cell-label) {
+        justify-content: center;
+        text-align: center;
+        width: 100%;
+    }
+    :global(.cell-center) {
+        text-align: center !important;
+    }
+
+    .controls {
+        padding: 10px 15px;
+        background: #4D4D4D;
+        color: white;
+        display: flex;
+        gap: 20px;
+        align-items: center;
+        height: 50px;
+        box-sizing: border-box;
+    }
+
+    select {
+        margin-left: 10px;
+        padding: 5px;
+        background: #333;
+        color: white;
+        border: 2px solid #C81B00;
+    }
+
+    .grid-container {
+        height: calc(100vh - 50px);
+        width: 90vw;
+        margin-left: calc(-45vw + 50%);
+        background: #000;
+        box-sizing: border-box;
+    }
+</style>

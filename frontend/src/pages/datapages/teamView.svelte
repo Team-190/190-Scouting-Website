@@ -1,31 +1,59 @@
-<script>
+<script lang="ts">
     import { onMount } from "svelte";
     import {
         createGrid,
         ModuleRegistry,
         AllCommunityModule
     } from "ag-grid-community";
+    import teamViewData from "../../utils/allTeamView.json";
 
     import "ag-grid-community/styles/ag-grid.css";
     import "ag-grid-community/styles/ag-theme-quartz.css";
 
     ModuleRegistry.registerModules([AllCommunityModule]);
-    const TBA_KEY = "zhTqFG7csJoif1sNXt3aZngy0LB1X4LxMgTfXBvPscNG0P9FifZCa2uGJcUk2gKW";
 
     let domNode;
+    let colorblindMode = "normal";
 
-    /* -------- Stats helpers -------- */
+    const colorModes = {
+        normal: {
+            name: "Normal",
+            below: [255, 0, 0],
+            above: [0, 255, 0],
+            mid: [255, 255, 0]
+        },
+        protanopia: {
+            name: "Protanopia (Red-blind)",
+            below: [0, 114, 178],
+            above: [240, 228, 66],
+            mid: [120, 171, 121]
+        },
+        deuteranopia: {
+            name: "Deuteranopia (Green-blind)",
+            below: [213, 94, 0],
+            above: [86, 180, 233],
+            mid: [150, 137, 117]
+        },
+        tritanopia: {
+            name: "Tritanopia (Blue-yellow blind)",
+            below: [220, 20, 60],
+            above: [0, 128, 0],
+            mid: [110, 74, 30]
+        }
+    };
+
     const mean = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
+
+    const median = arr => {
+        const sorted = [...arr].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    };
+
     const sd = (arr, mu) => {
         const variance = arr.reduce((s, v) => s + (v - mu) ** 2, 0) / arr.length;
         return Math.sqrt(variance);
     };
-
-    // Color-blind-safe diverging palette
-    const BLUE   = [0, 114, 178];   // below average
-    const ORANGE = [230, 159, 0];   // above average
-    const GRAY   = [210, 210, 210]; // neutral
-
 
     const lerpColor = (c1, c2, t) =>
         `rgb(${[
@@ -38,125 +66,118 @@
         if (v === 0) return "#000";
         if (sigma === 0) return "rgb(180,180,180)";
 
+        const mode = colorModes[colorblindMode];
         const z = (v - mu) / sigma;
         const t = Math.min(1, Math.abs(z));
 
-        return z < 0
-            ? lerpColor(GRAY, BLUE, t)     // below mean
-            : lerpColor(GRAY, ORANGE, t);  // above mean
+        return z < 0 ? lerpColor(mode.mid, mode.below, t) : lerpColor(mode.mid, mode.above, t);
     }
 
-    function TeamHeaderComponent() {}
+    function onColorblindChange(e: Event) {
+        const target = e.target as HTMLSelectElement;
+        colorblindMode = target.value;
+        if (selectedTeam) {
+            loadTeamData(selectedTeam);
+        }
+    }
 
-    TeamHeaderComponent.prototype.init = function (params) {
-        this.params = params;
-
-        const div = document.createElement("div");
-        div.style.display = "flex";
-        div.style.alignItems = "center";
-        div.style.justifyContent = "center";
-        div.style.height = "100%";
-
-        const select = document.createElement("select");
-        select.style.width = "140px";
-        select.style.padding = "4px";
-        select.style.fontWeight = "bold";
-        select.style.background = "#7a1f1f";
-        select.style.color = "white";
-        select.style.border = "none";
-        select.style.borderRadius = "4px";
-
-        // Populate list of teams
-        params.context.allTeams.forEach(t => {
-            const opt = document.createElement("option");
-            opt.value = t;
-            opt.textContent = t;
-            select.appendChild(opt);
-        });
-
-        select.value = params.context.selectedTeam;
-
-        // When selection changes → load data & refresh grid
-        select.addEventListener("change", async (e) => {
-            const t = Number(e.target.value);
-            params.context.selectedTeam = t;
-
-            await params.context.loadTeamData(t);
-
-            params.api.refreshHeader();
-        });
-
-        div.appendChild(select);
-        this.eGui = div;
-    };
-
-    TeamHeaderComponent.prototype.getGui = function () {
-        return this.eGui;
-    };
+    function onTeamChange(e: Event) {
+        const target = e.target as HTMLSelectElement;
+        selectedTeam = target.value;
+        loadTeamData(selectedTeam);
+    }
 
     let allTeams = [];
     let selectedTeam = null;
 
-    // load list of teams attending season (simplified)
-    async function loadAllTeams() {
-        // replace with your real source later
-        allTeams = [190, 254, 1678, 6328, 2056, 148, 118];
-        if (!selectedTeam) selectedTeam = allTeams[0];
+    function loadAllTeams() {
+        const allRows = Array.isArray(teamViewData?.data) ? teamViewData.data : [];
+        const uniqueTeams = [...new Set(allRows.map(r => r.Team))];
+        allTeams = uniqueTeams.sort();
+        if (!selectedTeam && allTeams.length > 0) selectedTeam = allTeams[0];
     }
 
-    async function loadTeamData(teamNumber) {
-        const res = await fetch(`/team${teamNumber}Data.json`);
-        const json = await res.json();
-        buildGrid(json);
+    function loadTeamData(teamNumber) {
+        const allRows = Array.isArray(teamViewData?.data) ? teamViewData.data : [];
+        const teamMatches = allRows.filter(r => r.Team === teamNumber);
+        buildGrid(teamMatches);
     }
 
     let gridInstance = null;
 
-    function buildGrid(json) {
-        const matches = json.data;
+    function buildGrid(matches) {
+        if (matches.length === 0) return;
+
         const matchNums = matches.map(m => m.Match);
         const qLabels = matchNums.map((_, i) => `Q${i + 1}`);
 
         const sample = matches[0];
         const numericMetrics = Object.keys(sample).filter(
-            k => k !== "Match" && !isNaN(Number(sample[k]))
+            k => !["Match", "Team"].includes(k) && !isNaN(Number(sample[k]))
         );
+
+        // Calculate global stats for each metric across all teams/matches
+        const globalStats = {};
+        numericMetrics.forEach(metric => {
+            const allRows = Array.isArray(teamViewData?.data) ? teamViewData.data : [];
+            const allValues = [];
+            allRows.forEach((row) => {
+                const val = Number(row[metric] ?? 0);
+                allValues.push(val);
+            });
+            const filteredValues = allValues.filter(v => v !== 0);
+            globalStats[metric] = {
+                mean: filteredValues.length > 0 ? mean(filteredValues) : 0,
+                sd: filteredValues.length > 0 ? sd(filteredValues, mean(filteredValues)) : 0
+            };
+        });
 
         const rowData = [];
 
         // First row: Match Numbers
-        const matchRow = { metric: "MatchNum" };
+        const matchRow: any = { metric: "MatchNum" };
         qLabels.forEach((q, i) => {
             matchRow[q] = matchNums[i];
         });
         rowData.push(matchRow);
 
-        // Other metrics
+        // Other metrics with mean and median
         numericMetrics.forEach(metric => {
-            const row = { metric };
+            const row: any = { metric };
+            const values = [];
             qLabels.forEach((q, i) => {
                 const match = matches[i];
-                row[q] = Number(match?.[metric] || 0);
+                const val = Number(match?.[metric] || 0);
+                row[q] = val;
+                values.push(val);
             });
+            row.mean = values.length > 0 ? Number(mean(values).toFixed(2)) : 0;
+            row.median = values.length > 0 ? Number(median(values).toFixed(2)) : 0;
             rowData.push(row);
         });
 
         const columnDefs = [
             {
-                headerComponent: "teamHeader",
                 field: "metric",
                 pinned: "left",
-                width: 160,
+                flex: 1,
+                minWidth: 120,
+                headerClass: "header-center",
+                cellClass: "cell-center",
                 cellStyle: {
                     background: "#7a1f1f",
                     color: "white",
-                    fontWeight: "bold"
+                    fontWeight: "bold",
+                    textAlign: "center"
                 }
             },
-            ...qLabels.map((q, colIndex) => ({
+            ...qLabels.map((q) => ({
                 headerName: q,
                 field: q,
-                width: 110,
+                flex: 1,
+                minWidth: 80,
+                headerClass: "header-center",
+                cellClass: "cell-center",
                 cellStyle: params => {
                     if (params.data.metric === "MatchNum") {
                         return {
@@ -167,45 +188,159 @@
                         };
                     }
 
-                    const values = qLabels.map(q => params.data[q]);
-                    const mu = mean(values);
-                    const sigma = sd(values, mu);
+                    const metricName = params.data.metric;
+                    const stats = globalStats[metricName] || { mean: 0, sd: 0 };
                     return {
-                        background: colorFromStats(params.value, mu, sigma),
+                        background: colorFromStats(params.value, stats.mean, stats.sd),
                         color: params.value === 0 ? "white" : "black",
                         fontWeight: 600,
                         textAlign: "center"
                     };
                 }
-            }))
+            })),
+            {
+                headerName: "Mean",
+                field: "mean",
+                flex: 1,
+                minWidth: 80,
+                headerClass: "header-center",
+                cellClass: "cell-center",
+                cellStyle: params => {
+                    const metricName = params.data.metric;
+                    const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+                    return {
+                        background: colorFromStats(params.value, stats.mean, stats.sd),
+                        color: params.value === 0 ? "white" : "black",
+                        fontWeight: "bold",
+                        textAlign: "center"
+                    };
+                }
+            },
+            {
+                headerName: "Median",
+                field: "median",
+                flex: 1,
+                minWidth: 80,
+                headerClass: "header-center",
+                cellClass: "cell-center",
+                cellStyle: params => {
+                    const metricName = params.data.metric;
+                    const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+                    return {
+                        background: colorFromStats(params.value, stats.mean, stats.sd),
+                        color: params.value === 0 ? "white" : "black",
+                        fontWeight: "bold",
+                        textAlign: "center"
+                    };
+                }
+            }
         ];
 
+        // Destroy old grid if it exists
         if (gridInstance) {
-            gridInstance.api.setRowData(rowData);
-            gridInstance.api.setColumnDefs(columnDefs);
-            return;
+            gridInstance.destroy();
         }
 
+        // Create new grid
         gridInstance = createGrid(domNode, {
             rowData,
             columnDefs,
-            components: { teamHeader: TeamHeaderComponent },
-            context: {
-                selectedTeam,
-                allTeams,
-                loadTeamData
-            },
             defaultColDef: {
-                resizable: true,
+                resizable: false,
                 sortable: false
-            }
+            },
+            suppressHorizontalScroll: false
         });
     }
 
-    onMount(async () => {
-        await loadAllTeams();
-        await loadTeamData(selectedTeam);
+    onMount(() => {
+        loadAllTeams();
+
+        if (allTeams.length > 0) {
+            selectedTeam = allTeams[0];
+            loadTeamData(selectedTeam);
+        }
     });
 </script>
 
-<div class="ag-theme-quartz" style="height: 100vh; width: 100vw;" bind:this={domNode}></div>
+<style>
+    :global(html), :global(body) {
+        margin: 0;
+        padding: 0;
+        background: #000;
+        overflow: hidden;
+        height: 100vh;
+        width: 100vw;
+    }
+
+    :global(*) {
+        box-sizing: border-box;
+    }
+
+    :global(select option:checked) {
+        background: #C81B00;
+        color: white;
+    }
+
+    :global(.ag-header-cell.header-center) {
+        justify-content: center;
+    }
+
+    :global(.ag-header-cell.header-center .ag-header-cell-label) {
+        justify-content: center;
+        text-align: center;
+        width: 100%;
+    }
+    :global(.cell-center) {
+        text-align: center !important;
+    }
+
+    .controls {
+        padding: 10px 15px;
+        background: #4D4D4D;
+        color: white;
+        display: flex;
+        gap: 20px;
+        align-items: center;
+        box-sizing: border-box;
+    }
+
+    select {
+        margin-left: 10px;
+        padding: 5px;
+        background: #333;
+        color: white;
+        border: 2px solid #C81B00;
+    }
+
+    .grid-container {
+        height: calc(56vh);
+        width: 90vw;
+        margin-left: calc(-45vw + 50%);
+        background: #000;
+        box-sizing: border-box;
+    }
+</style>
+
+<!-- Controls -->
+<div class="controls">
+    <div>
+        <label for="team-select">Team:</label>
+        <select id="team-select" bind:value={selectedTeam} on:change={onTeamChange}>
+            {#each allTeams as team}
+                <option value={team}>{team}</option>
+            {/each}
+        </select>
+    </div>
+    <div>
+        <label for="colorblind-select">Colorblind Mode:</label>
+        <select id="colorblind-select" bind:value={colorblindMode} on:change={onColorblindChange}>
+            {#each Object.entries(colorModes) as [key, mode]}
+                <option value={key}>{mode.name}</option>
+            {/each}
+        </select>
+    </div>
+</div>
+
+<!-- Grid container -->
+<div class="grid-container ag-theme-quartz" bind:this={domNode}></div>
