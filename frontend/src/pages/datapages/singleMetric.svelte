@@ -63,6 +63,7 @@
         const variance = arr.reduce((s, v) => s + (v - mu) ** 2, 0) / arr.length;
         return Math.sqrt(variance);
     };
+    
 
     const lerpColor = (c1, c2, t) =>
         `rgb(${[
@@ -81,6 +82,26 @@
 
         return z < 0 ? lerpColor(mode.mid, mode.below, t) : lerpColor(mode.mid, mode.above, t);
     }
+    function summaryColor(v, values) {
+        if (v === 0) return "rgb(150,150,150)";
+
+        const nonZero = values.filter(x => x !== 0);
+        if (nonZero.length === 0) return "rgb(180,180,180)";
+
+        const mu = mean(nonZero);
+        const sigma = sd(nonZero, mu);
+        if (sigma === 0) return "rgb(180,180,180)";
+
+        const mode = colorModes[colorblindMode];
+        const z = (v - mu) / sigma;
+        const t = Math.min(1, Math.abs(z));
+
+        return z < 0
+            ? lerpColor(mode.mid, mode.below, t)
+            : lerpColor(mode.mid, mode.above, t);
+    }
+    
+
 
     function loadTeamData() {
         try {
@@ -176,9 +197,11 @@
             row.mean = values.length > 0 ? Number(mean(values).toFixed(2)) : 0;
             row.median = values.length > 0 ? Number(median(values).toFixed(2)) : 0;
 
+
             return row;
         }).sort((a, b) => b.mean - a.mean);
-
+        const meanValues = rowData.map(r => r.mean);
+        const medianValues = rowData.map(r => r.median);
         const columnDefs = [
             {
                 headerName: "Team",
@@ -189,7 +212,7 @@
                 headerClass: "header-center",
                 cellClass: "cell-center",
                 cellStyle: {
-                    background: "#7a1f1f",
+                    background: "#C81B00",
                     color: "white",
                     fontWeight: "bold",
                     textAlign: "center"
@@ -215,18 +238,19 @@
             })),
             {
                 headerName: "Mean",
-                headerClass: "header-center",
                 field: "mean",
                 flex: 1,
-                minWidth: 80,
-                cellClass: "cell-center",
+                minWidth: 90,
+                headerClass: "header-center mean-header",
+                cellClass: "cell-center mean-cell",
                 cellStyle: params => {
-                    const metricName = selectedMetric;
+                    const v = params.value ?? 0;
                     return {
-                        background: colorFromStats(params.value, globalMean, globalSd),
-                        color: params.value === 0 ? "white" : "black",
+                        background: summaryColor(v, meanValues),
+                        color: v === 0 ? "#222" : "black",
                         fontWeight: "bold",
-                        textAlign: "center"
+                        textAlign: "center",
+                        borderLeft: "3px solid #C81B00"
                     };
                 }
             },
@@ -234,19 +258,21 @@
                 headerName: "Median",
                 field: "median",
                 flex: 1,
-                headerClass: "header-center",
-                minWidth: 80,
-                cellClass: "cell-center",
+                minWidth: 90,
+                headerClass: "header-center median-header",
+                cellClass: "cell-center median-cell",
                 cellStyle: params => {
-                    const metricName = selectedMetric;
+                    const v = params.value ?? 0;
                     return {
-                        background: colorFromStats(params.value, globalMean, globalSd),
-                        color: params.value === 0 ? "white" : "black",
+                        background: summaryColor(v, medianValues),
+                        color: v === 0 ? "#222" : "black",
                         fontWeight: "bold",
-                        textAlign: "center"
+                        textAlign: "center",
+                        borderLeft: "2px solid #555"
                     };
                 }
             }
+
         ];
 
         if (gridApi) {
@@ -355,12 +381,15 @@
 
     :global(.ag-header-cell.header-center) {
     justify-content: center;
+    background: #C81B00 !important;
+    color: white !important;
 }
 
     :global(.ag-header-cell.header-center .ag-header-cell-label) {
         justify-content: center;
         text-align: center;
         width: 100%;
+        color: white !important;
     }
     :global(.cell-center) {
         text-align: center !important;
@@ -368,7 +397,7 @@
 
     .controls {
         padding: 10px 15px;
-        background: #4D4D4D;
+        background: #000;
         color: white;
         display: flex;
         gap: 20px;

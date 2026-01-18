@@ -165,7 +165,7 @@
                 headerClass: "header-center",
                 cellClass: "cell-center",
                 cellStyle: {
-                    background: "#7a1f1f",
+                    background: "#C81B00",
                     color: "white",
                     fontWeight: "bold",
                     textAlign: "center"
@@ -209,8 +209,10 @@
                     const metricName = params.data.metric;
                     const stats = globalStats[metricName] || { mean: 0, sd: 0 };
                     return {
-                        background: colorFromStats(params.value, stats.mean, stats.sd),
-                        color: params.value === 0 ? "white" : "black",
+                        background: params.value === 0
+                            ? "#e0e0e0"            // gray background
+                            : colorFromStats(params.value, stats.mean, stats.sd),
+                        color: "black",            // always black text
                         fontWeight: "bold",
                         textAlign: "center"
                     };
@@ -227,8 +229,10 @@
                     const metricName = params.data.metric;
                     const stats = globalStats[metricName] || { mean: 0, sd: 0 };
                     return {
-                        background: colorFromStats(params.value, stats.mean, stats.sd),
-                        color: params.value === 0 ? "white" : "black",
+                        background: params.value === 0
+                            ? "#e0e0e0"            // gray background
+                            : colorFromStats(params.value, stats.mean, stats.sd),
+                        color: "black",            // always black text
                         fontWeight: "bold",
                         textAlign: "center"
                     };
@@ -282,14 +286,16 @@
         color: white;
     }
 
-    :global(.ag-header-cell.header-center) {
-        justify-content: center;
+    :global(.ag-header-cell) {
+        background: #C81B00 !important;
+        color: white !important;
     }
 
     :global(.ag-header-cell.header-center .ag-header-cell-label) {
         justify-content: center;
         text-align: center;
         width: 100%;
+        color: white !important;
     }
     :global(.cell-center) {
         text-align: center !important;
@@ -297,7 +303,7 @@
 
     .controls {
         padding: 10px 15px;
-        background: #4D4D4D;
+        background: #000;
         color: white;
         display: flex;
         gap: 20px;
