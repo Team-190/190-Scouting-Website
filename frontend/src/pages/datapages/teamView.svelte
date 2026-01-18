@@ -21,9 +21,11 @@
         return Math.sqrt(variance);
     };
 
-    const RED = [255, 0, 0];
-    const YELLOW = [255, 255, 0];
-    const GREEN = [0, 255, 0];
+    // Color-blind-safe diverging palette
+    const BLUE   = [0, 114, 178];   // below average
+    const ORANGE = [230, 159, 0];   // above average
+    const GRAY   = [210, 210, 210]; // neutral
+
 
     const lerpColor = (c1, c2, t) =>
         `rgb(${[
@@ -33,14 +35,15 @@
         ].join(",")})`;
 
     function colorFromStats(v, mu, sigma) {
-        if (v === 0) return "black";
-        if (sigma === 0) return "yellow";
+        if (v === 0) return "#000";
+        if (sigma === 0) return "rgb(180,180,180)";
+
         const z = (v - mu) / sigma;
-        return lerpColor(
-            z < 0 ? YELLOW : YELLOW,
-            z < 0 ? RED : GREEN,
-            Math.min(1, Math.abs(z))
-        );
+        const t = Math.min(1, Math.abs(z));
+
+        return z < 0
+            ? lerpColor(GRAY, BLUE, t)     // below mean
+            : lerpColor(GRAY, ORANGE, t);  // above mean
     }
 
     function TeamHeaderComponent() {}
