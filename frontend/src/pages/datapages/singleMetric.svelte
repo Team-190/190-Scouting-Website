@@ -162,46 +162,40 @@
         const firstRows = teamData[firstTeam];
         if (!firstRows || firstRows.length === 0) return;
 
-        const matches = firstRows.map((m) => m.Match);
+        const matches = firstRows.map(m => m.Match);
         const qLabels = matches.map((_, i) => `Q${i + 1}`);
 
-        // Calculate global stats across all data, excluding teams with all zeros
+        // Global stats (exclude all-zero teams)
         const allValues = [];
-        availableTeams.forEach((team) => {
+        availableTeams.forEach(team => {
             const rows = teamData[team] || [];
-            const teamValues = rows.map((matchRow) => Number(matchRow[selectedMetric] ?? 0));
-            
-            // Only include team if it has at least one non-zero value
-            const hasNonZero = teamValues.some(v => v !== 0);
-            if (hasNonZero) {
-                allValues.push(...teamValues);
-            }
+            const vals = rows.map(r => Number(r[selectedMetric] ?? 0));
+            if (vals.some(v => v !== 0)) allValues.push(...vals);
         });
 
-        const globalMean = allValues.length > 0 ? mean(allValues) : 0;
-        const globalSd = allValues.length > 0 ? sd(allValues, globalMean) : 0;
+        const globalMean = allValues.length ? mean(allValues) : 0;
+        const globalSd = allValues.length ? sd(allValues, globalMean) : 0;
 
-        const rowData = availableTeams.map((team) => {
-            const row = { team };
+        const rowData = availableTeams.map(team => {
             const rows = teamData[team] || [];
             const values = [];
+            const row = { team };
 
-            rows.forEach((matchRow, index) => {
-                const label = qLabels[index];
-                if (!label) return;
-                const val = Number(matchRow[selectedMetric] ?? 0);
-                row[label] = val;
-                values.push(val);
+            rows.forEach((r, i) => {
+                const label = qLabels[i];
+                const v = Number(r[selectedMetric] ?? 0);
+                row[label] = v;
+                values.push(v);
             });
 
-            row.mean = values.length > 0 ? Number(mean(values).toFixed(2)) : 0;
-            row.median = values.length > 0 ? Number(median(values).toFixed(2)) : 0;
-
-
+            row.mean = values.length ? Number(mean(values).toFixed(2)) : 0;
+            row.median = values.length ? Number(median(values).toFixed(2)) : 0;
             return row;
         }).sort((a, b) => b.mean - a.mean);
+
         const meanValues = rowData.map(r => r.mean);
         const medianValues = rowData.map(r => r.median);
+
         const columnDefs = [
             {
                 headerName: "Team",
@@ -215,24 +209,25 @@
                     background: "#C81B00",
                     color: "white",
                     fontWeight: "bold",
+                    fontSize: "18px",
                     textAlign: "center"
                 }
             },
-            ...qLabels.map((q) => ({
+            ...qLabels.map(q => ({
                 headerName: q,
                 field: q,
                 flex: 1,
-                headerClass: "header-center",
                 minWidth: 80,
+                headerClass: "header-center",
                 cellClass: "cell-center",
-                cellStyle: (params) => {
+                cellStyle: params => {
                     const v = params.value ?? 0;
-
                     return {
                         background: colorFromStats(v, globalMean, globalSd),
                         color: v === 0 ? "white" : "black",
-                        textAlign: "center",
-                        fontWeight: 600
+                        fontWeight: 600,
+                        fontSize: "18px",
+                        textAlign: "center"
                     };
                 }
             })),
@@ -240,15 +235,16 @@
                 headerName: "Mean",
                 field: "mean",
                 flex: 1,
-                minWidth: 90,
-                headerClass: "header-center mean-header",
-                cellClass: "cell-center mean-cell",
+                minWidth: 80,
+                headerClass: "header-center",
+                cellClass: "cell-center",
                 cellStyle: params => {
                     const v = params.value ?? 0;
                     return {
                         background: summaryColor(v, meanValues),
                         color: v === 0 ? "#222" : "black",
                         fontWeight: "bold",
+                        fontSize: "18px",
                         textAlign: "center",
                         borderLeft: "3px solid #C81B00"
                     };
@@ -258,21 +254,21 @@
                 headerName: "Median",
                 field: "median",
                 flex: 1,
-                minWidth: 90,
-                headerClass: "header-center median-header",
-                cellClass: "cell-center median-cell",
+                minWidth: 80,
+                headerClass: "header-center",
+                cellClass: "cell-center",
                 cellStyle: params => {
                     const v = params.value ?? 0;
                     return {
                         background: summaryColor(v, medianValues),
                         color: v === 0 ? "#222" : "black",
                         fontWeight: "bold",
+                        fontSize: "18px",
                         textAlign: "center",
                         borderLeft: "2px solid #555"
                     };
                 }
             }
-
         ];
 
         if (gridApi) {
@@ -283,13 +279,19 @@
                 rowData,
                 columnDefs,
                 defaultColDef: {
-                    resizable: true,
-                    sortable: false
+                    resizable: false,
+                    sortable: false,
+                    suppressMovable: true,
+                    cellStyle: {
+                        fontSize: "18px"
+                    }
                 },
-                theme: "legacy"
+                suppressColumnVirtualisation: true,
+                suppressHorizontalScroll: true
             });
         }
     }
+
 
     function onMetricChange(e) {
         selectedMetric = e.target.value;
@@ -330,6 +332,79 @@
     });
 </script>
 
+<style>
+    :global(html), :global(body) {
+        margin: 0;
+        padding: 0;
+        background: #000;
+        overflow: hidden;
+        height: 100vh;
+        width: 100vw;
+    }
+
+    :global(*) {
+        box-sizing: border-box;
+    }
+
+    :global(select option:checked) {
+        background: #C81B00;
+        color: white;
+        font-size: "18px";
+    }
+
+    :global(.ag-header-cell) {
+        background: #C81B00 !important;
+        color: white !important;
+        font-size: "18px";
+    }
+
+    :global(.ag-header-cell.header-center .ag-header-cell-label) {
+        justify-content: center;
+        text-align: center;
+        width: 100%;
+        color: white !important;
+        font-size: "18px";
+    }
+    
+    :global(.cell-center) {
+        text-align: center !important;
+    }
+
+    :global(.ag-theme-quartz .ag-root-wrapper) {
+        --ag-font-size: 20px;
+    }     
+
+    .controls {
+        padding: 10px 15px;
+        background: #000;
+        color: white;
+        font-size: "18px";
+        display: flex;
+        gap: 20px;
+        align-items: center;
+        box-sizing: border-box;
+        width: 80vw;
+        margin: 0 auto;
+    }
+
+    select {
+        margin-left: 10px;
+        padding: 5px;
+        background: #333;
+        color: white;
+        font-size: "18px";
+        border: 2px solid #C81B00;
+    }
+
+    .grid-container {
+        height: calc(56vh);
+        width: 80vw;
+        margin: 0 auto;
+        background: #000;
+        box-sizing: border-box;
+    }
+</style>
+
 <!-- Controls -->
 <div class="controls">
     {#if loading}
@@ -359,66 +434,3 @@
 
 <!-- Grid container -->
 <div class="grid-container ag-theme-quartz" bind:this={domNode}></div>
-
-<style>
-    :global(html), :global(body) {
-        margin: 0;
-        padding: 0;
-        background: #000;
-        overflow: hidden;
-        height: 100vh;
-        width: 100vw;
-    }
-
-    :global(*) {
-        box-sizing: border-box;
-    }
-
-    :global(select option:checked) {
-        background: #C81B00;
-        color: white;
-    }
-
-    :global(.ag-header-cell.header-center) {
-    justify-content: center;
-    background: #C81B00 !important;
-    color: white !important;
-}
-
-    :global(.ag-header-cell.header-center .ag-header-cell-label) {
-        justify-content: center;
-        text-align: center;
-        width: 100%;
-        color: white !important;
-    }
-    :global(.cell-center) {
-        text-align: center !important;
-    }
-
-    .controls {
-        padding: 10px 15px;
-        background: #000;
-        color: white;
-        display: flex;
-        gap: 20px;
-        align-items: center;
-        height: 50px;
-        box-sizing: border-box;
-    }
-
-    select {
-        margin-left: 10px;
-        padding: 5px;
-        background: #333;
-        color: white;
-        border: 2px solid #C81B00;
-    }
-
-    .grid-container {
-        height: calc(100vh - 50px);
-        width: 90vw;
-        margin-left: calc(-45vw + 50%);
-        background: #000;
-        box-sizing: border-box;
-    }
-</style>

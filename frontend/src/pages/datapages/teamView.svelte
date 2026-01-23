@@ -167,6 +167,7 @@
                 cellStyle: {
                     background: "#C81B00",
                     color: "white",
+                    fontSize: "18px",
                     fontWeight: "bold",
                     textAlign: "center"
                 }
@@ -176,6 +177,7 @@
                 field: q,
                 flex: 1,
                 minWidth: 80,
+                fontSize: "18px",
                 headerClass: "header-center",
                 cellClass: "cell-center",
                 cellStyle: params => {
@@ -183,6 +185,7 @@
                         return {
                             background: "#333",
                             color: "white",
+                            fontSize: "18px",
                             fontWeight: 800,
                             textAlign: "center"
                         };
@@ -193,6 +196,7 @@
                     return {
                         background: colorFromStats(params.value, stats.mean, stats.sd),
                         color: params.value === 0 ? "white" : "black",
+                        fontSize: "18px",
                         fontWeight: 600,
                         textAlign: "center"
                     };
@@ -213,6 +217,7 @@
                             ? "#e0e0e0"            // gray background
                             : colorFromStats(params.value, stats.mean, stats.sd),
                         color: "black",            // always black text
+                        fontSize: "18px",
                         fontWeight: "bold",
                         textAlign: "center"
                     };
@@ -233,6 +238,7 @@
                             ? "#e0e0e0"            // gray background
                             : colorFromStats(params.value, stats.mean, stats.sd),
                         color: "black",            // always black text
+                        fontSize: "18px",
                         fontWeight: "bold",
                         textAlign: "center"
                     };
@@ -251,9 +257,14 @@
             columnDefs,
             defaultColDef: {
                 resizable: false,
-                sortable: false
+                sortable: false,
+                suppressMovable: true,
+                cellStyle: {
+                    fontSize: "18px"
+                }
             },
-            suppressHorizontalScroll: false
+            suppressColumnVirtualisation: true,
+            suppressHorizontalScroll: true
         });
     }
 
@@ -284,11 +295,13 @@
     :global(select option:checked) {
         background: #C81B00;
         color: white;
+        font-size: "18px";
     }
 
     :global(.ag-header-cell) {
         background: #C81B00 !important;
         color: white !important;
+        font-size: "18px";
     }
 
     :global(.ag-header-cell.header-center .ag-header-cell-label) {
@@ -296,19 +309,27 @@
         text-align: center;
         width: 100%;
         color: white !important;
+        font-size: "18px";
     }
     :global(.cell-center) {
         text-align: center !important;
     }
 
+    :global(.ag-theme-quartz .ag-root-wrapper) {
+        --ag-font-size: 20px;
+    }     
+
     .controls {
         padding: 10px 15px;
         background: #000;
         color: white;
+        font-size: "18px";
         display: flex;
         gap: 20px;
         align-items: center;
         box-sizing: border-box;
+        width: 80%;
+        margin: 0 auto;
     }
 
     select {
@@ -316,13 +337,14 @@
         padding: 5px;
         background: #333;
         color: white;
+        font-size: "18px";
         border: 2px solid #C81B00;
     }
 
     .grid-container {
         height: calc(56vh);
-        width: 90vw;
-        margin-left: calc(-45vw + 50%);
+        width: 80vw;
+        margin: 0 auto;
         background: #000;
         box-sizing: border-box;
     }
