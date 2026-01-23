@@ -4,18 +4,27 @@
   import * as pie from '../../pages/graphcode/pie.js';
   import * as radar from '../../pages/graphcode/radar.js';
   import * as scatter from '../../pages/graphcode/scatter.js';
-  import jsonData from '../../data_testing/allTeamView.json';
 
-  const dummyData = jsonData.data;
+  import dummyData from '../../data_testing/allTeamView.json';
 
   let chartTypes = ['bar', 'line', 'pie', 'scatter', 'radar'];
+  let teamOptions = dummyData.data.map(d => d.Team);
+  let metricOptions = Object.keys(dummyData.data[0]).filter(k => k !== 'Team' && k !== 'Match');
+
   let charts = [];
   let showDropdown = false;
 
   function addChart(type) {
     charts = [
       ...charts,
-      { id: crypto.randomUUID(), type, el: null, instance: null, dataset: '' }
+      {
+        id: crypto.randomUUID(),
+        type,
+        el: null,
+        instance: null,
+        team: '',
+        yAxisMetric: metricOptions[0]
+      }
     ];
   }
 
@@ -33,88 +42,109 @@
     charts.forEach(chart => {
       if (chart.el && !chart.instance) {
         switch (chart.type) {
-          case 'bar': chart.instance = bar.createChart(chart.el); break;
-          case 'line': chart.instance = line.createChart(chart.el); break;
-          case 'pie': chart.instance = pie.createChart(chart.el); break;
-          case 'scatter': chart.instance = scatter.createChart(chart.el); break;
-          case 'radar': chart.instance = radar.createChart(chart.el); break;
+          case 'bar':
+            chart.instance = bar.createChart(chart.el);
+            break;
+          case 'line':
+            chart.instance = line.createChart(chart.el);
+            break;
+          case 'pie':
+            chart.instance = pie.createChart(chart.el);
+            break;
+          case 'scatter':
+            chart.instance = scatter.createChart(chart.el);
+            break;
+          case 'radar':
+            chart.instance = radar.createChart(chart.el);
+            break;
         }
       }
     });
   }
 
   function updateChartDataset(chart) {
-    if (!chart.instance || !chart.dataset) return;
+    if (!chart.instance) return;
+
     let option;
     switch (chart.type) {
-      case 'bar': option = getBarOption(chart.dataset); break;
-      case 'line': option = getLineOption(chart.dataset); break;
-      case 'pie': option = getPieOption(chart.dataset); break;
-      case 'scatter': option = getScatterOption(chart.dataset); break;
-      case 'radar': option = getRadarOption(chart.dataset); break;
+      case 'bar':
+        option = getBarOption(chart.team, chart.yAxisMetric);
+        break;
+      case 'line':
+        option = getLineOption(chart.team, chart.yAxisMetric);
+        break;
+      case 'pie':
+        option = getPieOption(chart.team, chart.yAxisMetric);
+        break;
+      case 'scatter':
+        option = getScatterOption(chart.team, chart.yAxisMetric);
+        break;
+      case 'radar':
+        option = getRadarOption(chart.team);
+        break;
     }
     chart.instance.setOption(option, true);
   }
 
-  // Get list of teams from the data
-  let datasetOptions = dummyData.map(d => d.Team);
-
-  function getBarOption(team) {
-    const teamData = dummyData.find(d => d.Team === team);
-    const metrics = Object.keys(teamData).filter(k => k !== 'Team' && typeof teamData[k] === 'number');
+  function getBarOption(team, metric) {
+    const dataPoint = dummyData.data.find(d => d.Team === team);
     return {
-      xAxis: { type: 'category', data: metrics },
+      xAxis: { type: 'category', data: [metric] },
       yAxis: { type: 'value' },
-      series: [{ data: metrics.map(m => teamData[m]), type: 'bar', name: team }]
+      series: [
+        { data: [dataPoint ? dataPoint[metric] : 0], type: 'bar', name: metric }
+      ]
     };
   }
 
-  function getLineOption(team) {
-    const teamData = dummyData.find(d => d.Team === team);
-    const metrics = Object.keys(teamData).filter(k => k !== 'Team' && typeof teamData[k] === 'number');
+  function getLineOption(team, metric) {
+    const teamData = dummyData.data.filter(d => d.Team === team);
     return {
-      xAxis: { type: 'category', data: metrics },
+      xAxis: { type: 'category', data: teamData.map(d => d.Match) },
       yAxis: { type: 'value' },
-      series: [{ data: metrics.map(m => teamData[m]), type: 'line', name: team }]
+      series: [
+        { data: teamData.map(d => d[metric]), type: 'line', name: metric }
+      ]
     };
   }
 
-  function getPieOption(team) {
-    const teamData = dummyData.find(d => d.Team === team);
-    const metrics = Object.keys(teamData).filter(k => k !== 'Team' && typeof teamData[k] === 'number');
+  function getPieOption(team, metric) {
     return {
       series: [{
         type: 'pie',
-        data: metrics.map(m => ({ value: teamData[m], name: m })),
-        name: team
+        data: dummyData.data.map(d => ({ value: d[metric], name: d.Team })),
+        name: metric
       }]
     };
   }
 
-  function getScatterOption(team) {
-    const teamData = dummyData.find(d => d.Team === team);
-    const metrics = Object.keys(teamData).filter(k => k !== 'Team' && typeof teamData[k] === 'number');
+  function getScatterOption(team, metric) {
     return {
-      xAxis: { type: 'category', data: metrics, name: 'Metrics' },
-      yAxis: { type: 'value', name: 'Value' },
-      series: [{ data: metrics.map(m => teamData[m]), type: 'scatter', name: team }]
+      xAxis: { name: 'Match' },
+      yAxis: { name: metric },
+      series: [{
+        symbolSize: 10,
+        data: dummyData.data.map(d => [d.Match, d[metric]]),
+        type: 'scatter',
+        name: `${metric} vs Match`
+      }]
     };
   }
 
   function getRadarOption(team) {
-    const teamData = dummyData.find(d => d.Team === team);
-    const metrics = Object.keys(teamData).filter(k => k !== 'Team' && typeof teamData[k] === 'number');
-    const maxValues = {};
-    metrics.forEach(m => {
-      maxValues[m] = Math.max(...dummyData.map(d => d[m]));
-    });
     return {
       radar: {
-        indicator: metrics.map(m => ({ name: m, max: maxValues[m] }))
+        indicator: metricOptions.map(k => ({
+          name: k,
+          max: Math.max(...dummyData.data.map(d => d[k]))
+        }))
       },
       series: [{
         type: 'radar',
-        data: [{ value: metrics.map(m => teamData[m]), name: team }]
+        data: dummyData.data.map(d => ({
+          value: metricOptions.map(k => d[k]),
+          name: d.Team
+        }))
       }]
     };
   }
@@ -147,12 +177,21 @@
 
         <p class="chart-label">{chart.type} Chart</p>
 
-        <select bind:value={chart.dataset} on:change={() => updateChartDataset(chart)}>
+        <select bind:value={chart.team} on:change={() => updateChartDataset(chart)}>
           <option value="">Choose team</option>
-          {#each datasetOptions as team}
+          {#each teamOptions as team}
             <option value={team}>{team}</option>
           {/each}
         </select>
+
+        {#if chart.type !== 'radar'}
+          <select bind:value={chart.yAxisMetric} on:change={() => updateChartDataset(chart)}>
+            <option value="">Choose metric</option>
+            {#each metricOptions as m}
+              <option value={m}>{m}</option>
+            {/each}
+          </select>
+        {/if}
       </div>
     {/each}
   </div>
@@ -173,8 +212,6 @@
 
 .dropdown-container {
   position: relative;
-  display: flex;
-  justify-content: center;
   margin-bottom: 2rem;
 }
 
@@ -192,6 +229,7 @@
   color: white;
   cursor: pointer;
   padding: 0;
+  box-sizing: border-box;
 }
 
 .plus-btn:hover {
@@ -201,21 +239,21 @@
 .dropdown {
   position: absolute;
   top: 70px;
-  display: flex;
-  flex-direction: column;
+  left: 50%;
+  transform: translateX(-50%);
   background: white;
   border: 1px solid #ccc;
   border-radius: 6px;
   list-style: none;
   padding: 0;
   margin: 0;
-  min-width: 120px;
+  width: 150px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.2);
   z-index: 10;
 }
 
 .dropdown li {
-  padding: 10px 15px;
+  padding: 10px;
   cursor: pointer;
   text-align: center;
   color: #000;
