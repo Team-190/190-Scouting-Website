@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
     import { onMount } from "svelte";
     import {
         createGrid,
@@ -8,6 +8,8 @@
 
     import "ag-grid-community/styles/ag-grid.css";
     import "ag-grid-community/styles/ag-theme-quartz.css";
+    import { fetchTeamView, fetchAvailableTeams } from "../../utils/api"
+    import Team from "../../components/Team.svelte";
 
     ModuleRegistry.registerModules([AllCommunityModule]);
     const TBA_KEY = "zhTqFG7csJoif1sNXt3aZngy0LB1X4LxMgTfXBvPscNG0P9FifZCa2uGJcUk2gKW";
@@ -75,7 +77,8 @@
 
         // When selection changes → load data & refresh grid
         select.addEventListener("change", async (e) => {
-            const t = Number(e.target.value);
+            const target = e.target as HTMLSelectElement;
+            const t = Number(target.value);
             params.context.selectedTeam = t;
 
             await params.context.loadTeamData(t);
@@ -97,20 +100,20 @@
     // load list of teams attending season (simplified)
     async function loadAllTeams() {
         // replace with your real source later
-        allTeams = [190, 254, 1678, 6328, 2056, 148, 118];
+        allTeams = await (await fetchAvailableTeams()).json();
         if (!selectedTeam) selectedTeam = allTeams[0];
     }
 
     async function loadTeamData(teamNumber) {
-        const res = await fetch(`/team${teamNumber}Data.json`);
-        const json = await res.json();
-        buildGrid(json);
+        const json = await fetchTeamView(teamNumber);
+        const teamData = await json.json()
+        buildGrid(teamData);
     }
-
+    
     let gridInstance = null;
-
-    function buildGrid(json) {
-        const matches = json.data;
+    
+    async function buildGrid(teamData) {
+        const matches = teamData.data;
         const matchNums = matches.map(m => m.Match);
         const qLabels = matchNums.map((_, i) => `Q${i + 1}`);
 

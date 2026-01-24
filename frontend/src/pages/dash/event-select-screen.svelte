@@ -1,6 +1,7 @@
 <script>
+    import {goto} from "@mateothegreat/svelte5-router";
     import { onMount } from "svelte";
-    import "../../utils/api.js";
+    import { postEventCode } from "../../utils/api";
 
     let years = [];
     let months = [
@@ -67,12 +68,15 @@
       });
     }
 
-    function handleSubmit() {
+    async function handleSubmit() {
         if (!selectedEvent) {
             alert("Please select an event before submitting.");
             return;
         }
-    alert(`Submitted: ${selectedEvent}`);
+    
+        await postEventCode(selectedEvent);
+        alert(`Submitted: ${selectedEvent}`);
+        goto("/teamView");
     }
 
   
