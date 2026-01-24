@@ -336,9 +336,10 @@
     :global(html), :global(body) {
         margin: 0;
         padding: 0;
-        background: #000;
-        overflow: hidden;
-        height: 100vh;
+        background: #A9B0B7;
+        overflow-x: hidden;
+        overflow-y: auto;
+        min-height: 100vh;
         width: 100vw;
     }
 
@@ -349,13 +350,16 @@
     :global(select option:checked) {
         background: #C81B00;
         color: white;
-        font-size: "18px";
+        font-size: 18px;
     }
 
     :global(.ag-header-cell) {
         background: #C81B00 !important;
         color: white !important;
-        font-size: "18px";
+        font-size: 18px;
+        font-weight: 700 !important;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
 
     :global(.ag-header-cell.header-center .ag-header-cell-label) {
@@ -363,74 +367,165 @@
         text-align: center;
         width: 100%;
         color: white !important;
-        font-size: "18px";
+        font-size: 18px;
     }
-    
+
     :global(.cell-center) {
         text-align: center !important;
     }
 
     :global(.ag-theme-quartz .ag-root-wrapper) {
-        --ag-font-size: 20px;
-    }     
+        --ag-font-size: 18px;
+        border: 3px solid #C81B00;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    :global(.ag-body-viewport) {
+        overflow-y: scroll !important;
+    }
+
+    :global(.ag-body-viewport::-webkit-scrollbar) {
+        width: 12px;
+        display: block !important;
+    }
+
+    :global(.ag-body-viewport::-webkit-scrollbar-track) {
+        background: #2a2a2a;
+        border-radius: 6px;
+    }
+
+    :global(.ag-body-viewport::-webkit-scrollbar-thumb) {
+        background: #C81B00;
+        border-radius: 6px;
+        border: 2px solid #2a2a2a;
+    }
+
+    :global(.ag-body-viewport::-webkit-scrollbar-thumb:hover) {
+        background: #a01500;
+    }
+
+    .page-wrapper {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        min-height: 100vh;
+        padding: 20px;
+        background: #A9B0B7;
+    }
+
+    .page-header {
+        text-align: center;
+        margin-bottom: 20px;
+    }
+
+    .page-header h1 {
+        color: #C81B00;
+        font-size: 2.5rem;
+        font-weight: 800;
+        margin: 0 0 5px 0;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .page-header .team-badge {
+        display: inline-block;
+        background: #C81B00;
+        color: white;
+        padding: 5px 20px;
+        border-radius: 20px;
+        font-weight: 700;
+        font-size: 1rem;
+    }
 
     .controls {
-        padding: 10px 15px;
-        background: #000;
+        padding: 15px 25px;
+        background: linear-gradient(135deg, #1a1a1a, #2d2d2d);
         color: white;
-        font-size: "18px";
+        font-size: 16px;
         display: flex;
-        gap: 20px;
+        gap: 30px;
         align-items: center;
-        box-sizing: border-box;
-        width: 80vw;
-        margin: 0 auto;
+        justify-content: center;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        border: 2px solid #C81B00;
+    }
+
+    .controls label {
+        font-weight: 600;
+        color: #fff;
     }
 
     select {
         margin-left: 10px;
-        padding: 5px;
-        background: #333;
+        padding: 8px 15px;
+        background: #1a1a1a;
         color: white;
-        font-size: "18px";
+        font-size: 16px;
         border: 2px solid #C81B00;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    select:hover {
+        background: #2d2d2d;
+        border-color: #ff3020;
+    }
+
+    select:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(200, 27, 0, 0.3);
     }
 
     .grid-container {
-        height: calc(56vh);
-        width: 80vw;
-        margin: 0 auto;
-        background: #000;
-        box-sizing: border-box;
+        height: 60vh;
+        width: 90vw;
+        max-width: 1400px;
+        background: #1a1a1a;
+        border-radius: 8px;
+        overflow: hidden;
     }
 </style>
 
-<!-- Controls -->
-<div class="controls">
-    {#if loading}
-        Loading team data...
-    {:else if error}
-        {error}
-    {:else}
-        <div>
-            <label for="metric-select">Metric:</label>
-            <select id="metric-select" bind:value={selectedMetric} on:change={onMetricChange}>
-                {#each metrics as m}
-                    <option value={m}>{m}</option>
-                {/each}
-            </select>
-        </div>
+<div class="page-wrapper">
+    <!-- Page Header -->
+    <div class="page-header">
+        <h1>Single Metric View</h1>
+        <span class="team-badge">FRC 190</span>
+    </div>
 
-        <div>
-            <label for="colorblind-select">Colorblind Mode:</label>
-            <select id="colorblind-select" bind:value={colorblindMode} on:change={onColorblindChange}>
-                {#each Object.entries(colorModes) as [key, mode]}
-                    <option value={key}>{mode.name}</option>
-                {/each}
-            </select>
-        </div>
-    {/if}
+    <!-- Controls -->
+    <div class="controls">
+        {#if loading}
+            Loading team data...
+        {:else if error}
+            {error}
+        {:else}
+            <div>
+                <label for="metric-select">Metric:</label>
+                <select id="metric-select" bind:value={selectedMetric} on:change={onMetricChange}>
+                    {#each metrics as m}
+                        <option value={m}>{m}</option>
+                    {/each}
+                </select>
+            </div>
+
+            <div>
+                <label for="colorblind-select">Colorblind Mode:</label>
+                <select id="colorblind-select" bind:value={colorblindMode} on:change={onColorblindChange}>
+                    {#each Object.entries(colorModes) as [key, mode]}
+                        <option value={key}>{mode.name}</option>
+                    {/each}
+                </select>
+            </div>
+        {/if}
+    </div>
+
+    <!-- Grid container -->
+    <div class="grid-container ag-theme-quartz" bind:this={domNode}></div>
 </div>
-
-<!-- Grid container -->
-<div class="grid-container ag-theme-quartz" bind:this={domNode}></div>
