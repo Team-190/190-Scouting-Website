@@ -987,37 +987,45 @@
 
 </script>
 
-<main>
-    <h1>Picklist</h1>
-
-    <div class="tabs">
-        <button class:active={activeView === 'picklists'} on:click={() => activeView = 'picklists'}>
-            Picklists
-        </button>
-        <button class:active={activeView === 'alliances'} on:click={() => activeView = 'alliances'}>
-            Alliance Selection
-        </button>
+<div class="page-wrapper">
+    <!-- Header Section -->
+    <div class="header-section">
+        <h1>Picklists & Alliance Selection</h1>
+        <p class="subtitle">FRC Team 190 - Scouting Strategy</p>
     </div>
 
-    <div>
-        <label for="tba-key">TBA API Key:</label>
-        <input type="text" id="tba-key" bind:value={tbaApiKey}>
-        <button on:click={getEvents}>Get Events</button>
-    </div>
-
-    {#if events.length > 0}
-        <div>
-            <label for="event-select">Select Event:</label>
-            <select id="event-select" bind:value={selectedEvent} on:change={getTeams}>
-                <option value="">--Select an Event--</option>
-                {#each events as event}
-                    <option value={event.key}>{event.name}</option>
-                {/each}
-            </select>
+    <!-- Top Controls Section -->
+    <div class="top-controls">
+        <div class="top-left-group">
+            <div class="tabs">
+                <button class:active={activeView === 'picklists'} on:click={() => activeView = 'picklists'}>
+                    Picklists
+                </button>
+                <button class:active={activeView === 'alliances'} on:click={() => activeView = 'alliances'}>
+                    Alliance Selection
+                </button>
+            </div>
+            
+            <div class="api-controls">
+                {#if events.length > 0}
+                    <select id="event-select" bind:value={selectedEvent} on:change={getTeams}>
+                        <option value="">--Select an Event--</option>
+                        {#each events as event}
+                            <option value={event.key}>{event.name}</option>
+                        {/each}
+                    </select>
+                {/if}
+            </div>
         </div>
-    {/if}
 
+        <div class="api-controls">
+            <button on:click={getEvents}>Get Events</button>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
     <div class="main-content" on:dragover={handleDragOver} on:drop|preventDefault={handleDropToRemove}>
+        <!-- Team List Sidebar -->
         <div class="team-list-container">
             <h2>Teams</h2>
             <div class="team-list">
@@ -1029,11 +1037,13 @@
             </div>
         </div>
 
+        <!-- Right Side View Container -->
         <div class="view-container" on:dragover={handleDragOver} on:drop|preventDefault={handleDropToRemove}>
             {#if activeView === 'picklists'}
                 <div class="picklist-view">
-                    <div class="controls">
-                        <input type="text" bind:value={newPickListName} placeholder="New picklist name" />
+                    <!-- Create New Picklist Input -->
+                    <div style="margin-bottom: 20px;">
+                        <input type="text" bind:value={newPickListName} placeholder="New picklist name" style="width: 300px;" />
                         <button on:click={createPickList}>Create Picklist</button>
                     </div>
                     
@@ -1053,7 +1063,7 @@
                                     {:else}
                                         <span on:click={() => startEditing(key, list.name)}>{list.name}</span>
                                     {/if}
-                                    <button on:click={() => deletePickList(key)}>X</button>
+                                    <button on:click={() => deletePickList(key)} style="background: transparent; border: none; font-size: 1.2rem; padding: 0;">X</button>
                                 </h2>
                                 <div class="list" on:dragover={handleDragOver} on:drop={() => handleDrop(key)} on:dragenter={(e) => handleDragEnter(e, key)}>
                                     {#each list.teams as team (team.team_number)}
@@ -1066,14 +1076,15 @@
 
                     <div class="share-container">
                         <div class="share-controls">
-                            <h2>Share & Import</h2>
-                            <button on:click={exportPicklists}>Copy Picklists to Clipboard</button>
+                            <h3>Share Picklists</h3>
+                            <p style="margin: 5px 0 10px; font-size: 0.9em; opacity: 0.8;">Generate a code to share your current picklists with others.</p>
+                            <button on:click={exportPicklists}>Copy Code to Clipboard</button>
                         </div>
                         <div class="share-controls">
                             <h3>Import Picklists</h3>
-                            <textarea bind:value={importData} rows="8" placeholder="Paste shared data here..."></textarea>
+                            <textarea bind:value={importData} rows="4" placeholder="Paste shared data string here..."></textarea>
                             <br />
-                            <button on:click={importPicklists}>Import</button>
+                            <button on:click={importPicklists}>Import Data</button>
                         </div>
                     </div>
 
@@ -1087,15 +1098,16 @@
             {#if activeView === 'alliances'}
                 <div class="alliance-selection">
                     <div class="alliance-controls">
-                        <h2>Alliance Selection</h2>
-                        <div>
-                            <label>
-                                <input type="checkbox" bind:checked={isFourTeamAlliance} />
+                        <h2>Alliance Selection Board</h2>
+                        <div style="display: flex; gap: 20px; align-items: center;">
+                            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                                <input type="checkbox" bind:checked={isFourTeamAlliance} style="width: 20px; height: 20px;" />
                                 4 teams per alliance
                             </label>
+                            <button on:click={populateAllianceCaptains}>Reset Board</button>
                         </div>
-                        <button on:click={populateAllianceCaptains}>Reset</button>
                     </div>
+                    
                     <div class="alliances-container">
                         {#each alliances as alliance}
                             <div class="alliance-list" on:dragover={handleDragOver} on:drop={() => handleDropOnAlliance(alliance.id)}>
@@ -1108,21 +1120,20 @@
                             </div>
                         {/each}
                     </div>
+                    
                     <div class="fixed-buttons">
-                        <button on:click={rankFill}>Fill Based on Rank</button>
-                        <button on:click={oprFill}>Fill Based on OPR</button>
-                        <button on:click={epaFill}>Fill Based on EPA</button>
+                        <button on:click={rankFill}>Fill by Rank</button>
+                        <button on:click={oprFill}>Fill by OPR</button>
+                        <button on:click={epaFill}>Fill by EPA</button>
                     </div>
                 </div>
             {/if}
         </div>
     </div>
+    
     {#if activeView === 'alliances'}
     <div class="bottom-bar">
         <div class="alliance-management">
-            <input type="text" bind:value={newAllianceSelectionName} placeholder="New selection name" on:keydown={(e) => e.key === 'Enter' && createAllianceSelection()} />
-            <button on:click={createAllianceSelection}>New</button>
-            
             <div class="current-selection-display">
                 {#if editingAllianceSelectionId === activeAllianceSelectionId}
                     <input
@@ -1140,156 +1151,374 @@
                 {/if}
             </div>
 
-            <select id="alliance-selection-switcher" bind:value={activeAllianceSelectionId}>
+            <select id="alliance-selection-switcher" bind:value={activeAllianceSelectionId} style="background: #333; border: 1px solid #555;">
                 {#each Object.entries(allianceSelections) as [id, selection]}
                     <option value={id}>{selection.name}</option>
                 {/each}
             </select>
+            
             <button on:click={deleteAllianceSelection} disabled={Object.keys(allianceSelections).length <= 1 || activeAllianceSelectionId === 'default'}>Delete</button>
+            <div style="width: 1px; height: 20px; background: #555; margin: 0 5px;"></div>
             <button on:click={copyAllianceSelection}>Copy</button>
-            <input type="text" bind:value={allianceImportData} placeholder="Paste selection data..." />
+            <input type="text" bind:value={allianceImportData} placeholder="Paste data..." style="width: 150px;" />
             <button on:click={pasteAllianceSelection}>Paste</button>
+            
+            <div style="width: 1px; height: 20px; background: #555; margin: 0 5px;"></div>
+            
+            <input type="text" bind:value={newAllianceSelectionName} placeholder="New list name" on:keydown={(e) => e.key === 'Enter' && createAllianceSelection()} style="width: 150px;" />
+            <button on:click={createAllianceSelection}>New</button>
         </div>
     </div>
     {/if}
-</main>
+</div>
 
 <style>
-    .tabs {
-        margin-bottom: 20px;
+    /* FRC 190 Brand Colors & Global Resets */
+    :root {
+        --frc-190-red: #C81B00;
+        --wpi-gray: #A9B0B7;
+        --frc-190-black: #4D4D4D;
+        --dark-bg: #1a1a1a;
+        --darker-bg: #121212;
+        --card-bg: #2d2d2d;
     }
-    .tabs button {
-        padding: 10px 20px;
-        border: 1px solid #ccc;
-        background-color: #000000;
-        color: #ffffff;
+
+    :global(html), :global(body) {
+        margin: 0;
+        padding: 0;
+        background: var(--wpi-gray);
+        height: 100vh;
+        width: 100vw;
+        overflow-x: hidden;
+    }
+
+    :global(*) {
+        box-sizing: border-box;
+    }
+
+    button {
         cursor: pointer;
+        padding: 8px 16px;
+        border: 2px solid var(--frc-190-red);
+        background: linear-gradient(135deg, #333 0%, #444 100%);
+        color: white;
+        font-weight: 600;
+        border-radius: 6px;
+        transition: all 0.2s;
     }
+
+    button:hover {
+        background: linear-gradient(135deg, #444 0%, #555 100%);
+        border-color: #e02200;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+
+    button:active {
+        transform: translateY(0);
+    }
+
+    button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    input[type="text"], textarea, select {
+        padding: 8px 12px;
+        border: 2px solid var(--frc-190-red);
+        background: #333;
+        color: white;
+        border-radius: 6px;
+        font-size: 14px;
+    }
+
+    input[type="text"]:focus, textarea:focus, select:focus {
+        outline: none;
+        box-shadow: 0 0 0 2px rgba(200, 27, 0, 0.4);
+    }
+
+    /* Page Layout */
+    .page-wrapper {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-height: 100vh;
+        padding: 20px;
+        background: var(--wpi-gray);
+        padding-bottom: 80px; /* Space for fixed bottom bar */
+    }
+
+    .header-section {
+        text-align: center;
+        margin-bottom: 20px;
+        width: 100%;
+    }
+
+    .header-section h1 {
+        color: var(--frc-190-red);
+        font-size: 2.5rem;
+        font-weight: 800;
+        margin: 0 0 5px 0;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        letter-spacing: 1px;
+    }
+
+    /* Top Controls Area */
+    .top-controls {
+        width: 95%; /* Make it wide */
+        max-width: 1600px;
+        background: var(--dark-bg);
+        padding: 15px;
+        border-radius: 10px;
+        border: 2px solid var(--frc-190-red);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        color: white;
+    }
+
+    .top-left-group {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+    }
+
+    .tabs {
+        display: flex;
+        gap: 0;
+        border: 2px solid var(--frc-190-red);
+        border-radius: 6px;
+        overflow: hidden;
+    }
+
+    .tabs button {
+        border-radius: 0;
+        border: none;
+        background: #222;
+        color: #aaa;
+        padding: 10px 20px;
+        font-size: 16px;
+    }
+
+    .tabs button:hover {
+        background: #333;
+        color: white;
+        transform: none;
+        box-shadow: none;
+    }
+
     .tabs button.active {
-        background-color: #e7e7e7;
-        color: #000000;
-        border-bottom: 1px solid #fff;
+        background: var(--frc-190-red);
+        color: white;
+        font-weight: bold;
     }
+
+    .api-controls {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+
+    /* Main Content Area */
+    .main-content {
+        display: flex;
+        width: 95%;
+        max-width: 1600px;
+        gap: 20px;
+        align-items: flex-start;
+        /* height is managed by children */
+    }
+
+    /* Team List Sidebar */
+    .team-list-container {
+        width: 280px;
+        background: var(--dark-bg);
+        border: 2px solid var(--frc-190-black);
+        border-radius: 8px;
+        display: flex;
+        flex-direction: column;
+        height: 75vh;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+    
+    .team-list-container h2 {
+        background: var(--frc-190-red);
+        color: white;
+        margin: 0;
+        padding: 10px;
+        text-align: center;
+        font-size: 1.2rem;
+    }
+
+    .team-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 10px;
+    }
+
+    /* View Container (Picklists/Alliances) */
+    .view-container {
+        flex: 1;
+        min-width: 0; /* allows flex shrink */
+    }
+
+    /* Picklist Grid */
+    .container {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 20px;
+        margin-top: 20px;
+    }
+
+    .picklist, .alliance-list {
+        background: var(--dark-bg);
+        border: 2px solid var(--frc-190-black);
+        border-radius: 8px;
+        display: flex;
+        flex-direction: column;
+        height: 400px; /* Fixed height for consistency */
+        overflow: hidden;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+
+    .picklist h2, .alliance-list h3 {
+        background: var(--frc-190-red);
+        color: white;
+        margin: 0;
+        padding: 10px;
+        font-size: 1.1rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
+    .picklist h2 input {
+        background: rgba(0,0,0,0.2);
+        border: 1px solid rgba(255,255,255,0.3);
+        color: white;
+        width: 70%;
+    }
+
+    .picklist .list, .alliance-list .list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 10px;
+        background: #252525; /* Slightly lighter inner background */
+    }
+
+    /* Share Section in Picklists */
+    .share-container {
+        margin-top: 30px;
+        background: var(--dark-bg);
+        padding: 20px;
+        border-radius: 8px;
+        border: 2px solid var(--frc-190-red);
+        display: flex;
+        gap: 20px;
+        color: white;
+    }
+
+    .share-controls {
+        flex: 1;
+    }
+    
+    .share-controls h2, .share-controls h3 {
+        margin-top: 0;
+        color: var(--frc-190-red);
+    }
+
+    /* Fixed floating buttons */
+    .fixed-buttons {
+        position: fixed;
+        bottom: 100px;
+        right: 30px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        z-index: 50;
+    }
+    
+    .fixed-buttons button {
+        box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    }
+
+    /* Alliance Selection View */
+    .alliance-controls {
+        background: var(--dark-bg);
+        padding: 15px;
+        border-radius: 8px;
+        border: 2px solid var(--frc-190-black);
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        color: white;
+    }
+    
+    .alliances-container {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr); /* 4 columns for 8 alliances looks good */
+        gap: 20px;
+    }
+    @media (max-width: 1400px) {
+        .alliances-container {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    /* Bottom Fixed Bar style */
     .bottom-bar {
         position: fixed;
         bottom: 0;
         left: 0;
         width: 100%;
-        background-color: #1a1a1a;
-        border-top: 1px solid #ccc;
-        padding: 10px 20px;
-        z-index: 20;
+        background: #151515;
+        border-top: 2px solid var(--frc-190-red);
+        padding: 15px 30px;
+        z-index: 100;
         display: flex;
-        justify-content: flex-start;
-        align-items: center;
+        justify-content: center;
+        box-shadow: 0 -4px 10px rgba(0,0,0,0.3);
     }
+    
     .alliance-management {
+        background: #222;
+        padding: 10px 20px;
+        border-radius: 50px; /* Pill shape */
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 15px;
+        border: 1px solid #444;
     }
-    .current-selection-display span {
-        cursor: pointer;
-        padding: 5px;
-        border: 1px solid transparent;
+    
+    .alliance-management input {
+        border-radius: 20px; 
     }
-    .current-selection-display span:hover {
-        border-color: #ccc;
+
+    .current-selection-display {
+        color: var(--frc-190-red);
+        font-weight: bold;
+        font-size: 1.1rem;
     }
-    .main-content {
-        display: flex;
-        gap: 20px;
+
+    /* Scrollbar Styling */
+    :global(::-webkit-scrollbar) {
+        width: 10px;
+        height: 10px;
     }
-    .team-list-container {
-        position: fixed;
-        left: 20px;
-        top: 20px;
-        width: 300px;
-        height: calc(100vh - 40px);
-        z-index: 10;
-        background: #1a1a1a;
-        border: 1px solid #ccc;
+    :global(::-webkit-scrollbar-track) {
+        background: #222;
+    }
+    :global(::-webkit-scrollbar-thumb) {
+        background: var(--frc-190-red);
         border-radius: 5px;
-        padding: 10px;
-        display: flex;
-        flex-direction: column;
+        border: 2px solid #222;
     }
-    .team-list {
-        width: 100%;
-        border: none;
-        padding: 0;
-        overflow-y: auto;
-        flex-grow: 1;
-    }
-    .view-container {
-        flex-grow: 1;
-        overflow-x: auto;
-        margin-left: 340px;
-        padding-bottom: 60px; /* Add padding to avoid overlap with bottom bar */
-    }
-    .list {
-        min-height: 200px;
-        background-color: #f9f9f9;
-        padding: 5px;
-    }
-    .controls {
-        margin-top: 20px;
-    }
-    h2 button {
-        font-size: 0.8rem;
-        margin-left: 10px;
-        cursor: pointer;
-    }
-    h2 span {
-        cursor: pointer;
-    }
-    .share-container {
-        display: flex;
-        gap: 20px;
-        margin-top: 20px;
-    }
-    .share-controls {
-        flex: 1;
-        padding: 10px;
-        border: 1px solid #ccc;
-        border-radius: 5px;
-    }
-    .share-controls textarea {
-        width: 100%;
-        box-sizing: border-box;
-        margin-top: 10px;
-    }
-    .share-controls button {
-        margin-top: 10px;
-    }
-    .fixed-buttons {
-        position: fixed;
-        bottom: 80px; /* Adjust to be above the new bottom bar */
-        right: 20px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-    }
-    .alliance-controls {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-top: 20px;
-    }
-    .alliance-selection {
-        margin-top: 20px;
-    }
-    .alliances-container {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-        gap: 20px;
-    }
-    .alliance-list {
-        border: 1px solid #ccc;
-        border-radius: 5px;
-        padding: 10px;
-    }
-    .alliance-list h3 {
-        margin-top: 0;
+    :global(::-webkit-scrollbar-thumb:hover) {
+        background: #e02200;
     }
 </style>

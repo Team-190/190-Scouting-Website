@@ -72,18 +72,25 @@
             Math.round(c1[2] + (c2[2] - c1[2]) * t)
         ].join(",")})`;
 
-    function colorFromStats(v, mu, sigma) {
-        if (v === 0) return "#000";
+    function colorFromStats(v, mu, sigma, inverted = false) {
+        if (v === 0) {
+            console.log("colorFromStats v is 0, returning black", v);
+            return "black";
+        }
         if (sigma === 0) return "rgb(180,180,180)";
 
         const mode = colorModes[colorblindMode];
         const z = (v - mu) / sigma;
         const t = Math.min(1, Math.abs(z));
 
-        return z < 0 ? lerpColor(mode.mid, mode.below, t) : lerpColor(mode.mid, mode.above, t);
+        if (inverted) {
+             return z < 0 ? lerpColor(mode.mid, mode.above, t) : lerpColor(mode.mid, mode.below, t);
+        } else {
+             return z < 0 ? lerpColor(mode.mid, mode.below, t) : lerpColor(mode.mid, mode.above, t);
+        }
     }
-    function summaryColor(v, values) {
-        if (v === 0) return "rgb(150,150,150)";
+    function summaryColor(v, values, inverted = false) {
+        if (v === 0) return "#4D4D4D";
 
         const nonZero = values.filter(x => x !== 0);
         if (nonZero.length === 0) return "rgb(180,180,180)";
@@ -96,9 +103,11 @@
         const z = (v - mu) / sigma;
         const t = Math.min(1, Math.abs(z));
 
-        return z < 0
-            ? lerpColor(mode.mid, mode.below, t)
-            : lerpColor(mode.mid, mode.above, t);
+        if (inverted) {
+             return z < 0 ? lerpColor(mode.mid, mode.above, t) : lerpColor(mode.mid, mode.below, t);
+        } else {
+             return z < 0 ? lerpColor(mode.mid, mode.below, t) : lerpColor(mode.mid, mode.above, t);
+        }
     }
     
 
@@ -184,14 +193,22 @@
             rows.forEach((r, i) => {
                 const label = qLabels[i];
                 const v = Number(r[selectedMetric] ?? 0);
-                row[label] = v;
+                row[label] = Number(v.toFixed(2));
                 values.push(v);
             });
 
             row.mean = values.length ? Number(mean(values).toFixed(2)) : 0;
             row.median = values.length ? Number(median(values).toFixed(2)) : 0;
             return row;
-        }).sort((a, b) => b.mean - a.mean);
+        }).sort((a, b) => {
+            if (a.mean === 0 && b.mean !== 0) return 1;
+            if (b.mean === 0 && a.mean !== 0) return -1;
+
+            if (["time_of_climb", "climb_time"].includes(selectedMetric)) {
+                return a.mean - b.mean; // Lower is better
+            }
+            return b.mean - a.mean; // Higher is better
+        });
 
         const meanValues = rowData.map(r => r.mean);
         const medianValues = rowData.map(r => r.median);
@@ -222,9 +239,21 @@
                 cellClass: "cell-center",
                 cellStyle: params => {
                     const v = params.value ?? 0;
+                    const inverted = ["time_of_climb", "climb_time"].includes(selectedMetric);
+                    
+                    if (v === 0) {
+                        return {
+                            background: "black",
+                            color: "white",
+                            fontWeight: 600,
+                            fontSize: "18px",
+                            textAlign: "center"
+                        };
+                    }
+
                     return {
-                        background: colorFromStats(v, globalMean, globalSd),
-                        color: v === 0 ? "white" : "black",
+                        background: colorFromStats(v, globalMean, globalSd, inverted),
+                        color: "black",
                         fontWeight: 600,
                         fontSize: "18px",
                         textAlign: "center"
@@ -240,9 +269,10 @@
                 cellClass: "cell-center",
                 cellStyle: params => {
                     const v = params.value ?? 0;
+                    const inverted = ["time_of_climb", "climb_time"].includes(selectedMetric);
                     return {
-                        background: summaryColor(v, meanValues),
-                        color: v === 0 ? "#222" : "black",
+                        background: summaryColor(v, meanValues, inverted),
+                        color: v === 0 ? "white" : "black",
                         fontWeight: "bold",
                         fontSize: "18px",
                         textAlign: "center",
@@ -259,9 +289,10 @@
                 cellClass: "cell-center",
                 cellStyle: params => {
                     const v = params.value ?? 0;
+                    const inverted = ["time_of_climb", "climb_time"].includes(selectedMetric);
                     return {
-                        background: summaryColor(v, medianValues),
-                        color: v === 0 ? "#222" : "black",
+                        background: summaryColor(v, medianValues, inverted),
+                        color: v === 0 ? "white" : "black",
                         fontWeight: "bold",
                         fontSize: "18px",
                         textAlign: "center",
@@ -367,6 +398,12 @@
         background: var(--frc-190-red);
         color: white;
         font-size: 18px;
+    }
+
+    :global(select option) {
+        background: #333;
+        color: white;
+        padding: 8px;
     }
 
     :global(.ag-header-cell) {

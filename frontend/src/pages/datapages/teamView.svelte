@@ -151,7 +151,7 @@
             qLabels.forEach((q, i) => {
                 const match = matches[i];
                 const val = Number(match?.[metric] || 0);
-                row[q] = val;
+                row[q] = Number(val.toFixed(2));
                 values.push(val);
             });
             row.mean = values.length > 0 ? Number(mean(values).toFixed(2)) : 0;
@@ -196,8 +196,11 @@
 
                     const metricName = params.data.metric;
                     const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+                    
+                    const inverted = ["time_of_climb", "climb_time"].includes(metricName);
+
                     return {
-                        background: colorFromStats(params.value, stats.mean, stats.sd),
+                        background: colorFromStats(params.value, stats.mean, stats.sd, inverted),
                         color: params.value === 0 ? "white" : "black",
                         fontSize: "18px",
                         fontWeight: 600,
@@ -215,11 +218,13 @@
                 cellStyle: params => {
                     const metricName = params.data.metric;
                     const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+                    const inverted = ["time_of_climb", "climb_time"].includes(metricName);
+
                     return {
                         background: params.value === 0
-                            ? "#e0e0e0"            // gray background
-                            : colorFromStats(params.value, stats.mean, stats.sd),
-                        color: "black",            // always black text
+                            ? "#4D4D4D"            // gray background for zeros
+                            : colorFromStats(params.value, stats.mean, stats.sd, inverted),
+                        color: params.value === 0 ? "white" : "black",
                         fontSize: "18px",
                         fontWeight: "bold",
                         textAlign: "center"
@@ -236,11 +241,13 @@
                 cellStyle: params => {
                     const metricName = params.data.metric;
                     const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+                    const inverted = ["time_of_climb", "climb_time"].includes(metricName);
+
                     return {
                         background: params.value === 0
-                            ? "#e0e0e0"            // gray background
-                            : colorFromStats(params.value, stats.mean, stats.sd),
-                        color: "black",            // always black text
+                            ? "#4D4D4D"            // gray background for zeros
+                            : colorFromStats(params.value, stats.mean, stats.sd, inverted),
+                        color: params.value === 0 ? "white" : "black",
                         fontSize: "18px",
                         fontWeight: "bold",
                         textAlign: "center"
@@ -319,6 +326,12 @@
         background: var(--frc-190-red);
         color: white;
         font-size: 18px;
+    }
+
+    :global(select option) {
+        background: #333;
+        color: white;
+        padding: 8px;
     }
 
     :global(.ag-header-cell) {
