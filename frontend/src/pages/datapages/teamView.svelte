@@ -9,8 +9,6 @@
 
     import "ag-grid-community/styles/ag-grid.css";
     import "ag-grid-community/styles/ag-theme-quartz.css";
-    import { fetchTeamView, fetchAvailableTeams } from "../../utils/api"
-    import Team from "../../components/Team.svelte";
 
     ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -68,13 +66,9 @@
         if (v === 0) return "#000";
         if (sigma === 0) return "rgb(180,180,180)";
 
-        // When selection changes → load data & refresh grid
-        select.addEventListener("change", async (e) => {
-            const target = e.target as HTMLSelectElement;
-            const t = Number(target.value);
-            params.context.selectedTeam = t;
-
-            await params.context.loadTeamData(t);
+        const mode = colorModes[colorblindMode];
+        const z = (v - mu) / sigma;
+        const t = Math.min(1, Math.abs(z));
 
         return z < 0 ? lerpColor(mode.mid, mode.below, t) : lerpColor(mode.mid, mode.above, t);
     }
@@ -96,23 +90,24 @@
     let allTeams = [];
     let selectedTeam = null;
 
-    // load list of teams attending season (simplified)
-    async function loadAllTeams() {
-        // replace with your real source later
-        allTeams = await (await fetchAvailableTeams()).json();
-        if (!selectedTeam) selectedTeam = allTeams[0];
+    function loadAllTeams() {
+        const allRows = Array.isArray(teamViewData?.data) ? teamViewData.data : [];
+        const uniqueTeams = [...new Set(allRows.map(r => r.Team))];
+        allTeams = uniqueTeams.sort();
+        if (!selectedTeam && allTeams.length > 0) selectedTeam = allTeams[0];
     }
 
-    async function loadTeamData(teamNumber) {
-        const json = await fetchTeamView(teamNumber);
-        const teamData = await json.json()
-        buildGrid(teamData);
+    function loadTeamData(teamNumber) {
+        const allRows = Array.isArray(teamViewData?.data) ? teamViewData.data : [];
+        const teamMatches = allRows.filter(r => r.Team === teamNumber);
+        buildGrid(teamMatches);
     }
-    
+
     let gridInstance = null;
-    
-    async function buildGrid(teamData) {
-        const matches = teamData.data;
+
+    function buildGrid(matches) {
+        if (matches.length === 0) return;
+
         const matchNums = matches.map(m => m.Match);
         const qLabels = matchNums.map((_, i) => `Q${i + 1}`);
 
@@ -153,7 +148,7 @@
             qLabels.forEach((q, i) => {
                 const match = matches[i];
                 const val = Number(match?.[metric] || 0);
-                row[q] = val;
+                row[q] = Number(val.toFixed(2));
                 values.push(val);
             });
             row.mean = values.length > 0 ? Number(mean(values).toFixed(2)) : 0;
@@ -198,8 +193,11 @@
 
                     const metricName = params.data.metric;
                     const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+                    
+                    const inverted = ["time_of_climb", "climb_time"].includes(metricName);
+
                     return {
-                        background: colorFromStats(params.value, stats.mean, stats.sd),
+                        background: colorFromStats(params.value, stats.mean, stats.sd, inverted),
                         color: params.value === 0 ? "white" : "black",
                         fontSize: "18px",
                         fontWeight: 600,
@@ -217,11 +215,13 @@
                 cellStyle: params => {
                     const metricName = params.data.metric;
                     const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+                    const inverted = ["time_of_climb", "climb_time"].includes(metricName);
+
                     return {
                         background: params.value === 0
-                            ? "#e0e0e0"            // gray background
-                            : colorFromStats(params.value, stats.mean, stats.sd),
-                        color: "black",            // always black text
+                            ? "#4D4D4D"            // gray background for zeros
+                            : colorFromStats(params.value, stats.mean, stats.sd, inverted),
+                        color: params.value === 0 ? "white" : "black",
                         fontSize: "18px",
                         fontWeight: "bold",
                         textAlign: "center"
@@ -238,11 +238,13 @@
                 cellStyle: params => {
                     const metricName = params.data.metric;
                     const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+                    const inverted = ["time_of_climb", "climb_time"].includes(metricName);
+
                     return {
                         background: params.value === 0
-                            ? "#e0e0e0"            // gray background
-                            : colorFromStats(params.value, stats.mean, stats.sd),
-                        color: "black",            // always black text
+                            ? "#4D4D4D"            // gray background for zeros
+                            : colorFromStats(params.value, stats.mean, stats.sd, inverted),
+                        color: params.value === 0 ? "white" : "black",
                         fontSize: "18px",
                         fontWeight: "bold",
                         textAlign: "center"
@@ -284,33 +286,53 @@
 </script>
 
 <style>
+    /* FRC 190 Brand Colors */
+    :root {
+        --frc-190-red: #C81B00;
+        --wpi-gray: #A9B0B7;
+        --frc-190-black: #4D4D4D;
+    }
+
     :global(html), :global(body) {
         margin: 0;
         padding: 0;
-        background: #A9B0B7;
-        overflow-x: hidden;
-        overflow-y: auto;
-        min-height: 100vh;
+        background: var(--wpi-gray);
+        height: 100vh;
         width: 100vw;
+        overflow-x: hidden;
     }
 
     :global(*) {
         box-sizing: border-box;
     }
 
+    .page-wrapper {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        min-height: 100vh;
+        padding: 20px;
+        background: var(--wpi-gray);
+    }
+
     :global(select option:checked) {
-        background: #C81B00;
+        background: var(--frc-190-red);
         color: white;
         font-size: 18px;
     }
 
+    :global(select option) {
+        background: #333;
+        color: white;
+        padding: 8px;
+    }
+
     :global(.ag-header-cell) {
-        background: #C81B00 !important;
+        background: var(--frc-190-red) !important;
         color: white !important;
         font-size: 18px;
-        font-weight: 700 !important;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+        font-weight: bold;
     }
 
     :global(.ag-header-cell.header-center .ag-header-cell-label) {
@@ -326,84 +348,74 @@
     }
 
     :global(.ag-theme-quartz .ag-root-wrapper) {
-        --ag-font-size: 18px;
-        border: 3px solid #C81B00;
+        --ag-font-size: 20px;
+        border: 3px solid var(--frc-190-red);
         border-radius: 8px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        overflow: hidden;
     }
 
+    /* Permanent scrollbar styling */
     :global(.ag-body-viewport) {
         overflow-y: scroll !important;
+        overflow-x: auto !important;
     }
 
     :global(.ag-body-viewport::-webkit-scrollbar) {
         width: 12px;
-        display: block !important;
+        height: 12px;
     }
 
     :global(.ag-body-viewport::-webkit-scrollbar-track) {
-        background: #2a2a2a;
+        background: var(--frc-190-black);
         border-radius: 6px;
     }
 
     :global(.ag-body-viewport::-webkit-scrollbar-thumb) {
-        background: #C81B00;
+        background: var(--frc-190-red);
         border-radius: 6px;
-        border: 2px solid #2a2a2a;
+        border: 2px solid var(--frc-190-black);
     }
 
     :global(.ag-body-viewport::-webkit-scrollbar-thumb:hover) {
-        background: #a01500;
+        background: #e02200;
     }
 
-    .page-wrapper {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: flex-start;
-        min-height: 100vh;
-        padding: 20px;
-        background: #A9B0B7;
-    }
-
-    .page-header {
+    .header-section {
         text-align: center;
         margin-bottom: 20px;
     }
 
-    .page-header h1 {
-        color: #C81B00;
+    .header-section h1 {
+        color: var(--frc-190-red);
         font-size: 2.5rem;
         font-weight: 800;
         margin: 0 0 5px 0;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        letter-spacing: 1px;
     }
 
-    .page-header .team-badge {
-        display: inline-block;
-        background: #C81B00;
-        color: white;
-        padding: 5px 20px;
-        border-radius: 20px;
-        font-weight: 700;
+    .header-section .subtitle {
+        color: var(--frc-190-black);
         font-size: 1rem;
+        margin: 0;
     }
 
     .controls {
         padding: 15px 25px;
-        background: linear-gradient(135deg, #1a1a1a, #2d2d2d);
+        background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
         color: white;
-        font-size: 16px;
+        font-size: 18px;
         display: flex;
         gap: 30px;
         align-items: center;
         justify-content: center;
+        box-sizing: border-box;
+        width: 80%;
+        max-width: 1200px;
         border-radius: 10px;
         margin-bottom: 20px;
+        border: 2px solid var(--frc-190-red);
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-        border: 2px solid #C81B00;
     }
 
     .controls label {
@@ -414,40 +426,40 @@
     select {
         margin-left: 10px;
         padding: 8px 15px;
-        background: #1a1a1a;
+        background: linear-gradient(135deg, #333 0%, #444 100%);
         color: white;
         font-size: 16px;
-        border: 2px solid #C81B00;
-        border-radius: 5px;
+        border: 2px solid var(--frc-190-red);
+        border-radius: 6px;
         cursor: pointer;
-        transition: all 0.2s ease;
+        transition: all 0.3s ease;
     }
 
     select:hover {
-        background: #2d2d2d;
-        border-color: #ff3020;
+        background: linear-gradient(135deg, #444 0%, #555 100%);
+        border-color: #e02200;
     }
 
     select:focus {
         outline: none;
-        box-shadow: 0 0 0 3px rgba(200, 27, 0, 0.3);
+        box-shadow: 0 0 0 3px rgba(200, 27, 0, 0.4);
     }
 
     .grid-container {
         height: 56.7vh;
-        width: 90vw;
-        max-width: 1400px;
-        background: #1a1a1a;
+        width: 80vw;
+        background: var(--frc-190-black);
+        box-sizing: border-box;
         border-radius: 8px;
-        overflow: hidden;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
     }
 </style>
 
 <div class="page-wrapper">
-    <!-- Page Header -->
-    <div class="page-header">
+    <!-- Header Section -->
+    <div class="header-section">
         <h1>Team View</h1>
-        <span class="team-badge">FRC 190</span>
+        <p class="subtitle">FRC Team 190 - Scouting Data Analysis</p>
     </div>
 
     <!-- Controls -->
