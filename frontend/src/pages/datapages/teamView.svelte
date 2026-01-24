@@ -5,7 +5,10 @@
         ModuleRegistry,
         AllCommunityModule
     } from "ag-grid-community";
-    import teamViewData from "../../utils/allTeamView.json";
+    //import teamViewData from "../../utils/allTeamView.json";
+    let teamViewData = null
+
+    console.log("teamview: "+teamViewData);
 
     import "ag-grid-community/styles/ag-grid.css";
     import "ag-grid-community/styles/ag-theme-quartz.css";
@@ -267,8 +270,11 @@
             suppressHorizontalScroll: true
         });
     }
-
-    onMount(() => {
+    onMount(async () => {
+        const response = await fetch("http://localhost:3000/teamView");
+        teamViewData = await response.json();
+        console.log("teamview: ", teamViewData);
+        
         loadAllTeams();
 
         if (allTeams.length > 0) {
