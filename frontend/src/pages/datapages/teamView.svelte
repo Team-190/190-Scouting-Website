@@ -5,10 +5,14 @@
         ModuleRegistry,
         AllCommunityModule
     } from "ag-grid-community";
-    import teamViewData from "../../utils/allTeamView.json";
+    //import teamViewData from "../../utils/allTeamView.json";
+    let teamViewData = null
+    // it is populated automatically by onMount
+    console.log("teamview: "+teamViewData);
 
     import "ag-grid-community/styles/ag-grid.css";
     import "ag-grid-community/styles/ag-theme-quartz.css";
+    import Team from "../../components/Team.svelte";
 
     ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -42,25 +46,31 @@
         }
     };
 
-    const mean = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
+    let cache = {};
 
-    const median = arr => {
+    function mean (arr) {
+        return arr.reduce((a, b) => a + b, 0) / arr.length;
+    } 
+
+    function median(arr) {
         const sorted = [...arr].sort((a, b) => a - b);
         const mid = Math.floor(sorted.length / 2);
         return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
     };
 
-    const sd = (arr, mu) => {
+    function sd(arr, mu)  {
         const variance = arr.reduce((s, v) => s + (v - mu) ** 2, 0) / arr.length;
         return Math.sqrt(variance);
     };
 
-    const lerpColor = (c1, c2, t) =>
-        `rgb(${[
+    function lerpColor(c1, c2, t) {
+        return `rgb(${[
             Math.round(c1[0] + (c2[0] - c1[0]) * t),
             Math.round(c1[1] + (c2[1] - c1[1]) * t),
             Math.round(c1[2] + (c2[2] - c1[2]) * t)
-        ].join(",")})`;
+            ].join(",")})`;
+    }
+        
 
     function colorFromStats(v, mu, sigma) {
         if (v === 0) return "#000";
@@ -88,27 +98,41 @@
     }
 
     let allTeams = [];
-    let selectedTeam = null;
+    let selectedTeam = "190";
 
-    function loadAllTeams() {
-        const allRows = Array.isArray(teamViewData?.data) ? teamViewData.data : [];
-        const uniqueTeams = [...new Set(allRows.map(r => r.Team))];
-        allTeams = uniqueTeams.sort();
-        if (!selectedTeam && allTeams.length > 0) selectedTeam = allTeams[0];
+    async function loadTeamNumbers() {
+        const data = await(await fetch("http://localhost:3000/teamNumbers")).json();
+        return data
     }
 
-    function loadTeamData(teamNumber) {
-        const allRows = Array.isArray(teamViewData?.data) ? teamViewData.data : [];
-        const teamMatches = allRows.filter(r => r.Team === teamNumber);
-        buildGrid(teamMatches);
+    async function cacheAllData() {
+        const data = (await(await fetch("http://localhost:3000/allData")).json()).data;
+        console.log("ALL DATA CACHE:\n\n"+JSON.stringify(data, null, 4));
+        return;
+        for (let team in data) {
+            cache[team] = data[team]
+        }
+    }
+
+    async function loadTeamData(teamNumber) {
+        let data = [];
+        if (Object.keys(cache).includes(teamNumber.toString())) {
+            console.log("cache fired");
+            data = cache[teamNumber.toString()];
+        } else {
+            data = (await(await fetch("http://localhost:3000/teamView?teamNumber="+teamNumber)).json()).data;
+            cache[teamNumber.toString()] = data;
+        }
+        buildGrid(data);
     }
 
     let gridInstance = null;
 
     function buildGrid(matches) {
         if (matches.length === 0) return;
+        console.log("MATCHES LOADING GRID:"+JSON.stringify(matches, null, 2))
 
-        const matchNums = matches.map(m => m.Match);
+        const matchNums = matches.map(m => m.match);
         const qLabels = matchNums.map((_, i) => `Q${i + 1}`);
 
         const sample = matches[0];
@@ -274,14 +298,18 @@
             suppressHorizontalScroll: true
         });
     }
+    
+    onMount(async () => {
+        const response = await fetch("http://localhost:3000/teamView?teamNumber=190");
+        teamViewData = await response.json();
+        console.log("teamview: ", teamViewData);
+        
+        loadTeamData(190);
+        console.log("Loading data from 190")
 
-    onMount(() => {
-        loadAllTeams();
-
-        if (allTeams.length > 0) {
-            selectedTeam = allTeams[0];
-            loadTeamData(selectedTeam);
-        }
+        allTeams = await loadTeamNumbers();
+        console.log("Populated team list")
+        
     });
 </script>
 
