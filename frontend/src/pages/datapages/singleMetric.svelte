@@ -5,65 +5,36 @@
         ModuleRegistry,
         AllCommunityModule
     } from "ag-grid-community";
-    import teamViewData from "../../utils/allTeamView.json";
 
     import "ag-grid-community/styles/ag-grid.css";
     import "ag-grid-community/styles/ag-theme-quartz.css";
+    import { fetchAllTeams } from "../../utils/api"
 
     ModuleRegistry.registerModules([AllCommunityModule]);
 
     let domNode;
+
     let availableTeams = [];
-    let teamData = {};
+    let teamData = {};          // { teamNumber: [ rows ] }
+
     let metrics = [];
     let selectedMetric = "";
-    let colorblindMode = "normal";
+
     let gridApi = null;
     let loading = true;
     let error = "";
 
-    const colorModes = {
-        normal: {
-            name: "Normal",
-            below: [255, 0, 0],
-            above: [0, 255, 0],
-            mid: [255, 255, 0]
-        },
-        protanopia: {
-            name: "Protanopia (Red-blind)",
-            below: [0, 114, 178],
-            above: [240, 228, 66],
-            mid: [120, 171, 121]
-        },
-        deuteranopia: {
-            name: "Deuteranopia (Green-blind)",
-            below: [213, 94, 0],
-            above: [86, 180, 233],
-            mid: [150, 137, 117]
-        },
-        tritanopia: {
-            name: "Tritanopia (Blue-yellow blind)",
-            below: [220, 20, 60],
-            above: [0, 128, 0],
-            mid: [110, 74, 30]
-        }
-    };
-
-    const GRAY = [255, 255, 0];
-
+    /* ---------- stats + color helpers ---------- */
     const mean = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
-
-    const median = arr => {
-        const sorted = [...arr].sort((a, b) => a - b);
-        const mid = Math.floor(sorted.length / 2);
-        return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-    };
 
     const sd = (arr, mu) => {
         const variance = arr.reduce((s, v) => s + (v - mu) ** 2, 0) / arr.length;
         return Math.sqrt(variance);
     };
-    
+
+    const RED = [255, 0, 0];
+    const YELLOW = [255, 255, 0];
+    const GREEN = [0, 255, 0];
 
     const lerpColor = (c1, c2, t) =>
         `rgb(${[
@@ -73,47 +44,35 @@
         ].join(",")})`;
 
     function colorFromStats(v, mu, sigma) {
-        if (v === 0) return "#000";
-        if (sigma === 0) return "rgb(180,180,180)";
-
-        const mode = colorModes[colorblindMode];
+        if (v === 0) return "black";
+        if (sigma === 0) return "yellow";
         const z = (v - mu) / sigma;
-        const t = Math.min(1, Math.abs(z));
-
-        return z < 0 ? lerpColor(mode.mid, mode.below, t) : lerpColor(mode.mid, mode.above, t);
+        return lerpColor(
+            z < 0 ? YELLOW : YELLOW,
+            z < 0 ? RED : GREEN,
+            Math.min(1, Math.abs(z))
+        );
     }
-    function summaryColor(v, values) {
-        if (v === 0) return "rgb(150,150,150)";
 
-        const nonZero = values.filter(x => x !== 0);
-        if (nonZero.length === 0) return "rgb(180,180,180)";
+    /* ---------- data loading ---------- */
 
-        const mu = mean(nonZero);
-        const sigma = sd(nonZero, mu);
-        if (sigma === 0) return "rgb(180,180,180)";
-
-        const mode = colorModes[colorblindMode];
-        const z = (v - mu) / sigma;
-        const t = Math.min(1, Math.abs(z));
-
-        return z < 0
-            ? lerpColor(mode.mid, mode.below, t)
-            : lerpColor(mode.mid, mode.above, t);
-    }
-    
-
-
-    function loadTeamData() {
+    async function loadAllTeamData() {
         try {
-            const allRows = Array.isArray(teamViewData?.data) ? teamViewData.data : [];
+            const res = await fetchAllTeams()
+            if (!res.ok) {
+                throw new Error(`Failed to fetch dummyData.json (status ${res.status})`);
+            }
+            const json = await res.json();
+            const allRows = Array.isArray(json?.data) ? json.data : [];
 
             if (allRows.length === 0) {
-                throw new Error("No data found in allTeamView.json");
+                throw new Error("No data found in dummyData.json");
             }
 
             availableTeams = [];
             teamData = {};
 
+            // Group rows by team
             for (const row of allRows) {
                 const teamNum = row.Team;
                 if (!teamNum) continue;
@@ -138,12 +97,13 @@
         if (availableTeams.length === 0) return [];
 
         const metricSet = new Set();
-
+        
+        // Collect all numeric keys from all teams and rows
         for (const team of availableTeams) {
             const rows = teamData[team] || [];
             for (const row of rows) {
                 Object.keys(row).forEach((k) => {
-                    if (["Match", "Team"].includes(k)) return;
+                    if (k === "Match" || k === "Team") return;
                     const n = Number(row[k]);
                     if (!Number.isNaN(n)) {
                         metricSet.add(k);
@@ -155,120 +115,67 @@
         return Array.from(metricSet).sort();
     }
 
+    /* ---------- grid building ---------- */
+
     function buildGrid() {
-        if (!domNode || !selectedMetric || availableTeams.length === 0) return;
+        if (!domNode) return;
+        if (!selectedMetric) return;
+        if (availableTeams.length === 0) return;
 
         const firstTeam = availableTeams[0];
         const firstRows = teamData[firstTeam];
         if (!firstRows || firstRows.length === 0) return;
 
-        const matches = firstRows.map(m => m.Match);
+        const matches = firstRows.map((m) => m.Match);
         const qLabels = matches.map((_, i) => `Q${i + 1}`);
 
-        // Global stats (exclude all-zero teams)
-        const allValues = [];
-        availableTeams.forEach(team => {
-            const rows = teamData[team] || [];
-            const vals = rows.map(r => Number(r[selectedMetric] ?? 0));
-            if (vals.some(v => v !== 0)) allValues.push(...vals);
-        });
-
-        const globalMean = allValues.length ? mean(allValues) : 0;
-        const globalSd = allValues.length ? sd(allValues, globalMean) : 0;
-
-        const rowData = availableTeams.map(team => {
-            const rows = teamData[team] || [];
-            const values = [];
+        // rows = teams
+        const rowData = availableTeams.map((team) => {
             const row = { team };
+            const rows = teamData[team] || [];
 
-            rows.forEach((r, i) => {
-                const label = qLabels[i];
-                const v = Number(r[selectedMetric] ?? 0);
-                row[label] = v;
-                values.push(v);
+            rows.forEach((matchRow, index) => {
+                const label = qLabels[index];
+                if (!label) return;
+                row[label] = Number(matchRow[selectedMetric] ?? 0);
             });
 
-            row.mean = values.length ? Number(mean(values).toFixed(2)) : 0;
-            row.median = values.length ? Number(median(values).toFixed(2)) : 0;
             return row;
-        }).sort((a, b) => b.mean - a.mean);
-
-        const meanValues = rowData.map(r => r.mean);
-        const medianValues = rowData.map(r => r.median);
+        });
 
         const columnDefs = [
             {
-                headerName: "Team",
+                headerName: selectedMetric,
                 field: "team",
                 pinned: "left",
-                flex: 1,
-                minWidth: 120,
-                headerClass: "header-center",
-                cellClass: "cell-center",
+                width: 150,
                 cellStyle: {
-                    background: "#C81B00",
+                    background: "#7a1f1f",
                     color: "white",
                     fontWeight: "bold",
-                    fontSize: "18px",
                     textAlign: "center"
                 }
             },
-            ...qLabels.map(q => ({
+            ...qLabels.map((q) => ({
                 headerName: q,
                 field: q,
-                flex: 1,
-                minWidth: 80,
-                headerClass: "header-center",
-                cellClass: "cell-center",
-                cellStyle: params => {
+                width: 110,
+                cellStyle: (params) => {
                     const v = params.value ?? 0;
+
+                    // all Q columns for this row (this team) for this metric
+                    const values = qLabels.map((label) => params.data[label] ?? 0);
+                    const mu = mean(values);
+                    const sigma = sd(values, mu);
+
                     return {
-                        background: colorFromStats(v, globalMean, globalSd),
+                        background: colorFromStats(v, mu, sigma),
                         color: v === 0 ? "white" : "black",
-                        fontWeight: 600,
-                        fontSize: "18px",
-                        textAlign: "center"
-                    };
-                }
-            })),
-            {
-                headerName: "Mean",
-                field: "mean",
-                flex: 1,
-                minWidth: 80,
-                headerClass: "header-center",
-                cellClass: "cell-center",
-                cellStyle: params => {
-                    const v = params.value ?? 0;
-                    return {
-                        background: summaryColor(v, meanValues),
-                        color: v === 0 ? "#222" : "black",
-                        fontWeight: "bold",
-                        fontSize: "18px",
                         textAlign: "center",
-                        borderLeft: "3px solid #C81B00"
+                        fontWeight: 600
                     };
                 }
-            },
-            {
-                headerName: "Median",
-                field: "median",
-                flex: 1,
-                minWidth: 80,
-                headerClass: "header-center",
-                cellClass: "cell-center",
-                cellStyle: params => {
-                    const v = params.value ?? 0;
-                    return {
-                        background: summaryColor(v, medianValues),
-                        color: v === 0 ? "#222" : "black",
-                        fontWeight: "bold",
-                        fontSize: "18px",
-                        textAlign: "center",
-                        borderLeft: "2px solid #555"
-                    };
-                }
-            }
+            }))
         ];
 
         if (gridApi) {
@@ -279,36 +186,25 @@
                 rowData,
                 columnDefs,
                 defaultColDef: {
-                    resizable: false,
-                    sortable: false,
-                    suppressMovable: true,
-                    cellStyle: {
-                        fontSize: "18px"
-                    }
+                    resizable: true,
+                    sortable: false
                 },
-                suppressColumnVirtualisation: true,
-                suppressHorizontalScroll: true
+                theme: "legacy" // because we're using CSS themes
             });
         }
     }
-
 
     function onMetricChange(e) {
         selectedMetric = e.target.value;
         buildGrid();
     }
 
-    function onColorblindChange(e) {
-        colorblindMode = e.target.value;
-        buildGrid();
-    }
-
-    onMount(() => {
+    onMount(async () => {
         try {
-            loadTeamData();
+            await loadAllTeamData();
 
             if (availableTeams.length === 0) {
-                error = "No team data found in allTeamView.json.";
+                error = "No team data found in dummyData.json.";
                 loading = false;
                 return;
             }
@@ -332,200 +228,25 @@
     });
 </script>
 
-<style>
-    :global(html), :global(body) {
-        margin: 0;
-        padding: 0;
-        background: #A9B0B7;
-        overflow-x: hidden;
-        overflow-y: auto;
-        min-height: 100vh;
-        width: 100vw;
-    }
-
-    :global(*) {
-        box-sizing: border-box;
-    }
-
-    :global(select option:checked) {
-        background: #C81B00;
-        color: white;
-        font-size: 18px;
-    }
-
-    :global(.ag-header-cell) {
-        background: #C81B00 !important;
-        color: white !important;
-        font-size: 18px;
-        font-weight: 700 !important;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    :global(.ag-header-cell.header-center .ag-header-cell-label) {
-        justify-content: center;
-        text-align: center;
-        width: 100%;
-        color: white !important;
-        font-size: 18px;
-    }
-
-    :global(.cell-center) {
-        text-align: center !important;
-    }
-
-    :global(.ag-theme-quartz .ag-root-wrapper) {
-        --ag-font-size: 18px;
-        border: 3px solid #C81B00;
-        border-radius: 8px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-    }
-
-    :global(.ag-body-viewport) {
-        overflow-y: scroll !important;
-    }
-
-    :global(.ag-body-viewport::-webkit-scrollbar) {
-        width: 12px;
-        display: block !important;
-    }
-
-    :global(.ag-body-viewport::-webkit-scrollbar-track) {
-        background: #2a2a2a;
-        border-radius: 6px;
-    }
-
-    :global(.ag-body-viewport::-webkit-scrollbar-thumb) {
-        background: #C81B00;
-        border-radius: 6px;
-        border: 2px solid #2a2a2a;
-    }
-
-    :global(.ag-body-viewport::-webkit-scrollbar-thumb:hover) {
-        background: #a01500;
-    }
-
-    .page-wrapper {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: flex-start;
-        min-height: 100vh;
-        padding: 20px;
-        background: #A9B0B7;
-    }
-
-    .page-header {
-        text-align: center;
-        margin-bottom: 20px;
-    }
-
-    .page-header h1 {
-        color: #C81B00;
-        font-size: 2.5rem;
-        font-weight: 800;
-        margin: 0 0 5px 0;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
-    }
-
-    .page-header .team-badge {
-        display: inline-block;
-        background: #C81B00;
-        color: white;
-        padding: 5px 20px;
-        border-radius: 20px;
-        font-weight: 700;
-        font-size: 1rem;
-    }
-
-    .controls {
-        padding: 15px 25px;
-        background: linear-gradient(135deg, #1a1a1a, #2d2d2d);
-        color: white;
-        font-size: 16px;
-        display: flex;
-        gap: 30px;
-        align-items: center;
-        justify-content: center;
-        border-radius: 10px;
-        margin-bottom: 20px;
-        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-        border: 2px solid #C81B00;
-    }
-
-    .controls label {
-        font-weight: 600;
-        color: #fff;
-    }
-
-    select {
-        margin-left: 10px;
-        padding: 8px 15px;
-        background: #1a1a1a;
-        color: white;
-        font-size: 16px;
-        border: 2px solid #C81B00;
-        border-radius: 5px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-    }
-
-    select:hover {
-        background: #2d2d2d;
-        border-color: #ff3020;
-    }
-
-    select:focus {
-        outline: none;
-        box-shadow: 0 0 0 3px rgba(200, 27, 0, 0.3);
-    }
-
-    .grid-container {
-        height: 60vh;
-        width: 90vw;
-        max-width: 1400px;
-        background: #1a1a1a;
-        border-radius: 8px;
-        overflow: hidden;
-    }
-</style>
-
-<div class="page-wrapper">
-    <!-- Page Header -->
-    <div class="page-header">
-        <h1>Single Metric View</h1>
-        <span class="team-badge">FRC 190</span>
-    </div>
-
-    <!-- Controls -->
-    <div class="controls">
-        {#if loading}
-            Loading team data...
-        {:else if error}
-            {error}
-        {:else}
-            <div>
-                <label for="metric-select">Metric:</label>
-                <select id="metric-select" bind:value={selectedMetric} on:change={onMetricChange}>
-                    {#each metrics as m}
-                        <option value={m}>{m}</option>
-                    {/each}
-                </select>
-            </div>
-
-            <div>
-                <label for="colorblind-select">Colorblind Mode:</label>
-                <select id="colorblind-select" bind:value={colorblindMode} on:change={onColorblindChange}>
-                    {#each Object.entries(colorModes) as [key, mode]}
-                        <option value={key}>{mode.name}</option>
-                    {/each}
-                </select>
-            </div>
-        {/if}
-    </div>
-
-    <!-- Grid container -->
-    <div class="grid-container ag-theme-quartz" bind:this={domNode}></div>
+<!-- Metric selector -->
+<div style="padding:10px; background:#111; color:white;">
+    {#if loading}
+        Loading team data...
+    {:else if error}
+        {error}
+    {:else}
+        <label>Metric:</label>
+        <select bind:value={selectedMetric} on:change={onMetricChange} style="margin-left:10px; padding:5px;">
+            {#each metrics as m}
+                <option value={m}>{m}</option>
+            {/each}
+        </select>
+    {/if}
 </div>
+
+<!-- Grid container -->
+<div
+    class="ag-theme-quartz"
+    style="height: 100vh; width: 100vw;"
+    bind:this={domNode}
+></div>

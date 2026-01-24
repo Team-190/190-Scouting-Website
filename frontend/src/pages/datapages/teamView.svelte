@@ -9,6 +9,8 @@
 
     import "ag-grid-community/styles/ag-grid.css";
     import "ag-grid-community/styles/ag-theme-quartz.css";
+    import { fetchTeamView, fetchAvailableTeams } from "../../utils/api"
+    import Team from "../../components/Team.svelte";
 
     ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -66,9 +68,13 @@
         if (v === 0) return "#000";
         if (sigma === 0) return "rgb(180,180,180)";
 
-        const mode = colorModes[colorblindMode];
-        const z = (v - mu) / sigma;
-        const t = Math.min(1, Math.abs(z));
+        // When selection changes → load data & refresh grid
+        select.addEventListener("change", async (e) => {
+            const target = e.target as HTMLSelectElement;
+            const t = Number(target.value);
+            params.context.selectedTeam = t;
+
+            await params.context.loadTeamData(t);
 
         return z < 0 ? lerpColor(mode.mid, mode.below, t) : lerpColor(mode.mid, mode.above, t);
     }
@@ -90,24 +96,23 @@
     let allTeams = [];
     let selectedTeam = null;
 
-    function loadAllTeams() {
-        const allRows = Array.isArray(teamViewData?.data) ? teamViewData.data : [];
-        const uniqueTeams = [...new Set(allRows.map(r => r.Team))];
-        allTeams = uniqueTeams.sort();
-        if (!selectedTeam && allTeams.length > 0) selectedTeam = allTeams[0];
+    // load list of teams attending season (simplified)
+    async function loadAllTeams() {
+        // replace with your real source later
+        allTeams = await (await fetchAvailableTeams()).json();
+        if (!selectedTeam) selectedTeam = allTeams[0];
     }
 
-    function loadTeamData(teamNumber) {
-        const allRows = Array.isArray(teamViewData?.data) ? teamViewData.data : [];
-        const teamMatches = allRows.filter(r => r.Team === teamNumber);
-        buildGrid(teamMatches);
+    async function loadTeamData(teamNumber) {
+        const json = await fetchTeamView(teamNumber);
+        const teamData = await json.json()
+        buildGrid(teamData);
     }
-
+    
     let gridInstance = null;
-
-    function buildGrid(matches) {
-        if (matches.length === 0) return;
-
+    
+    async function buildGrid(teamData) {
+        const matches = teamData.data;
         const matchNums = matches.map(m => m.Match);
         const qLabels = matchNums.map((_, i) => `Q${i + 1}`);
 

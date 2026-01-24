@@ -1,0 +1,129 @@
+const fs = require("fs").promises;
+const supabaseUtil = require("./supabaseUtil");
+const storage = require("./storage");
+require("dotenv").config();
+
+
+supabaseUtil.supabaseInit()
+    .then((value) => {supabaseClient = value})
+    .catch((error) => console.warn(error));
+
+
+async function teamView(eventCode, teamNumber) {
+    console.log("About to call");
+    const {data, error} = await storage.retrieveConfig(eventCode);
+
+    if (parseInt(process.env.USE_CUSTOM_CONFIG)) {
+        try {
+            const raw = await fs.readFile(`test/${eventCode}-config.json`, 'utf8');
+            config = JSON.parse(raw);
+        } catch (error) {
+            return error;
+        }
+    } else {
+        if (!error) config = JSON.parse(await data.text()) 
+        else return error;
+    }
+
+    console.log(config);
+
+    for (let i = 0; i < config.teamView.length; i++) {
+        console.log(`Making new query for ${config.teamView[i].columns}`)
+        let query = supabaseClient
+            .from(eventCode)
+            .select(config.teamView[i].columns.toString());
+
+        console.log(`Adding. ${JSON.stringify(config.teamView[i].requirements)}`);
+        
+        for (const obj of config.teamView[i].requirements) {
+            for (const [key, value] of Object.entries(obj)) {
+                console.log(key, value);
+                query = query.eq(key, value);
+            }
+        }
+        query = query.eq("Team", `frc${teamNumber}`);
+
+        const result = await query;
+        result.teamNumber = teamNumber
+        // console.log(result);
+
+        // matches = {};
+
+        // for (let row of result.data) {
+        //     matches[row['Match']] = matches[row['Match']] || [];
+        //     matches[row['Match']].push(row);
+        // }
+
+        // console.log(matches);
+        return result;        
+    }
+};
+
+
+async function allTeamsView(eventCode) {
+    const {data, error} = await storage.retrieveConfig(eventCode);
+
+    if (parseInt(process.env.USE_CUSTOM_CONFIG)) {
+        try {
+            const raw = await fs.readFile(`test/${eventCode}-config.json`, 'utf8');
+            config = JSON.parse(raw);
+        } catch (error) {
+            return error;
+        }
+    } else {
+        if (!error) config = JSON.parse(await data.text()) 
+        else return error;
+    }
+
+    console.log(["Team"].concat(config.teamView[0].columns));
+
+    let query = supabaseClient
+        .from(eventCode)
+        .select(["Team"].concat(config.teamView[0].columns).toString());
+    
+    query = query.eq("RecordType", "EndMatch");
+
+    return query;
+}
+
+
+async function availableTeamsView(eventCode) {
+
+    const {data, error} = await storage.retrieveConfig(eventCode);
+
+    if (parseInt(process.env.USE_CUSTOM_CONFIG)) {
+        try {
+            const raw = await fs.readFile(`test/${eventCode}-config.json`, 'utf8');
+            config = JSON.parse(raw);
+        } catch (error) {
+            return error;
+        }
+    } else {
+        if (!error) config = JSON.parse(await data.text()) 
+        else return error;
+    }
+
+    let query = supabaseClient
+        .from(eventCode)
+        .select("Team");
+    
+    query = await query;
+    const queryData = query.data;
+
+    teams = [];
+    for (let team of queryData) {
+        const teamNumber = parseInt(team.Team.slice(3));
+        teams.push(teamNumber);
+    }
+
+    teams = [...new Set(teams)];
+
+    return teams;
+}
+
+
+module.exports = {
+    teamView,
+    allTeamsView,
+    availableTeamsView
+}
