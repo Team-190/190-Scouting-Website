@@ -1,16 +1,15 @@
 <script lang="ts">
-    import { onMount } from "svelte";
     import {
+        AllCommunityModule,
         createGrid,
-        ModuleRegistry,
-        AllCommunityModule
+        ModuleRegistry
     } from "ag-grid-community";
+    import { onMount } from "svelte";
     import teamViewData from "../../utils/allTeamView.json";
 
     import "ag-grid-community/styles/ag-grid.css";
     import "ag-grid-community/styles/ag-theme-quartz.css";
-    import { fetchTeamView, fetchAvailableTeams } from "../../utils/api"
-    import Team from "../../components/Team.svelte";
+    import { fetchAvailableTeams, fetchTeamView } from "../../utils/api";
 
     ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -68,13 +67,9 @@
         if (v === 0) return "#000";
         if (sigma === 0) return "rgb(180,180,180)";
 
-        // When selection changes → load data & refresh grid
-        select.addEventListener("change", async (e) => {
-            const target = e.target as HTMLSelectElement;
-            const t = Number(target.value);
-            params.context.selectedTeam = t;
-
-            await params.context.loadTeamData(t);
+        const mode = colorModes[colorblindMode];
+        const z = (v - mu) / sigma;
+        const t = Math.max(-3, Math.min(3, z)) / 3 + 0.5;
 
         return z < 0 ? lerpColor(mode.mid, mode.below, t) : lerpColor(mode.mid, mode.above, t);
     }
