@@ -1,0 +1,1295 @@
+<script>
+    import baseX from 'base-x';
+    import pako from 'pako';
+    import Team from '../../components/Team.svelte';
+
+    const BASE85_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~';
+    const bs85 = baseX(BASE85_CHARS);
+    const textEncoder = new TextEncoder();
+    const textDecoder = new TextDecoder();
+
+    let events = $state([]);
+    let selectedEvent = $state('');
+    let teams = $state([]);
+    let picklists = $state({});
+    let tbaApiKey = $state('zhTqFG7csJoif1sNXt3aZngy0LB1X4LxMgTfXBvPscNG0P9FifZCa2uGJcUk2gKW');
+
+    let draggedItem = $state(null);
+    let newPickListName = $state('');
+    let pickedTeams = $state({});
+    let importData = $state('');
+    let editingPicklistId = $state(null);
+    let editingPicklistName = $state('');
+    let alliances = $state(Array.from({ length: 8 }, (_, i) => ({ id: i + 1, teams: [] })));
+    let activeView = $state('picklists');
+    let rankedTeams = $state([]);
+    let isFourTeamAlliance = $state(false);
+
+    let allianceSelections = $state({
+        default: {
+            name: 'Default',
+            alliances: Array.from({ length: 8 }, (_, i) => ({ id: i + 1, teams: [] }))
+        }
+    });
+    let activeAllianceSelectionId = $state('default');
+    let newAllianceSelectionName = $state('');
+    let editingAllianceSelectionId = $state(null);
+    let editingAllianceSelectionName = $state('');
+    let allianceImportData = $state('');
+
+    $effect(() => {
+        if (allianceSelections[activeAllianceSelectionId]) {
+            alliances = allianceSelections[activeAllianceSelectionId].alliances;
+            isFourTeamAlliance = allianceSelections[activeAllianceSelectionId].isFourTeamAlliance || false;
+        }
+    });
+
+    $effect(() => {
+        if (allianceSelections[activeAllianceSelectionId]) {
+            allianceSelections[activeAllianceSelectionId].alliances = alliances;
+            allianceSelections[activeAllianceSelectionId].isFourTeamAlliance = isFourTeamAlliance;
+        }
+    });
+
+    async function exportPicklists() {
+        const dataString = Object.values(picklists)
+            .map(list => `${list.name}:${list.teams.map(t => t.team_number).join(',')}`)
+            .join(';');
+        
+        const compressedData = pako.deflate(dataString);
+        const encodedData = bs85.encode(compressedData);
+        try {
+            await navigator.clipboard.writeText(encodedData);
+        } catch (err) {
+            console.error('Failed to copy text: ', err);
+            alert('Failed to copy picklists.');
+        }
+    }
+
+    function importPicklists() {
+        if (!importData) {
+            alert('Please paste the data to import.');
+            return;
+        }
+        try {
+            const decodedBuffer = bs85.decode(importData);
+            const decompressedData = pako.inflate(decodedBuffer, { to: 'string' });
+            
+            const newPicklists = {};
+            const importedLists = decompressedData.split(';');
+            
+            const allTeamNumbers = new Set(teams.map(t => t.team_number.toString()));
+
+            for (const listData of importedLists) {
+                if (!listData) continue;
+                const [name, teamNumbersStr] = listData.split(':');
+                if (!name) continue;
+
+                const teamNumbers = teamNumbersStr ? teamNumbersStr.split(',') : [];
+                const newTeams = teamNumbers
+                    .map(numStr => {
+                        if (allTeamNumbers.has(numStr)) {
+                            return teams.find(t => t.team_number.toString() === numStr);
+                        }
+                        return null;
+                    })
+                    .filter(Boolean); // Filter out any nulls if a team wasn't found
+
+                const newId = `picklist_${Date.now()}_${Math.random()}`;
+                newPicklists[newId] = { name, teams: newTeams };
+            }
+
+            picklists = newPicklists;
+            importData = '';
+        } catch (error) {
+            alert('Failed to parse import data. Please check the format.');
+            console.error('Import error:', error);
+        }
+    }
+
+    function toggleTeamPicked(teamNumber) {
+        pickedTeams[teamNumber] = !pickedTeams[teamNumber];
+    }
+
+    function createPickList() {
+        if (newPickListName && !Object.values(picklists).some(p => p.name === newPickListName)) {
+            const newId = `picklist_${Date.now()}`;
+            picklists[newId] = { name: newPickListName, teams: [] };
+            newPickListName = '';
+        } else if (Object.values(picklists).some(p => p.name === newPickListName)) {
+            alert('Picklist with that name already exists.');
+        }
+    }
+
+    function startEditing(id, currentName) {
+        editingPicklistId = id;
+        editingPicklistName = currentName;
+    }
+
+    function finishEditing(id) {
+        if (editingPicklistId === null) return;
+
+        const originalName = Object.entries(picklists).find(([pId]) => pId === id)?.[1].name;
+        const newName = editingPicklistName.trim();
+
+        // If name is unchanged, do nothing.
+        if (newName === originalName) {
+            editingPicklistId = null;
+            editingPicklistName = '';
+            return;
+        }
+
+        // If name is changed, validate it.
+        if (newName && !Object.values(picklists).some(p => p.name === newName)) {
+            picklists[id].name = newName;
+        } else {
+            alert('Picklist name cannot be empty or already exist.');
+        }
+        editingPicklistId = null;
+        editingPicklistName = '';
+    }
+
+    function deletePickList(key) {
+        const newPicklists = { ...picklists };
+        delete newPicklists[key];
+        picklists = newPicklists;
+    }
+
+    async function getEvents() {
+        if (!tbaApiKey) {
+            alert('Please enter your TBA API Key');
+            return;
+        }
+        const year = new Date().getFullYear();
+        const response = await fetch(`https://www.thebluealliance.com/api/v3/events/${year}/simple`, {
+            headers: {
+                'X-TBA-Auth-Key': tbaApiKey
+            }
+        });
+        events = await response.json();
+    }
+
+    async function getTeams() {
+        if (!selectedEvent) return;
+        const teamPromise = fetch(`https://www.thebluealliance.com/api/v3/event/${selectedEvent}/teams/simple`, {
+            headers: { 'X-TBA-Auth-Key': tbaApiKey }
+        }).then(res => res.json());
+
+        const statusesPromise = fetch(`https://www.thebluealliance.com/api/v3/event/${selectedEvent}/teams/statuses`, {
+            headers: { 'X-TBA-Auth-Key': tbaApiKey }
+        }).then(res => res.ok ? res.json() : null);
+
+        const [teamList, statuses] = await Promise.all([teamPromise, statusesPromise]);
+
+        if (statuses) {
+            const teamRanks = Object.fromEntries(
+                Object.entries(statuses)
+                    .filter(([, status]) => status?.qual?.ranking?.rank != null)
+                    .map(([teamKey, status]) => [teamKey.replace('frc', ''), status.qual.ranking.rank])
+            );
+
+            teamList.sort((a, b) => {
+                const rankA = teamRanks[a.team_number];
+                const rankB = teamRanks[b.team_number];
+
+                if (rankA != null && rankB != null) {
+                    return rankA - rankB;
+                }
+                if (rankA != null) {
+                    return -1;
+                }
+                if (rankB != null) {
+                    return 1;
+                }
+                return a.team_number - b.team_number;
+            });
+        }
+
+        teams = teamList;
+
+        // Reset picklists when new teams are fetched
+        for (let list in picklists) {
+            picklists[list].teams = [];
+        }
+    }
+
+    function handleDragStart(item, sourceList) {
+        draggedItem = { item, sourceList };
+    }
+
+    function handleDrop(targetListKey) {
+        if (draggedItem) {
+            const { item, sourceList } = draggedItem;
+
+            // Reordering within the same list
+            if (sourceList === targetListKey) {
+                draggedItem = null; // Drag is done
+                return; // Do nothing, reordering is handled by dragenter
+            }
+
+            // Add to target list, avoiding duplicates
+            const target = picklists[targetListKey];
+            if (target && !target.teams.some(t => t.team_number === item.team_number)) {
+                target.teams.push(item);
+            }
+
+            // Remove from source if it's a picklist
+            if (sourceList && sourceList !== 'teams') {
+                const source = picklists[sourceList];
+                if (source) {
+                    const index = source.teams.findIndex(t => t.team_number === item.team_number);
+                    if (index > -1) {
+                        source.teams.splice(index, 1);
+                    }
+                }
+            }
+            // Note: we don't remove from the main 'teams' list to allow adding to multiple picklists
+
+            draggedItem = null;
+        }
+    }
+
+    function handleDropToRemove(event) {
+        // Prevent this from firing on child drop zones
+        if (event.target !== event.currentTarget) {
+            return;
+        }
+
+        if (draggedItem) {
+            const { item, sourceList } = draggedItem;
+
+            // Remove from a picklist
+            if (sourceList && sourceList !== 'teams' && picklists[sourceList]) {
+                const source = picklists[sourceList];
+                const index = source.teams.findIndex(t => t.team_number === item.team_number);
+                if (index > -1) {
+                    source.teams.splice(index, 1);
+                    // Force svelte to update the view
+                    picklists = { ...picklists };
+                }
+            }
+            // Remove from an alliance
+            else if (sourceList.startsWith('alliance_')) {
+                const sourceAllianceId = parseInt(sourceList.split('_')[1]);
+                const sourceAlliance = alliances.find(a => a.id === sourceAllianceId);
+                if (sourceAlliance) {
+                    const index = sourceAlliance.teams.findIndex(t => t.team_number === item.team_number);
+                    if (index > -1) {
+                        sourceAlliance.teams.splice(index, 1);
+                        // Force svelte to update the view
+                        alliances = [...alliances];
+                        if (index === 0 && sourceAlliance.id <= 8) {
+                            updateAllianceCaptains();
+                        }
+                    }
+                }
+            }
+
+            draggedItem = null;
+        }
+    }
+
+    function handleDropOnAlliance(targetAllianceId) {
+        if (draggedItem) {
+            const { item, sourceList } = draggedItem;
+
+            const targetAlliance = alliances.find(a => a.id === targetAllianceId);
+
+            if (targetAlliance) {
+                const maxTeams = isFourTeamAlliance ? 4 : 3;
+                // Check if alliance is full
+                if (targetAlliance.teams.length >= maxTeams) {
+                    alert('This alliance is full.');
+                    draggedItem = null;
+                    return;
+                }
+
+                // Add to target alliance, avoiding duplicates
+                if (!targetAlliance.teams.some(t => t.team_number === item.team_number)) {
+                    targetAlliance.teams.push(item);
+                }
+
+                // Remove from source if it's another alliance
+                if (sourceList.startsWith('alliance_')) {
+                    const sourceAllianceId = parseInt(sourceList.split('_')[1]);
+                    if (sourceAllianceId !== targetAllianceId) {
+                        const sourceAlliance = alliances.find(a => a.id === sourceAllianceId);
+                        if (sourceAlliance) {
+                            const index = sourceAlliance.teams.findIndex(t => t.team_number === item.team_number);
+                            if (index > -1) {
+                                sourceAlliance.teams.splice(index, 1);
+                                // If a captain was moved, update the alliance captains
+                                if (index === 0 && sourceAlliance.id <= 8) {
+                                    updateAllianceCaptains();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            draggedItem = null;
+        }
+    }
+
+    async function rankFill() {
+        createAndSwitchToNewAllianceSelection('Rank Filled');
+        await populateAllianceCaptains();
+
+        if (rankedTeams.length === 0) {
+            alert('Please ensure team rankings are loaded. The new selection may be empty.');
+            return;
+        }
+
+        // --- Standard Serpentine Draft for remaining picks ---
+        const teamsInAlliances = () => alliances.flatMap(a => a.teams.map(t => `frc${t.team_number}`));
+        let availableRankedTeams = rankedTeams.filter(rt => !teamsInAlliances().includes(rt.team_key));
+
+        const pickTeamForAlliance = (alliance) => {
+            const maxTeams = isFourTeamAlliance ? 4 : 3;
+            if (alliance.teams.length >= maxTeams) return; // Alliance is full
+
+            if (availableRankedTeams.length > 0) {
+                const teamToPickKey = availableRankedTeams.shift().team_key;
+                const teamNumber = teamToPickKey.replace('frc', '');
+                const team = teams.find(t => t.team_number == teamNumber);
+                if (team) {
+                    alliance.teams.push(team);
+                }
+            }
+        };
+
+        // Fill the rest of the second picks (8 -> 1)
+        for (let i = 7; i >= 0; i--) {
+            pickTeamForAlliance(alliances[i]);
+        }
+
+        // Fill third picks (8 -> 1)
+        for (let i = 7; i >= 0; i--) {
+            pickTeamForAlliance(alliances[i]);
+        }
+
+        // Fill fourth picks if enabled (8 -> 1)
+        if (isFourTeamAlliance) {
+            for (let i = 7; i >= 0; i--) {
+                pickTeamForAlliance(alliances[i]);
+            }
+        }
+    }
+
+    async function oprFill() {
+        if (!selectedEvent) {
+            alert('Please select an event first.');
+            return;
+        }
+        
+        createAndSwitchToNewAllianceSelection('OPR Filled');
+        await populateAllianceCaptains();
+
+        const areCaptainsSet = alliances.every(a => a.teams.length > 0);
+        if (!areCaptainsSet) {
+            alert('Could not populate all alliance captains. The new selection may be incomplete.');
+            return;
+        }
+
+        const response = await fetch(`https://www.thebluealliance.com/api/v3/event/${selectedEvent}/oprs`, {
+            headers: { 'X-TBA-Auth-Key': tbaApiKey }
+        });
+
+        if (!response.ok) {
+            alert('Could not fetch OPRs for this event. They may not be available.');
+            return;
+        }
+
+        const oprs = await response.json();
+        if (!oprs || !oprs.oprs) {
+            alert('OPRs not available for this event.');
+            return;
+        }
+
+        const sortedTeamNumbers = Object.keys(oprs.oprs).sort((a, b) => oprs.oprs[b] - oprs.oprs[a]);
+        
+        const oprSortedTeams = sortedTeamNumbers.map(teamNumber => {
+            const teamKey = teamNumber.replace('frc', '');
+            return teams.find(t => t.team_number == teamKey);
+        }).filter(Boolean);
+
+        const pickTeamForAlliance = (pickingAlliance, pickingAllianceIndex) => {
+            const maxTeams = isFourTeamAlliance ? 4 : 3;
+            if (pickingAlliance.teams.length >= maxTeams) return;
+
+            // Get a list of teams that are already on a "full" alliance (2+ members)
+            const pickedTeams = alliances
+                .filter(a => a.teams.length > 1)
+                .flatMap(a => a.teams.map(t => t.team_number));
+
+            // Captains of alliances ranked higher than the current picker are unpickable.
+            const unpickableCaptains = alliances
+                .slice(0, pickingAllianceIndex)
+                .filter(a => a.teams.length === 1)
+                .map(a => a.teams[0].team_number);
+            
+            // The picking alliance cannot pick itself.
+            const selfCaptain = pickingAlliance.teams[0].team_number;
+
+            // Find the highest OPR team that is not already picked, not an unpickable captain, and not the picker themselves.
+            const teamToPick = oprSortedTeams.find(t => 
+                !pickedTeams.includes(t.team_number) &&
+                !unpickableCaptains.includes(t.team_number) &&
+                t.team_number !== selfCaptain
+            );
+
+            if (teamToPick) {
+                // Find which alliance this team is currently captain of, if any
+                const originalAlliance = alliances.find(a => a.teams.length === 1 && a.teams[0].team_number === teamToPick.team_number);
+
+                // Add the picked team to the picking alliance
+                pickingAlliance.teams.push(teamToPick);
+
+                if (originalAlliance) {
+                    // The captain was picked. We need to shift all subsequent captains up.
+                    const vacantAllianceIndex = alliances.findIndex(a => a.id === originalAlliance.id);
+
+                    if (vacantAllianceIndex !== -1) {
+                        // Shift captains up from the vacant spot to the end
+                        for (let i = vacantAllianceIndex; i < 7; i++) {
+                            alliances[i].teams = alliances[i + 1].teams;
+                        }
+
+                        // Now, backfill the last alliance spot with the next highest ranked available team.
+                        const allTeamsInAlliancesNow = alliances.flatMap(a => a.teams.map(t => `frc${t.team_number}`));
+                        const nextCaptain = rankedTeams.find(rt => !allTeamsInAlliancesNow.includes(rt.team_key));
+
+                        if (nextCaptain) {
+                            const teamNumber = nextCaptain.team_key.replace('frc', '');
+                            const team = teams.find(t => t.team_number == teamNumber);
+                            if (team) {
+                                alliances[7].teams = [team]; // Place new captain in the last alliance
+                            } else {
+                                alliances[7].teams = []; // Should not happen if teams list is correct
+                            }
+                        } else {
+                            // No more available teams, the last alliance becomes empty
+                            alliances[7].teams = [];
+                        }
+                    }
+                }
+            }
+        };
+
+        // Round 2 of picks (serpentine draft: 1->8)
+        for (let i = 0; i < 8; i++) {
+            pickTeamForAlliance(alliances[i], i);
+        }
+
+        // Round 3 of picks (serpentine draft: 8->1)
+        for (let i = 7; i >= 0; i--) {
+            pickTeamForAlliance(alliances[i], i);
+        }
+
+        // Round 4 (if 4-team alliances are enabled: 8->1)
+        if (isFourTeamAlliance) {
+            for (let i = 7; i >= 0; i--) {
+                pickTeamForAlliance(alliances[i], i);
+            }
+        }
+    }
+
+    async function epaFill() {
+        if (!selectedEvent) {
+            alert('Please select an event first.');
+            return;
+        }
+
+        createAndSwitchToNewAllianceSelection('EPA Filled');
+        await populateAllianceCaptains();
+
+        const areCaptainsSet = alliances.every(a => a.teams.length > 0);
+        if (!areCaptainsSet) {
+            alert('Could not populate all alliance captains. The new selection may be incomplete.');
+            return;
+        }
+
+        const response = await fetch(`https://api.statbotics.io/v3/team_events?event=${selectedEvent}`);
+
+        if (!response.ok) {
+            alert('Could not fetch EPAs for this event. They may not be available.');
+            return;
+        }
+
+        const epas = await response.json();
+        if (!epas || epas.length === 0) {
+            alert('EPAs not available for this event.');
+            return;
+        }
+
+        const sortedTeamNumbers = epas.sort((a, b) => b.epa.total_points.mean - a.epa.total_points.mean);
+        
+        const epaSortedTeams = sortedTeamNumbers.map(teamStat => {
+            return teams.find(t => t.team_number == teamStat.team);
+        }).filter(Boolean);
+
+        const pickTeamForAlliance = (pickingAlliance, pickingAllianceIndex) => {
+            const maxTeams = isFourTeamAlliance ? 4 : 3;
+            if (pickingAlliance.teams.length >= maxTeams) return;
+
+            // Get a list of teams that are already on a "full" alliance (2+ members)
+            const pickedTeams = alliances
+                .filter(a => a.teams.length > 1)
+                .flatMap(a => a.teams.map(t => t.team_number));
+
+            // Captains of alliances ranked higher than the current picker are unpickable.
+            const unpickableCaptains = alliances
+                .slice(0, pickingAllianceIndex)
+                .filter(a => a.teams.length === 1)
+                .map(a => a.teams[0].team_number);
+            
+            // The picking alliance cannot pick itself.
+            const selfCaptain = pickingAlliance.teams[0].team_number;
+
+            // Find the highest OPR team that is not already picked, not an unpickable captain, and not the picker themselves.
+            const teamToPick = epaSortedTeams.find(t => 
+                !pickedTeams.includes(t.team_number) &&
+                !unpickableCaptains.includes(t.team_number) &&
+                t.team_number !== selfCaptain
+            );
+
+            if (teamToPick) {
+                // Find which alliance this team is currently captain of, if any
+                const originalAlliance = alliances.find(a => a.teams.length === 1 && a.teams[0].team_number === teamToPick.team_number);
+
+                // Add the picked team to the picking alliance
+                pickingAlliance.teams.push(teamToPick);
+
+                if (originalAlliance) {
+                    // The captain was picked. We need to shift all subsequent captains up.
+                    const vacantAllianceIndex = alliances.findIndex(a => a.id === originalAlliance.id);
+
+                    if (vacantAllianceIndex !== -1) {
+                        // Shift captains up from the vacant spot to the end
+                        for (let i = vacantAllianceIndex; i < 7; i++) {
+                            alliances[i].teams = alliances[i + 1].teams;
+                        }
+
+                        // Now, backfill the last alliance spot with the next highest ranked available team.
+                        const allTeamsInAlliancesNow = alliances.flatMap(a => a.teams.map(t => `frc${t.team_number}`));
+                        const nextCaptain = rankedTeams.find(rt => !allTeamsInAlliancesNow.includes(rt.team_key));
+
+                        if (nextCaptain) {
+                            const teamNumber = nextCaptain.team_key.replace('frc', '');
+                            const team = teams.find(t => t.team_number == teamNumber);
+                            if (team) {
+                                alliances[7].teams = [team]; // Place new captain in the last alliance
+                            } else {
+                                alliances[7].teams = []; // Should not happen if teams list is correct
+                            }
+                        } else {
+                            // No more available teams, the last alliance becomes empty
+                            alliances[7].teams = [];
+                        }
+                    }
+                }
+            }
+        };
+
+        // Round 2 of picks (serpentine draft: 1->8)
+        for (let i = 0; i < 8; i++) {
+            pickTeamForAlliance(alliances[i], i);
+        }
+
+        // Round 3 of picks (serpentine draft: 8->1)
+        for (let i = 7; i >= 0; i--) {
+            pickTeamForAlliance(alliances[i], i);
+        }
+
+        // Round 4 (if 4-team alliances are enabled: 8->1)
+        if (isFourTeamAlliance) {
+            for (let i = 7; i >= 0; i--) {
+                pickTeamForAlliance(alliances[i], i);
+            }
+        }
+    }
+
+    async function updateAllianceCaptains() {
+        if (rankedTeams.length === 0) {
+            // If we don't have ranks, we can't do anything.
+            // We could try to fetch them, but for now, let's just return.
+            return;
+        }
+
+        // Find the first empty alliance captain spot (alliances 1-8)
+        const emptyAllianceIndex = alliances.findIndex(a => a.id <= 8 && a.teams.length === 0);
+
+        if (emptyAllianceIndex === -1) {
+            // No empty spots, nothing to do.
+            return;
+        }
+
+        // Shift up captains from below
+        for (let i = emptyAllianceIndex; i < 7; i++) {
+            alliances[i].teams = alliances[i + 1].teams;
+        }
+
+        // Now alliance 8 (index 7) is the one to fill.
+        // Find the highest-ranked team that is not already in an alliance.
+        const teamsInAlliances = alliances.flatMap(a => a.teams.map(t => `frc${t.team_number}`));
+        const nextCaptain = rankedTeams.find(rt => !teamsInAlliances.includes(rt.team_key));
+
+        if (nextCaptain) {
+            const teamNumber = nextCaptain.team_key.replace('frc', '');
+            const team = teams.find(t => t.team_number == teamNumber);
+            if (team) {
+                alliances[7].teams = [team];
+            } else {
+                // If team is not in the list, clear the last alliance.
+                alliances[7].teams = [];
+            }
+        } else {
+            // No more ranked teams to choose from.
+            alliances[7].teams = [];
+        }
+    }
+
+    function handleDragOver(event) {
+        event.preventDefault();
+    }
+
+    function handleDragEnter(event, listKey) {
+        if (!draggedItem) return;
+        const { item, sourceList } = draggedItem;
+
+        if (sourceList !== listKey) return; // Only reorder within the same list
+
+        const list = picklists[listKey].teams;
+        const draggedIndex = list.findIndex(t => t.team_number === item.team_number);
+        
+        const targetElement = event.target.closest('.list-item');
+        if (!targetElement) return;
+
+        const targetTeamNumber = Number(targetElement.dataset.teamNumber);
+        const dropIndex = list.findIndex(t => t.team_number === targetTeamNumber);
+
+        if (draggedIndex !== -1 && dropIndex !== -1 && draggedIndex !== dropIndex) {
+            // Basic reorder logic
+            const [draggedTeam] = list.splice(draggedIndex, 1);
+            list.splice(dropIndex, 0, draggedTeam);
+            // This is a simple implementation. For smoother UX, you might want to check
+            // if the item is being dragged over the top or bottom half of the target element.
+        }
+    }
+
+    async function createOprPicklist() {
+        if (!selectedEvent) {
+            alert('Please select an event first.');
+            return;
+        }
+
+        const response = await fetch(`https://www.thebluealliance.com/api/v3/event/${selectedEvent}/oprs`, {
+            headers: {
+                'X-TBA-Auth-Key': tbaApiKey
+            }
+        });
+
+        if (!response.ok) {
+            alert('Could not fetch OPRs for this event. They may not be available.');
+            return;
+        }
+
+        const oprs = await response.json();
+        if (!oprs || !oprs.oprs) {
+            alert('OPRs not available for this event.');
+            return;
+        }
+
+        const picklistName = 'OPR Rank';
+        if (Object.values(picklists).some(p => p.name === picklistName)) {
+            alert(`A picklist named "${picklistName}" already exists.`);
+            return;
+        }
+
+        if (teams.length === 0) {
+            await getTeams();
+        }
+
+        const sortedTeamNumbers = Object.keys(oprs.oprs).sort((a, b) => oprs.oprs[b] - oprs.oprs[a]);
+        
+        const sortedTeams = sortedTeamNumbers.map(teamNumber => {
+            const teamKey = teamNumber.replace('frc', '');
+            return teams.find(t => t.team_number == teamKey);
+        }).filter(Boolean);
+
+        const newId = `picklist_${Date.now()}`;
+        picklists[newId] = { name: picklistName, teams: sortedTeams };
+    }
+
+    async function createEpaPicklist() {
+        if (!selectedEvent) {
+            alert('Please select an event first.');
+            return;
+        }
+
+        const response = await fetch(`https://api.statbotics.io/v3/team_events?event=${selectedEvent}`);
+
+        if (!response.ok) {
+            alert('Could not fetch EPA data for this event. They may not be available.');
+            return;
+        }
+
+        const eventData = await response.json();
+        if (!eventData || !Array.isArray(eventData)) {
+            alert('EPA data not available for this event.');
+            return;
+        }
+
+        const picklistName = 'EPA Rank';
+        if (Object.values(picklists).some(p => p.name === picklistName)) {
+            alert(`A picklist named "${picklistName}" already exists.`);
+            return;
+        }
+
+        if (teams.length === 0) {
+            await getTeams();
+        }
+
+        const sortedTeamStats = eventData.sort((a, b) => b.epa.stats.mean - a.epa.stats.mean);
+        
+        const sortedTeams = sortedTeamStats.map(teamStat => {
+            return teams.find(t => t.team_number == teamStat.team);
+        }).filter(Boolean);
+
+        const newId = `picklist_${Date.now()}`;
+        picklists[newId] = { name: picklistName, teams: sortedTeams };
+    }
+
+    async function populateAllianceCaptains() {
+        if (!selectedEvent) {
+            alert('Please select an event first.');
+            return;
+        }
+
+        const response = await fetch(`https://www.thebluealliance.com/api/v3/event/${selectedEvent}/teams/statuses`, {
+            headers: {
+                'X-TBA-Auth-Key': tbaApiKey
+            }
+        });
+
+        if (!response.ok) {
+            alert('Could not fetch team statuses for this event. They may not be available.');
+            return;
+        }
+
+        const statuses = await response.json();
+        if (!statuses) {
+            alert('Team statuses not available for this event.');
+            return;
+        }
+
+        const localRankedTeams = Object.entries(statuses)
+            .map(([teamKey, status]) => ({
+                team_key: teamKey,
+                rank: status?.qual?.ranking?.rank
+            }))
+            .filter(team => team.rank !== null && team.rank !== undefined)
+            .sort((a, b) => a.rank - b.rank);
+        
+        rankedTeams = localRankedTeams;
+
+        const top8 = rankedTeams.slice(0, 8);
+
+        if (top8.length < 8) {
+            alert('Not enough ranked teams to populate all 8 alliance captain spots.');
+        }
+
+        if (teams.length === 0) {
+            await getTeams();
+        }
+
+        // Reset alliances
+        alliances = Array.from({ length: 8 }, (_, i) => ({ id: i + 1, teams: [] }));
+
+        top8.forEach(rankedTeam => {
+            const teamNumber = rankedTeam.team_key.replace('frc', '');
+            const team = teams.find(t => t.team_number == teamNumber);
+            const allianceIndex = rankedTeam.rank - 1;
+
+            if (team && allianceIndex >= 0 && allianceIndex < 8) {
+                if (!alliances[allianceIndex].teams.some(t => t.team_number === team.team_number)) {
+                    alliances[allianceIndex].teams.push(team);
+                }
+            }
+        });
+    }
+
+    function createAllianceSelection() {
+        const name = newAllianceSelectionName.trim();
+        if (name && !Object.values(allianceSelections).some(s => s.name === name)) {
+            const newId = `selection_${Date.now()}`;
+            allianceSelections[newId] = {
+                name: name,
+                alliances: Array.from({ length: 8 }, (_, i) => ({ id: i + 1, teams: [] })),
+                isFourTeamAlliance: false
+            };
+            activeAllianceSelectionId = newId;
+            newAllianceSelectionName = ''; // Clear input after creation
+        } else if (!name) {
+            alert('Please enter a name for the new alliance selection.');
+        } else {
+            alert('An alliance selection with that name already exists.');
+        }
+    }
+
+    function startEditingAllianceSelection() {
+        if (!activeAllianceSelectionId) return;
+        editingAllianceSelectionId = activeAllianceSelectionId;
+        editingAllianceSelectionName = allianceSelections[activeAllianceSelectionId].name;
+    }
+
+    function finishEditingAllianceSelection() {
+        if (editingAllianceSelectionId === null) return;
+
+        const originalName = allianceSelections[editingAllianceSelectionId]?.name;
+        const newName = editingAllianceSelectionName.trim();
+
+        // If name is unchanged, do nothing.
+        if (newName === originalName) {
+            editingAllianceSelectionId = null;
+            editingAllianceSelectionName = '';
+            return;
+        }
+
+        // If name is changed, validate it.
+        if (newName && !Object.values(allianceSelections).some(s => s.name === newName)) {
+            allianceSelections[editingAllianceSelectionId].name = newName;
+        } else {
+            alert('Alliance selection name cannot be empty or already exist.');
+        }
+        editingAllianceSelectionId = null;
+        editingAllianceSelectionName = '';
+    }
+
+    function createAndSwitchToNewAllianceSelection(name) {
+        let newName = name;
+        let counter = 1;
+        while (Object.values(allianceSelections).some(s => s.name === newName)) {
+            newName = `${name} ${++counter}`;
+        }
+
+        const newId = `selection_${Date.now()}`;
+        allianceSelections[newId] = {
+            name: newName,
+            alliances: Array.from({ length: 8 }, (_, i) => ({ id: i + 1, teams: [] })),
+            isFourTeamAlliance: isFourTeamAlliance
+        };
+        activeAllianceSelectionId = newId;
+    }
+
+    function deleteAllianceSelection() {
+        if (activeAllianceSelectionId === 'default') {
+            alert('You cannot delete the Default selection.');
+            return;
+        }
+        if (!activeAllianceSelectionId || Object.keys(allianceSelections).length <= 1) {
+            alert('You cannot delete the last alliance selection.');
+            return;
+        }
+        if (confirm(`Are you sure you want to delete the "${allianceSelections[activeAllianceSelectionId].name}" selection?`)) {
+            const oldId = activeAllianceSelectionId;
+            delete allianceSelections[oldId];
+            activeAllianceSelectionId = Object.keys(allianceSelections)[0];
+        }
+    }
+
+    async function copyAllianceSelection() {
+        if (!activeAllianceSelectionId) return;
+
+        const selection = allianceSelections[activeAllianceSelectionId];
+        if (!selection) return;
+
+        const dataString = [
+            selection.name,
+            selection.isFourTeamAlliance ? '1' : '0',
+            selection.alliances.map(a => a.teams.map(t => t.team_number).join(',')).join(';')
+        ].join('|');
+
+        const compressedData = pako.deflate(dataString);
+        const encodedData = bs85.encode(compressedData);
+
+        try {
+            await navigator.clipboard.writeText(encodedData);
+        } catch (err) {
+            console.error('Failed to copy text: ', err);
+            alert('Failed to copy alliance selection.');
+        }
+    }
+
+    function pasteAllianceSelection() {
+        const importString = allianceImportData;
+        if (!importString) {
+            alert('Please paste the alliance selection data into the text box.');
+            return;
+        }
+
+        try {
+            const decodedBuffer = bs85.decode(importString);
+            const decompressedData = pako.inflate(decodedBuffer, { to: 'string' });
+            
+            const parts = decompressedData.split('|');
+            if (parts.length !== 3) {
+                throw new Error('Invalid data format');
+            }
+
+            const [name, isFourTeamStr, alliancesStr] = parts;
+
+            let newName = name;
+            let counter = 1;
+            while (Object.values(allianceSelections).some(s => s.name === newName)) {
+                newName = `${name} (${++counter})`;
+            }
+
+            const isFourTeamAlliance = isFourTeamStr === '1';
+            const allianceTeamStrs = alliancesStr.split(';');
+            const newAlliances = Array.from({ length: 8 }, (_, i) => {
+                const teamNumbers = (allianceTeamStrs[i] || '').split(',').filter(Boolean);
+                const newTeams = teamNumbers
+                    .map(numStr => teams.find(t => t.team_number.toString() === numStr))
+                    .filter(Boolean);
+                return { id: i + 1, teams: newTeams };
+            });
+
+            const newId = `selection_${Date.now()}`;
+            allianceSelections[newId] = {
+                name: newName,
+                alliances: newAlliances,
+                isFourTeamAlliance: isFourTeamAlliance
+            };
+            activeAllianceSelectionId = newId;
+            allianceImportData = ''; // Clear the input field
+        } catch (error) {
+            alert('Failed to parse alliance selection data. Please check the format.');
+            console.error('Alliance import error:', error);
+        }
+    }
+
+    $effect(() => {
+        if (activeView === 'alliances' && alliances.every(a => a.teams.length === 0)) {
+            populateAllianceCaptains();
+        }
+    });
+
+    $effect(() => {
+        if (!isFourTeamAlliance) {
+            alliances.forEach(alliance => {
+                if (alliance.teams.length > 3) {
+                    alliance.teams.length = 3;
+                }
+            });
+        }
+    });
+
+</script>
+
+<main>
+    <h1>Picklist</h1>
+
+    <div class="tabs">
+        <button class:active={activeView === 'picklists'} on:click={() => activeView = 'picklists'}>
+            Picklists
+        </button>
+        <button class:active={activeView === 'alliances'} on:click={() => activeView = 'alliances'}>
+            Alliance Selection
+        </button>
+    </div>
+
+    <div>
+        <label for="tba-key">TBA API Key:</label>
+        <input type="text" id="tba-key" bind:value={tbaApiKey}>
+        <button on:click={getEvents}>Get Events</button>
+    </div>
+
+    {#if events.length > 0}
+        <div>
+            <label for="event-select">Select Event:</label>
+            <select id="event-select" bind:value={selectedEvent} on:change={getTeams}>
+                <option value="">--Select an Event--</option>
+                {#each events as event}
+                    <option value={event.key}>{event.name}</option>
+                {/each}
+            </select>
+        </div>
+    {/if}
+
+    <div class="main-content" on:dragover={handleDragOver} on:drop|preventDefault={handleDropToRemove}>
+        <div class="team-list-container">
+            <h2>Teams</h2>
+            <div class="team-list">
+                <div class="list" on:dragover={handleDragOver} on:drop={() => { /* Can't drop back on main list */ }}>
+                    {#each teams as team (team.team_number)}
+                        <Team {team} picked={!!pickedTeams[team.team_number]} on:click={() => toggleTeamPicked(team.team_number)} on:dragstart={() => handleDragStart(team, 'teams')} />
+                    {/each}
+                </div>
+            </div>
+        </div>
+
+        <div class="view-container" on:dragover={handleDragOver} on:drop|preventDefault={handleDropToRemove}>
+            {#if activeView === 'picklists'}
+                <div class="picklist-view">
+                    <div class="controls">
+                        <input type="text" bind:value={newPickListName} placeholder="New picklist name" />
+                        <button on:click={createPickList}>Create Picklist</button>
+                    </div>
+                    
+                    <div class="container">
+                        {#each Object.entries(picklists) as [key, list]}
+                            <div class="picklist">
+                                <h2>
+                                    {#if editingPicklistId === key}
+                                        <input
+                                            type="text"
+                                            bind:value={editingPicklistName}
+                                            on:blur={() => finishEditing(key)}
+                                            on:keydown={(e) => e.key === 'Enter' && finishEditing(key)}
+                                            on:focus={(e) => e.currentTarget.select()}
+                                            autofocus
+                                        />
+                                    {:else}
+                                        <span on:click={() => startEditing(key, list.name)}>{list.name}</span>
+                                    {/if}
+                                    <button on:click={() => deletePickList(key)}>X</button>
+                                </h2>
+                                <div class="list" on:dragover={handleDragOver} on:drop={() => handleDrop(key)} on:dragenter={(e) => handleDragEnter(e, key)}>
+                                    {#each list.teams as team (team.team_number)}
+                                        <Team {team} picked={!!pickedTeams[team.team_number]} on:click={() => toggleTeamPicked(team.team_number)} on:dragstart={() => handleDragStart(team, key)} />
+                                    {/each}
+                                </div>
+                            </div>
+                        {/each}
+                    </div>
+
+                    <div class="share-container">
+                        <div class="share-controls">
+                            <h2>Share & Import</h2>
+                            <button on:click={exportPicklists}>Copy Picklists to Clipboard</button>
+                        </div>
+                        <div class="share-controls">
+                            <h3>Import Picklists</h3>
+                            <textarea bind:value={importData} rows="8" placeholder="Paste shared data here..."></textarea>
+                            <br />
+                            <button on:click={importPicklists}>Import</button>
+                        </div>
+                    </div>
+
+                    <div class="fixed-buttons">
+                        <button on:click={createOprPicklist}>Create OPR Picklist</button>
+                        <button on:click={createEpaPicklist}>Create EPA Picklist</button>
+                    </div>
+                </div>
+            {/if}
+
+            {#if activeView === 'alliances'}
+                <div class="alliance-selection">
+                    <div class="alliance-controls">
+                        <h2>Alliance Selection</h2>
+                        <div>
+                            <label>
+                                <input type="checkbox" bind:checked={isFourTeamAlliance} />
+                                4 teams per alliance
+                            </label>
+                        </div>
+                        <button on:click={populateAllianceCaptains}>Reset</button>
+                    </div>
+                    <div class="alliances-container">
+                        {#each alliances as alliance}
+                            <div class="alliance-list" on:dragover={handleDragOver} on:drop={() => handleDropOnAlliance(alliance.id)}>
+                                <h3>Alliance {alliance.id}</h3>
+                                <div class="list">
+                                    {#each alliance.teams as team (team.team_number)}
+                                        <Team {team} picked={!!pickedTeams[team.team_number]} on:click={() => toggleTeamPicked(team.team_number)} on:dragstart={() => handleDragStart(team, `alliance_${alliance.id}`)} />
+                                    {/each}
+                                </div>
+                            </div>
+                        {/each}
+                    </div>
+                    <div class="fixed-buttons">
+                        <button on:click={rankFill}>Fill Based on Rank</button>
+                        <button on:click={oprFill}>Fill Based on OPR</button>
+                        <button on:click={epaFill}>Fill Based on EPA</button>
+                    </div>
+                </div>
+            {/if}
+        </div>
+    </div>
+    {#if activeView === 'alliances'}
+    <div class="bottom-bar">
+        <div class="alliance-management">
+            <input type="text" bind:value={newAllianceSelectionName} placeholder="New selection name" on:keydown={(e) => e.key === 'Enter' && createAllianceSelection()} />
+            <button on:click={createAllianceSelection}>New</button>
+            
+            <div class="current-selection-display">
+                {#if editingAllianceSelectionId === activeAllianceSelectionId}
+                    <input
+                        type="text"
+                        bind:value={editingAllianceSelectionName}
+                        on:blur={finishEditingAllianceSelection}
+                        on:keydown={(e) => e.key === 'Enter' && finishEditingAllianceSelection()}
+                        on:focus={(e) => e.currentTarget.select()}
+                        autofocus
+                    />
+                {:else}
+                    <span on:click={startEditingAllianceSelection} title="Click to rename">
+                        {allianceSelections[activeAllianceSelectionId]?.name || 'Select a selection'}
+                    </span>
+                {/if}
+            </div>
+
+            <select id="alliance-selection-switcher" bind:value={activeAllianceSelectionId}>
+                {#each Object.entries(allianceSelections) as [id, selection]}
+                    <option value={id}>{selection.name}</option>
+                {/each}
+            </select>
+            <button on:click={deleteAllianceSelection} disabled={Object.keys(allianceSelections).length <= 1 || activeAllianceSelectionId === 'default'}>Delete</button>
+            <button on:click={copyAllianceSelection}>Copy</button>
+            <input type="text" bind:value={allianceImportData} placeholder="Paste selection data..." />
+            <button on:click={pasteAllianceSelection}>Paste</button>
+        </div>
+    </div>
+    {/if}
+</main>
+
+<style>
+    .tabs {
+        margin-bottom: 20px;
+    }
+    .tabs button {
+        padding: 10px 20px;
+        border: 1px solid #ccc;
+        background-color: #000000;
+        color: #ffffff;
+        cursor: pointer;
+    }
+    .tabs button.active {
+        background-color: #e7e7e7;
+        color: #000000;
+        border-bottom: 1px solid #fff;
+    }
+    .bottom-bar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        background-color: #1a1a1a;
+        border-top: 1px solid #ccc;
+        padding: 10px 20px;
+        z-index: 20;
+        display: flex;
+        justify-content: flex-start;
+        align-items: center;
+    }
+    .alliance-management {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .current-selection-display span {
+        cursor: pointer;
+        padding: 5px;
+        border: 1px solid transparent;
+    }
+    .current-selection-display span:hover {
+        border-color: #ccc;
+    }
+    .main-content {
+        display: flex;
+        gap: 20px;
+    }
+    .team-list-container {
+        position: fixed;
+        left: 20px;
+        top: 20px;
+        width: 300px;
+        height: calc(100vh - 40px);
+        z-index: 10;
+        background: #1a1a1a;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+    }
+    .team-list {
+        width: 100%;
+        border: none;
+        padding: 0;
+        overflow-y: auto;
+        flex-grow: 1;
+    }
+    .view-container {
+        flex-grow: 1;
+        overflow-x: auto;
+        margin-left: 340px;
+        padding-bottom: 60px; /* Add padding to avoid overlap with bottom bar */
+    }
+    .list {
+        min-height: 200px;
+        background-color: #f9f9f9;
+        padding: 5px;
+    }
+    .controls {
+        margin-top: 20px;
+    }
+    h2 button {
+        font-size: 0.8rem;
+        margin-left: 10px;
+        cursor: pointer;
+    }
+    h2 span {
+        cursor: pointer;
+    }
+    .share-container {
+        display: flex;
+        gap: 20px;
+        margin-top: 20px;
+    }
+    .share-controls {
+        flex: 1;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+    }
+    .share-controls textarea {
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 10px;
+    }
+    .share-controls button {
+        margin-top: 10px;
+    }
+    .fixed-buttons {
+        position: fixed;
+        bottom: 80px; /* Adjust to be above the new bottom bar */
+        right: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    .alliance-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 20px;
+    }
+    .alliance-selection {
+        margin-top: 20px;
+    }
+    .alliances-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 20px;
+    }
+    .alliance-list {
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        padding: 10px;
+    }
+    .alliance-list h3 {
+        margin-top: 0;
+    }
+</style>
