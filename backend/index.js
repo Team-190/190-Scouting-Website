@@ -79,6 +79,13 @@ app.get("/getTeamView", async (req, res) => {
     res.send(result);
 });
 
+app.get("/teamView", async (req, res) => {
+    const teamNumber = req.query.teamNumber;
+    if (!teamNumber) res.sendStatus(400);
+    let result = await database.teamView(teamNumber);
+    res.send(result);
+});
+
 app.get("/getAllTeams", async (req, res) => {
     const column = req.query.attribute;
     if (!column) res.sendStatus(400);
@@ -88,5 +95,5 @@ app.get("/getAllTeams", async (req, res) => {
 });
 
 app.listen(PORT, () =>{
-    console.log("Listening");
+    console.log("Listening on port "+PORT);
 });
