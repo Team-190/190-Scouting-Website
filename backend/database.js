@@ -8,16 +8,17 @@ supabaseUtil.supabaseInit()
     .then((value) => {supabaseClient = value})
     .catch((error) => console.warn(error));
 
-async function teamView(teamNumber) {
+async function teamView() {
     let query = supabaseClient
         .from("2026_game")
         .select("*")
-        .eq("team", `frc${teamNumber}`);
+        //.eq("team", `frc${teamNumber}`);
 
     const result = await query;
     console.log(result);
     return result;
 }
+
 
 
 async function oldTeamView(eventCode, teamNumber) {

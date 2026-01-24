@@ -88,9 +88,10 @@ app.get("/getTeamView", async (req, res) => {
 });
 
 app.get("/teamView", async (req, res) => {
-    const teamNumber = req.query.teamNumber;
-    if (!teamNumber) res.sendStatus(400);
-    let result = await database.teamView(teamNumber);
+    console.log("TeamView requested.");
+    //const teamNumber = req.query.teamNumber;
+    //if (!teamNumber) return res.status(400).send("Please supply a team number.");
+    let result = await database.teamView();
     res.send(result);
 });
 
