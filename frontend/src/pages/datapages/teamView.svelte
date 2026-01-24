@@ -148,7 +148,7 @@
             qLabels.forEach((q, i) => {
                 const match = matches[i];
                 const val = Number(match?.[metric] || 0);
-                row[q] = val;
+                row[q] = Number(val.toFixed(2));
                 values.push(val);
             });
             row.mean = values.length > 0 ? Number(mean(values).toFixed(2)) : 0;
@@ -214,9 +214,9 @@
                     const stats = globalStats[metricName] || { mean: 0, sd: 0 };
                     return {
                         background: params.value === 0
-                            ? "#e0e0e0"            // gray background
+                            ? "#4D4D4D"            // gray background for zeros
                             : colorFromStats(params.value, stats.mean, stats.sd),
-                        color: "black",            // always black text
+                        color: params.value === 0 ? "white" : "black",
                         fontSize: "18px",
                         fontWeight: "bold",
                         textAlign: "center"
@@ -235,9 +235,9 @@
                     const stats = globalStats[metricName] || { mean: 0, sd: 0 };
                     return {
                         background: params.value === 0
-                            ? "#e0e0e0"            // gray background
+                            ? "#4D4D4D"            // gray background for zeros
                             : colorFromStats(params.value, stats.mean, stats.sd),
-                        color: "black",            // always black text
+                        color: params.value === 0 ? "white" : "black",
                         fontSize: "18px",
                         fontWeight: "bold",
                         textAlign: "center"
@@ -313,6 +313,12 @@
         background: var(--frc-190-red);
         color: white;
         font-size: 18px;
+    }
+
+    :global(select option) {
+        background: #333;
+        color: white;
+        padding: 8px;
     }
 
     :global(.ag-header-cell) {

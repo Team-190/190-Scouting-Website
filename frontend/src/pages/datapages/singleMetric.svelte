@@ -83,7 +83,7 @@
         return z < 0 ? lerpColor(mode.mid, mode.below, t) : lerpColor(mode.mid, mode.above, t);
     }
     function summaryColor(v, values) {
-        if (v === 0) return "rgb(150,150,150)";
+        if (v === 0) return "#4D4D4D";
 
         const nonZero = values.filter(x => x !== 0);
         if (nonZero.length === 0) return "rgb(180,180,180)";
@@ -184,7 +184,7 @@
             rows.forEach((r, i) => {
                 const label = qLabels[i];
                 const v = Number(r[selectedMetric] ?? 0);
-                row[label] = v;
+                row[label] = Number(v.toFixed(2));
                 values.push(v);
             });
 
@@ -242,7 +242,7 @@
                     const v = params.value ?? 0;
                     return {
                         background: summaryColor(v, meanValues),
-                        color: v === 0 ? "#222" : "black",
+                        color: v === 0 ? "white" : "black",
                         fontWeight: "bold",
                         fontSize: "18px",
                         textAlign: "center",
@@ -261,7 +261,7 @@
                     const v = params.value ?? 0;
                     return {
                         background: summaryColor(v, medianValues),
-                        color: v === 0 ? "#222" : "black",
+                        color: v === 0 ? "white" : "black",
                         fontWeight: "bold",
                         fontSize: "18px",
                         textAlign: "center",
@@ -367,6 +367,12 @@
         background: var(--frc-190-red);
         color: white;
         font-size: 18px;
+    }
+
+    :global(select option) {
+        background: #333;
+        color: white;
+        padding: 8px;
     }
 
     :global(.ag-header-cell) {
