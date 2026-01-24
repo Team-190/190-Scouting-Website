@@ -1,8 +1,25 @@
 <script>
+    import { Router } from "@mateothegreat/svelte5-router";
+
+    import Navbar from "./components/Navbar.svelte";
+    import Home from "./pages/Home.svelte";
+    import EventSelectScreen from "./pages/dash/event-select-screen.svelte";
+    import PickLists from "./pages/datapages/pickLists.svelte";
+    import SingleMetric from "./pages/datapages/singleMetric.svelte";
+    import TeamView from "./pages/datapages/teamView.svelte";
+
+    const routes = [
+        {path : "/", component: Home},
+        {path : "/event-select", component: EventSelectScreen},
+        {path : "/pickLists", component: PickLists},
+        {path : "/eventView", component: SingleMetric},
+        {path : "/teamView", component: TeamView},
+    ];
 </script>
 
 <main>
-    <h1>Data Visualization</h1>
+    <Navbar />
+    <Router {routes} />
 </main>
 
 <style>

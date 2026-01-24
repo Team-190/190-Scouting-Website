@@ -13,6 +13,7 @@ const path = require("path");
 const test = require("./test/test.js")
 const database = require("./database.js");
 const session = require("express-session");
+const cors = require("cors");
 require("dotenv").config();
 
 const app = express();
@@ -41,6 +42,12 @@ app.use(
     })
 );
 
+app.use(cors({
+    origin: "http://localhost:5173",
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type"],
+}))
+
 app.use((req, res, next) => {
     // if (!req.session.username) res.redirect("/login");
 
@@ -68,6 +75,7 @@ app.post("/postEventCode", async (req, res) => {
     }
     else {
         console.log(`Event code retrieved, ${eventCode}`);
+        res.sendStatus(200);
     }
 })
 
@@ -87,10 +95,14 @@ app.get("/teamView", async (req, res) => {
 });
 
 app.get("/getAllTeams", async (req, res) => {
-    const column = req.query.attribute;
-    if (!column) res.sendStatus(400);
     if (!eventCode) res.sendStatus(403);
-    let result = await database.allTeamsView(eventCode, column);
+    let result = await database.allTeamsView(eventCode);
+    res.send(result);
+});
+
+app.get("/getAvailableTeams", async (req, res) => {
+    if (!eventCode) res.sendStatus(403);
+    let result = await database.availableTeamsView(eventCode);
     res.send(result);
 });
 

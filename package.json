@@ -1,0 +1,8 @@
+{
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^6.2.1"
+  },
+  "dependencies": {
+    "ag-charts-community": "^12.3.1"
+  }
+}
