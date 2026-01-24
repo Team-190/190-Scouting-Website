@@ -7,7 +7,7 @@
     } from "ag-grid-community";
     //import teamViewData from "../../utils/allTeamView.json";
     let teamViewData = null
-
+    // it is populated automatically by onMount
     console.log("teamview: "+teamViewData);
 
     import "ag-grid-community/styles/ag-grid.css";
