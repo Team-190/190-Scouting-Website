@@ -18,6 +18,7 @@
 
     let domNode;
     let colorblindMode = "normal";
+    let populatecache;
 
     const colorModes = {
         normal: {
@@ -105,15 +106,6 @@
         return data
     }
 
-    async function cacheAllData() {
-        const data = (await(await fetch("http://localhost:3000/allData")).json()).data;
-        console.log("ALL DATA CACHE:\n\n"+JSON.stringify(data, null, 4));
-        return;
-        for (let team in data) {
-            cache[team] = data[team]
-        }
-    }
-
     async function loadTeamData(teamNumber) {
         let data = [];
         if (Object.keys(cache).includes(teamNumber.toString())) {
@@ -124,6 +116,32 @@
             cache[teamNumber.toString()] = data;
         }
         buildGrid(data);
+    }
+
+    async function loadFromLocalStorage() {
+        // Get all data from local storage
+        const localStorageData = JSON.parse(localStorage.getItem("data"));
+        const time = localStorage.getItem("timestamp");
+        console.log("GETTING DATA:");
+        console.log(localStorageData);
+        
+        const allTeamNumbers = []
+        for (let data_point in localStorageData) {
+            data_point = localStorageData[data_point]
+            console.log(data_point)
+            let number = parseInt(data_point["team"].slice(3));
+            if (!allTeamNumbers.includes(number)) {
+                allTeamNumbers.push(number)
+            }
+            if (Object.keys(cache).includes(number.toString())) {
+                cache[number.toString()].push(data_point);
+            } else {
+                cache[number.toString()] = [data_point];
+            }
+        }
+        allTeams = allTeamNumbers;
+        selectedTeam = allTeams[0];
+        buildGrid(cache[selectedTeam]);
     }
 
     let gridInstance = null;
@@ -293,17 +311,19 @@
     }
     
     onMount(async () => {
+        let latest_storage_date = localStorage.getItem("timestamp");
+        populatecache.textContent = `Load from localstorage (${latest_storage_date})`;
         const response = await fetch("http://localhost:3000/teamView?teamNumber=190");
         teamViewData = await response.json();
         console.log("teamview: ", teamViewData);
         
         loadTeamData(190);
-        console.log("Loading data from 190")
+        console.log("Loading data from 190");
 
         allTeams = await loadTeamNumbers();
-        console.log("Populated team list")
-        
+        console.log("Populated team list");
     });
+
 </script>
 
 <style>
@@ -495,6 +515,7 @@
                 {/each}
             </select>
         </div>
+        <button bind:this={populatecache} on:click={loadFromLocalStorage}>populate cache</button>
     </div>
 
     <!-- Grid container -->

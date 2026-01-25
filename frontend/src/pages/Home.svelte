@@ -1,9 +1,13 @@
 <script>
     import { goto } from '@mateothegreat/svelte5-router';
 
-    function cacheData() {
-        console.log("CACHE DATA triggered");
-        // Placeholder for future cache logic
+    async function cacheAllData() {
+        console.log("Getting all data from storage")
+        const data = JSON.stringify((await(await fetch("http://localhost:3000/allData")).json()).data);
+        
+        console.log(data)
+        localStorage.setItem("data", data);
+        localStorage.setItem("timestamp", new Date(Date.now()).toLocaleString());
     }
 </script>
 
@@ -13,7 +17,7 @@
         <div class="nonagon">
             <!-- Hexagon (6-sided) -->
             <div class="hexagon">
-                <span class="label">CACHE DATA</span>
+                <span class="label">Populate localstorage</span>
             </div>
         </div>
     </div>
