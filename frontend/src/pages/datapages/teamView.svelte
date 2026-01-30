@@ -1,20 +1,24 @@
 <script lang="ts">
-    import {
-        AllCommunityModule,
-        createGrid,
-        ModuleRegistry
-    } from "ag-grid-community";
     import { onMount } from "svelte";
-    import teamViewData from "../../utils/allTeamView.json";
+    import {
+        createGrid,
+        ModuleRegistry,
+        AllCommunityModule
+    } from "ag-grid-community";
+    //import teamViewData from "../../utils/allTeamView.json";
+    let teamViewData = null
+    // it is populated automatically by onMount
+    console.log("teamview: "+teamViewData);
 
     import "ag-grid-community/styles/ag-grid.css";
     import "ag-grid-community/styles/ag-theme-quartz.css";
-    import { fetchAvailableTeams, fetchTeamView } from "../../utils/api";
+    import Team from "../../components/Team.svelte";
 
     ModuleRegistry.registerModules([AllCommunityModule]);
 
     let domNode;
     let colorblindMode = "normal";
+    let populatecache;
 
     const colorModes = {
         normal: {
@@ -43,25 +47,31 @@
         }
     };
 
-    const mean = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
+    let cache = {};
 
-    const median = arr => {
+    function mean (arr) {
+        return arr.reduce((a, b) => a + b, 0) / arr.length;
+    } 
+
+    function median(arr) {
         const sorted = [...arr].sort((a, b) => a - b);
         const mid = Math.floor(sorted.length / 2);
         return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
     };
 
-    const sd = (arr, mu) => {
+    function sd(arr, mu)  {
         const variance = arr.reduce((s, v) => s + (v - mu) ** 2, 0) / arr.length;
         return Math.sqrt(variance);
     };
 
-    const lerpColor = (c1, c2, t) =>
-        `rgb(${[
+    function lerpColor(c1, c2, t) {
+        return `rgb(${[
             Math.round(c1[0] + (c2[0] - c1[0]) * t),
             Math.round(c1[1] + (c2[1] - c1[1]) * t),
             Math.round(c1[2] + (c2[2] - c1[2]) * t)
-        ].join(",")})`;
+            ].join(",")})`;
+    }
+        
 
     function colorFromStats(v, mu, sigma) {
         if (v === 0) return "#000";
@@ -69,7 +79,7 @@
 
         const mode = colorModes[colorblindMode];
         const z = (v - mu) / sigma;
-        const t = Math.max(-3, Math.min(3, z)) / 3 + 0.5;
+        const t = Math.min(1, Math.abs(z));
 
         return z < 0 ? lerpColor(mode.mid, mode.below, t) : lerpColor(mode.mid, mode.above, t);
     }
@@ -89,26 +99,58 @@
     }
 
     let allTeams = [];
-    let selectedTeam = null;
+    let selectedTeam = "190";
 
-    // load list of teams attending season (simplified)
-    async function loadAllTeams() {
-        // replace with your real source later
-        allTeams = await (await fetchAvailableTeams()).json();
-        if (!selectedTeam) selectedTeam = allTeams[0];
+    async function loadTeamNumbers() {
+        const data = await(await fetch("http://localhost:3000/teamNumbers")).json();
+        return data
     }
 
     async function loadTeamData(teamNumber) {
-        const json = await fetchTeamView(teamNumber);
-        const teamData = await json.json()
-        buildGrid(teamData);
+        let data = [];
+        if (Object.keys(cache).includes(teamNumber.toString())) {
+            console.log("cache fired");
+            data = cache[teamNumber.toString()];
+        } else {
+            data = (await(await fetch("http://localhost:3000/teamView?teamNumber="+teamNumber)).json()).data;
+            cache[teamNumber.toString()] = data;
+        }
+        buildGrid(data);
     }
-    
+
+    async function loadFromLocalStorage() {
+        // Get all data from local storage
+        const localStorageData = JSON.parse(localStorage.getItem("data"));
+        const time = localStorage.getItem("timestamp");
+        console.log("GETTING DATA:");
+        console.log(localStorageData);
+        
+        const allTeamNumbers = []
+        for (let data_point in localStorageData) {
+            data_point = localStorageData[data_point]
+            console.log(data_point)
+            let number = parseInt(data_point["team"].slice(3));
+            if (!allTeamNumbers.includes(number)) {
+                allTeamNumbers.push(number)
+            }
+            if (Object.keys(cache).includes(number.toString())) {
+                cache[number.toString()].push(data_point);
+            } else {
+                cache[number.toString()] = [data_point];
+            }
+        }
+        allTeams = allTeamNumbers;
+        selectedTeam = allTeams[0];
+        buildGrid(cache[selectedTeam]);
+    }
+
     let gridInstance = null;
-    
-    async function buildGrid(teamData) {
-        const matches = teamData.data;
-        const matchNums = matches.map(m => m.Match);
+
+    function buildGrid(matches) {
+        if (matches.length === 0) return;
+        console.log("MATCHES LOADING GRID:"+JSON.stringify(matches, null, 2))
+
+        const matchNums = matches.map(m => m.match);
         const qLabels = matchNums.map((_, i) => `Q${i + 1}`);
 
         const sample = matches[0];
@@ -148,7 +190,7 @@
             qLabels.forEach((q, i) => {
                 const match = matches[i];
                 const val = Number(match?.[metric] || 0);
-                row[q] = val;
+                row[q] = Number(val.toFixed(2));
                 values.push(val);
             });
             row.mean = values.length > 0 ? Number(mean(values).toFixed(2)) : 0;
@@ -193,8 +235,11 @@
 
                     const metricName = params.data.metric;
                     const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+                    
+                    const inverted = ["time_of_climb", "climb_time"].includes(metricName);
+
                     return {
-                        background: colorFromStats(params.value, stats.mean, stats.sd),
+                        background: colorFromStats(params.value, stats.mean, stats.sd, inverted),
                         color: params.value === 0 ? "white" : "black",
                         fontSize: "18px",
                         fontWeight: 600,
@@ -212,11 +257,13 @@
                 cellStyle: params => {
                     const metricName = params.data.metric;
                     const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+                    const inverted = ["time_of_climb", "climb_time"].includes(metricName);
+
                     return {
                         background: params.value === 0
-                            ? "#e0e0e0"            // gray background
-                            : colorFromStats(params.value, stats.mean, stats.sd),
-                        color: "black",            // always black text
+                            ? "#4D4D4D"            // gray background for zeros
+                            : colorFromStats(params.value, stats.mean, stats.sd, inverted),
+                        color: params.value === 0 ? "white" : "black",
                         fontSize: "18px",
                         fontWeight: "bold",
                         textAlign: "center"
@@ -233,11 +280,13 @@
                 cellStyle: params => {
                     const metricName = params.data.metric;
                     const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+                    const inverted = ["time_of_climb", "climb_time"].includes(metricName);
+
                     return {
                         background: params.value === 0
-                            ? "#e0e0e0"            // gray background
-                            : colorFromStats(params.value, stats.mean, stats.sd),
-                        color: "black",            // always black text
+                            ? "#4D4D4D"            // gray background for zeros
+                            : colorFromStats(params.value, stats.mean, stats.sd, inverted),
+                        color: params.value === 0 ? "white" : "black",
                         fontSize: "18px",
                         fontWeight: "bold",
                         textAlign: "center"
@@ -267,45 +316,71 @@
             suppressHorizontalScroll: true
         });
     }
+    
+    onMount(async () => {
+        let latest_storage_date = localStorage.getItem("timestamp");
+        populatecache.textContent = `Load from localstorage (${latest_storage_date})`;
+        const response = await fetch("http://localhost:3000/teamView?teamNumber=190");
+        teamViewData = await response.json();
+        console.log("teamview: ", teamViewData);
+        
+        loadTeamData(190);
+        console.log("Loading data from 190");
 
-    onMount(() => {
-        loadAllTeams();
-
-        if (allTeams.length > 0) {
-            selectedTeam = allTeams[0];
-            loadTeamData(selectedTeam);
-        }
+        allTeams = await loadTeamNumbers();
+        console.log("Populated team list");
     });
+
 </script>
 
 <style>
+    /* FRC 190 Brand Colors */
+    :root {
+        --frc-190-red: #C81B00;
+        --wpi-gray: #A9B0B7;
+        --frc-190-black: #4D4D4D;
+    }
+
     :global(html), :global(body) {
         margin: 0;
         padding: 0;
-        background: #A9B0B7;
-        overflow-x: hidden;
-        overflow-y: auto;
-        min-height: 100vh;
+        background: var(--wpi-gray);
+        height: 100vh;
         width: 100vw;
+        overflow-x: hidden;
     }
 
     :global(*) {
         box-sizing: border-box;
     }
 
+    .page-wrapper {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        min-height: 100vh;
+        padding: 20px;
+        background: var(--wpi-gray);
+    }
+
     :global(select option:checked) {
-        background: #C81B00;
+        background: var(--frc-190-red);
         color: white;
         font-size: 18px;
     }
 
+    :global(select option) {
+        background: #333;
+        color: white;
+        padding: 8px;
+    }
+
     :global(.ag-header-cell) {
-        background: #C81B00 !important;
+        background: var(--frc-190-red) !important;
         color: white !important;
         font-size: 18px;
-        font-weight: 700 !important;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
+        font-weight: bold;
     }
 
     :global(.ag-header-cell.header-center .ag-header-cell-label) {
@@ -321,84 +396,74 @@
     }
 
     :global(.ag-theme-quartz .ag-root-wrapper) {
-        --ag-font-size: 18px;
-        border: 3px solid #C81B00;
+        --ag-font-size: 20px;
+        border: 3px solid var(--frc-190-red);
         border-radius: 8px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        overflow: hidden;
     }
 
+    /* Permanent scrollbar styling */
     :global(.ag-body-viewport) {
         overflow-y: scroll !important;
+        overflow-x: auto !important;
     }
 
     :global(.ag-body-viewport::-webkit-scrollbar) {
         width: 12px;
-        display: block !important;
+        height: 12px;
     }
 
     :global(.ag-body-viewport::-webkit-scrollbar-track) {
-        background: #2a2a2a;
+        background: var(--frc-190-black);
         border-radius: 6px;
     }
 
     :global(.ag-body-viewport::-webkit-scrollbar-thumb) {
-        background: #C81B00;
+        background: var(--frc-190-red);
         border-radius: 6px;
-        border: 2px solid #2a2a2a;
+        border: 2px solid var(--frc-190-black);
     }
 
     :global(.ag-body-viewport::-webkit-scrollbar-thumb:hover) {
-        background: #a01500;
+        background: #e02200;
     }
 
-    .page-wrapper {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: flex-start;
-        min-height: 100vh;
-        padding: 20px;
-        background: #A9B0B7;
-    }
-
-    .page-header {
+    .header-section {
         text-align: center;
         margin-bottom: 20px;
     }
 
-    .page-header h1 {
-        color: #C81B00;
+    .header-section h1 {
+        color: var(--frc-190-red);
         font-size: 2.5rem;
         font-weight: 800;
         margin: 0 0 5px 0;
-        text-transform: uppercase;
-        letter-spacing: 2px;
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        letter-spacing: 1px;
     }
 
-    .page-header .team-badge {
-        display: inline-block;
-        background: #C81B00;
-        color: white;
-        padding: 5px 20px;
-        border-radius: 20px;
-        font-weight: 700;
+    .header-section .subtitle {
+        color: var(--frc-190-black);
         font-size: 1rem;
+        margin: 0;
     }
 
     .controls {
         padding: 15px 25px;
-        background: linear-gradient(135deg, #1a1a1a, #2d2d2d);
+        background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
         color: white;
-        font-size: 16px;
+        font-size: 18px;
         display: flex;
         gap: 30px;
         align-items: center;
         justify-content: center;
+        box-sizing: border-box;
+        width: 80%;
+        max-width: 1200px;
         border-radius: 10px;
         margin-bottom: 20px;
+        border: 2px solid var(--frc-190-red);
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-        border: 2px solid #C81B00;
     }
 
     .controls label {
@@ -409,40 +474,40 @@
     select {
         margin-left: 10px;
         padding: 8px 15px;
-        background: #1a1a1a;
+        background: linear-gradient(135deg, #333 0%, #444 100%);
         color: white;
         font-size: 16px;
-        border: 2px solid #C81B00;
-        border-radius: 5px;
+        border: 2px solid var(--frc-190-red);
+        border-radius: 6px;
         cursor: pointer;
-        transition: all 0.2s ease;
+        transition: all 0.3s ease;
     }
 
     select:hover {
-        background: #2d2d2d;
-        border-color: #ff3020;
+        background: linear-gradient(135deg, #444 0%, #555 100%);
+        border-color: #e02200;
     }
 
     select:focus {
         outline: none;
-        box-shadow: 0 0 0 3px rgba(200, 27, 0, 0.3);
+        box-shadow: 0 0 0 3px rgba(200, 27, 0, 0.4);
     }
 
     .grid-container {
         height: 56.7vh;
-        width: 90vw;
-        max-width: 1400px;
-        background: #1a1a1a;
+        width: 80vw;
+        background: var(--frc-190-black);
+        box-sizing: border-box;
         border-radius: 8px;
-        overflow: hidden;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
     }
 </style>
 
 <div class="page-wrapper">
-    <!-- Page Header -->
-    <div class="page-header">
+    <!-- Header Section -->
+    <div class="header-section">
         <h1>Team View</h1>
-        <span class="team-badge">FRC 190</span>
+        <p class="subtitle">FRC Team 190 - Scouting Data Analysis</p>
     </div>
 
     <!-- Controls -->
@@ -463,7 +528,8 @@
                 {/each}
             </select>
         </div>
-    </div>  
+        <button bind:this={populatecache} on:click={loadFromLocalStorage}>populate cache</button>
+    </div>
 
     <!-- Grid container -->
     <div class="grid-container ag-theme-quartz" bind:this={domNode}></div>

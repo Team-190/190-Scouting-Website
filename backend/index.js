@@ -79,17 +79,26 @@ app.post("/postEventCode", async (req, res) => {
     }
 })
 
-app.get("/getTeamView", async (req, res) => {
+app.get("/teamView", async (req, res) => {
+    return;
+    console.log("TeamView requested.");
     const teamNumber = req.query.teamNumber;
-    if (!teamNumber) res.sendStatus(400);
-    if (!eventCode) res.sendStatus(403);
-    let result = await database.teamView(eventCode, teamNumber);
+    if (!teamNumber) return res.status(400).send("Please supply a team number.");
+    let result = await database.teamView(teamNumber);
     res.send(result);
 });
 
-app.get("/getAllTeams", async (req, res) => {
-    if (!eventCode) res.sendStatus(403);
-    let result = await database.allTeamsView(eventCode);
+app.get("/teamNumbers", async (req, res) => {
+    return;
+    console.log("teamNumbers requested.");
+    let result = await database.getTeamNumbers();
+    res.send(result);
+})
+
+app.get("/allData", async (req, res) => {
+    console.log("alldata requested.");
+    let result = await database.allData();
+    console.log(result);
     res.send(result);
 });
 
@@ -100,5 +109,5 @@ app.get("/getAvailableTeams", async (req, res) => {
 });
 
 app.listen(PORT, () =>{
-    console.log("Listening on port " + PORT);
+    console.log("Listening on port "+PORT);
 });

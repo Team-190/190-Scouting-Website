@@ -8,8 +8,42 @@ supabaseUtil.supabaseInit()
     .then((value) => {supabaseClient = value})
     .catch((error) => console.warn(error));
 
+async function teamView(teamNumber) {
+    let query = supabaseClient
+        .from("2026_game")
+        .select("*")
+        .eq("team", `frc${teamNumber}`);
 
-async function teamView(eventCode, teamNumber) {
+    const result = await query;
+    console.log(result);
+    return result;
+}
+
+async function getTeamNumbers() {
+    let query = supabaseClient
+        .from("2026_game")
+        .select("team")
+
+    let result = (await query).data
+    console.log("result: "+JSON.stringify(result))
+    result = result.map((element, _index, _array) => {
+        return element.team.slice(3)
+    });
+    
+    console.log(result);
+    return result;
+}
+
+async function allData() {
+    let query = supabaseClient
+        .from("2026_game")
+        .select("*");
+    const result = await query;
+    return result;
+}
+
+
+async function oldTeamView(eventCode, teamNumber) {
     console.log("About to call");
     const {data, error} = await storage.retrieveConfig(eventCode);
 
@@ -123,6 +157,8 @@ async function availableTeamsView(eventCode) {
 
 
 module.exports = {
+    allData,
+    getTeamNumbers,
     teamView,
     allTeamsView,
     availableTeamsView
