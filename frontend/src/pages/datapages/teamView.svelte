@@ -463,7 +463,7 @@
                 {/each}
             </select>
         </div>
-    </div>
+    </div>  
 
     <!-- Grid container -->
     <div class="grid-container ag-theme-quartz" bind:this={domNode}></div>

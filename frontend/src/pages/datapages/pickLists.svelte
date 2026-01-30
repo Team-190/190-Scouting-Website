@@ -2,14 +2,18 @@
     import baseX from 'base-x';
     import pako from 'pako';
     import Team from '../../components/Team.svelte';
+    import { selectedEvent as selectedEventStore } from '../../stores/selectedEvent';
 
     const BASE85_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~';
     const bs85 = baseX(BASE85_CHARS);
-    const textEncoder = new TextEncoder();
-    const textDecoder = new TextDecoder();
+
+    let selectedEvent = $state('');
+
+    $effect(() => {
+        selectedEvent = $selectedEventStore;
+    });
 
     let events = $state([]);
-    let selectedEvent = $state('');
     let teams = $state([]);
     let picklists = $state({});
     let tbaApiKey = $state('zhTqFG7csJoif1sNXt3aZngy0LB1X4LxMgTfXBvPscNG0P9FifZCa2uGJcUk2gKW');
@@ -156,21 +160,31 @@
     }
 
     async function getEvents() {
-        if (!tbaApiKey) {
-            alert('Please enter your TBA API Key');
-            return;
-        }
-        const year = new Date().getFullYear();
-        const response = await fetch(`https://www.thebluealliance.com/api/v3/events/${year}/simple`, {
-            headers: {
-                'X-TBA-Auth-Key': tbaApiKey
-            }
-        });
-        events = await response.json();
+    if (!tbaApiKey) {
+        alert('Please enter your TBA API Key');
+        return;
     }
+    const year = new Date().getFullYear();
+    try {
+        const response = await fetch(`https://www.thebluealliance.com/api/v3/events/${year}/simple`, {
+            headers: { 'X-TBA-Auth-Key': tbaApiKey }
+        });
+        if (!response.ok) throw new Error('Failed to fetch events');
+        events = await response.json();
+    } catch (err) {
+        console.error(err);
+        alert('Could not fetch events.');
+    }
+}
+
 
     async function getTeams() {
-        if (!selectedEvent) return;
+    if (!selectedEvent) {
+        alert('Please select an event first.');
+        return;
+    }
+
+    try {
         const teamPromise = fetch(`https://www.thebluealliance.com/api/v3/event/${selectedEvent}/teams/simple`, {
             headers: { 'X-TBA-Auth-Key': tbaApiKey }
         }).then(res => res.json());
@@ -191,16 +205,9 @@
             teamList.sort((a, b) => {
                 const rankA = teamRanks[a.team_number];
                 const rankB = teamRanks[b.team_number];
-
-                if (rankA != null && rankB != null) {
-                    return rankA - rankB;
-                }
-                if (rankA != null) {
-                    return -1;
-                }
-                if (rankB != null) {
-                    return 1;
-                }
+                if (rankA != null && rankB != null) return rankA - rankB;
+                if (rankA != null) return -1;
+                if (rankB != null) return 1;
                 return a.team_number - b.team_number;
             });
         }
@@ -211,7 +218,13 @@
         for (let list in picklists) {
             picklists[list].teams = [];
         }
+
+    } catch (err) {
+        console.error(err);
+        alert('Failed to fetch teams for this event.');
     }
+}
+
 
     function handleDragStart(item, sourceList) {
         draggedItem = { item, sourceList };
@@ -761,43 +774,29 @@
     }
 
     async function populateAllianceCaptains() {
-        if (!selectedEvent) {
-            alert('Please select an event first.');
-            return;
-        }
+    if (!selectedEvent) {
+        alert('Please select an event first.');
+        return;
+    }
 
+    try {
         const response = await fetch(`https://www.thebluealliance.com/api/v3/event/${selectedEvent}/teams/statuses`, {
-            headers: {
-                'X-TBA-Auth-Key': tbaApiKey
-            }
+            headers: { 'X-TBA-Auth-Key': tbaApiKey }
         });
-
-        if (!response.ok) {
-            alert('Could not fetch team statuses for this event. They may not be available.');
-            return;
-        }
-
+        if (!response.ok) throw new Error('Failed to fetch team statuses');
         const statuses = await response.json();
-        if (!statuses) {
-            alert('Team statuses not available for this event.');
-            return;
-        }
 
         const localRankedTeams = Object.entries(statuses)
             .map(([teamKey, status]) => ({
                 team_key: teamKey,
                 rank: status?.qual?.ranking?.rank
             }))
-            .filter(team => team.rank !== null && team.rank !== undefined)
+            .filter(t => t.rank != null)
             .sort((a, b) => a.rank - b.rank);
-        
+
         rankedTeams = localRankedTeams;
 
         const top8 = rankedTeams.slice(0, 8);
-
-        if (top8.length < 8) {
-            alert('Not enough ranked teams to populate all 8 alliance captain spots.');
-        }
 
         if (teams.length === 0) {
             await getTeams();
@@ -810,14 +809,21 @@
             const teamNumber = rankedTeam.team_key.replace('frc', '');
             const team = teams.find(t => t.team_number == teamNumber);
             const allianceIndex = rankedTeam.rank - 1;
-
             if (team && allianceIndex >= 0 && allianceIndex < 8) {
-                if (!alliances[allianceIndex].teams.some(t => t.team_number === team.team_number)) {
-                    alliances[allianceIndex].teams.push(team);
-                }
+                alliances[allianceIndex].teams.push(team);
             }
         });
+
+        if (top8.length < 8) {
+            alert('Not enough ranked teams to populate all 8 alliance captain spots.');
+        }
+
+    } catch (err) {
+        console.error(err);
+        alert('Failed to populate alliance captains.');
     }
+}
+
 
     function createAllianceSelection() {
         const name = newAllianceSelectionName.trim();
@@ -1005,17 +1011,10 @@
         <button on:click={getEvents}>Get Events</button>
     </div>
 
-    {#if events.length > 0}
-        <div>
-            <label for="event-select">Select Event:</label>
-            <select id="event-select" bind:value={selectedEvent} on:change={getTeams}>
-                <option value="">--Select an Event--</option>
-                {#each events as event}
-                    <option value={event.key}>{event.name}</option>
-                {/each}
-            </select>
-        </div>
-    {/if}
+    <div>
+    <label>You selected: {selectedEvent || 'None'}</label>
+    </div>
+
 
     <div class="main-content" on:dragover={handleDragOver} on:drop|preventDefault={handleDropToRemove}>
         <div class="team-list-container">
@@ -1161,7 +1160,7 @@
     .tabs button {
         padding: 10px 20px;
         border: 1px solid #ccc;
-        background-color: #000000;
+        background-color: #000000   ;
         color: #ffffff;
         cursor: pointer;
     }
