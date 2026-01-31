@@ -5,7 +5,6 @@
     import { selectedEvent as selectedEventStore } from '../../stores/selectedEvent';
     import { onDestroy } from 'svelte';
     import { writable } from 'svelte/store';
-    import { nonpassive } from 'svelte/legacy';
     import { AgCheckbox } from 'ag-grid-community';
 
     const BASE85_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~';
@@ -98,7 +97,7 @@
             console.error('Failed to save allianceSelections', e);
         }
     });
-    
+
     let activeAllianceSelectionId = $state('default');
     let newAllianceSelectionName = $state('');
     let editingAllianceSelectionId = $state(null);

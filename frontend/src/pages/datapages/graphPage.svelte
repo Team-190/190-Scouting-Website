@@ -286,6 +286,10 @@
 <div class="page">
   <h1 class="page-title">Graph Page</h1>
 
+  <button bind:this={populatecache} on:click={loadFromLocalStorage} class="load-cache-btn">
+    Load from localStorage (No Data)
+  </button>
+
   <div class="dropdown-container">
     <button class="plus-btn" on:click={() => (showDropdown = !showDropdown)}
       >+</button
