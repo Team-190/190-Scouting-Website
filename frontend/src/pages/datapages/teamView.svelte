@@ -239,7 +239,7 @@
                     const inverted = ["time_of_climb", "climb_time"].includes(metricName);
 
                     return {
-                        background: colorFromStats(params.value, stats.mean, stats.sd, inverted),
+                        background: colorFromStats(params.value, stats.mean, stats.sd),
                         color: params.value === 0 ? "white" : "black",
                         fontSize: "18px",
                         fontWeight: 600,
@@ -262,7 +262,7 @@
                     return {
                         background: params.value === 0
                             ? "#4D4D4D"            // gray background for zeros
-                            : colorFromStats(params.value, stats.mean, stats.sd, inverted),
+                            : colorFromStats(params.value, stats.mean, stats.sd),
                         color: params.value === 0 ? "white" : "black",
                         fontSize: "18px",
                         fontWeight: "bold",
@@ -285,7 +285,7 @@
                     return {
                         background: params.value === 0
                             ? "#4D4D4D"            // gray background for zeros
-                            : colorFromStats(params.value, stats.mean, stats.sd, inverted),
+                            : colorFromStats(params.value, stats.mean, stats.sd),
                         color: params.value === 0 ? "white" : "black",
                         fontSize: "18px",
                         fontWeight: "bold",

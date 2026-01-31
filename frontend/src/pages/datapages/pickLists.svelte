@@ -3,21 +3,17 @@
     import pako from 'pako';
     import Team from '../../components/Team.svelte';
     import { selectedEvent as selectedEventStore } from '../../stores/selectedEvent';
+    import { onDestroy } from 'svelte';
+    import { writable } from 'svelte/store';
 
     const BASE85_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~';
     const bs85 = baseX(BASE85_CHARS);
 
-    let selectedEvent = $state('');
-
-    $effect(() => {
-        selectedEvent = $selectedEventStore;
-    });
-
-    let events = $state([]);
-    let teams = $state([]);
+    export const teamsStore = writable([]);
     let picklists = $state({});
     let tbaApiKey = $state('zhTqFG7csJoif1sNXt3aZngy0LB1X4LxMgTfXBvPscNG0P9FifZCa2uGJcUk2gKW');
 
+    let teams = [];
     let draggedItem = $state(null);
     let newPickListName = $state('');
     let pickedTeams = $state({});
@@ -28,6 +24,8 @@
     let activeView = $state('picklists');
     let rankedTeams = $state([]);
     let isFourTeamAlliance = $state(false);
+    let loadingTeams = false;
+    let teamsError = '';
 
     let allianceSelections = $state({
         default: {
@@ -40,6 +38,23 @@
     let editingAllianceSelectionId = $state(null);
     let editingAllianceSelectionName = $state('');
     let allianceImportData = $state('');
+
+    let selectedEvent = '';
+
+    const unsubscribe = selectedEventStore.subscribe(value => {
+        selectedEvent = value;
+    });
+
+    onDestroy(unsubscribe);
+
+    $effect(() => {
+        if (selectedEvent) {
+            getTeams();
+        } else {
+            teams = [];
+        }
+    });
+
 
     $effect(() => {
         if (allianceSelections[activeAllianceSelectionId]) {
@@ -67,6 +82,36 @@
         } catch (err) {
             console.error('Failed to copy text: ', err);
             alert('Failed to copy picklists.');
+        }
+    }
+
+    async function fetchTeamsForEvent(key) {
+        if (!key) return;
+
+        loadingTeams = true;
+        teamsError = '';
+
+        try {
+            const res = await fetch(
+                `https://www.thebluealliance.com/api/v3/event/${key}/teams/simple`,
+                {
+                    headers: {
+                        'X-TBA-Auth-Key': tbaApiKey
+                    }
+                }
+            );
+
+            if (!res.ok) {
+                throw new Error(`TBA error ${res.status}`);
+            }
+
+            teams = await res.json();
+        } catch (err) {
+            console.error(err);
+            teamsError = 'Failed to load teams.';
+            teams = [];
+        } finally {
+            loadingTeams = false;
         }
     }
 
@@ -159,25 +204,6 @@
         picklists = newPicklists;
     }
 
-    async function getEvents() {
-    if (!tbaApiKey) {
-        alert('Please enter your TBA API Key');
-        return;
-    }
-    const year = new Date().getFullYear();
-    try {
-        const response = await fetch(`https://www.thebluealliance.com/api/v3/events/${year}/simple`, {
-            headers: { 'X-TBA-Auth-Key': tbaApiKey }
-        });
-        if (!response.ok) throw new Error('Failed to fetch events');
-        events = await response.json();
-    } catch (err) {
-        console.error(err);
-        alert('Could not fetch events.');
-    }
-}
-
-
     async function getTeams() {
     if (!selectedEvent) {
         alert('Please select an event first.');
@@ -185,6 +211,7 @@
     }
 
     try {
+        console.log('Fetching teams for:', selectedEvent);
         const teamPromise = fetch(`https://www.thebluealliance.com/api/v3/event/${selectedEvent}/teams/simple`, {
             headers: { 'X-TBA-Auth-Key': tbaApiKey }
         }).then(res => res.json());
@@ -212,7 +239,7 @@
             });
         }
 
-        teams = teamList;
+        teamsStore.set(teamList);
 
         // Reset picklists when new teams are fetched
         for (let list in picklists) {
@@ -997,7 +1024,6 @@
     <!-- Header Section -->
     <div class="header-section">
         <h1>Picklists & Alliance Selection</h1>
-        <p class="subtitle">FRC Team 190 - Scouting Strategy</p>
     </div>
 
     <!-- Top Controls Section -->
@@ -1011,22 +1037,15 @@
                     Alliance Selection
                 </button>
             </div>
-            
-            <div class="api-controls">
-                {#if events.length > 0}
-                    <select id="event-select" bind:value={selectedEvent} on:change={getTeams}>
-                        <option value="">--Select an Event--</option>
-                        {#each events as event}
-                            <option value={event.key}>{event.name}</option>
-                        {/each}
-                    </select>
+        </div>
+        <h3>
+                Selected Event:
+                {#if selectedEvent}
+                    <span>{selectedEvent}</span>
+                {:else}
+                    <span style="opacity: 0.6;">(none)</span>
                 {/if}
-            </div>
-        </div>
-
-        <div class="api-controls">
-            <button on:click={getEvents}>Get Events</button>
-        </div>
+        </h3>
     </div>
 
     <!-- Main Content Area -->
@@ -1036,7 +1055,7 @@
             <h2>Teams</h2>
             <div class="team-list">
                 <div class="list" on:dragover={handleDragOver} on:drop={() => { /* Can't drop back on main list */ }}>
-                    {#each teams as team (team.team_number)}
+                    {#each $teamsStore as team (team.team_number)}
                         <Team {team} picked={!!pickedTeams[team.team_number]} on:click={() => toggleTeamPicked(team.team_number)} on:dragstart={() => handleDragStart(team, 'teams')} />
                     {/each}
                 </div>
