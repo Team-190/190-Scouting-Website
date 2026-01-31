@@ -5,13 +5,46 @@
     import { selectedEvent as selectedEventStore } from '../../stores/selectedEvent';
     import { onDestroy } from 'svelte';
     import { writable } from 'svelte/store';
+    import { nonpassive } from 'svelte/legacy';
 
     const BASE85_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~';
     const bs85 = baseX(BASE85_CHARS);
 
     export const teamsStore = writable([]);
-    let picklists = $state({});
     let tbaApiKey = $state('zhTqFG7csJoif1sNXt3aZngy0LB1X4LxMgTfXBvPscNG0P9FifZCa2uGJcUk2gKW');
+
+    let picklists = $state({});
+    let cachedPicklists = null;
+
+    const sessionData = sessionStorage.getItem('picklists');
+    if (sessionData) {
+        try {
+            cachedPicklists = JSON.parse(sessionData);
+        } catch (e) {
+            console.error('Failed to parse session picklists.')
+        }
+    }
+    
+    if (!cachedPicklists) {
+    const localData = localStorage.getItem('picklists');
+    if (localData) {
+      try {
+        cachedPicklists = JSON.parse(localData);
+      } catch (e) {
+        console.error('Failed to parse local picklists', e);
+      }
+    }
+  }
+    if (cachedPicklists) picklists = cachedPicklists;
+
+    $effect(() => {
+        try {
+            sessionStorage.setItem('picklists', JSON.stringify(picklists));
+            localStorage.setItem('picklists', JSON.stringify(picklists));
+        } catch (e) {
+            console.error('Failed to save picklists', e);
+        }
+    });
 
     let teams = [];
     let draggedItem = $state(null);
@@ -146,9 +179,9 @@
 
                 const newId = `picklist_${Date.now()}_${Math.random()}`;
                 newPicklists[newId] = { name, teams: newTeams };
+                picklists = newPicklists;
             }
 
-            picklists = newPicklists;
             importData = '';
         } catch (error) {
             alert('Failed to parse import data. Please check the format.');
@@ -199,9 +232,7 @@
     }
 
     function deletePickList(key) {
-        const newPicklists = { ...picklists };
-        delete newPicklists[key];
-        picklists = newPicklists;
+        delete picklists[key];
     }
 
     async function getTeams() {
@@ -240,12 +271,6 @@
         }
 
         teamsStore.set(teamList);
-
-        // Reset picklists when new teams are fetched
-        for (let list in picklists) {
-            picklists[list].teams = [];
-        }
-
     } catch (err) {
         console.error(err);
         alert('Failed to fetch teams for this event.');
