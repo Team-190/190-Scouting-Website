@@ -6,6 +6,7 @@
     import { onDestroy } from 'svelte';
     import { writable } from 'svelte/store';
     import { nonpassive } from 'svelte/legacy';
+    import { AgCheckbox } from 'ag-grid-community';
 
     const BASE85_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~';
     const bs85 = baseX(BASE85_CHARS);
@@ -46,7 +47,7 @@
         }
     });
 
-    let teams = [];
+    let teams = $state([]);
     let draggedItem = $state(null);
     let newPickListName = $state('');
     let pickedTeams = $state({});
@@ -60,12 +61,44 @@
     let loadingTeams = false;
     let teamsError = '';
 
-    let allianceSelections = $state({
+    let cachedAllianceSelections = null;
+
+    const sessionAllianceData = sessionStorage.getItem('allianceSelections');
+    if (sessionAllianceData) {
+        try {
+            cachedAllianceSelections = JSON.parse(sessionAllianceData);
+        } catch (e) {
+            console.error('Failed to parse session allianceSelections.');
+        }
+    }
+
+    if (!cachedAllianceSelections) {
+        const localAllianceData = localStorage.getItem('allianceSelections');
+        if (localAllianceData) {
+            try {
+                cachedAllianceSelections = JSON.parse(localAllianceData);
+            } catch (e) {
+                console.error('Failed to parse local allianceSelections', e);
+            }
+        }
+    }
+
+    let allianceSelections = $state(cachedAllianceSelections || {
         default: {
             name: 'Default',
             alliances: Array.from({ length: 8 }, (_, i) => ({ id: i + 1, teams: [] }))
         }
     });
+
+    $effect(() => {
+        try {
+            sessionStorage.setItem('allianceSelections', JSON.stringify(allianceSelections));
+            localStorage.setItem('allianceSelections', JSON.stringify(allianceSelections));
+        } catch (e) {
+            console.error('Failed to save allianceSelections', e);
+        }
+    });
+    
     let activeAllianceSelectionId = $state('default');
     let newAllianceSelectionName = $state('');
     let editingAllianceSelectionId = $state(null);
@@ -271,12 +304,12 @@
         }
 
         teamsStore.set(teamList);
+        teams = teamList;
     } catch (err) {
         console.error(err);
         alert('Failed to fetch teams for this event.');
     }
 }
-
 
     function handleDragStart(item, sourceList) {
         draggedItem = { item, sourceList };
@@ -315,43 +348,41 @@
     }
 
     function handleDropToRemove(event) {
-        // Prevent this from firing on child drop zones
-        if (event.target !== event.currentTarget) {
+        if (!draggedItem) return;
+
+        // If the drop target is inside a picklist or alliance drop zone, let those handlers deal with it
+        if (event.target.closest('.picklist .list') || event.target.closest('.alliance-list .list')) {
             return;
         }
 
-        if (draggedItem) {
-            const { item, sourceList } = draggedItem;
+        const { item, sourceList } = draggedItem;
 
-            // Remove from a picklist
-            if (sourceList && sourceList !== 'teams' && picklists[sourceList]) {
-                const source = picklists[sourceList];
-                const index = source.teams.findIndex(t => t.team_number === item.team_number);
-                if (index > -1) {
-                    source.teams.splice(index, 1);
-                    // Force svelte to update the view
-                    picklists = { ...picklists };
-                }
+        // Remove from a picklist
+        if (sourceList && sourceList !== 'teams' && picklists[sourceList]) {
+            const source = picklists[sourceList];
+            const index = source.teams.findIndex(t => t.team_number === item.team_number);
+            if (index > -1) {
+                source.teams.splice(index, 1);
+                picklists = { ...picklists };
             }
-            // Remove from an alliance
-            else if (sourceList.startsWith('alliance_')) {
-                const sourceAllianceId = parseInt(sourceList.split('_')[1]);
-                const sourceAlliance = alliances.find(a => a.id === sourceAllianceId);
-                if (sourceAlliance) {
-                    const index = sourceAlliance.teams.findIndex(t => t.team_number === item.team_number);
-                    if (index > -1) {
-                        sourceAlliance.teams.splice(index, 1);
-                        // Force svelte to update the view
-                        alliances = [...alliances];
-                        if (index === 0 && sourceAlliance.id <= 8) {
-                            updateAllianceCaptains();
-                        }
+        }
+        // Remove from an alliance
+        else if (sourceList && sourceList.startsWith('alliance_')) {
+            const sourceAllianceId = parseInt(sourceList.split('_')[1]);
+            const sourceAlliance = alliances.find(a => a.id === sourceAllianceId);
+            if (sourceAlliance) {
+                const index = sourceAlliance.teams.findIndex(t => t.team_number === item.team_number);
+                if (index > -1) {
+                    sourceAlliance.teams.splice(index, 1);
+                    alliances = [...alliances];
+                    if (index === 0 && sourceAlliance.id <= 8) {
+                        updateAllianceCaptains();
                     }
                 }
             }
-
-            draggedItem = null;
         }
+
+        draggedItem = null;
     }
 
     function handleDropOnAlliance(targetAllianceId) {
@@ -1162,7 +1193,7 @@
                         {#each alliances as alliance}
                             <div class="alliance-list" on:dragover={handleDragOver} on:drop={() => handleDropOnAlliance(alliance.id)}>
                                 <h3>Alliance {alliance.id}</h3>
-                                <div class="list">
+                                <div class="list" on:dragover={handleDragOver} on:drop={() => handleDropOnAlliance(alliance.id)}>
                                     {#each alliance.teams as team (team.team_number)}
                                         <Team {team} picked={!!pickedTeams[team.team_number]} on:click={() => toggleTeamPicked(team.team_number)} on:dragstart={() => handleDragStart(team, `alliance_${alliance.id}`)} />
                                     {/each}
