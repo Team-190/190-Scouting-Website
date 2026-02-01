@@ -6,7 +6,7 @@
 <nav class="navbar">
     <div class="nav-brand" on:click={() => goto('/')}>
         <img src={logo} alt="FRC 190 Logo" class="logo" />
-        Scouting App
+        Scouting App Made by Atharv Joshi
     </div>
     
     <div class="nav-links">
