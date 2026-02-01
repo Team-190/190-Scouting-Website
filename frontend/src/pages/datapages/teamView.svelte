@@ -19,6 +19,10 @@
     let domNode;
     let colorblindMode = "normal";
     let populatecache;
+    let gridHeight = 400; // Default height, will be calculated dynamically
+    
+    const ROW_HEIGHT = 25; // Height of each row in pixels
+    const HEADER_HEIGHT = 32; // Height of the header row
 
     const colorModes = {
         normal: {
@@ -295,6 +299,9 @@
             }
         ];
 
+        // Calculate grid height based on number of rows (metrics + matchNum row)
+        gridHeight = (rowData.length * ROW_HEIGHT) + HEADER_HEIGHT;
+
         // Destroy old grid if it exists
         if (gridInstance) {
             gridInstance.destroy();
@@ -501,7 +508,6 @@
     }
 
     .grid-container {
-        height: 56.7vh;
         width: 80vw;
         background: var(--frc-190-black);
         box-sizing: border-box;
@@ -539,5 +545,5 @@
     </div>
 
     <!-- Grid container -->
-    <div class="grid-container ag-theme-quartz" bind:this={domNode}></div>
+    <div class="grid-container ag-theme-quartz" bind:this={domNode} style="height: {gridHeight}px;"></div>
 </div>

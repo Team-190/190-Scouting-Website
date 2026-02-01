@@ -21,6 +21,10 @@
     let gridApi = null;
     let loading = true;
     let error = "";
+    let gridHeight = 400; // Default height, will be calculated dynamically
+    
+    const ROW_HEIGHT = 25; // Height of each row in pixels
+    const HEADER_HEIGHT = 32; // Height of the header row
 
     const colorModes = {
         normal: {
@@ -307,6 +311,9 @@
             }
         ];
 
+        // Calculate grid height based on number of teams
+        gridHeight = (rowData.length * ROW_HEIGHT) + HEADER_HEIGHT;
+
         if (gridApi) {
             gridApi.setGridOption("columnDefs", columnDefs);
             gridApi.setGridOption("rowData", rowData);
@@ -534,7 +541,6 @@
     }
 
     .grid-container {
-        height: 60vh;
         width: 80vw;
         background: var(--frc-190-black);
         box-sizing: border-box;
@@ -578,5 +584,5 @@
     </div>
 
     <!-- Grid container -->
-    <div class="grid-container ag-theme-quartz" bind:this={domNode}></div>
+    <div class="grid-container ag-theme-quartz" bind:this={domNode} style="height: {gridHeight}px;"></div>
 </div>
