@@ -8,21 +8,21 @@
                 }
             ],
             "columns": [
-                "Match",
-                "StartingLocation",
-                "BumpTraversal",
-                "Defense",
-                "Avoidance",
-                "DefenseTime",
-                "FuelIntakeTime",
-                "FuelScoringTime",
-                "ClimbTime",
-                "TimeOfClimb",
-                "LadderLocation",
-                "AttemptClimb",
-                "AutoClimb",
-                "EndState",
-                "Strategy"
+                "match",
+                "starting_location",
+                "bump_traversal",
+                "defense",
+                "avoidance",
+                "defense_time",
+                "fuel_intake_time",
+                "fuel_scoring_time",
+                "climb_time",
+                "time_of_climb",
+                "ladder_location",
+                "attempt_climb",
+                "auto_climb",
+                "end_state",
+                "strategy"
             ]
 
         }
