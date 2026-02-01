@@ -5,7 +5,6 @@
         ModuleRegistry,
         AllCommunityModule
     } from "ag-grid-community";
-    import teamViewData from "../../utils/allTeamView.json";
 
     import "ag-grid-community/styles/ag-grid.css";
     import "ag-grid-community/styles/ag-theme-quartz.css";
@@ -15,6 +14,7 @@
     let domNode;
     let availableTeams = [];
     let teamData = {};
+    let allDataResponse = null;
     let metrics = [];
     let selectedMetric = "";
     let colorblindMode = "normal";
@@ -112,35 +112,38 @@
     
 
 
-    function loadTeamData() {
-        try {
-            const allRows = Array.isArray(teamViewData?.data) ? teamViewData.data : [];
+    async function fetchAllData() {
+        const response = await fetch("http://localhost:8000/allData");
+        const result = await response.json();
+        return result;
+    }
 
-            if (allRows.length === 0) {
-                throw new Error("No data found in allTeamView.json");
-            }
+    function processTeamData(dataResponse) {
+        const allRows = Array.isArray(dataResponse?.data) ? dataResponse.data : [];
 
-            availableTeams = [];
-            teamData = {};
-
-            for (const row of allRows) {
-                const teamNum = row.Team;
-                if (!teamNum) continue;
-
-                if (!availableTeams.includes(teamNum)) {
-                    availableTeams = [...availableTeams, teamNum];
-                }
-
-                if (!teamData[teamNum]) {
-                    teamData[teamNum] = [];
-                }
-                teamData[teamNum] = [...teamData[teamNum], row];
-            }
-
-            availableTeams = availableTeams.sort();
-        } catch (e) {
-            throw new Error(`Failed to load team data: ${e.message}`);
+        if (allRows.length === 0) {
+            throw new Error("No data found from backend");
         }
+
+        availableTeams = [];
+        teamData = {};
+
+        for (const row of allRows) {
+            // Handle both "Team" and "team" field names (backend uses lowercase)
+            const teamNum = row.Team || row.team;
+            if (!teamNum) continue;
+
+            if (!availableTeams.includes(teamNum)) {
+                availableTeams = [...availableTeams, teamNum];
+            }
+
+            if (!teamData[teamNum]) {
+                teamData[teamNum] = [];
+            }
+            teamData[teamNum] = [...teamData[teamNum], row];
+        }
+
+        availableTeams = availableTeams.sort();
     }
 
     function computeMetrics() {
@@ -152,7 +155,8 @@
             const rows = teamData[team] || [];
             for (const row of rows) {
                 Object.keys(row).forEach((k) => {
-                    if (["Match", "Team"].includes(k)) return;
+                    // Handle both uppercase and lowercase field names
+                    if (["Match", "Team", "match", "team"].includes(k)) return;
                     const n = Number(row[k]);
                     if (!Number.isNaN(n)) {
                         metricSet.add(k);
@@ -171,7 +175,8 @@
         const firstRows = teamData[firstTeam];
         if (!firstRows || firstRows.length === 0) return;
 
-        const matches = firstRows.map(m => m.Match);
+        // Handle both "Match" and "match" field names
+        const matches = firstRows.map(m => m.Match || m.match);
         const qLabels = matches.map((_, i) => `Q${i + 1}`);
 
         // Global stats (exclude all-zero teams)
@@ -334,12 +339,16 @@
         buildGrid();
     }
 
-    onMount(() => {
+    onMount(async () => {
         try {
-            loadTeamData();
+            // Fetch data from backend instead of using static JSON
+            allDataResponse = await fetchAllData();
+            console.log("Fetched data from backend:", allDataResponse);
+            
+            processTeamData(allDataResponse);
 
             if (availableTeams.length === 0) {
-                error = "No team data found in allTeamView.json.";
+                error = "No team data found from backend.";
                 loading = false;
                 return;
             }
@@ -359,6 +368,7 @@
         } catch (e) {
             error = e.message;
             loading = false;
+            console.error("Error loading data:", e);
         }
     });
 </script>

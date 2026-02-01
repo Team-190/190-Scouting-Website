@@ -102,7 +102,7 @@
     let selectedTeam = "190";
 
     async function loadTeamNumbers() {
-        const data = await(await fetch("http://localhost:3000/teamNumbers")).json();
+        const data = await(await fetch("http://localhost:8000/teamNumbers")).json();
         return data
     }
 
@@ -112,7 +112,7 @@
             console.log("cache fired");
             data = cache[teamNumber.toString()];
         } else {
-            data = (await(await fetch("http://localhost:3000/teamView?teamNumber="+teamNumber)).json()).data;
+            data = (await(await fetch("http://localhost:8000/teamView?teamNumber="+teamNumber)).json()).data;
             cache[teamNumber.toString()] = data;
         }
         buildGrid(data);
@@ -320,15 +320,22 @@
     onMount(async () => {
         let latest_storage_date = localStorage.getItem("timestamp");
         populatecache.textContent = `Load from localstorage (${latest_storage_date})`;
-        const response = await fetch("http://localhost:3000/teamView?teamNumber=190");
-        teamViewData = await response.json();
-        console.log("teamview: ", teamViewData);
         
-        loadTeamData(190);
-        console.log("Loading data from 190");
-
+        // Fetch all data from backend for global stats calculation
+        const allDataResponse = await fetch("http://localhost:8000/allData");
+        teamViewData = await allDataResponse.json();
+        console.log("All data loaded for global stats:", teamViewData);
+        
+        // Load team numbers from backend
         allTeams = await loadTeamNumbers();
-        console.log("Populated team list");
+        console.log("Populated team list:", allTeams);
+        
+        // Set initial selected team (first available team, or 190 if available)
+        if (allTeams.length > 0) {
+            selectedTeam = allTeams.includes("190") ? "190" : allTeams[0].toString();
+            loadTeamData(selectedTeam);
+            console.log("Loading data from team", selectedTeam);
+        }
     });
 
 </script>
