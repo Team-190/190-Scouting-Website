@@ -7,6 +7,7 @@
     import PickLists from "./pages/datapages/pickLists.svelte";
     import SingleMetric from "./pages/datapages/singleMetric.svelte";
     import TeamView from "./pages/datapages/teamView.svelte";
+    import pitScouting from "./pages/datapages/pitScouting.svelte";
 
     const routes = [
         {path : "/", component: Home},
@@ -14,6 +15,7 @@
         {path : "/pickLists", component: PickLists},
         {path : "/eventView", component: SingleMetric},
         {path : "/teamView", component: TeamView},
+        {path : "/pitScouting", component: pitScouting},
     ];
 </script>
 
