@@ -5,7 +5,6 @@
         ModuleRegistry,
         AllCommunityModule
     } from "ag-grid-community";
-    //import teamViewData from "../../utils/allTeamView.json";
     let teamViewData = null
     // it is populated automatically by onMount
     console.log("teamview: "+teamViewData);
@@ -60,6 +59,38 @@
 
     let cache = {};
 
+    function isNumeric(n) {
+        if (n === null || n === undefined || n === "") return false;
+        // Handle booleans
+        if (typeof n === 'boolean') return false;
+        // Handle strings and numbers
+        return !isNaN(parseFloat(n)) && isFinite(n);
+    }
+    
+    function normalizeValue(value) {
+        // Returns a normalized value for display
+        if (value === null || value === undefined) return "";
+        if (typeof value === 'boolean') return value ? "Yes" : "No";
+        if (typeof value === 'string') return value;
+        if (typeof value === 'number') return value;
+        return String(value);
+    }
+    
+    function checkIsNumericMetric(metric, teamData) {
+        if (!teamData || !teamData.length) return false;
+        let hasData = false;
+        for (const row of teamData) {
+            const v = row[metric];
+            if (v !== undefined && v !== null && v !== "") {
+                hasData = true;
+                if (!isNumeric(v)) {
+                    return false;
+                }
+            }
+        }
+        return hasData;
+    }
+
     function mean (arr) {
         return arr.reduce((a, b) => a + b, 0) / arr.length;
     } 
@@ -85,11 +116,18 @@
         
 
     function colorFromStats(v, mu, sigma) {
-        if (v === 0) return "#000";
+        // For non-numeric data, return neutral color
+        if (!isNumeric(v)) {
+            return "#333";
+        }
+        
+        const numValue = Number(v);
+        
+        if (numValue === 0) return "#000";
         if (sigma === 0) return "rgb(180,180,180)";
 
         const mode = colorModes[colorblindMode];
-        const z = (v - mu) / sigma;
+        const z = (numValue - mu) / sigma;
         const t = Math.min(1, Math.abs(z));
 
         return z < 0 ? lerpColor(mode.mid, mode.below, t) : lerpColor(mode.mid, mode.above, t);
@@ -163,8 +201,9 @@
     $: metricOptions =
         teamViewData?.data?.length > 0
             ? Object.keys(teamViewData.data[0]).filter(
-                (k) =>
-                    ![
+                (k) => {
+                    // Exclude trivial/metadata fields
+                    if ([
                         "id",
                         "created_at",
                         "team",
@@ -172,7 +211,13 @@
                         "record_type",
                         "scouter_name",
                         "scouter_error",
-                    ].includes(k),
+                    ].includes(k)) {
+                        return false;
+                    }
+                    
+                    // Only include numeric metrics
+                    return checkIsNumericMetric(k, teamViewData.data);
+                }
             )
             : [];
 
@@ -242,33 +287,84 @@
 
         // Get team data for the selected team
         const teamData = cache[selectedTeam] || [];
-        const teamKey = `frc${selectedTeam}`;
+        
+        let option = {};
+        const isNumeric = checkIsNumericMetric(chart.yAxisMetric, teamData);
 
-        let option;
-        switch (chart.type) {
-            case "bar":
-                option = getBarOption(teamData, chart.yAxisMetric);
-                break;
-            case "line":
-                option = getLineOption(teamData, chart.yAxisMetric);
-                break;
-            case "pie":
-                option = getPieOption(teamData, chart.yAxisMetric);
-                break;
-            case "scatter":
-                option = getScatterOption(teamData, chart.yAxisMetric);
-                break;
-            case "radar":
-                option = getRadarOption(teamData);
-                break;
+        if (!isNumeric && chart.type !== 'pie' && chart.type !== 'radar') {
+             option = {
+                title: { 
+                    text: 'This chart requires numeric data.',
+                    left: 'center',
+                    top: 'center',
+                    textStyle: { color: '#fff', fontSize: 16 }
+                },
+                xAxis: { show: false },
+                yAxis: { show: false },
+                series: []
+            };
+        } else {
+             switch (chart.type) {
+                case "bar":
+                    option = getBarOption(teamData, chart.yAxisMetric);
+                    break;
+                case "line":
+                    option = getLineOption(teamData, chart.yAxisMetric);
+                    break;
+                case "pie":
+                    option = getPieOption(teamData, chart.yAxisMetric, isNumeric);
+                    break;
+                case "scatter":
+                    option = getScatterOption(teamData, chart.yAxisMetric);
+                    break;
+                case "radar":
+                    option = getRadarOption(teamData);
+                    break;
+            }
         }
         chart.instance.setOption(option, true);
+    }
+
+    function getPieOption(teamData, metric, isNumeric) {
+        let pieData = [];
+        
+        if (isNumeric) {
+            // Show distribution of metric values across matches (Value = Match Result)
+             pieData = teamData.map((d, i) => ({
+                value: Number(d[metric] ?? 0),
+                name: `Q${i + 1}`,
+            }));
+        } else {
+            // Frequency of string values
+            const counts = {};
+            teamData.forEach(d => {
+                const rawValue = d[metric];
+                const v = normalizeValue(rawValue);
+                counts[v] = (counts[v] || 0) + 1;
+            });
+             pieData = Object.entries(counts).map(([name, value]) => ({ name, value }));
+        }
+
+        return {
+            tooltip: { trigger: 'item' },
+            series: [
+                {
+                    type: "pie",
+                    data: pieData,
+                    name: metric,
+                    radius: '60%',
+                },
+            ],
+        };
     }
 
     function getBarOption(teamData, metric) {
         // Show metric values across matches for the selected team
         const matchLabels = teamData.map((d, i) => `Q${i + 1}`);
-        const values = teamData.map((d) => d[metric] || 0);
+        const values = teamData.map((d) => {
+            const val = d[metric];
+            return isNumeric(val) ? Number(val) : 0;
+        });
         
         return {
             tooltip: { trigger: 'axis' },
@@ -285,7 +381,10 @@
 
     function getLineOption(teamData, metric) {
         const matchLabels = teamData.map((d, i) => `Q${i + 1}`);
-        const values = teamData.map((d) => d[metric] || 0);
+        const values = teamData.map((d) => {
+            const val = d[metric];
+            return isNumeric(val) ? Number(val) : 0;
+        });
         
         return {
             tooltip: { trigger: 'axis' },
@@ -301,27 +400,14 @@
         };
     }
 
-    function getPieOption(teamData, metric) {
-        // Show distribution of metric values across matches
-        const pieData = teamData.map((d, i) => ({
-            value: d[metric] || 0,
-            name: `Q${i + 1}`,
-        }));
-        return {
-            tooltip: { trigger: 'item' },
-            series: [
-                {
-                    type: "pie",
-                    data: pieData,
-                    name: metric,
-                    radius: '60%',
-                },
-            ],
-        };
-    }
-
     function getScatterOption(teamData, metric) {
-        const scatterData = teamData.map((d, i) => [i + 1, d[metric] || 0]);
+        const scatterData = teamData
+            .map((d, i) => {
+                const val = d[metric];
+                return isNumeric(val) ? [i + 1, Number(val)] : null;
+            })
+            .filter(point => point !== null && point[1] !== 0);
+            
         return {
             tooltip: { trigger: 'item' },
             xAxis: { name: "Match #", type: "value" },
@@ -337,22 +423,43 @@
     }
 
     function getRadarOption(teamData) {
-        // Calculate average values for each metric across all matches
-        const avgValues = metricOptions.map((k) => {
-            const values = teamData.map((d) => d[k] || 0);
+        // Calculate average values for each metric across all matches (only numeric)
+        const numericMetrics = metricOptions.filter(k => {
+            return checkIsNumericMetric(k, teamData);
+        });
+        
+        const avgValues = numericMetrics.map((k) => {
+            const values = teamData.map((d) => {
+                const val = d[k];
+                return isNumeric(val) ? Number(val) : 0;
+            });
             return values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
         });
         
         // Get max values from all data for proper scaling
-        const maxValues = metricOptions.map((k) => {
-            const allValues = (teamViewData?.data || []).map((d) => d[k] || 0);
+        const maxValues = numericMetrics.map((k) => {
+            const allValues = (teamViewData?.data || []).map((d) => {
+                const val = d[k];
+                return isNumeric(val) ? Number(val) : 0;
+            });
             return Math.max(...allValues, 1);
         });
+
+        if (numericMetrics.length === 0) {
+            return {
+                title: { 
+                    text: 'No numeric metrics available for radar chart.',
+                    left: 'center',
+                    top: 'center',
+                    textStyle: { color: '#fff', fontSize: 16 }
+                }
+            };
+        }
 
         return {
             tooltip: { trigger: 'item' },
             radar: {
-                indicator: metricOptions.map((k, i) => ({
+                indicator: numericMetrics.map((k, i) => ({
                     name: k,
                     max: maxValues[i],
                 })),
@@ -382,24 +489,50 @@
         const qLabels = matchNums.map((_, i) => `Q${i + 1}`);
 
         const sample = matches[0];
-        const numericMetrics = Object.keys(sample).filter(
-            k => !["match", "team", "id"].includes(k) && !isNaN(Number(sample[k]))
+        // Allow all non-excluded metrics, regardless of type
+        const displayMetrics = Object.keys(sample).filter(
+            k => !["match", "team", "id", "created_at", "record_type", "scouter_name", "scouter_error"].includes(k)
         );
 
-        // Calculate global stats for each metric across all teams/matches
+        // Calculate global stats for each metric across all teams/matches (only for numeric)
         const globalStats = {};
-        numericMetrics.forEach(metric => {
+        displayMetrics.forEach(metric => {
+            // Check if metric is numeric based on global data sample
             const allRows = Array.isArray(teamViewData?.data) ? teamViewData.data : [];
             const allValues = [];
-            allRows.forEach((row) => {
-                const val = Number(row[metric] ?? 0);
-                allValues.push(val);
-            });
-            const filteredValues = allValues.filter(v => v !== 0);
-            globalStats[metric] = {
-                mean: filteredValues.length > 0 ? mean(filteredValues) : 0,
-                sd: filteredValues.length > 0 ? sd(filteredValues, mean(filteredValues)) : 0
-            };
+            let isNumericMetric = true;  
+            let hasData = false;
+            
+            // Check ALL values to determine type
+            for (const r of allRows) {
+                 const v = r[metric];
+                 if (v !== undefined && v !== null && v !== "") {
+                     hasData = true;
+                     if (!isNumeric(v)) {
+                         isNumericMetric = false;
+                         break;
+                     }
+                 }
+            }
+            // If no data found, assume not numeric (string is safer default)
+            if (!hasData) isNumericMetric = false; 
+            
+            if (isNumericMetric) {
+                allRows.forEach((row) => {
+                    const val = row[metric];
+                    if (isNumeric(val)) {
+                        allValues.push(Number(val));
+                    }
+                });
+                const filteredValues = allValues.filter(v => v !== 0);
+                globalStats[metric] = {
+                    mean: filteredValues.length > 0 ? mean(filteredValues) : 0,
+                    sd: filteredValues.length > 0 ? sd(filteredValues, mean(filteredValues)) : 0,
+                    isNumeric: true
+                };
+            } else {
+                globalStats[metric] = { mean: 0, sd: 0, isNumeric: false };
+            }
         });
 
         const rowData = [];
@@ -412,17 +545,31 @@
         rowData.push(matchRow);
 
         // Other metrics with mean and median
-        numericMetrics.forEach(metric => {
+        displayMetrics.forEach(metric => {
             const row: any = { metric };
             const values = [];
+            const isNumericMetric = globalStats[metric]?.isNumeric ?? false;
+
             qLabels.forEach((q, i) => {
                 const match = matches[i];
-                const val = Number(match?.[metric] || 0);
-                row[q] = Number(val.toFixed(2));
-                values.push(val);
+                let val = match?.[metric];
+                
+                if (isNumericMetric) {
+                    const numVal = isNumeric(val) ? Number(val) : 0;
+                    row[q] = numVal;
+                    values.push(numVal);
+                } else {
+                    row[q] = normalizeValue(val);
+                }
             });
-            row.mean = values.length > 0 ? Number(mean(values).toFixed(2)) : 0;
-            row.median = values.length > 0 ? Number(median(values).toFixed(2)) : 0;
+            
+            if (isNumericMetric) {
+                row.mean = values.length > 0 ? Number(mean(values).toFixed(2)) : 0;
+                row.median = values.length > 0 ? Number(median(values).toFixed(2)) : 0;
+            } else {
+                row.mean = null; 
+                row.median = null;
+            }
             rowData.push(row);
         });
 
@@ -463,16 +610,39 @@
 
                     const metricName = params.data.metric;
                     const stats = globalStats[metricName] || { mean: 0, sd: 0 };
-                    
-                    const inverted = ["time_of_climb", "climb_time"].includes(metricName);
+
+                    if (!stats.isNumeric) {
+                         return {
+                            background: "#333",
+                            color: "white",
+                            fontSize: "16px",
+                            fontWeight: 600,
+                            textAlign: "center",
+                            border: "1px solid #555"
+                        };
+                    }
+
+                    const val = params.value;
+                    const numValue = isNumeric(val) ? Number(val) : 0;
 
                     return {
-                        background: colorFromStats(params.value, stats.mean, stats.sd),
-                        color: params.value === 0 ? "white" : "black",
+                        background: colorFromStats(numValue, stats.mean, stats.sd),
+                        color: numValue === 0 ? "white" : "black",
                         fontSize: "18px",
                         fontWeight: 600,
                         textAlign: "center"
                     };
+                },
+                valueFormatter: params => {
+                    const metricName = params.data.metric;
+                    const stats = globalStats[metricName] || { isNumeric: false };
+                    
+                    if (!stats.isNumeric) {
+                        return normalizeValue(params.value);
+                    }
+                    
+                    const num = isNumeric(params.value) ? Number(params.value) : 0;
+                    return num === 0 ? "0" : num.toFixed(2);
                 }
             })),
             {
@@ -485,17 +655,21 @@
                 cellStyle: params => {
                     const metricName = params.data.metric;
                     const stats = globalStats[metricName] || { mean: 0, sd: 0 };
-                    const inverted = ["time_of_climb", "climb_time"].includes(metricName);
 
                     return {
-                        background: params.value === 0
-                            ? "#4D4D4D"            // gray background for zeros
+                        background: (params.value === 0 || params.value === null)
+                            ? "#4D4D4D"
                             : colorFromStats(params.value, stats.mean, stats.sd),
-                        color: params.value === 0 ? "white" : "black",
+                        color: (params.value === 0 || params.value === null) ? "white" : "black",
                         fontSize: "18px",
                         fontWeight: "bold",
                         textAlign: "center"
                     };
+                },
+                valueFormatter: params => {
+                    if (params.value === null || params.value === undefined) return "";
+                    const num = Number(params.value);
+                    return num === 0 ? "0" : num.toFixed(2);
                 }
             },
             {
@@ -508,17 +682,21 @@
                 cellStyle: params => {
                     const metricName = params.data.metric;
                     const stats = globalStats[metricName] || { mean: 0, sd: 0 };
-                    const inverted = ["time_of_climb", "climb_time"].includes(metricName);
 
                     return {
-                        background: params.value === 0
-                            ? "#4D4D4D"            // gray background for zeros
+                        background: (params.value === 0 || params.value === null)
+                            ? "#4D4D4D"
                             : colorFromStats(params.value, stats.mean, stats.sd),
-                        color: params.value === 0 ? "white" : "black",
+                        color: (params.value === 0 || params.value === null) ? "white" : "black",
                         fontSize: "18px",
                         fontWeight: "bold",
                         textAlign: "center"
                     };
+                },
+                valueFormatter: params => {
+                    if (params.value === null || params.value === undefined) return "";
+                    const num = Number(params.value);
+                    return num === 0 ? "0" : num.toFixed(2);
                 }
             }
         ];
@@ -729,6 +907,22 @@
     select:focus {
         outline: none;
         box-shadow: 0 0 0 3px rgba(200, 27, 0, 0.4);
+    }
+
+    button {
+        padding: 8px 15px;
+        background: linear-gradient(135deg, #333 0%, #444 100%);
+        color: white;
+        font-size: 16px;
+        border: 2px solid var(--frc-190-red);
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    button:hover {
+        background: linear-gradient(135deg, #444 0%, #555 100%);
+        border-color: #e02200;
     }
 
     .grid-container {
