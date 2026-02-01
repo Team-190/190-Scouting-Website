@@ -383,7 +383,7 @@
 
         const sample = matches[0];
         const numericMetrics = Object.keys(sample).filter(
-            k => !["Match", "Team"].includes(k) && !isNaN(Number(sample[k]))
+            k => !["match", "team", "id"].includes(k) && !isNaN(Number(sample[k]))
         );
 
         // Calculate global stats for each metric across all teams/matches
