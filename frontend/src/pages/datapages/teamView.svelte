@@ -13,6 +13,13 @@
     import "ag-grid-community/styles/ag-grid.css";
     import "ag-grid-community/styles/ag-theme-quartz.css";
     import Team from "../../components/Team.svelte";
+    
+    // Graph imports
+    import * as barGraph from "../../pages/graphcode/bar.js";
+    import * as lineGraph from "../../pages/graphcode/line.js";
+    import * as pieGraph from "../../pages/graphcode/pie.js";
+    import * as radarGraph from "../../pages/graphcode/radar.js";
+    import * as scatterGraph from "../../pages/graphcode/scatter.js";
 
     ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -146,6 +153,223 @@
         allTeams = allTeamNumbers;
         selectedTeam = allTeams[0];
         buildGrid(cache[selectedTeam]);
+    }
+
+    // ===== Graph/Chart functionality =====
+    let chartTypes = ["bar", "line", "pie", "scatter", "radar"];
+    let charts = [];
+    let showDropdown = false;
+    
+    $: metricOptions =
+        teamViewData?.data?.length > 0
+            ? Object.keys(teamViewData.data[0]).filter(
+                (k) =>
+                    ![
+                        "id",
+                        "created_at",
+                        "team",
+                        "match",
+                        "record_type",
+                        "scouter_name",
+                        "scouter_error",
+                    ].includes(k),
+            )
+            : [];
+
+    function addChart(type) {
+        charts = [
+            ...charts,
+            {
+                id: crypto.randomUUID(),
+                type,
+                el: null,
+                instance: null,
+                yAxisMetric: metricOptions[0] || "",
+            },
+        ];
+    }
+
+    function removeChart(id) {
+        charts = charts.filter((chart) => {
+            if (chart.id === id) {
+                if (chart.instance) chart.instance.dispose();
+                return false;
+            }
+            return true;
+        });
+    }
+
+    // Initialize chart instances when elements are bound
+    $: {
+        charts.forEach((chart) => {
+            if (chart.el && !chart.instance) {
+                switch (chart.type) {
+                    case "bar":
+                        chart.instance = barGraph.createChart(chart.el);
+                        break;
+                    case "line":
+                        chart.instance = lineGraph.createChart(chart.el);
+                        break;
+                    case "pie":
+                        chart.instance = pieGraph.createChart(chart.el);
+                        break;
+                    case "scatter":
+                        chart.instance = scatterGraph.createChart(chart.el);
+                        break;
+                    case "radar":
+                        chart.instance = radarGraph.createChart(chart.el);
+                        break;
+                }
+                // Initialize with current team data
+                if (chart.instance && selectedTeam) {
+                    updateChartDataset(chart);
+                }
+            }
+        });
+    }
+
+    // Update all charts when selectedTeam changes
+    $: if (selectedTeam) {
+        charts.forEach((chart) => {
+            if (chart.instance) {
+                updateChartDataset(chart);
+            }
+        });
+    }
+
+    function updateChartDataset(chart) {
+        if (!chart.instance) return;
+
+        // Get team data for the selected team
+        const teamData = cache[selectedTeam] || [];
+        const teamKey = `frc${selectedTeam}`;
+
+        let option;
+        switch (chart.type) {
+            case "bar":
+                option = getBarOption(teamData, chart.yAxisMetric);
+                break;
+            case "line":
+                option = getLineOption(teamData, chart.yAxisMetric);
+                break;
+            case "pie":
+                option = getPieOption(teamData, chart.yAxisMetric);
+                break;
+            case "scatter":
+                option = getScatterOption(teamData, chart.yAxisMetric);
+                break;
+            case "radar":
+                option = getRadarOption(teamData);
+                break;
+        }
+        chart.instance.setOption(option, true);
+    }
+
+    function getBarOption(teamData, metric) {
+        // Show metric values across matches for the selected team
+        const matchLabels = teamData.map((d, i) => `Q${i + 1}`);
+        const values = teamData.map((d) => d[metric] || 0);
+        
+        return {
+            tooltip: { trigger: 'axis' },
+            xAxis: { type: "category", data: matchLabels },
+            yAxis: { type: "value", name: metric },
+            series: [{
+                data: values,
+                type: "bar",
+                name: `Team ${selectedTeam}`,
+                itemStyle: { color: '#C81B00' }
+            }],
+        };
+    }
+
+    function getLineOption(teamData, metric) {
+        const matchLabels = teamData.map((d, i) => `Q${i + 1}`);
+        const values = teamData.map((d) => d[metric] || 0);
+        
+        return {
+            tooltip: { trigger: 'axis' },
+            xAxis: { type: "category", data: matchLabels },
+            yAxis: { type: "value", name: metric },
+            series: [{
+                data: values,
+                type: "line",
+                name: `Team ${selectedTeam}`,
+                lineStyle: { color: '#C81B00' },
+                itemStyle: { color: '#C81B00' }
+            }],
+        };
+    }
+
+    function getPieOption(teamData, metric) {
+        // Show distribution of metric values across matches
+        const pieData = teamData.map((d, i) => ({
+            value: d[metric] || 0,
+            name: `Q${i + 1}`,
+        }));
+        return {
+            tooltip: { trigger: 'item' },
+            series: [
+                {
+                    type: "pie",
+                    data: pieData,
+                    name: metric,
+                    radius: '60%',
+                },
+            ],
+        };
+    }
+
+    function getScatterOption(teamData, metric) {
+        const scatterData = teamData.map((d, i) => [i + 1, d[metric] || 0]);
+        return {
+            tooltip: { trigger: 'item' },
+            xAxis: { name: "Match #", type: "value" },
+            yAxis: { name: metric, type: "value" },
+            series: [{
+                symbolSize: 12,
+                data: scatterData,
+                type: "scatter",
+                name: `Team ${selectedTeam}`,
+                itemStyle: { color: '#C81B00' }
+            }],
+        };
+    }
+
+    function getRadarOption(teamData) {
+        // Calculate average values for each metric across all matches
+        const avgValues = metricOptions.map((k) => {
+            const values = teamData.map((d) => d[k] || 0);
+            return values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+        });
+        
+        // Get max values from all data for proper scaling
+        const maxValues = metricOptions.map((k) => {
+            const allValues = (teamViewData?.data || []).map((d) => d[k] || 0);
+            return Math.max(...allValues, 1);
+        });
+
+        return {
+            tooltip: { trigger: 'item' },
+            radar: {
+                indicator: metricOptions.map((k, i) => ({
+                    name: k,
+                    max: maxValues[i],
+                })),
+            },
+            series: [
+                {
+                    type: "radar",
+                    data: [{
+                        value: avgValues,
+                        name: `Team ${selectedTeam}`,
+                        areaStyle: { opacity: 0.3 },
+                        lineStyle: { color: '#C81B00' },
+                        itemStyle: { color: '#C81B00' }
+                    }],
+                },
+            ],
+        };
     }
 
     let gridInstance = null;
@@ -514,6 +738,156 @@
         border-radius: 8px;
         box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
     }
+
+    /* ===== Graph Section Styles ===== */
+    .graph-section {
+        width: 80vw;
+        margin-top: 30px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .section-title {
+        color: var(--frc-190-red);
+        font-size: 1.8rem;
+        font-weight: 700;
+        margin-bottom: 20px;
+        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
+    }
+
+    .dropdown-container {
+        position: relative;
+        margin-bottom: 20px;
+    }
+
+    .plus-btn {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        font-weight: 600;
+        border: 2px solid var(--frc-190-red);
+        background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+        color: white;
+        cursor: pointer;
+        padding: 0;
+        box-sizing: border-box;
+        transition: all 0.3s ease;
+    }
+
+    .plus-btn:hover {
+        background: linear-gradient(135deg, var(--frc-190-red) 0%, #e02200 100%);
+        transform: scale(1.05);
+    }
+
+    .dropdown {
+        position: absolute;
+        top: 60px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+        border: 2px solid var(--frc-190-red);
+        border-radius: 8px;
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        width: 150px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+        z-index: 10;
+        overflow: hidden;
+    }
+
+    .dropdown li {
+        padding: 12px 15px;
+        cursor: pointer;
+        text-align: center;
+        color: white;
+        font-weight: 500;
+        text-transform: capitalize;
+        transition: background 0.2s ease;
+    }
+
+    .dropdown li:hover {
+        background: var(--frc-190-red);
+    }
+
+    .charts-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
+        width: 100%;
+    }
+
+    .chart-wrapper {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+        background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+        border: 2px solid var(--frc-190-red);
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    .chart-container {
+        width: 100%;
+        height: 300px;
+        flex-grow: 1;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 6px;
+    }
+
+    .chart-label {
+        margin-top: 10px;
+        font-weight: bold;
+        text-transform: capitalize;
+        text-align: center;
+        color: white;
+        font-size: 1rem;
+    }
+
+    .remove-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: none;
+        background: var(--frc-190-red);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 10;
+        transition: background 0.2s ease;
+    }
+
+    .remove-btn:hover {
+        background: #e02200;
+    }
+
+    .metric-select {
+        margin-top: 10px;
+    }
+
+    @media (max-width: 1024px) {
+        .charts-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @media (max-width: 700px) {
+        .charts-grid {
+            grid-template-columns: 1fr;
+        }
+    }
 </style>
 
 <div class="page-wrapper">
@@ -546,4 +920,66 @@
 
     <!-- Grid container -->
     <div class="grid-container ag-theme-quartz" bind:this={domNode} style="height: {gridHeight}px;"></div>
+
+    <!-- Graph Section -->
+    <div class="graph-section">
+        <h2 class="section-title">Charts & Graphs</h2>
+        
+        <div class="dropdown-container">
+            <button class="plus-btn" on:click={() => (showDropdown = !showDropdown)}>+</button>
+            {#if showDropdown}
+                <ul class="dropdown">
+                    {#each chartTypes as type}
+                        <li
+                            on:click={() => {
+                                addChart(type);
+                                showDropdown = false;
+                            }}
+                        >
+                            {type}
+                        </li>
+                    {/each}
+                </ul>
+            {/if}
+        </div>
+
+        <div class="charts-grid">
+            {#each charts as chart (chart.id)}
+                <div class="chart-wrapper">
+                    <button
+                        class="remove-btn"
+                        on:click={() => removeChart(chart.id)}
+                        aria-label="Remove chart"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            width="16"
+                            height="16"
+                            fill="white"
+                        >
+                            <path d="M3 6h18v2H3V6zm2 3h14l-1.5 12H6.5L5 9zm3-7h4v2H8V2z" />
+                        </svg>
+                    </button>
+
+                    <div class="chart-container" bind:this={chart.el}></div>
+
+                    <p class="chart-label">{chart.type} Chart</p>
+
+                    {#if chart.type !== "radar"}
+                        <select
+                            class="metric-select"
+                            bind:value={chart.yAxisMetric}
+                            on:change={() => updateChartDataset(chart)}
+                        >
+                            <option value="">Choose metric</option>
+                            {#each metricOptions as m}
+                                <option value={m}>{m}</option>
+                            {/each}
+                        </select>
+                    {/if}
+                </div>
+            {/each}
+        </div>
+    </div>
 </div>
