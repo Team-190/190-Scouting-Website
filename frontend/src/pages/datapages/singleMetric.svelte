@@ -8,8 +8,20 @@
 
     import "ag-grid-community/styles/ag-grid.css";
     import "ag-grid-community/styles/ag-theme-quartz.css";
+    
+    // Graph imports
+    import * as barGraph from "../../pages/graphcode/bar.js";
+    import * as lineGraph from "../../pages/graphcode/line.js";
+    import * as pieGraph from "../../pages/graphcode/pie.js";
+    import * as scatterGraph from "../../pages/graphcode/scatter.js";
 
     ModuleRegistry.registerModules([AllCommunityModule]);
+
+    // Graph state
+    let rowData = []; // Exposed for charts
+    let charts = [];
+    let chartTypes = ["bar", "line", "pie", "scatter"];
+    let showDropdown = false;
 
     let domNode;
     let availableTeams = [];
@@ -194,7 +206,7 @@
         const globalMean = allValues.length ? mean(allValues) : 0;
         const globalSd = allValues.length ? sd(allValues, globalMean) : 0;
 
-        const rowData = availableTeams.map(team => {
+        rowData = availableTeams.map(team => {
             const rows = teamData[team] || [];
             const values = [];
             const row = { team };
@@ -333,6 +345,7 @@
                 suppressHorizontalScroll: true
             });
         }
+        updateAllCharts();
     }
 
 
@@ -344,6 +357,196 @@
     function onColorblindChange(e) {
         colorblindMode = e.target.value;
         buildGrid();
+    }
+
+    function toggleChartTeam(chart, team) {
+        if (chart.selectedTeams.has(team)) {
+            chart.selectedTeams.delete(team);
+        } else {
+            chart.selectedTeams.add(team);
+        }
+        chart.selectedTeams = new Set(chart.selectedTeams); // Trigger reactivity
+        updateChartDataset(chart);
+        charts = charts; // Trigger Svelte array reactivity
+    }
+
+    function selectChartAll(chart) {
+        chart.selectedTeams = new Set(availableTeams);
+        updateChartDataset(chart);
+        charts = charts; // Trigger Svelte array reactivity
+    }
+
+    function deselectChartAll(chart) {
+        chart.selectedTeams = new Set();
+        updateChartDataset(chart);
+        charts = charts; // Trigger Svelte array reactivity
+    }
+
+    // ===== Graph/Chart functionality =====
+    function addChart(type) {
+        charts = [
+            ...charts,
+            {
+                id: crypto.randomUUID(),
+                type,
+                el: null,
+                instance: null,
+                selectedTeams: new Set(availableTeams),
+                showFilter: false,
+                yAxisMetric: selectedMetric || "", 
+            },
+        ];
+    }
+
+    function removeChart(id) {
+        charts = charts.filter((chart) => {
+            if (chart.id === id) {
+                if (chart.instance) chart.instance.dispose();
+                return false;
+            }
+            return true;
+        });
+    }
+
+    // Reactively Initialize charts
+    $: {
+        charts.forEach((chart) => {
+            if (chart.el && !chart.instance) {
+                switch (chart.type) {
+                    case "bar":
+                        chart.instance = barGraph.createChart(chart.el);
+                        break;
+                    case "line":
+                        chart.instance = lineGraph.createChart(chart.el);
+                        break;
+                    case "pie":
+                        chart.instance = pieGraph.createChart(chart.el);
+                        break;
+                    case "scatter":
+                        chart.instance = scatterGraph.createChart(chart.el);
+                        break;
+                }
+                if (chart.instance) {
+                    updateChartDataset(chart);
+                }
+            }
+        });
+    }
+
+    function updateAllCharts() {
+        charts.forEach(c => updateChartDataset(c));
+    }
+
+    function updateChartDataset(chart) {
+        if (!chart.instance) return;
+        chart.yAxisMetric = selectedMetric;
+
+        // Ensure selectedTeams is initialized if it's missing (legacy safety)
+        if (!chart.selectedTeams) {
+            chart.selectedTeams = new Set(availableTeams);
+        }
+
+        let option;
+        switch (chart.type) {
+            case "bar":
+                option = getBarOption(chart.selectedTeams);
+                break;
+            case "line":
+                option = getLineOption(chart.selectedTeams);
+                break;
+            case "pie":
+                option = getPieOption(chart.selectedTeams);
+                break;
+            case "scatter":
+                option = getScatterOption(chart.selectedTeams);
+                break;
+        }
+        chart.instance.setOption(option, true);
+    }
+
+    function getBarOption(filterSet) {
+        // X: Teams, Y: Mean Metric
+        const filteredData = rowData.filter(r => filterSet.has(r.team));
+        const teams = filteredData.map(r => r.team);
+        const values = filteredData.map(r => r.mean);
+        
+        return {
+            tooltip: { trigger: 'axis' },
+            xAxis: { type: "category", data: teams },
+            yAxis: { type: "value", name: selectedMetric },
+            series: [{
+                data: values,
+                type: "bar",
+                name: selectedMetric,
+                itemStyle: { color: '#C81B00' }
+            }],
+        };
+    }
+
+    function getLineOption(filterSet) {
+        // X: Teams (sorted), Y: Mean Metric (Trend)
+        const filteredData = rowData.filter(r => filterSet.has(r.team));
+        const teams = filteredData.map(r => r.team);
+        const values = filteredData.map(r => r.mean);
+        
+        return {
+            tooltip: { trigger: 'axis' },
+            xAxis: { type: "category", data: teams },
+            yAxis: { type: "value", name: selectedMetric },
+            series: [{
+                data: values,
+                type: "line",
+                name: selectedMetric,
+                lineStyle: { color: '#C81B00' },
+                itemStyle: { color: '#C81B00' }
+            }],
+        };
+    }
+
+    function getPieOption(filterSet) {
+        const data = rowData.filter(r => filterSet.has(r.team)).map(r => ({
+           value: r.mean,
+           name: r.team 
+        }));
+
+        return {
+            tooltip: { trigger: 'item' },
+            series: [
+                {
+                    type: "pie",
+                    data: data,
+                    name: selectedMetric,
+                    radius: '60%',
+                },
+            ],
+        };
+    }
+
+    function getScatterOption(filterSet) {
+        // X: Team (Category), Y: All Raw Values
+        const sortedTeams = rowData.filter(r => filterSet.has(r.team)).map(r => r.team);
+        const scatterData = [];
+        sortedTeams.forEach((team) => {
+             const rows = teamData[team] || [];
+             rows.forEach(r => {
+                 const v = Number(r[selectedMetric] ?? 0);
+                 if (v !== 0) { // filter zeros
+                     scatterData.push([team, v]);
+                 }
+             });
+        });
+
+        return {
+            tooltip: { trigger: 'item' },
+            xAxis: { type: "category", data: sortedTeams, name: "Team" },
+            yAxis: { type: "value", name: selectedMetric },
+            series: [{
+                symbolSize: 10,
+                data: scatterData,
+                type: "scatter",
+                itemStyle: { color: '#C81B00' }
+            }],
+        };
     }
 
     onMount(async () => {
@@ -547,7 +750,210 @@
         border-radius: 8px;
         box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
     }
+    /* ===== Graph Section Styles ===== */
+    .graph-section {
+        width: 80vw;
+        margin-top: 30px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding-bottom: 50px;
+    }
+
+    .section-title {
+        color: var(--frc-190-red);
+        font-size: 1.8rem;
+        font-weight: 700;
+        margin-bottom: 20px;
+        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
+    }
+
+    .dropdown-container {
+        position: relative;
+        margin-bottom: 20px;
+    }
+
+    .plus-btn {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        font-weight: 600;
+        border: 2px solid var(--frc-190-red);
+        background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+        color: white;
+        cursor: pointer;
+        padding: 0;
+        box-sizing: border-box;
+        transition: all 0.3s ease;
+    }
+
+    .plus-btn:hover {
+        background: linear-gradient(135deg, var(--frc-190-red) 0%, #e02200 100%);
+        transform: scale(1.05);
+    }
+
+    .dropdown {
+        position: absolute;
+        top: 60px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+        border: 2px solid var(--frc-190-red);
+        border-radius: 8px;
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        width: 150px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+        z-index: 10;
+        overflow: hidden;
+    }
+
+    .dropdown li {
+        padding: 12px 15px;
+        cursor: pointer;
+        text-align: center;
+        color: white;
+        font-weight: 500;
+        text-transform: capitalize;
+        transition: background 0.2s ease;
+    }
+
+    .dropdown li:hover {
+        background: var(--frc-190-red);
+    }
+
+    .charts-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+        width: 100%;
+    }
+
+    .chart-wrapper {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+        background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+        border: 2px solid var(--frc-190-red);
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    .chart-container {
+        width: 100%;
+        height: 350px;
+        flex-grow: 1;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 6px;
+    }
+
+    .chart-label {
+        margin-top: 10px;
+        font-weight: bold;
+        text-transform: capitalize;
+        text-align: center;
+        color: white;
+        font-size: 1rem;
+    }
+
+    .remove-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: none;
+        background: var(--frc-190-red);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 10;
+        transition: background 0.2s ease;
+    }
+
+    .remove-btn:hover {
+        background: #e02200;
+    }
+    
+    @media (max-width: 1024px) {
+        .charts-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* Chart-specific filter styles */
+    .chart-controls {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+
+    .mini-btn {
+        background: transparent;
+        border: 1px solid var(--frc-190-red);
+        color: white;
+        padding: 4px 10px;
+        font-size: 14px;
+        border-radius: 4px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .mini-btn:hover {
+        background: rgba(200, 27, 0, 0.2);
+    }
+    
+    .local-filter-panel {
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid #444;
+        border-radius: 6px;
+        padding: 10px;
+        margin-bottom: 15px;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+
+    .local-filter-actions {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 10px;
+        padding-bottom: 5px;
+        border-bottom: 1px solid #444;
+    }
+
+    .local-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+        gap: 8px;
+    }
+    
+    .mini-checkbox {
+        font-size: 13px;
+        color: #ddd;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        cursor: pointer;
+    }
+
+    .mini-checkbox input {
+        accent-color: var(--frc-190-red);
+    }
 </style>
+
 
 <div class="page-wrapper">
     <!-- Header Section -->
@@ -580,9 +986,94 @@
                     {/each}
                 </select>
             </div>
+            
         {/if}
     </div>
 
     <!-- Grid container -->
     <div class="grid-container ag-theme-quartz" bind:this={domNode} style="height: {gridHeight}px;"></div>
+
+    <!-- Graph Section -->
+    <div class="graph-section">
+        <h2 class="section-title">Charts & Graphs</h2>
+        
+        <div class="dropdown-container">
+            <button class="plus-btn" on:click={() => (showDropdown = !showDropdown)}>+</button>
+            {#if showDropdown}
+                <ul class="dropdown">
+                    {#each chartTypes as type}
+                        <li
+                            on:click={() => {
+                                addChart(type);
+                                showDropdown = false;
+                            }}
+                        >
+                            {type}
+                        </li>
+                    {/each}
+                </ul>
+            {/if}
+        </div>
+
+        <div class="charts-grid">
+            {#each charts as chart (chart.id)}
+                <div class="chart-wrapper">
+                    <!-- Chart Controls Header -->
+                    <div class="chart-controls">
+                        <button 
+                             class="mini-btn" 
+                             on:click={() => {
+                                 chart.showFilter = !chart.showFilter;
+                                 charts = charts;
+                             }}
+                             aria-label="Filter teams"
+                        >
+                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                 <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                             </svg>
+                             {chart.showFilter ? 'Close Filter' : 'Filter'}
+                        </button>
+
+                        <button
+                            class="mini-btn"
+                            on:click={() => removeChart(chart.id)}
+                            aria-label="Remove chart"
+                            style="border-color: #666;"
+                        >
+                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                 <line x1="18" y1="6" x2="6" y2="18"></line>
+                                 <line x1="6" y1="6" x2="18" y2="18"></line>
+                             </svg>
+                        </button>
+                    </div>
+
+                    <!-- Collapsible Filter Panel -->
+                    {#if chart.showFilter}
+                        <div class="local-filter-panel">
+                            <div class="local-filter-actions">
+                                <button class="mini-btn" on:click={() => selectChartAll(chart)}>Select All</button>
+                                <button class="mini-btn" on:click={() => deselectChartAll(chart)}>Deselect All</button>
+                            </div>
+                            <div class="local-grid">
+                                {#each availableTeams as team}
+                                    <label class="mini-checkbox">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={chart.selectedTeams.has(team)} 
+                                            on:change={() => toggleChartTeam(chart, team)}
+                                        >
+                                        {team}
+                                    </label>
+                                {/each}
+                            </div>
+                        </div>
+                    {/if}
+
+                    <div class="chart-container" bind:this={chart.el}></div>
+
+                    <p class="chart-label">{chart.type} Chart - {selectedMetric}</p>
+                </div>
+            {/each}
+        </div>
+    </div>
 </div>
