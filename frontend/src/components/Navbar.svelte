@@ -11,7 +11,7 @@
     
     <div class="nav-links">
         <button on:click={() => goto('/pickLists')}>Pick Lists</button>
-        <button on:click={() => goto('/eventView')}>Event View</button>
+        <button on:click={() => goto('/singleMetric')}>Event View</button>
         <button on:click={() => goto('/teamView')}>Team View</button>
         <button on:click={() => goto('/pitScouting')}>Pit Scouting</button>
     </div>

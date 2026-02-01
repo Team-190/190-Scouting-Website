@@ -13,7 +13,7 @@
         {path : "/", component: Home},
         {path : "/event-select", component: EventSelectScreen},
         {path : "/pickLists", component: PickLists},
-        {path : "/eventView", component: SingleMetric},
+        {path : "/singleMetric", component: SingleMetric},
         {path : "/teamView", component: TeamView},
         {path : "/pitScouting", component: pitScouting},
     ];
