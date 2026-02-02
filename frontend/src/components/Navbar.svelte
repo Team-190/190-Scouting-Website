@@ -14,6 +14,7 @@
         <button on:click={() => goto('/singleMetric')}>Event View</button>
         <button on:click={() => goto('/teamView')}>Team View</button>
         <button on:click={() => goto('/pitScouting')}>Pit Scouting</button>
+        <button on:click={() => goto('/gracePage')}>Grace Page</button>
     </div>
 </nav>
 
