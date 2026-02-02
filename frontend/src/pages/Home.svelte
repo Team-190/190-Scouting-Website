@@ -1,8 +1,8 @@
 <script>
     import { goto } from '@mateothegreat/svelte5-router';
     import { onMount } from "svelte";
-    import { postEventCode } from "../../utils/api";
-    import { selectedEvent } from "../../stores/selectedEvent";
+    import { postEventCode } from "../utils/api";
+    import { selectedEvent } from "../stores/selectedEvent";
 
     async function cacheAllData() {
         console.log("Getting all data from storage")
@@ -32,6 +32,7 @@
     let selectedYear = new Date().getFullYear();
     let selectedMonth = new Date().getMonth() + 1;
     let selected_event = "";
+    let showEventSelector = false;
 
     const TBA_KEY = "zhTqFG7csJoif1sNXt3aZngy0LB1X4LxMgTfXBvPscNG0P9FifZCa2uGJcUk2gKW";
 
@@ -75,6 +76,10 @@
         goto("/teamView");
     }
 
+    function toggleEventSelector() {
+        showEventSelector = !showEventSelector;
+    }
+
     $: selectedYear && loadEventsForYear().then(filterEvents);
     $: selectedMonth && filterEvents();
 
@@ -82,17 +87,34 @@
 
 <div class="container">
     <div class="button-wrapper" on:click={cacheAllData}>
-        <!-- Nonagon (9-sided) -->
-        <div class="nonagon">
-            <!-- Hexagon (6-sided) -->
-            <div class="hexagon">
-                <span class="label">Populate localstorage</span>
-            </div>
+        <div class="circle">
+            <span class="label">Populate Local Storage</span>
         </div>
     </div>
+
+    {#if showEventSelector}
+        <div class="event-selector-panel">
+            <h2>Event Selector</h2>
+
+            <select class="select" bind:value={selected_event}>
+                <option value="">Select an event...</option>
+                {#each events as event}
+                    <option value={event.key}>
+                        {event.name} — {event.start_date}
+                    </option>
+                {/each}
+            </select>
+
+            {#if selected_event}
+                <p class="selected-event">You selected: {selected_event}</p>
+            {/if}
+
+            <button class="submit-button" on:click={handleSubmit}>Submit</button>
+        </div>
+    {/if}
 </div>
 
-<button class="fab" on:click={() => goto('/event-select')}>
+<button class="fab" on:click={toggleEventSelector}>
     Select Event
 </button>
 
@@ -109,18 +131,18 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        height: 100vh;
+        min-height: 100vh;
+        padding: 2rem;
         background: var(--wpi-gray);
         font-family: sans-serif;
-        overflow: hidden;
     }
 
     .button-wrapper {
-        position: relative;
         width: 300px;
         height: 300px;
         cursor: pointer;
         transition: transform 0.2s;
+        margin-bottom: 2rem;
     }
 
     .button-wrapper:hover {
@@ -131,52 +153,15 @@
         transform: scale(0.95);
     }
 
-    .nonagon {
+    .circle {
         width: 100%;
         height: 100%;
         background-color: var(--frc-190-red);
-        /* 
-           Approximated 9-sided polygon (Nonagon).
-           Vertices calculated roughly around a circle.
-        */
-        clip-path: polygon(
-            50% 0%, 
-            83% 12%, 
-            100% 43%, 
-            94% 78%, 
-            68% 100%, 
-            32% 100%, 
-            6% 78%, 
-            0% 43%, 
-            17% 12%
-        );
+        border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.5); /* Shadow might get clipped, but structure is here */
-    }
-
-    .hexagon {
-        width: 60%;
-        height: 60%;
-        background-color: var(--frc-190-black);
-        /* 
-           Hexagon clip-path 
-           Using drop-shadow filter to create a visible border effect around the clipped shape
-        */
-        filter: drop-shadow(0 0 5px rgba(0,0,0,0.5));
-        clip-path: polygon(
-            50% 0%, 
-            100% 25%, 
-            100% 75%, 
-            50% 100%, 
-            0% 75%, 
-            0% 25%
-        );
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 2;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     }
 
     .label {
@@ -186,6 +171,35 @@
         letter-spacing: 2px;
         text-align: center;
         line-height: 1.2;
+    }
+
+    .event-selector-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        width: 100%;
+        max-width: 500px;
+    }
+
+    h2 {
+        margin: 0;
+    }
+
+    .select {
+        height: 22px;
+    }
+
+    .selected-event {
+        
+    }
+
+    .submit-button {
+        height: 20px;
+        width: 80px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: auto;
     }
 
     .fab {
@@ -209,32 +223,3 @@
         transform: translateY(-2px);
     }
 </style>
-
-<h2>Event Selector</h2>
-
-<select class="select" bind:value={selectedYear}>
-    {#each years as y}
-        <option value={y}>{y}</option>
-    {/each}
-</select>
-
-<select class="select" bind:value={selectedMonth}>
-    {#each months as m}
-        <option value={m.value}>{m.label}</option>
-    {/each}
-</select>
-
-<select class="select" bind:value={selected_event}>
-    <option value="">Select an event...</option>
-    {#each events as event}
-        <option value={event.key}>
-            {event.name} — {event.start_date}
-        </option>
-    {/each}
-</select>
-
-{#if selected_event}
-    <p>You selected: {selected_event}</p>
-{/if}
-
-<button class="submit-button" on:click={handleSubmit}>Submit</button>
