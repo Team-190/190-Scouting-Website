@@ -34,9 +34,9 @@ async function getTeamNumbers() {
     return result;
 }
 
-async function allData() {
+async function allData(eventCode) {
     let query = supabaseClient
-        .from("2026_game")
+        .from("2026"+eventCode)
         .select("*");
     const result = await query;
     return result;

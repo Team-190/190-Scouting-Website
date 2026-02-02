@@ -57,11 +57,11 @@ app.use((req, res, next) => {
     next();
 });
 
-app.get("/", async (req, res) =>{
+app.get("/", async (req, res) => {
     res.renderHtml("file.html");
 });
 
-app.get("/login", (req, res) =>{
+app.get("/login", (req, res) => {
     res.renderHtml("login.html");
 
     test.test();
@@ -79,25 +79,14 @@ app.post("/postEventCode", async (req, res) => {
     }
 })
 
-app.get("/teamView", async (req, res) => {
-    return;
-    console.log("TeamView requested.");
-    const teamNumber = req.query.teamNumber;
-    if (!teamNumber) return res.status(400).send("Please supply a team number.");
-    let result = await database.teamView(teamNumber);
-    res.send(result);
-});
-
-app.get("/teamNumbers", async (req, res) => {
-    return;
-    console.log("teamNumbers requested.");
-    let result = await database.getTeamNumbers();
-    res.send(result);
-})
 
 app.get("/allData", async (req, res) => {
-    console.log("alldata requested.");
-    let result = await database.allData();
+    return;
+    const eventCode = req.query.eventCode;
+    if (!eventCode) res.sendStatus(403);
+
+    console.log("alldata requested, teamCode: "+eventCode);
+    let result = await database.allData(eventCode);
     console.log(result);
     res.send(result);
 });
@@ -108,6 +97,6 @@ app.get("/getAvailableTeams", async (req, res) => {
     res.send(result);
 });
 
-app.listen(PORT, () =>{
-    console.log("Listening on port "+PORT);
+app.listen(PORT, () => {
+    console.log("Listening on port " + PORT);
 });

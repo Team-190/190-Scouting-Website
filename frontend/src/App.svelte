@@ -6,14 +6,16 @@
     import PickLists from "./pages/datapages/pickLists.svelte";
     import SingleMetric from "./pages/datapages/singleMetric.svelte";
     import TeamView from "./pages/datapages/teamView.svelte";
-    import graphPage from "./pages/datapages/graphPage.svelte";
+    import pitScouting from "./pages/datapages/pitScouting.svelte";
+    import gracePage from "./pages/datapages/gracePage.svelte";
 
     const routes = [
         {path : "/", component: Home},
         {path : "/pickLists", component: PickLists},
-        {path : "/eventView", component: SingleMetric},
+        {path : "/singleMetric", component: SingleMetric},
         {path : "/teamView", component: TeamView},
-        {path : "/graph", component: graphPage},
+        {path : "/pitScouting", component: pitScouting},
+        {path : "/gracePage", component: gracePage}
     ];
 </script>
 

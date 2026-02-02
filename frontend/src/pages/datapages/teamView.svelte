@@ -5,7 +5,6 @@
         ModuleRegistry,
         AllCommunityModule
     } from "ag-grid-community";
-    //import teamViewData from "../../utils/allTeamView.json";
     let teamViewData = null
     // it is populated automatically by onMount
     console.log("teamview: "+teamViewData);
@@ -13,12 +12,23 @@
     import "ag-grid-community/styles/ag-grid.css";
     import "ag-grid-community/styles/ag-theme-quartz.css";
     import Team from "../../components/Team.svelte";
+    
+    // Graph imports
+    import * as barGraph from "../../pages/graphcode/bar.js";
+    import * as lineGraph from "../../pages/graphcode/line.js";
+    import * as pieGraph from "../../pages/graphcode/pie.js";
+    import * as radarGraph from "../../pages/graphcode/radar.js";
+    import * as scatterGraph from "../../pages/graphcode/scatter.js";
 
     ModuleRegistry.registerModules([AllCommunityModule]);
 
     let domNode;
     let colorblindMode = "normal";
     let populatecache;
+    let gridHeight = 400; // Default height, will be calculated dynamically
+    
+    const ROW_HEIGHT = 25; // Height of each row in pixels
+    const HEADER_HEIGHT = 32; // Height of the header row
 
     const colorModes = {
         normal: {
@@ -49,6 +59,38 @@
 
     let cache = {};
 
+    function isNumeric(n) {
+        if (n === null || n === undefined || n === "") return false;
+        // Handle booleans
+        if (typeof n === 'boolean') return false;
+        // Handle strings and numbers
+        return !isNaN(parseFloat(n)) && isFinite(n);
+    }
+    
+    function normalizeValue(value) {
+        // Returns a normalized value for display
+        if (value === null || value === undefined) return "";
+        if (typeof value === 'boolean') return value ? "Yes" : "No";
+        if (typeof value === 'string') return value;
+        if (typeof value === 'number') return value;
+        return String(value);
+    }
+    
+    function checkIsNumericMetric(metric, teamData) {
+        if (!teamData || !teamData.length) return false;
+        let hasData = false;
+        for (const row of teamData) {
+            const v = row[metric];
+            if (v !== undefined && v !== null && v !== "") {
+                hasData = true;
+                if (!isNumeric(v)) {
+                    return false;
+                }
+            }
+        }
+        return hasData;
+    }
+
     function mean (arr) {
         return arr.reduce((a, b) => a + b, 0) / arr.length;
     } 
@@ -74,11 +116,18 @@
         
 
     function colorFromStats(v, mu, sigma) {
-        if (v === 0) return "#000";
+        // For non-numeric data, return neutral color
+        if (!isNumeric(v)) {
+            return "#333";
+        }
+        
+        const numValue = Number(v);
+        
+        if (numValue === 0) return "#000";
         if (sigma === 0) return "rgb(180,180,180)";
 
         const mode = colorModes[colorblindMode];
-        const z = (v - mu) / sigma;
+        const z = (numValue - mu) / sigma;
         const t = Math.min(1, Math.abs(z));
 
         return z < 0 ? lerpColor(mode.mid, mode.below, t) : lerpColor(mode.mid, mode.above, t);
@@ -101,47 +150,322 @@
     let allTeams = [];
     let selectedTeam = "190";
 
-    async function loadTeamNumbers() {
-        const data = await(await fetch("http://localhost:3000/teamNumbers")).json();
-        return data
+    async function loadTeamNumbers(eventCode) {
+        let data = []
+        console.log(JSON.stringify(JSON.parse(localStorage.getItem("data")), null, 2));
+        for (let element of JSON.parse(localStorage.getItem("data"))) {
+            if (!data.includes(parseInt(element["team"].slice(3)))) {
+                data.push(parseInt(element["team"].slice(3)));
+            }
+        }
+        if (data.length==0) { alert("commit"); }
+
+        //const data = await(await fetch("http://localhost:3000/teamNumbers?eventCode"+eventCode)).json();
+        return data;
     }
 
     async function loadTeamData(teamNumber) {
+        console.log("Changing to :"+teamNumber);
         let data = [];
-        if (Object.keys(cache).includes(teamNumber.toString())) {
-            console.log("cache fired");
-            data = cache[teamNumber.toString()];
-        } else {
-            data = (await(await fetch("http://localhost:3000/teamView?teamNumber="+teamNumber)).json()).data;
-            cache[teamNumber.toString()] = data;
+        for (let element of teamViewData) {
+            if (element["team"] == `frc${teamNumber}`) {
+                data.push(element)
+                //data = element;
+                break;
+            }
         }
+        if (data.length==0) {
+            alert("fuckass monkey give it a team number")
+        }
+        console.log("Data:\n"+JSON.stringify(data, null, 2));
         buildGrid(data);
     }
 
-    async function loadFromLocalStorage() {
-        // Get all data from local storage
-        const localStorageData = JSON.parse(localStorage.getItem("data"));
-        const time = localStorage.getItem("timestamp");
-        console.log("GETTING DATA:");
-        console.log(localStorageData);
-        
-        const allTeamNumbers = []
-        for (let data_point in localStorageData) {
-            data_point = localStorageData[data_point]
-            console.log(data_point)
-            let number = parseInt(data_point["team"].slice(3));
-            if (!allTeamNumbers.includes(number)) {
-                allTeamNumbers.push(number)
+
+    // ===== Graph/Chart functionality =====
+    let chartTypes = ["bar", "line", "pie", "scatter", "radar"];
+    let charts = [];
+    let showDropdown = false;
+    
+    $: metricOptions =
+        teamViewData?.data?.length > 0
+            ? Object.keys(teamViewData.data[0]).filter(
+                (k) => {
+                    // Exclude trivial/metadata fields
+                    if ([
+                        "id",
+                        "created_at",
+                        "team",
+                        "match",
+                        "record_type",
+                        "scouter_name",
+                        "scouter_error",
+                    ].includes(k)) {
+                        return false;
+                    }
+                    
+                    // Only include numeric metrics
+                    return checkIsNumericMetric(k, teamViewData.data);
+                }
+            )
+            : [];
+
+    function addChart(type) {
+        charts = [
+            ...charts,
+            {
+                id: crypto.randomUUID(),
+                type,
+                el: null,
+                instance: null,
+                yAxisMetric: metricOptions[0] || "",
+            },
+        ];
+    }
+
+    function removeChart(id) {
+        charts = charts.filter((chart) => {
+            if (chart.id === id) {
+                if (chart.instance) chart.instance.dispose();
+                return false;
             }
-            if (Object.keys(cache).includes(number.toString())) {
-                cache[number.toString()].push(data_point);
-            } else {
-                cache[number.toString()] = [data_point];
+            return true;
+        });
+    }
+
+    // Initialize chart instances when elements are bound
+    $: {
+        charts.forEach((chart) => {
+            if (chart.el && !chart.instance) {
+                switch (chart.type) {
+                    case "bar":
+                        chart.instance = barGraph.createChart(chart.el);
+                        break;
+                    case "line":
+                        chart.instance = lineGraph.createChart(chart.el);
+                        break;
+                    case "pie":
+                        chart.instance = pieGraph.createChart(chart.el);
+                        break;
+                    case "scatter":
+                        chart.instance = scatterGraph.createChart(chart.el);
+                        break;
+                    case "radar":
+                        chart.instance = radarGraph.createChart(chart.el);
+                        break;
+                }
+                // Initialize with current team data
+                if (chart.instance && selectedTeam) {
+                    updateChartDataset(chart);
+                }
+            }
+        });
+    }
+
+    // Update all charts when selectedTeam changes
+    $: if (selectedTeam) {
+        charts.forEach((chart) => {
+            if (chart.instance) {
+                updateChartDataset(chart);
+            }
+        });
+    }
+
+    function updateChartDataset(chart) {
+        if (!chart.instance) return;
+
+        // Get team data for the selected team
+        const teamData = cache[selectedTeam] || [];
+        
+        let option = {};
+        const isNumeric = checkIsNumericMetric(chart.yAxisMetric, teamData);
+
+        if (!isNumeric && chart.type !== 'pie' && chart.type !== 'radar') {
+             option = {
+                title: { 
+                    text: 'This chart requires numeric data.',
+                    left: 'center',
+                    top: 'center',
+                    textStyle: { color: '#fff', fontSize: 16 }
+                },
+                xAxis: { show: false },
+                yAxis: { show: false },
+                series: []
+            };
+        } else {
+             switch (chart.type) {
+                case "bar":
+                    option = getBarOption(teamData, chart.yAxisMetric);
+                    break;
+                case "line":
+                    option = getLineOption(teamData, chart.yAxisMetric);
+                    break;
+                case "pie":
+                    option = getPieOption(teamData, chart.yAxisMetric, isNumeric);
+                    break;
+                case "scatter":
+                    option = getScatterOption(teamData, chart.yAxisMetric);
+                    break;
+                case "radar":
+                    option = getRadarOption(teamData);
+                    break;
             }
         }
-        allTeams = allTeamNumbers;
-        selectedTeam = allTeams[0];
-        buildGrid(cache[selectedTeam]);
+        chart.instance.setOption(option, true);
+    }
+
+    function getPieOption(teamData, metric, isNumeric) {
+        let pieData = [];
+        
+        if (isNumeric) {
+            // Show distribution of metric values across matches (Value = Match Result)
+             pieData = teamData.map((d, i) => ({
+                value: Number(d[metric] ?? 0),
+                name: `Q${i + 1}`,
+            }));
+        } else {
+            // Frequency of string values
+            const counts = {};
+            teamData.forEach(d => {
+                const rawValue = d[metric];
+                const v = normalizeValue(rawValue);
+                counts[v] = (counts[v] || 0) + 1;
+            });
+             pieData = Object.entries(counts).map(([name, value]) => ({ name, value }));
+        }
+
+        return {
+            tooltip: { trigger: 'item' },
+            series: [
+                {
+                    type: "pie",
+                    data: pieData,
+                    name: metric,
+                    radius: '60%',
+                },
+            ],
+        };
+    }
+
+    function getBarOption(teamData, metric) {
+        // Show metric values across matches for the selected team
+        const matchLabels = teamData.map((d, i) => `Q${i + 1}`);
+        const values = teamData.map((d) => {
+            const val = d[metric];
+            return isNumeric(val) ? Number(val) : 0;
+        });
+        
+        return {
+            tooltip: { trigger: 'axis' },
+            xAxis: { type: "category", data: matchLabels },
+            yAxis: { type: "value", name: metric },
+            series: [{
+                data: values,
+                type: "bar",
+                name: `Team ${selectedTeam}`,
+                itemStyle: { color: '#C81B00' }
+            }],
+        };
+    }
+
+    function getLineOption(teamData, metric) {
+        const matchLabels = teamData.map((d, i) => `Q${i + 1}`);
+        const values = teamData.map((d) => {
+            const val = d[metric];
+            return isNumeric(val) ? Number(val) : 0;
+        });
+        
+        return {
+            tooltip: { trigger: 'axis' },
+            xAxis: { type: "category", data: matchLabels },
+            yAxis: { type: "value", name: metric },
+            series: [{
+                data: values,
+                type: "line",
+                name: `Team ${selectedTeam}`,
+                lineStyle: { color: '#C81B00' },
+                itemStyle: { color: '#C81B00' }
+            }],
+        };
+    }
+
+    function getScatterOption(teamData, metric) {
+        const scatterData = teamData
+            .map((d, i) => {
+                const val = d[metric];
+                return isNumeric(val) ? [i + 1, Number(val)] : null;
+            })
+            .filter(point => point !== null && point[1] !== 0);
+            
+        return {
+            tooltip: { trigger: 'item' },
+            xAxis: { name: "Match #", type: "value" },
+            yAxis: { name: metric, type: "value" },
+            series: [{
+                symbolSize: 12,
+                data: scatterData,
+                type: "scatter",
+                name: `Team ${selectedTeam}`,
+                itemStyle: { color: '#C81B00' }
+            }],
+        };
+    }
+
+    function getRadarOption(teamData) {
+        // Calculate average values for each metric across all matches (only numeric)
+        const numericMetrics = metricOptions.filter(k => {
+            return checkIsNumericMetric(k, teamData);
+        });
+        
+        const avgValues = numericMetrics.map((k) => {
+            const values = teamData.map((d) => {
+                const val = d[k];
+                return isNumeric(val) ? Number(val) : 0;
+            });
+            return values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+        });
+        
+        // Get max values from all data for proper scaling
+        const maxValues = numericMetrics.map((k) => {
+            const allValues = (teamViewData?.data || []).map((d) => {
+                const val = d[k];
+                return isNumeric(val) ? Number(val) : 0;
+            });
+            return Math.max(...allValues, 1);
+        });
+
+        if (numericMetrics.length === 0) {
+            return {
+                title: { 
+                    text: 'No numeric metrics available for radar chart.',
+                    left: 'center',
+                    top: 'center',
+                    textStyle: { color: '#fff', fontSize: 16 }
+                }
+            };
+        }
+
+        return {
+            tooltip: { trigger: 'item' },
+            radar: {
+                indicator: numericMetrics.map((k, i) => ({
+                    name: k,
+                    max: maxValues[i],
+                })),
+            },
+            series: [
+                {
+                    type: "radar",
+                    data: [{
+                        value: avgValues,
+                        name: `Team ${selectedTeam}`,
+                        areaStyle: { opacity: 0.3 },
+                        lineStyle: { color: '#C81B00' },
+                        itemStyle: { color: '#C81B00' }
+                    }],
+                },
+            ],
+        };
     }
 
     let gridInstance = null;
@@ -154,24 +478,50 @@
         const qLabels = matchNums.map((_, i) => `Q${i + 1}`);
 
         const sample = matches[0];
-        const numericMetrics = Object.keys(sample).filter(
-            k => !["Match", "Team"].includes(k) && !isNaN(Number(sample[k]))
+        // Allow all non-excluded metrics, regardless of type
+        const displayMetrics = Object.keys(sample).filter(
+            k => !["match", "team", "id", "created_at", "record_type", "scouter_name", "scouter_error"].includes(k)
         );
 
-        // Calculate global stats for each metric across all teams/matches
+        // Calculate global stats for each metric across all teams/matches (only for numeric)
         const globalStats = {};
-        numericMetrics.forEach(metric => {
+        displayMetrics.forEach(metric => {
+            // Check if metric is numeric based on global data sample
             const allRows = Array.isArray(teamViewData?.data) ? teamViewData.data : [];
             const allValues = [];
-            allRows.forEach((row) => {
-                const val = Number(row[metric] ?? 0);
-                allValues.push(val);
-            });
-            const filteredValues = allValues.filter(v => v !== 0);
-            globalStats[metric] = {
-                mean: filteredValues.length > 0 ? mean(filteredValues) : 0,
-                sd: filteredValues.length > 0 ? sd(filteredValues, mean(filteredValues)) : 0
-            };
+            let isNumericMetric = true;  
+            let hasData = false;
+            
+            // Check ALL values to determine type
+            for (const r of allRows) {
+                 const v = r[metric];
+                 if (v !== undefined && v !== null && v !== "") {
+                     hasData = true;
+                     if (!isNumeric(v)) {
+                         isNumericMetric = false;
+                         break;
+                     }
+                 }
+            }
+            // If no data found, assume not numeric (string is safer default)
+            if (!hasData) isNumericMetric = false; 
+            
+            if (isNumericMetric) {
+                allRows.forEach((row) => {
+                    const val = row[metric];
+                    if (isNumeric(val)) {
+                        allValues.push(Number(val));
+                    }
+                });
+                const filteredValues = allValues.filter(v => v !== 0);
+                globalStats[metric] = {
+                    mean: filteredValues.length > 0 ? mean(filteredValues) : 0,
+                    sd: filteredValues.length > 0 ? sd(filteredValues, mean(filteredValues)) : 0,
+                    isNumeric: true
+                };
+            } else {
+                globalStats[metric] = { mean: 0, sd: 0, isNumeric: false };
+            }
         });
 
         const rowData = [];
@@ -184,17 +534,31 @@
         rowData.push(matchRow);
 
         // Other metrics with mean and median
-        numericMetrics.forEach(metric => {
+        displayMetrics.forEach(metric => {
             const row: any = { metric };
             const values = [];
+            const isNumericMetric = globalStats[metric]?.isNumeric ?? false;
+
             qLabels.forEach((q, i) => {
                 const match = matches[i];
-                const val = Number(match?.[metric] || 0);
-                row[q] = Number(val.toFixed(2));
-                values.push(val);
+                let val = match?.[metric];
+                
+                if (isNumericMetric) {
+                    const numVal = isNumeric(val) ? Number(val) : 0;
+                    row[q] = numVal;
+                    values.push(numVal);
+                } else {
+                    row[q] = normalizeValue(val);
+                }
             });
-            row.mean = values.length > 0 ? Number(mean(values).toFixed(2)) : 0;
-            row.median = values.length > 0 ? Number(median(values).toFixed(2)) : 0;
+            
+            if (isNumericMetric) {
+                row.mean = values.length > 0 ? Number(mean(values).toFixed(2)) : 0;
+                row.median = values.length > 0 ? Number(median(values).toFixed(2)) : 0;
+            } else {
+                row.mean = null; 
+                row.median = null;
+            }
             rowData.push(row);
         });
 
@@ -235,16 +599,39 @@
 
                     const metricName = params.data.metric;
                     const stats = globalStats[metricName] || { mean: 0, sd: 0 };
-                    
-                    const inverted = ["time_of_climb", "climb_time"].includes(metricName);
+
+                    if (!stats.isNumeric) {
+                         return {
+                            background: "#333",
+                            color: "white",
+                            fontSize: "16px",
+                            fontWeight: 600,
+                            textAlign: "center",
+                            border: "1px solid #555"
+                        };
+                    }
+
+                    const val = params.value;
+                    const numValue = isNumeric(val) ? Number(val) : 0;
 
                     return {
-                        background: colorFromStats(params.value, stats.mean, stats.sd),
-                        color: params.value === 0 ? "white" : "black",
+                        background: colorFromStats(numValue, stats.mean, stats.sd),
+                        color: numValue === 0 ? "white" : "black",
                         fontSize: "18px",
                         fontWeight: 600,
                         textAlign: "center"
                     };
+                },
+                valueFormatter: params => {
+                    const metricName = params.data.metric;
+                    const stats = globalStats[metricName] || { isNumeric: false };
+                    
+                    if (!stats.isNumeric) {
+                        return normalizeValue(params.value);
+                    }
+                    
+                    const num = isNumeric(params.value) ? Number(params.value) : 0;
+                    return num === 0 ? "0" : num.toFixed(2);
                 }
             })),
             {
@@ -257,17 +644,21 @@
                 cellStyle: params => {
                     const metricName = params.data.metric;
                     const stats = globalStats[metricName] || { mean: 0, sd: 0 };
-                    const inverted = ["time_of_climb", "climb_time"].includes(metricName);
 
                     return {
-                        background: params.value === 0
-                            ? "#4D4D4D"            // gray background for zeros
+                        background: (params.value === 0 || params.value === null)
+                            ? "#4D4D4D"
                             : colorFromStats(params.value, stats.mean, stats.sd),
-                        color: params.value === 0 ? "white" : "black",
+                        color: (params.value === 0 || params.value === null) ? "white" : "black",
                         fontSize: "18px",
                         fontWeight: "bold",
                         textAlign: "center"
                     };
+                },
+                valueFormatter: params => {
+                    if (params.value === null || params.value === undefined) return "";
+                    const num = Number(params.value);
+                    return num === 0 ? "0" : num.toFixed(2);
                 }
             },
             {
@@ -280,20 +671,27 @@
                 cellStyle: params => {
                     const metricName = params.data.metric;
                     const stats = globalStats[metricName] || { mean: 0, sd: 0 };
-                    const inverted = ["time_of_climb", "climb_time"].includes(metricName);
 
                     return {
-                        background: params.value === 0
-                            ? "#4D4D4D"            // gray background for zeros
+                        background: (params.value === 0 || params.value === null)
+                            ? "#4D4D4D"
                             : colorFromStats(params.value, stats.mean, stats.sd),
-                        color: params.value === 0 ? "white" : "black",
+                        color: (params.value === 0 || params.value === null) ? "white" : "black",
                         fontSize: "18px",
                         fontWeight: "bold",
                         textAlign: "center"
                     };
+                },
+                valueFormatter: params => {
+                    if (params.value === null || params.value === undefined) return "";
+                    const num = Number(params.value);
+                    return num === 0 ? "0" : num.toFixed(2);
                 }
             }
         ];
+
+        // Calculate grid height based on number of rows (metrics + matchNum row)
+        gridHeight = (rowData.length * ROW_HEIGHT) + HEADER_HEIGHT;
 
         // Destroy old grid if it exists
         if (gridInstance) {
@@ -318,17 +716,23 @@
     }
     
     onMount(async () => {
-        let latest_storage_date = localStorage.getItem("timestamp");
-        populatecache.textContent = `Load from localstorage (${latest_storage_date})`;
-        const response = await fetch("http://localhost:3000/teamView?teamNumber=190");
-        teamViewData = await response.json();
-        console.log("teamview: ", teamViewData);
-        
-        loadTeamData(190);
-        console.log("Loading data from 190");
+        // Fetch all data from backend for global stats calculation
+        const allDataResponse = JSON.parse(localStorage.getItem("data"));
 
-        allTeams = await loadTeamNumbers();
-        console.log("Populated team list");
+        teamViewData = allDataResponse;
+        console.log("All data loaded for global stats:", teamViewData);
+        
+        // Load team numbers from backend
+        allTeams = await loadTeamNumbers(localStorage.getItem("eventCode"));
+
+        console.log("Populated team list:", allTeams);
+        
+        // Set initial selected team (first available team, or 190 if available)
+        if (allTeams.length > 0) {
+            selectedTeam = allTeams.includes("190") ? "190" : allTeams[0].toString();
+            loadTeamData(selectedTeam);
+            console.log("Loading data from team", selectedTeam);
+        }
     });
 
 </script>
@@ -493,13 +897,178 @@
         box-shadow: 0 0 0 3px rgba(200, 27, 0, 0.4);
     }
 
+    button {
+        padding: 8px 15px;
+        background: linear-gradient(135deg, #333 0%, #444 100%);
+        color: white;
+        font-size: 16px;
+        border: 2px solid var(--frc-190-red);
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    button:hover {
+        background: linear-gradient(135deg, #444 0%, #555 100%);
+        border-color: #e02200;
+    }
+
     .grid-container {
-        height: 56.7vh;
         width: 80vw;
         background: var(--frc-190-black);
         box-sizing: border-box;
         border-radius: 8px;
         box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    }
+
+    /* ===== Graph Section Styles ===== */
+    .graph-section {
+        width: 80vw;
+        margin-top: 30px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .section-title {
+        color: var(--frc-190-red);
+        font-size: 1.8rem;
+        font-weight: 700;
+        margin-bottom: 20px;
+        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
+    }
+
+    .dropdown-container {
+        position: relative;
+        margin-bottom: 20px;
+    }
+
+    .plus-btn {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        font-weight: 600;
+        border: 2px solid var(--frc-190-red);
+        background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+        color: white;
+        cursor: pointer;
+        padding: 0;
+        box-sizing: border-box;
+        transition: all 0.3s ease;
+    }
+
+    .plus-btn:hover {
+        background: linear-gradient(135deg, var(--frc-190-red) 0%, #e02200 100%);
+        transform: scale(1.05);
+    }
+
+    .dropdown {
+        position: absolute;
+        top: 60px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+        border: 2px solid var(--frc-190-red);
+        border-radius: 8px;
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        width: 150px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+        z-index: 10;
+        overflow: hidden;
+    }
+
+    .dropdown li {
+        padding: 12px 15px;
+        cursor: pointer;
+        text-align: center;
+        color: white;
+        font-weight: 500;
+        text-transform: capitalize;
+        transition: background 0.2s ease;
+    }
+
+    .dropdown li:hover {
+        background: var(--frc-190-red);
+    }
+
+    .charts-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
+        width: 100%;
+    }
+
+    .chart-wrapper {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+        background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+        border: 2px solid var(--frc-190-red);
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    .chart-container {
+        width: 100%;
+        height: 300px;
+        flex-grow: 1;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 6px;
+    }
+
+    .chart-label {
+        margin-top: 10px;
+        font-weight: bold;
+        text-transform: capitalize;
+        text-align: center;
+        color: white;
+        font-size: 1rem;
+    }
+
+    .remove-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: none;
+        background: var(--frc-190-red);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 10;
+        transition: background 0.2s ease;
+    }
+
+    .remove-btn:hover {
+        background: #e02200;
+    }
+
+    .metric-select {
+        margin-top: 10px;
+    }
+
+    @media (max-width: 1024px) {
+        .charts-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @media (max-width: 700px) {
+        .charts-grid {
+            grid-template-columns: 1fr;
+        }
     }
 </style>
 
@@ -528,9 +1097,72 @@
                 {/each}
             </select>
         </div>
-        <button bind:this={populatecache} on:click={loadFromLocalStorage}>populate cache</button>
     </div>
 
     <!-- Grid container -->
-    <div class="grid-container ag-theme-quartz" bind:this={domNode}></div>
+    <div class="grid-container ag-theme-quartz" bind:this={domNode} style="height: {gridHeight}px;"></div>
+
+    <!-- Graph Section -->
+    <div class="graph-section">
+        <h2 class="section-title">Charts & Graphs</h2>
+        
+        <div class="dropdown-container">
+            <button class="plus-btn" on:click={() => (showDropdown = !showDropdown)}>+</button>
+            {#if showDropdown}
+                <ul class="dropdown">
+                    {#each chartTypes as type}
+                        <!-- svelte-ignore a11y_click_events_have_key_events -->
+                        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                        <li
+                            on:click={() => {
+                                addChart(type);
+                                showDropdown = false;
+                            }}
+                        >
+                            {type}
+                        </li>
+                    {/each}
+                </ul>
+            {/if}
+        </div>
+
+        <div class="charts-grid">
+            {#each charts as chart (chart.id)}
+                <div class="chart-wrapper">
+                    <button
+                        class="remove-btn"
+                        on:click={() => removeChart(chart.id)}
+                        aria-label="Remove chart"
+                    >
+                        <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            width="16"
+                            height="16"
+                            fill="white"
+                        >
+                            <path d="M3 6h18v2H3V6zm2 3h14l-1.5 12H6.5L5 9zm3-7h4v2H8V2z" />
+                        </svg>
+                    </button>
+
+                    <div class="chart-container" bind:this={chart.el}></div>
+
+                    <p class="chart-label">{chart.type} Chart</p>
+
+                    {#if chart.type !== "radar"}
+                        <select
+                            class="metric-select"
+                            bind:value={chart.yAxisMetric}
+                            on:change={() => updateChartDataset(chart)}
+                        >
+                            <option value="">Choose metric</option>
+                            {#each metricOptions as m}
+                                <option value={m}>{m}</option>
+                            {/each}
+                        </select>
+                    {/if}
+                </div>
+            {/each}
+        </div>
+    </div>
 </div>

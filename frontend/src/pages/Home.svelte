@@ -1,16 +1,14 @@
 <script>
     import { goto } from '@mateothegreat/svelte5-router';
-    import { onMount } from "svelte";
-    import { postEventCode } from "../utils/api";
-    import { selectedEvent } from "../stores/selectedEvent";
-
+    let eventCode;
     async function cacheAllData() {
         console.log("Getting all data from storage")
-        const data = JSON.stringify((await(await fetch("http://localhost:3000/allData")).json()).data);
-        
+        const data = JSON.stringify((await(await fetch("http://localhost:3000/allData?eventCode="+eventCode)).json()).data);
+    
         console.log(data)
         localStorage.setItem("data", data);
         localStorage.setItem("timestamp", new Date(Date.now()).toLocaleString());
+        localStorage.setItem("eventCode", eventCode);
     }
 
     let years = [];
@@ -113,6 +111,13 @@
         </div>
     {/if}
 </div>
+
+<select bind:value={eventCode}>
+  <option value="_game">_game</option>
+  <option value="gentoo">Gentoo</option>
+  <option value="void">Void</option>
+</select>
+
 
 <button class="fab" on:click={toggleEventSelector}>
     Select Event
