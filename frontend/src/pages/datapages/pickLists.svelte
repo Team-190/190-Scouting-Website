@@ -1110,7 +1110,16 @@
             <h2>Teams</h2>
             <div class="team-list">
                 <div class="list" on:dragover={handleDragOver} on:drop={() => { /* Can't drop back on main list */ }}>
-                    {#each $teamsStore as team (team.team_number)}
+                    {#each $teamsStore.filter(team => {
+                        // If we're on alliance view, filter out teams that are in alliances
+                        if (activeView === 'alliances') {
+                            const isInAlliance = alliances.some(alliance => 
+                                alliance.teams.some(t => t.team_number === team.team_number)
+                            );
+                            return !isInAlliance;
+                        }
+                        return true;
+                    }) as team (team.team_number)}
                         <Team {team} picked={!!pickedTeams[team.team_number]} on:click={() => toggleTeamPicked(team.team_number)} on:dragstart={() => handleDragStart(team, 'teams')} />
                     {/each}
                 </div>
@@ -1177,34 +1186,65 @@
 
             {#if activeView === 'alliances'}
                 <div class="alliance-selection">
-                    <div class="alliance-controls">
-                        <h2>Alliance Selection Board</h2>
-                        <div style="display: flex; gap: 20px; align-items: center;">
-                            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                                <input type="checkbox" bind:checked={isFourTeamAlliance} style="width: 20px; height: 20px;" />
-                                4 teams per alliance
-                            </label>
-                            <button on:click={populateAllianceCaptains}>Reset Board</button>
-                        </div>
-                    </div>
-                    
-                    <div class="alliances-container">
-                        {#each alliances as alliance}
-                            <div class="alliance-list" on:dragover={handleDragOver} on:drop={() => handleDropOnAlliance(alliance.id)}>
-                                <h3>Alliance {alliance.id}</h3>
-                                <div class="list" on:dragover={handleDragOver} on:drop={() => handleDropOnAlliance(alliance.id)}>
-                                    {#each alliance.teams as team (team.team_number)}
-                                        <Team {team} picked={!!pickedTeams[team.team_number]} on:click={() => toggleTeamPicked(team.team_number)} on:dragstart={() => handleDragStart(team, `alliance_${alliance.id}`)} />
-                                    {/each}
+                    <div class="alliance-with-picklists">
+                        <div class="alliance-main">
+                            <div class="alliance-controls">
+                                <h2>Alliance Selection Board</h2>
+                                <div style="display: flex; gap: 20px; align-items: center;">
+                                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                                        <input type="checkbox" bind:checked={isFourTeamAlliance} style="width: 20px; height: 20px;" />
+                                        4 teams per alliance
+                                    </label>
+                                    <button on:click={populateAllianceCaptains}>Reset Board</button>
                                 </div>
                             </div>
-                        {/each}
-                    </div>
-                    
-                    <div class="fixed-buttons">
-                        <button on:click={rankFill}>Fill by Rank</button>
-                        <button on:click={oprFill}>Fill by OPR</button>
-                        <button on:click={epaFill}>Fill by EPA</button>
+                            
+                            <div class="alliances-container">
+                                {#each alliances as alliance}
+                                    <div class="alliance-list" on:dragover={handleDragOver} on:drop={() => handleDropOnAlliance(alliance.id)}>
+                                        <h3>Alliance {alliance.id}</h3>
+                                        <div class="list" on:dragover={handleDragOver} on:drop={() => handleDropOnAlliance(alliance.id)}>
+                                            {#each alliance.teams as team (team.team_number)}
+                                                <Team {team} picked={!!pickedTeams[team.team_number]} on:click={() => toggleTeamPicked(team.team_number)} on:dragstart={() => handleDragStart(team, `alliance_${alliance.id}`)} />
+                                            {/each}
+                                        </div>
+                                    </div>
+                                {/each}
+                            </div>
+                            
+                            <div class="fixed-buttons">
+                                <button on:click={rankFill}>Fill by Rank</button>
+                                <button on:click={oprFill}>Fill by OPR</button>
+                                <button on:click={epaFill}>Fill by EPA</button>
+                            </div>
+                        </div>
+                        
+                        <div class="picklists-sidebar">
+                            <h2>Picklists</h2>
+                            <div class="picklists-scroll">
+                                {#if Object.keys(picklists).length === 0}
+                                    <p style="padding: 20px; text-align: center; opacity: 0.6;">No picklists created yet</p>
+                                {:else}
+                                    {#each Object.entries(picklists) as [key, list]}
+                                        <div class="sidebar-picklist">
+                                            <h3>{list.name}</h3>
+                                            <div class="sidebar-list">
+                                                {#each list.teams as team, index (team.team_number)}
+                                                    <div 
+                                                        class="sidebar-team" 
+                                                        class:picked={!!pickedTeams[team.team_number]}
+                                                        draggable="true" 
+                                                        on:dragstart={() => handleDragStart(team, key)}
+                                                        on:click={() => toggleTeamPicked(team.team_number)}>
+                                                        {team.team_number}
+                                                    </div>
+                                                {/each}
+                                            </div>
+                                        </div>
+                                    {/each}
+                                {/if}
+                            </div>
+                        </div>
                     </div>
                 </div>
             {/if}
@@ -1272,6 +1312,11 @@
         overflow-x: hidden;
     }
 
+    :global(body) {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
     :global(*) {
         box-sizing: border-box;
     }
@@ -1322,17 +1367,19 @@
     .page-wrapper {
         display: flex;
         flex-direction: column;
-        align-items: center;
+        align-items: stretch; /* Changed from center to stretch for full width */
         min-height: 100vh;
-        padding: 20px;
+        padding: 0; /* No padding at all */
+        margin: 0; /* No margin */
         background: var(--wpi-gray);
         padding-bottom: 80px; /* Space for fixed bottom bar */
     }
 
     .header-section {
         text-align: center;
-        margin-bottom: 20px;
+        margin: 0 0 10px 0;
         width: 100%;
+        padding: 10px 0; /* Just vertical padding */
     }
 
     .header-section h1 {
@@ -1346,14 +1393,16 @@
 
     /* Top Controls Area */
     .top-controls {
-        width: 95%; /* Make it wide */
-        max-width: 1600px;
+        width: 100%; /* Full width */
+        max-width: none; /* No limit */
         background: var(--dark-bg);
-        padding: 15px;
-        border-radius: 10px;
+        padding: 10px 15px; /* Reduced vertical padding */
+        border-radius: 0; /* No border radius for full width */
         border: 2px solid var(--frc-190-red);
+        border-left: none;
+        border-right: none;
         box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-        margin-bottom: 20px;
+        margin-bottom: 5px; /* Minimal margin */
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -1406,16 +1455,17 @@
     /* Main Content Area */
     .main-content {
         display: flex;
-        width: 95%;
-        max-width: 1600px;
-        gap: 20px;
+        width: 100%;
+        max-width: none; /* No limit - as wide as possible */
+        gap: 5px; /* Absolute minimum gap */
         align-items: flex-start;
-        /* height is managed by children */
+        padding: 0; /* No padding at all */
+        margin: 0; /* No margin */
     }
 
     /* Team List Sidebar */
     .team-list-container {
-        width: 280px;
+        width: 150px; /* Ultra minimal */
         background: var(--dark-bg);
         border: 2px solid var(--frc-190-black);
         border-radius: 8px;
@@ -1460,7 +1510,7 @@
         border-radius: 8px;
         display: flex;
         flex-direction: column;
-        height: 400px; /* Fixed height for consistency */
+        min-height: 400px; /* Changed to min-height for flexibility */
         overflow: hidden;
         box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     }
@@ -1527,6 +1577,16 @@
     }
 
     /* Alliance Selection View */
+    .alliance-with-picklists {
+        display: flex;
+        gap: 5px; /* Minimum gap */
+    }
+
+    .alliance-main {
+        flex: 1;
+        min-width: 0;
+    }
+
     .alliance-controls {
         background: var(--dark-bg);
         padding: 15px;
@@ -1541,13 +1601,114 @@
     
     .alliances-container {
         display: grid;
-        grid-template-columns: repeat(4, 1fr); /* 4 columns for 8 alliances looks good */
-        gap: 20px;
+        grid-template-columns: repeat(4, 1fr); /* 4 columns = all 8 alliances visible */
+        gap: 8px; /* Minimum practical gap */
+        max-width: 100%;
     }
-    @media (max-width: 1400px) {
+    @media (max-width: 1600px) {
         .alliances-container {
             grid-template-columns: repeat(2, 1fr);
         }
+    }
+
+    /* Picklists Sidebar */
+    .picklists-sidebar {
+        width: 140px; /* Ultra minimal - just team numbers */
+        background: var(--dark-bg);
+        border: 2px solid var(--frc-190-black);
+        border-radius: 8px;
+        display: flex;
+        flex-direction: column;
+        height: 75vh;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+
+    .picklists-sidebar h2 {
+        background: var(--frc-190-red);
+        color: white;
+        margin: 0;
+        padding: 10px;
+        text-align: center;
+        font-size: 1.2rem;
+    }
+
+    .picklists-scroll {
+        flex: 1;
+        overflow-y: auto;
+        padding: 10px;
+    }
+
+    .sidebar-picklist {
+        background: #252525;
+        border: 1px solid #333;
+        border-radius: 6px;
+        margin-bottom: 15px;
+        overflow: hidden;
+    }
+
+    .sidebar-picklist h3 {
+        background: #2d2d2d;
+        color: var(--frc-190-red);
+        margin: 0;
+        padding: 8px 12px;
+        font-size: 1rem;
+        border-bottom: 1px solid #333;
+    }
+
+    .sidebar-list {
+        padding: 5px;
+    }
+
+    .sidebar-team {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 3px;
+        background: #1a1a1a;
+        border: 1px solid #333;
+        border-radius: 4px;
+        margin-bottom: 2px;
+        color: white;
+        cursor: grab;
+        transition: all 0.15s;
+        font-size: 0.8rem;
+        font-weight: bold;
+    }
+
+    .sidebar-team.picked {
+        background: var(--frc-190-red);
+        border-color: var(--frc-190-red);
+        color: white;
+    }
+
+    .sidebar-team:hover {
+        background: #222;
+        border-color: var(--frc-190-red);
+        transform: translateX(2px);
+    }
+
+    .sidebar-team:active {
+        cursor: grabbing;
+    }
+
+    .rank-number {
+        text-align: center;
+        color: var(--frc-190-red);
+        font-weight: bold;
+        font-size: 0.85rem;
+    }
+
+    .team-number {
+        font-weight: bold;
+        color: #fff;
+    }
+
+    .team-name {
+        color: #aaa;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 0.85rem;
     }
 
     /* Bottom Fixed Bar style */
