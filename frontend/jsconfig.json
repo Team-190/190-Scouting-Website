@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "moduleResolution": "bundler",
+    "types": ["svelte", "node"],
     "target": "ESNext",
     "module": "ESNext",
     /**

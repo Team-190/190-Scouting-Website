@@ -3,14 +3,47 @@
 
   //Variables
   let allTeams = [];
-  let rating = [" ","🤮","😨","🥱","🙂","🤑", "💍"];
+  let selectedTeam = "Select a team";
+  let tableData = [];
+  let rating = ["🤮", "😨", "🥱", "🙂", "🤑", "💍"];
+  let selectedTeamName;
+  const apiKey = import.meta.env.VITE_AUTH_KEY;
+  
 
   onMount(async () => {
     document.title = "GRACE - FRC 190";
     allTeams = await loadTeamNumbers();
     console.log(allTeams);
-    populateTeamsDropdown();
+    console.log("AUTH Key:", apiKey);
   });
+
+  async function fetchTeamName(teamNumber: string) {
+    const apiUrl = `https://www.thebluealliance.com/api/v3/team/frc${teamNumber}`;
+
+    try {
+      const response = await fetch(apiUrl, {
+        headers: {
+          "X-TBA-Auth-Key": apiKey
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      selectedTeamName = data.nickname || data.name || "Team name not found";
+      console.log("Team data:", data);
+      console.log("Selected Team Name:", selectedTeamName);
+      
+
+    } catch (error) {
+      console.error('There was a problem fetching team data:', error);
+      selectedTeamName = "Error fetching team name";
+      
+    }
+  }
+
 
   async function loadTeamNumbers() {
     const data = await (
@@ -19,44 +52,65 @@
     return data;
   }
 
-  function populateTeamsDropdown() {
-    const selectElement = document.getElementById("teams");
+  function handleRatingClick(ratingEmoji: string) {
+    if (selectedTeam === "Select a team") {
+      alert("Please select a team first!");
+      return;
+    }
 
-    allTeams.forEach((optionText) => {
-      let option = document.createElement("option");
-      console.log("Adding option: " + optionText);
-      option.textContent = optionText;
-      selectElement.appendChild(option);
-    });
+    const existingIndex = tableData.findIndex(
+      (row) => row.team === selectedTeam,
+    );
 
-    const ratingSelectElement = document.getElementById("rating");
-    rating.forEach((optionText) => {
-      let option = document.createElement("option");
-      console.log("Adding option: " + optionText);
-      option.textContent = optionText;
-      ratingSelectElement.appendChild(option);
-    });
+    if (existingIndex !== -1) {
+      tableData[existingIndex].rating = ratingEmoji;
+      tableData[existingIndex].name = selectedTeamName;
+    } else {
+      
+      tableData = [...tableData, { team: selectedTeam, name: selectedTeamName, rating: ratingEmoji }];
+    }
   }
 </script>
 
-<html lang="en">
-  <body>
-    <div class="inputSection">
-      <form action="">
-        <label for="teams">Choose a Team:</label>
-        <select id="teams" name="teams">
-          <option>Select a team</option>
-        </select>
-        <label for="rating">Rating</label>
-        <select id="rating" name="rating">
-          <option>Select a rating</option>
-        </select>
-        <input type="submit" value="Submit">
-      </form>
-      
+<div class="inputSection">
+  <label for="teams">Choose a Team:</label>
+  <select id="teams" name="teams" bind:value={selectedTeam} on:change={() => fetchTeamName(selectedTeam)}>
+    <option value="Select a team">Select a team</option>
+    {#each allTeams as team}
+      <option value={team}>{team}</option>
+    {/each}
+  </select>
+  <br /><br />
+  <div class="ratingSection">
+    <p>Rating:</p>
+    <div class="ratingButtonContainer">
+      {#each rating as ratingEmoji}
+        <button on:click={() => handleRatingClick(ratingEmoji)}>
+          {ratingEmoji}
+        </button>
+      {/each}
     </div>
-  </body>
-</html>
+    <table>
+      <thead>
+        <tr>
+          <th>Team #</th>
+          <th>Team Name</th>
+          <th>Rating</th>
+        </tr>
+      </thead>
+      <tbody>
+        {#each tableData as row}
+          <tr>
+            <td>{row.team}</td>
+            <td>{row.name}</td>
+            <td>{row.rating}</td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
+</div>
+
 
 <style>
   :root {
@@ -82,7 +136,7 @@
     box-sizing: border-box;
   }
 
-  input[type="submit"] {
+  button {
     cursor: pointer;
     padding: 8px 16px;
     border: 2px solid var(--frc-190-red);
@@ -93,18 +147,18 @@
     transition: all 0.2s;
   }
 
-  input[type="submit"] :hover {
+  button:hover {
     background: linear-gradient(135deg, #444 0%, #555 100%);
     border-color: #e02200;
     transform: translateY(-1px);
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
   }
 
-  input[type="submit"] :active {
+  button:active {
     transform: translateY(0);
   }
 
-  input[type="submit"]:disabled {
+  button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
     transform: none;
@@ -126,5 +180,28 @@
   select:focus {
     outline: none;
     box-shadow: 0 0 0 2px rgba(200, 27, 0, 0.4);
+  }
+
+  .ratingSection {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .ratingButtonContainer {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+  }
+
+  table,
+  th,
+  td {
+    margin-top: 10px;
+    border: solid #642a75;
+    color: var(--dark-bg);
+    background-color: white;
+    border-collapse: collapse;
+    padding: 10px;
   }
 </style>
