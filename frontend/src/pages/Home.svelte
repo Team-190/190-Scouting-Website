@@ -120,13 +120,6 @@
     {/if}
 </div>
 
-<select bind:value={eventCode}>
-  <option value="_game">_game</option>
-  <option value="gentoo">Gentoo</option>
-  <option value="void">Void</option>
-</select>
-
-
 <button class="fab" on:click={toggleEventSelector}>
     Select Event
 </button>
