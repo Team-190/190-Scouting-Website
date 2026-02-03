@@ -150,48 +150,37 @@
     let allTeams = [];
     let selectedTeam = "190";
 
-    async function loadTeamNumbers() {
-        const data = await(await fetch("http://localhost:8000/teamNumbers")).json();
-        return data
+    async function loadTeamNumbers(eventCode) {
+        let data = []
+        console.log(JSON.stringify(JSON.parse(localStorage.getItem("data")), null, 2));
+        for (let element of JSON.parse(localStorage.getItem("data"))) {
+            if (!data.includes(parseInt(element["team"].slice(3)))) {
+                data.push(parseInt(element["team"].slice(3)));
+            }
+        }
+        if (data.length==0) { alert("commit"); }
+
+        //const data = await(await fetch("http://localhost:3000/teamNumbers?eventCode"+eventCode)).json();
+        return data;
     }
 
     async function loadTeamData(teamNumber) {
+        console.log("Changing to :"+teamNumber);
         let data = [];
-        if (Object.keys(cache).includes(teamNumber.toString())) {
-            console.log("cache fired");
-            data = cache[teamNumber.toString()];
-        } else {
-            data = (await(await fetch("http://localhost:8000/teamView?teamNumber="+teamNumber)).json()).data;
-            cache[teamNumber.toString()] = data;
+        for (let element of teamViewData) {
+            if (element["team"] == `frc${teamNumber}`) {
+                data.push(element)
+                //data = element;
+                break;
+            }
         }
+        if (data.length==0) {
+            alert("fuckass monkey give it a team number")
+        }
+        console.log("Data:\n"+JSON.stringify(data, null, 2));
         buildGrid(data);
     }
 
-    async function loadFromLocalStorage() {
-        // Get all data from local storage
-        const localStorageData = JSON.parse(localStorage.getItem("data"));
-        const time = localStorage.getItem("timestamp");
-        console.log("GETTING DATA:");
-        console.log(localStorageData);
-        
-        const allTeamNumbers = []
-        for (let data_point in localStorageData) {
-            data_point = localStorageData[data_point]
-            console.log(data_point)
-            let number = parseInt(data_point["team"].slice(3));
-            if (!allTeamNumbers.includes(number)) {
-                allTeamNumbers.push(number)
-            }
-            if (Object.keys(cache).includes(number.toString())) {
-                cache[number.toString()].push(data_point);
-            } else {
-                cache[number.toString()] = [data_point];
-            }
-        }
-        allTeams = allTeamNumbers;
-        selectedTeam = allTeams[0];
-        buildGrid(cache[selectedTeam]);
-    }
 
     // ===== Graph/Chart functionality =====
     let chartTypes = ["bar", "line", "pie", "scatter", "radar"];
@@ -727,16 +716,15 @@
     }
     
     onMount(async () => {
-        let latest_storage_date = localStorage.getItem("timestamp");
-        populatecache.textContent = `Load from localstorage (${latest_storage_date})`;
-        
         // Fetch all data from backend for global stats calculation
-        const allDataResponse = await fetch("http://localhost:8000/allData");
-        teamViewData = await allDataResponse.json();
+        const allDataResponse = JSON.parse(localStorage.getItem("data"));
+
+        teamViewData = allDataResponse;
         console.log("All data loaded for global stats:", teamViewData);
         
         // Load team numbers from backend
-        allTeams = await loadTeamNumbers();
+        allTeams = await loadTeamNumbers(localStorage.getItem("eventCode"));
+
         console.log("Populated team list:", allTeams);
         
         // Set initial selected team (first available team, or 190 if available)
@@ -1109,7 +1097,6 @@
                 {/each}
             </select>
         </div>
-        <button bind:this={populatecache} on:click={loadFromLocalStorage}>populate cache</button>
     </div>
 
     <!-- Grid container -->
