@@ -1,29 +1,133 @@
 <script>
     import { goto } from '@mateothegreat/svelte5-router';
+    import { onMount } from "svelte";
 
+    let eventCode;
     async function cacheAllData() {
         console.log("Getting all data from storage")
-        const data = JSON.stringify((await(await fetch("http://localhost:3000/allData")).json()).data);
-        
+        const data = JSON.stringify((await(await fetch("http://localhost:3000/allData?eventCode="+eventCode)).json()).data);
+    
         console.log(data)
         localStorage.setItem("data", data);
         localStorage.setItem("timestamp", new Date(Date.now()).toLocaleString());
+        localStorage.setItem("eventCode", eventCode);
     }
+
+    let years = [];
+    let months = [
+        { value: 1, label: "January" },
+        { value: 2, label: "February" },
+        { value: 3, label: "March" },
+        { value: 4, label: "April" },
+        { value: 5, label: "May" },
+        { value: 6, label: "June" },
+        { value: 7, label: "July" },
+        { value: 8, label: "August" },
+        { value: 9, label: "September" },
+        { value: 10, label: "October" },
+        { value: 11, label: "November" },
+        { value: 12, label: "December" }
+    ];
+
+    let selectedYear = new Date().getFullYear();
+    let selectedMonth = new Date().getMonth() + 1;
+    let selected_event = "";
+    let showEventSelector = false;
+
+    const TBA_KEY = "zhTqFG7csJoif1sNXt3aZngy0LB1X4LxMgTfXBvPscNG0P9FifZCa2uGJcUk2gKW";
+
+    let allEvents = [];
+    let events = [];
+
+    onMount(async () => {
+        const currentYear = new Date().getFullYear();
+        years = Array.from({ length: currentYear - 2014 }, (_, i) => 2015 + i);
+        await loadEventsForYear();
+        filterEvents();
+    });
+
+    async function loadEventsForYear() {
+        try {
+            const res = await fetch(
+                `https://www.thebluealliance.com/api/v3/events/${selectedYear}`,
+                { headers: { "X-TBA-Auth-Key": TBA_KEY } }
+            );
+            allEvents = res.ok ? await res.json() : [];
+        } catch {
+            allEvents = [];
+        }
+    }
+
+    function filterEvents() {
+        events = allEvents.filter(evt => {
+            const [, month] = evt.start_date.split("-").map(Number);
+            return month === selectedMonth;
+        });
+    }
+
+    async function handleSubmit() {
+        if (!selected_event) {
+            alert("Please select an event before submitting.");
+            return;
+        }
+    }
+
+    function toggleEventSelector() {
+        showEventSelector = !showEventSelector;
+    }
+
+    $: selectedYear && loadEventsForYear().then(filterEvents);
+    $: selectedMonth && filterEvents();
+
 </script>
 
 <div class="container">
     <div class="button-wrapper" on:click={cacheAllData}>
-        <!-- Nonagon (9-sided) -->
-        <div class="nonagon">
-            <!-- Hexagon (6-sided) -->
-            <div class="hexagon">
-                <span class="label">Populate localstorage</span>
-            </div>
+        <div class="circle">
+            <span class="label">Populate Local Storage</span>
         </div>
     </div>
+
+    {#if showEventSelector}
+        <div class="event-selector-panel">
+            <h2>Event Selector</h2>
+
+            <select class="select" bind:value={selected_event}>
+                <option value="">Select an Event</option>
+                <option value="option1">2026_game</option>
+                <option value="option2">Minuteman Event</option>
+                <option value="option3">Greater Boston Event</option>
+                <option value="option4">WPI Event</option>
+                <option value="option4">Richland Event</option>
+            </select>
+
+            {#if selected_event}
+                {#if selected_event === "option1"}
+                    <p class="selected-event">You selected: 2026_game</p>
+                {:else if selected_event === "option2"}
+                    <p class="selected-event">You selected: 2026mabil</p>
+                {:else if selected_event === "option3"}
+                    <p class="selected-event">You selected: 2026mabos</p>
+                {:else if selected_event === "option4"}
+                    <p class="selected-event">You selected: 2026mawor</p>
+                {:else if selected_event === "option5"}
+                    <p class="selected-event">You selected: 2026schop</p>
+                {/if}
+            {/if}
+
+            <button class="submit-button" on:click={handleSubmit}>Submit</button>
+        </div>
+    {/if}
 </div>
 
-<button class="fab" on:click={() => goto('/event-select')}>
+<select bind:value={eventCode}>
+  <option value="_game">_game</option>
+  <option value="gentoo">Gentoo</option>
+  <option value="void">Void</option>
+</select>
+
+
+<button class="fab" on:click={toggleEventSelector}>
     Select Event
 </button>
 
@@ -40,18 +144,18 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        height: 100vh;
+        min-height: 100vh;
+        padding: 2rem;
         background: var(--wpi-gray);
         font-family: sans-serif;
-        overflow: hidden;
     }
 
     .button-wrapper {
-        position: relative;
         width: 300px;
         height: 300px;
         cursor: pointer;
         transition: transform 0.2s;
+        margin-bottom: 2rem;
     }
 
     .button-wrapper:hover {
@@ -62,52 +166,15 @@
         transform: scale(0.95);
     }
 
-    .nonagon {
+    .circle {
         width: 100%;
         height: 100%;
         background-color: var(--frc-190-red);
-        /* 
-           Approximated 9-sided polygon (Nonagon).
-           Vertices calculated roughly around a circle.
-        */
-        clip-path: polygon(
-            50% 0%, 
-            83% 12%, 
-            100% 43%, 
-            94% 78%, 
-            68% 100%, 
-            32% 100%, 
-            6% 78%, 
-            0% 43%, 
-            17% 12%
-        );
+        border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.5); /* Shadow might get clipped, but structure is here */
-    }
-
-    .hexagon {
-        width: 60%;
-        height: 60%;
-        background-color: var(--frc-190-black);
-        /* 
-           Hexagon clip-path 
-           Using drop-shadow filter to create a visible border effect around the clipped shape
-        */
-        filter: drop-shadow(0 0 5px rgba(0,0,0,0.5));
-        clip-path: polygon(
-            50% 0%, 
-            100% 25%, 
-            100% 75%, 
-            50% 100%, 
-            0% 75%, 
-            0% 25%
-        );
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 2;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     }
 
     .label {
@@ -117,6 +184,35 @@
         letter-spacing: 2px;
         text-align: center;
         line-height: 1.2;
+    }
+
+    .event-selector-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        width: 100%;
+        max-width: 500px;
+    }
+
+    h2 {
+        margin: 0;
+    }
+
+    .select {
+        height: 22px;
+    }
+
+    .selected-event {
+        
+    }
+
+    .submit-button {
+        height: 20px;
+        width: 80px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: auto;
     }
 
     .fab {
@@ -139,4 +235,5 @@
         border-color: #e02200;
         transform: translateY(-2px);
     }
+
 </style>

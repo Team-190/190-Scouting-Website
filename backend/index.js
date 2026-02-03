@@ -79,23 +79,14 @@ app.post("/postEventCode", async (req, res) => {
     }
 })
 
-app.get("/teamView", async (req, res) => {
-    console.log("TeamView requested.");
-    const teamNumber = req.query.teamNumber;
-    if (!teamNumber) return res.status(400).send("Please supply a team number.");
-    let result = await database.teamView(teamNumber);
-    res.send(result);
-});
-
-app.get("/teamNumbers", async (req, res) => {
-    console.log("teamNumbers requested.");
-    let result = await database.getTeamNumbers();
-    res.send(result);
-})
 
 app.get("/allData", async (req, res) => {
-    console.log("alldata requested.");
-    let result = await database.allData();
+    return;
+    const eventCode = req.query.eventCode;
+    if (!eventCode) res.sendStatus(403);
+
+    console.log("alldata requested, teamCode: "+eventCode);
+    let result = await database.allData(eventCode);
     console.log(result);
     res.send(result);
 });
