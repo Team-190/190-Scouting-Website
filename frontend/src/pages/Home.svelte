@@ -1,5 +1,7 @@
 <script>
     import { goto } from '@mateothegreat/svelte5-router';
+    import { onMount } from "svelte";
+
     let eventCode;
     async function cacheAllData() {
         console.log("Getting all data from storage")
@@ -68,10 +70,6 @@
             alert("Please select an event before submitting.");
             return;
         }
-
-        selectedEvent.set(selected_event);
-        await postEventCode(selected_event);
-        goto("/teamView");
     }
 
     function toggleEventSelector() {
@@ -95,16 +93,26 @@
             <h2>Event Selector</h2>
 
             <select class="select" bind:value={selected_event}>
-                <option value="">Select an event...</option>
-                {#each events as event}
-                    <option value={event.key}>
-                        {event.name} — {event.start_date}
-                    </option>
-                {/each}
+                <option value="">Select an Event</option>
+                <option value="option1">2026_game</option>
+                <option value="option2">Minuteman Event</option>
+                <option value="option3">Greater Boston Event</option>
+                <option value="option4">WPI Event</option>
+                <option value="option4">Richland Event</option>
             </select>
 
             {#if selected_event}
-                <p class="selected-event">You selected: {selected_event}</p>
+                {#if selected_event === "option1"}
+                    <p class="selected-event">You selected: 2026_game</p>
+                {:else if selected_event === "option2"}
+                    <p class="selected-event">You selected: 2026mabil</p>
+                {:else if selected_event === "option3"}
+                    <p class="selected-event">You selected: 2026mabos</p>
+                {:else if selected_event === "option4"}
+                    <p class="selected-event">You selected: 2026mawor</p>
+                {:else if selected_event === "option5"}
+                    <p class="selected-event">You selected: 2026schop</p>
+                {/if}
             {/if}
 
             <button class="submit-button" on:click={handleSubmit}>Submit</button>
@@ -227,4 +235,5 @@
         border-color: #e02200;
         transform: translateY(-2px);
     }
+
 </style>
