@@ -3,6 +3,8 @@
     import { onMount } from "svelte";
 
     let eventCode;
+    $: eventCode = selected_event ? selected_event : "2025nhalt1";
+
     async function cacheAllData() {
         localStorage.clear();
         console.log("Getting all data from storage for event "+eventCode);
