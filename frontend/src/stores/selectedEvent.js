@@ -1,10 +1,10 @@
 import { writable } from 'svelte/store';
 
-const stored = localStorage.getItem('selectedEvent');
-export const selectedEvent = writable(stored || '');
+const stored = localStorage.getItem('eventCode');
+export const eventCode = writable(stored || '');
 
-selectedEvent.subscribe(value => {
+eventCode.subscribe(value => {
     if (value) {
-        localStorage.setItem('selectedEvent', value);
+        localStorage.setItem('eventCode', value);
     }
 });

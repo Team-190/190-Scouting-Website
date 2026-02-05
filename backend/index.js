@@ -81,18 +81,18 @@ app.post("/postEventCode", async (req, res) => {
 
 
 app.get("/allData", async (req, res) => {
-    return;
     const eventCode = req.query.eventCode;
-    if (!eventCode) res.sendStatus(403);
+    if (!eventCode) return res.sendStatus(403);
 
-    console.log("alldata requested, teamCode: "+eventCode);
+    console.log("alldata requested, eventCode: "+eventCode);
     let result = await database.allData(eventCode);
     console.log(result);
     res.send(result);
 });
 
-app.get("/getAvailableTeams", async (req, res) => {
-    if (!eventCode) res.sendStatus(403);
+app.get("/teamNumbers", async (req, res) => {
+    const eventCode = req.query.eventCode;
+    if (!eventCode) return res.sendStatus(403);
     let result = await database.availableTeamsView(eventCode);
     res.send(result);
 });

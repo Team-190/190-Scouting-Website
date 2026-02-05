@@ -4,9 +4,10 @@
 
     let eventCode;
     async function cacheAllData() {
-        console.log("Getting all data from storage")
+        localStorage.clear();
+        console.log("Getting all data from storage for event "+eventCode);
         const data = JSON.stringify((await(await fetch("http://localhost:3000/allData?eventCode="+eventCode)).json()).data);
-    
+        
         console.log(data)
         localStorage.setItem("data", data);
         localStorage.setItem("timestamp", new Date(Date.now()).toLocaleString());
@@ -32,7 +33,7 @@
     let selectedYear = new Date().getFullYear();
     let selectedMonth = new Date().getMonth() + 1;
     let selected_event = "";
-    let showEventSelector = false;
+    let showEventSelector = true;
 
     const TBA_KEY = "zhTqFG7csJoif1sNXt3aZngy0LB1X4LxMgTfXBvPscNG0P9FifZCa2uGJcUk2gKW";
 
@@ -90,39 +91,27 @@
 
     {#if showEventSelector}
         <div class="event-selector-panel">
-            <h2>Event Selector</h2>
+        <h2>Event Selector</h2>
 
-            <select class="select" bind:value={selected_event}>
-                <option value="">Select an Event</option>
-                <option value="option1">2026_game</option>
-                <option value="option2">Minuteman Event</option>
-                <option value="option3">Greater Boston Event</option>
-                <option value="option4">WPI Event</option>
-                <option value="option4">Richland Event</option>
-            </select>
+        <select class="select" bind:value={eventCode}>
+            <option value="_game">2026_game</option>
+            <option value="mabil">Minuteman Event</option>
+            <option value="mabos">Greater Boston Event</option>
+            <option value="mawor">WPI Event</option>
+            <option value="schop">Richland Event</option>
+        </select>
 
-            {#if selected_event}
-                {#if selected_event === "option1"}
-                    <p class="selected-event">You selected: 2026_game</p>
-                {:else if selected_event === "option2"}
-                    <p class="selected-event">You selected: 2026mabil</p>
-                {:else if selected_event === "option3"}
-                    <p class="selected-event">You selected: 2026mabos</p>
-                {:else if selected_event === "option4"}
-                    <p class="selected-event">You selected: 2026mawor</p>
-                {:else if selected_event === "option5"}
-                    <p class="selected-event">You selected: 2026schop</p>
-                {/if}
-            {/if}
+        <p class="selected-event">
+            You selected: {eventCode === "_game" ? "2026_game" : 
+                        eventCode === "mabil" ? "Minuteman Event" : 
+                        eventCode === "mabos" ? "Greater Boston Event" : 
+                        eventCode === "mawor" ? "WPI Event" : 
+                        eventCode === "schop" ? "Richland Event" : "2026_game"}
+        </p>
 
-            <button class="submit-button" on:click={handleSubmit}>Submit</button>
         </div>
     {/if}
 </div>
-
-<button class="fab" on:click={toggleEventSelector}>
-    Select Event
-</button>
 
 <style>
     /* FRC 190 Brand Colors */

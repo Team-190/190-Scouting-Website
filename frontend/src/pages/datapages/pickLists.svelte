@@ -2,10 +2,10 @@
     import baseX from 'base-x';
     import pako from 'pako';
     import Team from '../../components/Team.svelte';
-    import { selectedEvent as selectedEventStore } from '../../stores/selectedEvent';
     import { onDestroy } from 'svelte';
     import { writable } from 'svelte/store';
     import { AgCheckbox } from 'ag-grid-community';
+    import { onMount } from 'svelte';
 
     const BASE85_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~';
     const bs85 = baseX(BASE85_CHARS);
@@ -15,7 +15,12 @@
 
     let picklists = $state({});
     let cachedPicklists = null;
+    let eventCode = $state(localStorage.getItem("eventCode"));
 
+    // 2. Use an effect to save the value whenever it changes
+    $effect(() => {
+        localStorage.setItem("eventCode", eventCode);
+    });
     const sessionData = sessionStorage.getItem('picklists');
     if (sessionData) {
         try {
@@ -26,15 +31,15 @@
     }
     
     if (!cachedPicklists) {
-    const localData = localStorage.getItem('picklists');
-    if (localData) {
-      try {
-        cachedPicklists = JSON.parse(localData);
-      } catch (e) {
-        console.error('Failed to parse local picklists', e);
-      }
+        const localData = localStorage.getItem('picklists');
+        if (localData) {
+        try {
+            cachedPicklists = JSON.parse(localData);
+        } catch (e) {
+            console.error('Failed to parse local picklists', e);
+        }
+        }
     }
-  }
     if (cachedPicklists) picklists = cachedPicklists;
 
     $effect(() => {
@@ -61,6 +66,7 @@
     let teamsError = '';
 
     let cachedAllianceSelections = null;
+
 
     const sessionAllianceData = sessionStorage.getItem('allianceSelections');
     if (sessionAllianceData) {
@@ -104,16 +110,9 @@
     let editingAllianceSelectionName = $state('');
     let allianceImportData = $state('');
 
-    let selectedEvent = '';
-
-    const unsubscribe = selectedEventStore.subscribe(value => {
-        selectedEvent = value;
-    });
-
-    onDestroy(unsubscribe);
 
     $effect(() => {
-        if (selectedEvent) {
+        if (eventCode) {
             getTeams();
         } else {
             teams = [];
@@ -268,18 +267,18 @@
     }
 
     async function getTeams() {
-    if (!selectedEvent) {
+    if (!eventCode) {
         alert('Please select an event first.');
         return;
     }
 
     try {
-        console.log('Fetching teams for:', selectedEvent);
-        const teamPromise = fetch(`https://www.thebluealliance.com/api/v3/event/${selectedEvent}/teams/simple`, {
+        console.log('Fetching teams for:', eventCode);
+        const teamPromise = fetch(`https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/simple`, {
             headers: { 'X-TBA-Auth-Key': tbaApiKey }
         }).then(res => res.json());
 
-        const statusesPromise = fetch(`https://www.thebluealliance.com/api/v3/event/${selectedEvent}/teams/statuses`, {
+        const statusesPromise = fetch(`https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/statuses`, {
             headers: { 'X-TBA-Auth-Key': tbaApiKey }
         }).then(res => res.ok ? res.json() : null);
 
@@ -472,7 +471,7 @@
     }
 
     async function oprFill() {
-        if (!selectedEvent) {
+        if (!eventCode) {
             alert('Please select an event first.');
             return;
         }
@@ -486,7 +485,7 @@
             return;
         }
 
-        const response = await fetch(`https://www.thebluealliance.com/api/v3/event/${selectedEvent}/oprs`, {
+        const response = await fetch(`https://www.thebluealliance.com/api/v3/event/${eventCode}/oprs`, {
             headers: { 'X-TBA-Auth-Key': tbaApiKey }
         });
 
@@ -590,7 +589,7 @@
     }
 
     async function epaFill() {
-        if (!selectedEvent) {
+        if (!eventCode) {
             alert('Please select an event first.');
             return;
         }
@@ -604,7 +603,7 @@
             return;
         }
 
-        const response = await fetch(`https://api.statbotics.io/v3/team_events?event=${selectedEvent}`);
+        const response = await fetch(`https://api.statbotics.io/v3/team_events?event=${eventCode}`);
 
         if (!response.ok) {
             alert('Could not fetch EPAs for this event. They may not be available.');
@@ -773,12 +772,12 @@
     }
 
     async function createOprPicklist() {
-        if (!selectedEvent) {
+        if (!eventCode) {
             alert('Please select an event first.');
             return;
         }
 
-        const response = await fetch(`https://www.thebluealliance.com/api/v3/event/${selectedEvent}/oprs`, {
+        const response = await fetch(`https://www.thebluealliance.com/api/v3/event/${eventCode}/oprs`, {
             headers: {
                 'X-TBA-Auth-Key': tbaApiKey
             }
@@ -817,12 +816,12 @@
     }
 
     async function createEpaPicklist() {
-        if (!selectedEvent) {
+        if (!eventCode) {
             alert('Please select an event first.');
             return;
         }
 
-        const response = await fetch(`https://api.statbotics.io/v3/team_events?event=${selectedEvent}`);
+        const response = await fetch(`https://api.statbotics.io/v3/team_events?event=${eventCode}`);
 
         if (!response.ok) {
             alert('Could not fetch EPA data for this event. They may not be available.');
@@ -856,13 +855,13 @@
     }
 
     async function populateAllianceCaptains() {
-    if (!selectedEvent) {
+    if (!eventCode) {
         alert('Please select an event first.');
         return;
     }
 
     try {
-        const response = await fetch(`https://www.thebluealliance.com/api/v3/event/${selectedEvent}/teams/statuses`, {
+        const response = await fetch(`https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/statuses`, {
             headers: { 'X-TBA-Auth-Key': tbaApiKey }
         });
         if (!response.ok) throw new Error('Failed to fetch team statuses');
@@ -1095,8 +1094,8 @@
         </div>
         <h3>
                 Selected Event:
-                {#if selectedEvent}
-                    <span>{selectedEvent}</span>
+                {#if eventCode}
+                    <span>{eventCode}</span>
                 {:else}
                     <span style="opacity: 0.6;">(none)</span>
                 {/if}

@@ -46,9 +46,13 @@
 
 
   async function loadTeamNumbers() {
+    const eventCode = localStorage.getItem("eventCode");
+    if (!eventCode) return alert("get an event code, fool");
+    console.log(eventCode);
     const data = await (
-      await fetch("http://localhost:8000/teamNumbers")
+      await fetch("http://localhost:8000/teamNumbers?eventCode="+eventCode)
     ).json();
+    console.log("gotteam numbers:"+data)
     return data;
   }
 

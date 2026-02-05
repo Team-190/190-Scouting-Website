@@ -166,7 +166,9 @@
     }
 
     async function fetchAllData() {
-        const response = await fetch("http://localhost:8000/allData");
+        const eventCode = localStorage.getItem("eventCode");
+
+        const response = await fetch("http://localhost:8000/allData?eventCode="+eventCode);
         const result = await response.json();
         return result;
     }
