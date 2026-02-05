@@ -218,10 +218,16 @@
 </div>
 
 <style>
+    :root {
+        --frc-190-red: #c81b00;
+        --wpi-gray: #a9b0b7;
+        --frc-190-black: #4d4d4d;
+    }
+
     :global(body) {
         margin: 0;
         font-family: 'Roboto', sans-serif;
-        background: #fff;
+        background: var(--wpi-gray);
     }
 
     .bracket-app {
