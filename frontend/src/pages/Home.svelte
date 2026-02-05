@@ -3,14 +3,27 @@
     import { onMount } from "svelte";
 
     let eventCode;
+    $: eventCode = selected_event ? selected_event : "2025nhalt1";
+
     async function cacheAllData() {
-        console.log("Getting all data from storage")
-        const data = JSON.stringify((await(await fetch("http://localhost:3000/allData?eventCode="+eventCode)).json()).data);
-    
-        console.log(data)
-        localStorage.setItem("data", data);
-        localStorage.setItem("timestamp", new Date(Date.now()).toLocaleString());
-        localStorage.setItem("eventCode", eventCode);
+        console.log("Getting all data from storage using eventCode: " + eventCode);
+        try {
+            const response = await fetch("http://localhost:8000/allData?eventCode=" + eventCode);
+             if (!response.ok) {
+                 throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const json = await response.json();
+            const data = JSON.stringify(json.data);
+        
+            console.log(data)
+            localStorage.setItem("data", data);
+            localStorage.setItem("timestamp", new Date(Date.now()).toLocaleString());
+            localStorage.setItem("eventCode", eventCode);
+            alert("Data cached successfully for " + eventCode);
+        } catch (e) {
+            console.error("Failed to cache data:", e);
+            alert("Failed to cache data. Check console.");
+        }
     }
 
     let years = [];

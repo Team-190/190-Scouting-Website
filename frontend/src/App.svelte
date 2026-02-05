@@ -8,6 +8,7 @@
     import TeamView from "./pages/datapages/teamView.svelte";
     import pitScouting from "./pages/datapages/pitScouting.svelte";
     import gracePage from "./pages/datapages/gracePage.svelte";
+    import marchMadness from "./pages/datapages/marchMadness.svelte";
 
     const routes = [
         {path : "/", component: Home},
@@ -15,7 +16,8 @@
         {path : "/singleMetric", component: SingleMetric},
         {path : "/teamView", component: TeamView},
         {path : "/pitScouting", component: pitScouting},
-        {path : "/gracePage", component: gracePage}
+        {path : "/gracePage", component: gracePage},
+        {path : "/marchMadness", component: marchMadness}
     ];
 </script>
 

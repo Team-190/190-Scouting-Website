@@ -152,13 +152,30 @@
 
     async function loadTeamNumbers(eventCode) {
         let data = []
-        console.log(JSON.stringify(JSON.parse(localStorage.getItem("data")), null, 2));
-        for (let element of JSON.parse(localStorage.getItem("data"))) {
-            if (!data.includes(parseInt(element["team"].slice(3)))) {
-                data.push(parseInt(element["team"].slice(3)));
-            }
+        const storedData = localStorage.getItem("data");
+        
+        if (!storedData) {
+            console.warn("No data found in localStorage");
+            return [];
         }
-        if (data.length==0) { alert("commit"); }
+
+        try {
+            const parsedData = JSON.parse(storedData);
+            if (!parsedData || !Array.isArray(parsedData)) {
+                console.warn("Parsed data is not an array");
+                return [];
+            }
+            console.log(JSON.stringify(parsedData, null, 2));
+            for (let element of parsedData) {
+                if (element["team"] && !data.includes(parseInt(element["team"].slice(3)))) {
+                    data.push(parseInt(element["team"].slice(3)));
+                }
+            }
+            if (data.length==0) { alert("commit"); }
+        } catch (e) {
+            console.error("Error parsing data from localStorage:", e);
+            return [];
+        }
 
         //const data = await(await fetch("http://localhost:3000/teamNumbers?eventCode"+eventCode)).json();
         return data;
@@ -717,7 +734,16 @@
     
     onMount(async () => {
         // Fetch all data from backend for global stats calculation
-        const allDataResponse = JSON.parse(localStorage.getItem("data"));
+        const storedData = localStorage.getItem("data");
+        let allDataResponse = [];
+        
+        if (storedData) {
+            try {
+                allDataResponse = JSON.parse(storedData);
+            } catch (e) {
+                console.error("Failed to parse data:", e);
+            }
+        }
 
         teamViewData = allDataResponse;
         console.log("All data loaded for global stats:", teamViewData);

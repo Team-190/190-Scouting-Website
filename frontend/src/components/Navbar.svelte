@@ -15,6 +15,7 @@
         <button on:click={() => goto('/teamView')}>Team View</button>
         <button on:click={() => goto('/pitScouting')}>Pit Scouting</button>
         <button on:click={() => goto('/gracePage')}>Grace Page</button>
+        <button on:click={() => goto('/marchMadness')}>Gompei Madness</button>
     </div>
 </nav>
 
