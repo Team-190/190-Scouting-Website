@@ -7,11 +7,11 @@
   let tableData = [];
   let rating = ["🤮", "😨", "🥱", "🙂", "🤑", "💍"];
   let selectedTeamName;
-  const apiKey = import.meta.env.VITE_AUTH_KEY;
+  const apiKey = import.meta.env.VITE_BA_AUTH_KEY;
   
 
   onMount(async () => {
-    document.title = "GRACE - FRC 190";
+    document.title = "GARCE - FRC 190";
     allTeams = await loadTeamNumbers();
     console.log(allTeams);
     console.log("AUTH Key:", apiKey);
