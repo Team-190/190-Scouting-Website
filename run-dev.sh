@@ -10,7 +10,7 @@ if [ ! -d "backend/node_modules" ]; then
 fi
 
 # Start backend in a new Terminal window (macOS)
-osascript -e 'tell application "Terminal" to do script "cd '"$(pwd)"'/backend && npm start"'
+osascript -e 'tell application "Terminal" to do script "cd '"$(pwd)"'/backend && node ."'
 
 echo "Starting frontend server..."
 

@@ -1,6 +1,9 @@
 <script>
     import { onMount } from "svelte";
 
+    let Name = "";
+    let winners = [];
+
     let seeds = [
         { id: "A1", name: "Alliance 1", seed: 1 },
         { id: "A2", name: "Alliance 2", seed: 2 },
@@ -14,25 +17,25 @@
 
     // IDs match the visual diagram (Match 1..13, Finals)
     let matches = {
-        m1: { id: "m1", num: 1, name: "Match 1", red: seeds[0], blue: seeds[7], winner: null, desc: "R1 vs R8" },
-        m2: { id: "m2", num: 2, name: "Match 2", red: seeds[3], blue: seeds[4], winner: null, desc: "R4 vs R5" },
-        m3: { id: "m3", num: 3, name: "Match 3", red: seeds[1], blue: seeds[6], winner: null, desc: "R2 vs R7" },
-        m4: { id: "m4", num: 4, name: "Match 4", red: seeds[2], blue: seeds[5], winner: null, desc: "R3 vs R6" },
+        m1: { id: "m1", num: 1, name: "Match 1", round: "r1", red: seeds[0], blue: seeds[7], winner: null, desc: "R1 vs R8" },
+        m2: { id: "m2", num: 2, name: "Match 2", round: "r1", red: seeds[3], blue: seeds[4], winner: null, desc: "R4 vs R5" },
+        m3: { id: "m3", num: 3, name: "Match 3", round: "r1", red: seeds[1], blue: seeds[6], winner: null, desc: "R2 vs R7" },
+        m4: { id: "m4", num: 4, name: "Match 4", round: "r1", red: seeds[2], blue: seeds[5], winner: null, desc: "R3 vs R6" },
         
-        m5: { id: "m5", num: 5, name: "Match 5", red: null, blue: null, winner: null, desc: "L1 vs L2" },
-        m6: { id: "m6", num: 6, name: "Match 6", red: null, blue: null, winner: null, desc: "L3 vs L4" },
-        m7: { id: "m7", num: 7, name: "Match 7", red: null, blue: null, winner: null, desc: "W1 vs W2" },
-        m8: { id: "m8", num: 8, name: "Match 8", red: null, blue: null, winner: null, desc: "W3 vs W4" },
+        m5: { id: "m5", num: 5, name: "Match 5", round: "r2", red: null, blue: null, winner: null, desc: "L1 vs L2" },
+        m6: { id: "m6", num: 6, name: "Match 6", round: "r2", red: null, blue: null, winner: null, desc: "L3 vs L4" },
+        m7: { id: "m7", num: 7, name: "Match 7", round: "r2", red: null, blue: null, winner: null, desc: "W1 vs W2" },
+        m8: { id: "m8", num: 8, name: "Match 8", round: "r2", red: null, blue: null, winner: null, desc: "W3 vs W4" },
         
-        m9:  { id: "m9",  num: 9, name: "Match 9",  red: null, blue: null, winner: null, desc: "L7 vs W6" },
-        m10: { id: "m10", num: 10, name: "Match 10", red: null, blue: null, winner: null, desc: "W5 vs L8" },
+        m9:  { id: "m9",  num: 9, name: "Match 9",  round: "r3", red: null, blue: null, winner: null, desc: "L7 vs W6" },
+        m10: { id: "m10", num: 10, name: "Match 10", round: "r3", red: null, blue: null, winner: null, desc: "W5 vs L8" },
         
-        m11: { id: "m11", num: 11, name: "Match 11", red: null, blue: null, winner: null, desc: "W7 vs W8" },
-        m12: { id: "m12", num: 12, name: "Match 12", red: null, blue: null, winner: null, desc: "W10 vs W9" },
+        m11: { id: "m11", num: 11, name: "Match 11", round: "r4", red: null, blue: null, winner: null, desc: "W7 vs W8" },
+        m12: { id: "m12", num: 12, name: "Match 12", round: "r4", red: null, blue: null, winner: null, desc: "W10 vs W9" },
         
-        m13: { id: "m13", num: 13, name: "Match 13", red: null, blue: null, winner: null, desc: "L11 vs W12" },
+        m13: { id: "m13", num: 13, name: "Match 13", round: "r5", red: null, blue: null, winner: null, desc: "L11 vs W12" },
         
-        f1:  { id: "f1",  num: "F", name: "Finals",   red: null, blue: null, winner: null, desc: "Finals" }
+        f1:  { id: "f1",  num: "F", name: "Finals", round: "finals", red: null, blue: null, winner: null, desc: "Finals" }
     };
 
     const progression = {
@@ -111,7 +114,46 @@
         }
         matches = { ...matches };
     }
-</script>
+
+    function handleSubmit() {
+        if (!Name.trim()) {
+            alert("Please enter your name!");
+            return;
+        }
+
+        if (!matches.f1.winner) {
+            alert("Please complete the tournament before submitting!");
+            return;
+        }
+
+        const winnerEntry = {
+            name: Name
+        };
+
+        // Group matches by round dynamically
+        const roundGroups = {};
+        Object.values(matches).forEach(match => {
+            if (match.winner) {
+                if (!roundGroups[match.round]) {
+                    roundGroups[match.round] = [];
+                }
+                roundGroups[match.round].push({
+                    alliance: match[match.winner].id,
+                    match: match.num
+                });
+            }
+        });
+
+        // Add all rounds to the entry
+        Object.assign(winnerEntry, roundGroups);
+
+        winners = [...winners, winnerEntry];
+        console.log("Winners array:", winners);
+        alert(`Winners saved!`);
+
+        // Reset form
+        Name = "";
+    }</script>
 
 <!-- Inline Snippet for Match Card -->
 {#snippet matchCard(match)}
@@ -215,6 +257,17 @@
         <div class="cell f1">{@render matchCard(matches.f1)}</div>
 
     </div>
+</div>
+
+<div class="submissionSection">
+    <label for="Name">Your Name:</label>
+    <input
+        id="Name"
+        type="text"
+        bind:value={Name}
+        placeholder="Enter name"
+    />
+    <button on:click={handleSubmit}>Submit Winners</button>
 </div>
 
 <style>
@@ -506,5 +559,54 @@
        I will add basic input/output stubs to imply connection. */
 
     .cell::before { display: block; }
+
+    .submissionSection {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-top: 30px;
+        gap: 10px;
+        padding: 20px;
+    }
+
+    .submissionSection label {
+        font-weight: bold;
+        color: var(--frc-190-black);
+    }
+
+    .submissionSection input {
+        width: 300px;
+        max-width: 90%;
+        padding: 10px;
+        border: 2px solid var(--frc-190-red);
+        background: white;
+        color: var(--frc-190-black);
+        border-radius: 6px;
+        font-size: 14px;
+    }
+
+    .submissionSection input:focus {
+        outline: none;
+        box-shadow: 0 0 0 2px rgba(200, 27, 0, 0.4);
+    }
+
+    .submissionSection button {
+        padding: 10px 20px;
+        border: 2px solid var(--frc-190-red);
+        background: linear-gradient(135deg, #333 0%, #444 100%);
+        color: white;
+        font-weight: 600;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .submissionSection button:hover {
+        background: linear-gradient(135deg, #444 0%, #555 100%);
+        border-color: #e02200;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    }
 
 </style>
