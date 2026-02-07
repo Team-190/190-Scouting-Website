@@ -11,7 +11,6 @@
   
 let teams = new Map();
   onMount(async () => {
-    document.title = "GARCE PAGE";
     allTeams = await loadTeamNumbers();
     console.log(allTeams);
     console.log("AUTH Key:", apiKey);

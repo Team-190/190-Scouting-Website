@@ -1103,12 +1103,12 @@
     </div>
 
     <!-- Main Content Area -->
-    <div class="main-content" on:dragover={handleDragOver} on:drop|preventDefault={handleDropToRemove}>
+    <div class="main-content" on:dragover={handleDragOver} on:drop|preventDefault={handleDropToRemove} role="application">
         <!-- Team List Sidebar -->
         <div class="team-list-container">
             <h2>Teams</h2>
             <div class="team-list">
-                <div class="list" on:dragover={handleDragOver} on:drop={() => { /* Can't drop back on main list */ }}>
+                <div class="list" role="application" on:dragover={handleDragOver} on:drop={() => { /* Can't drop back on main list */ }}>
                     {#each $teamsStore.filter(team => {
                         // If we're on alliance view, filter out teams that are in alliances
                         if (activeView === 'alliances') {
@@ -1126,7 +1126,7 @@
         </div>
 
         <!-- Right Side View Container -->
-        <div class="view-container" on:dragover={handleDragOver} on:drop|preventDefault={handleDropToRemove}>
+        <div class="view-container" role="application" on:dragover={handleDragOver} on:drop|preventDefault={handleDropToRemove}>
             {#if activeView === 'picklists'}
                 <div class="picklist-view">
                     <!-- Create New Picklist Input -->
@@ -1153,7 +1153,7 @@
                                     {/if}
                                     <button on:click={() => deletePickList(key)} style="background: transparent; border: none; font-size: 1.2rem; padding: 0;">X</button>
                                 </h2>
-                                <div class="list" on:dragover={handleDragOver} on:drop={() => handleDrop(key)} on:dragenter={(e) => handleDragEnter(e, key)}>
+                                <div class="list" role="application" on:dragover={handleDragOver} on:drop={() => handleDrop(key)} on:dragenter={(e) => handleDragEnter(e, key)}>
                                     {#each list.teams as team (team.team_number)}
                                         <Team {team} picked={!!pickedTeams[team.team_number]} on:click={() => toggleTeamPicked(team.team_number)} on:dragstart={() => handleDragStart(team, key)} />
                                     {/each}
@@ -1200,9 +1200,9 @@
                             
                             <div class="alliances-container">
                                 {#each alliances as alliance}
-                                    <div class="alliance-list" on:dragover={handleDragOver} on:drop={() => handleDropOnAlliance(alliance.id)}>
+                                    <div class="alliance-list" role="application" on:dragover={handleDragOver} on:drop={() => handleDropOnAlliance(alliance.id)}>
                                         <h3>Alliance {alliance.id}</h3>
-                                        <div class="list" on:dragover={handleDragOver} on:drop={() => handleDropOnAlliance(alliance.id)}>
+                                        <div class="list" role="application" on:dragover={handleDragOver} on:drop={() => handleDropOnAlliance(alliance.id)}>
                                             {#each alliance.teams as team (team.team_number)}
                                                 <Team {team} picked={!!pickedTeams[team.team_number]} on:click={() => toggleTeamPicked(team.team_number)} on:dragstart={() => handleDragStart(team, `alliance_${alliance.id}`)} />
                                             {/each}

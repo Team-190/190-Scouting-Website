@@ -96,19 +96,19 @@
         <h2>Event Selector</h2>
 
         <select class="select" bind:value={eventCode}>
-            <option value="_game">2026_game</option>
-            <option value="mabil">Minuteman Event</option>
-            <option value="mabos">Greater Boston Event</option>
-            <option value="mawor">WPI Event</option>
-            <option value="schop">Richland Event</option>
+            <option value="2026_game">2026_game</option>
+            <option value="2026mabil">Minuteman Event</option>
+            <option value="2026mabos">Greater Boston Event</option>
+            <option value="2026mawor">WPI Event</option>
+            <option value="2026schop">Richland Event</option>
         </select>
 
         <p class="selected-event">
-            You selected: {eventCode === "_game" ? "2026_game" : 
-                        eventCode === "mabil" ? "Minuteman Event" : 
-                        eventCode === "mabos" ? "Greater Boston Event" : 
-                        eventCode === "mawor" ? "WPI Event" : 
-                        eventCode === "schop" ? "Richland Event" : "2026_game"}
+            You selected: {eventCode === "2026_game" ? "2026_game" : 
+                        eventCode === "2026mabil" ? "Minuteman Event" : 
+                        eventCode === "2026mabos" ? "Greater Boston Event" : 
+                        eventCode === "2026mawor" ? "WPI Event" : 
+                        eventCode === "2026schop" ? "Richland Event" : "2026_game"}
         </p>
 
         </div>
