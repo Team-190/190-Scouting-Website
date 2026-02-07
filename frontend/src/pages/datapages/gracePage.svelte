@@ -9,7 +9,7 @@
   let selectedTeam = "Select a team";
   let tableData = [];
   let isSubmitting = false;
-  let rating = ["🤮", "😨", "🥱", "🙂", "🤑", "💍"];
+  const rating = [new URL("../../images/DNP.png", import.meta.url).href, new URL("../../images/ProbNo.png", import.meta.url).href, new URL("../../images/NeutralBad.jpg", import.meta.url).href, new URL("../../images/NeutralGood.png", import.meta.url).href, new URL("../../images/PrettyGood.gif", import.meta.url).href, new URL("../../images/AHHHHH.png", import.meta.url).href, new URL("../../images/FIRSTpick.gif", import.meta.url).href ];
   const apiKey = import.meta.env.VITE_BA_AUTH_KEY;
   const eventCode = localStorage.getItem("eventCode");
 
@@ -162,7 +162,7 @@
     <div class="ratingButtonContainer">
       {#each rating as ratingEmoji, i}
         <button on:click={() => handleRatingClick(ratingEmoji, i + 1)}>
-          {ratingEmoji}
+          <img src={ratingEmoji} alt="Rating Emoji" width="40" height="40"  />
         </button>
       {/each}
     </div>
@@ -179,7 +179,7 @@
           <tr>
             <td>{row.team}</td>
             <td>{row.name}</td>
-            <td>{row.rating}</td>
+            <td><img src={row.rating} alt="Rating Emoji" width="40" height="40" /></td>
           </tr>
         {/each}
       </tbody>
