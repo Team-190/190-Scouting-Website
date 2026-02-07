@@ -37,7 +37,7 @@ async function getTeamNumbers() {
 
 async function allData(eventCode) {
     let query = supabaseClient
-        .from("2026"+eventCode)
+        .from(eventCode)
         .select("*");
     const result = await query;
     return result;
@@ -138,48 +138,25 @@ async function availableTeamsView(eventCode) {
     //     else return error;
     // }
 
-    // let query = supabaseClient
-    //     .from(eventCode)
-    //     .select("team");
+    let query = supabaseClient
+        .from(eventCode)
+        .select("team");
     
-    // query = await query;
-    // console.log(query);
-    // const queryData = query.data;
-    // console.log(queryData);
+    query = await query;
+    console.log(query);
+    const queryData = query.data;
+    console.log(queryData);
 
-    // let teams = [];
-    // for (let team_ of queryData) {
-    //     const teamNumber = parseInt(team_.team.slice(3));
-    //     teams.push(teamNumber);
-    // }
-
-    // teams = [...new Set(teams)];
-
-    // return teams;
-
-    const apiUrl = `https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/simple`;
-
-    try {
-      const response = await fetch(apiUrl, {
-        headers: {
-          "X-TBA-Auth-Key": apiKey,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      let teams = [];
-      for (let team_ of data) {
-        const teamNumber = parseInt(team_["key"].slice(3));
+    let teams = [];
+    for (let team_ of queryData) {
+        const teamNumber = parseInt(team_.team.slice(3));
         teams.push(teamNumber);
-      }
-      return teams;
-    } catch (error) {
-      console.error("There was a problem fetching team data:", error);
     }
+
+    teams = [...new Set(teams)];
+
+    return teams;
+
 }
 
 
