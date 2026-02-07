@@ -46,3 +46,50 @@ export async function postEventCode(eventCode) {
     console.log('Success:', result);
     return result;
 }
+
+
+export async function postGompeiMadnessBracket(bracket) {
+    // data: { name: "guy", r1: [{matchNumber: 1 , winner: "a1"}, "a2", "a3", "a4"], r2: ["a1", "a2"], r3: ["a1"] }
+
+    const response = await fetch("http://localhost:8000/postGompeiMadnessBracket", {
+        method: 'POST',
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({bracket})
+    });
+
+    if (!response.ok) {
+        // Handle HTTP errors, e.g., 404, 500 status codes
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+    }
+    
+    const result = await response.text(); // or response.json() if the server responds with JSON
+    console.log('Success:', result);
+    return result;
+}
+
+
+export async function retrieveWinners(eventCode) {
+    const apiKey = import.meta.env.VITE_AUTH_KEY;
+    const apiUrl = `https://www.thebluealliance.com/api/v3/team/frc${eventCode}`;
+
+    try {
+        const response = await fetch(apiUrl, {
+        headers: {
+            "X-TBA-Auth-Key": apiKey
+        }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        
+
+
+    } catch (error) {
+        console.error('There was a problem fetching team data:', error);
+    }
+}
