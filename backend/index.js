@@ -12,8 +12,10 @@ const express = require("express");
 const path = require("path");
 const test = require("./test/test.js")
 const database = require("./database.js");
+const fs = require('fs');
 const session = require("express-session");
 const cors = require("cors");
+const e = require("express");
 require("dotenv").config();
 
 const app = express();
@@ -80,6 +82,58 @@ app.post("/postEventCode", async (req, res) => {
     }
 })
 
+app.post("/postRating", async (req, res) => {
+    // json file fileData {
+    //   "2026mabil": {
+    //     "190":  {1: 4, 2: 3},
+    //     "1323": {1: 5}
+    //   },
+    //   "2026mabos": {
+    //     "190":  {1: 1, 2: 2},
+    //     "1323": {1: 4}
+    //   }
+    // }
+
+    let event = req.body.event;
+    let rating = req.body.rating;
+    let team = req.body.team;
+    if (!rating || !team || !event) {
+        console.log("One or more fields could not be retrieved");
+        console.log(`${rating} ${team} ${event}`);
+        res.sendStatus(400);
+    }
+    else {
+
+        let fileData;
+        try {
+            fileData = JSON.parse(fs.readFileSync("driverRatings.json", { encoding: 'utf8', flag: 'r' }));
+        } catch (error) {
+            console.log("driverRatings.json does not exist, creating file...");
+        }
+
+        fileData ||= {};
+        fileData[event] ||= {};
+
+        if (fileData[event][team]) {
+            let nextRating = Object.keys(fileData[event][team]).length;
+
+            fileData[event][team][nextRating] = rating;
+        } else {
+            fileData[event][team] = {0: rating};
+        }
+
+        fs.writeFile("driverRatings.json", JSON.stringify(fileData, null, 4), "utf8", (err) => {
+            if (err) {
+                console.error("Error writing to file", err);
+            } else {
+                console.log("Data written to driverRatings.json successfully");
+            }
+        });
+
+        res.sendStatus(200);
+    }
+})
+
 
 app.get("/allData", async (req, res) => {
     const eventCode = req.query.eventCode;
@@ -96,6 +150,21 @@ app.get("/teamNumbers", async (req, res) => {
     if (!eventCode) return res.sendStatus(403);
     let result = await database.availableTeamsView(eventCode);
     res.send(result);
+});
+
+app.get("/getRating", async (req, res) => {
+    const eventCode = req.query.eventCode;
+    if (!eventCode) return res.sendStatus(403);
+    
+    let fileData;
+    try {
+        fileData = JSON.parse(fs.readFileSync("driverRatings.json", { encoding: 'utf8', flag: 'r' }));
+        fileData = fileData[eventCode];
+    } catch (error) {
+        console.log("No data");
+    }
+
+    res.send(fileData);
 });
 
 app.post("/postGompeiMadnessBracket", async (req, res) => {
