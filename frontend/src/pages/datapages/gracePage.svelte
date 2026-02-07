@@ -2,23 +2,27 @@
   import { onMount } from "svelte";
 
   //Variables
-  let allTeams = [];
+  let allTeams = []; //for dropdown
   let selectedTeam = "Select a team";
   let tableData = [];
   let rating = ["🤮", "😨", "🥱", "🙂", "🤑", "💍"];
-  let selectedTeamName;
   const apiKey = import.meta.env.VITE_BA_AUTH_KEY;
+  const eventCode = "2026" + localStorage.getItem("eventCode");
   
-
+let teams = new Map();
   onMount(async () => {
-    document.title = "GARCE - FRC 190";
+    document.title = "GARCE PAGE";
     allTeams = await loadTeamNumbers();
     console.log(allTeams);
     console.log("AUTH Key:", apiKey);
+    // for (let i = 0; i < allTeams.length; i++){
+    //   teamNames.push(await fetchNames(allTeams[i]));
+    // }
+    fetchNames();
   });
 
-  async function fetchTeamName(teamNumber: string) {
-    const apiUrl = `https://www.thebluealliance.com/api/v3/team/frc${teamNumber}`;
+  async function fetchNames() {
+    const apiUrl = `https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/simple`;
 
     try {
       const response = await fetch(apiUrl, {
@@ -27,19 +31,30 @@
         }
       });
 
+      const data = await response.json();
+      allTeams = data
+        .map(team => team.team_number)
+        .sort((a, b) => a - b);
+      console.log("Fetched team data:", data);  
+      for (let i =0; i<data.length; i++){
+        teams.set(data[i].team_number, data[i].nickname);
+      }
+      teams=teams;
+      console.log("Teams Map:", teams);
+
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
-      selectedTeamName = data.nickname || data.name || "Team name not found";
-      console.log("Team data:", data);
-      console.log("Selected Team Name:", selectedTeamName);
+      // const data = await response.json();
+      // selectedTeamName = data.nickname || data.name || "Team name not found";
+      // console.log("Team data:", data);
+      // console.log("Selected Team Name:", selectedTeamName);
+      // return selectedTeamName;
       
 
     } catch (error) {
       console.error('There was a problem fetching team data:', error);
-      selectedTeamName = "Error fetching team name";
       
     }
   }
@@ -68,17 +83,17 @@
 
     if (existingIndex !== -1) {
       tableData[existingIndex].rating = ratingEmoji;
-      tableData[existingIndex].name = selectedTeamName;
+      tableData[existingIndex].name = teams.get(selectedTeam);
     } else {
       
-      tableData = [...tableData, { team: selectedTeam, name: selectedTeamName, rating: ratingEmoji }];
+      tableData = [...tableData, { team: selectedTeam, name: teams.get(selectedTeam), rating: ratingEmoji }];
     }
   }
 </script>
 
 <div class="inputSection">
   <label for="teams">Choose a Team:</label>
-  <select id="teams" name="teams" bind:value={selectedTeam} on:change={() => fetchTeamName(selectedTeam)}>
+  <select id="teams" name="teams" bind:value={selectedTeam}>
     <option value="Select a team">Select a team</option>
     {#each allTeams as team}
       <option value={team}>{team}</option>
