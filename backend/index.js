@@ -27,6 +27,7 @@ const publicDir = path.join(__dirname, DIR);
 console.log(DIR);
 
 let eventCode = testingMode ? "2025nhalt1" : "";
+let bracket;
 
 app.use(express.static(publicDir));
 app.use(express.json());
@@ -95,6 +96,16 @@ app.get("/teamNumbers", async (req, res) => {
     if (!eventCode) return res.sendStatus(403);
     let result = await database.availableTeamsView(eventCode);
     res.send(result);
+});
+
+app.post("/postGompeiMadnessBracket", async (req, res) => {
+    bracket = req.body.bracket;
+    if (!bracket) return res.sendStatus(400);
+    res.sendStatus(200);
+});
+
+app.get("/winnerOfGompeiMadness", async (req, res) => {
+    let winner = req.body.winner;
 });
 
 app.listen(PORT, () => {

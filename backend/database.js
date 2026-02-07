@@ -3,6 +3,7 @@ const supabaseUtil = require("./supabaseUtil");
 const storage = require("./storage");
 require("dotenv").config();
 
+const apiKey = process.env.VITE_AUTH_KEY;
 
 supabaseUtil.supabaseInit()
     .then((value) => {supabaseClient = value})
@@ -36,7 +37,7 @@ async function getTeamNumbers() {
 
 async function allData(eventCode) {
     let query = supabaseClient
-        .from("2026"+eventCode)
+        .from(eventCode)
         .select("*");
     const result = await query;
     return result;
@@ -138,7 +139,7 @@ async function availableTeamsView(eventCode) {
     // }
 
     let query = supabaseClient
-        .from("2026"+eventCode)
+        .from(eventCode)
         .select("team");
     
     query = await query;
@@ -155,6 +156,7 @@ async function availableTeamsView(eventCode) {
     teams = [...new Set(teams)];
 
     return teams;
+
 }
 
 

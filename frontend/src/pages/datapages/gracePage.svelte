@@ -7,7 +7,7 @@
   let tableData = [];
   const rating = [new URL("../../images/DNP.png", import.meta.url).href, new URL("../../images/ProbNo.png", import.meta.url).href, new URL("../../images/NeutralBad.jpg", import.meta.url).href, new URL("../../images/NeutralGood.png", import.meta.url).href, new URL("../../images/PrettyGood.gif", import.meta.url).href, new URL("../../images/AHHHHH.png", import.meta.url).href, new URL("../../images/FIRSTpick.gif", import.meta.url).href ];
   const apiKey = import.meta.env.VITE_BA_AUTH_KEY;
-  const eventCode = "2026" + localStorage.getItem("eventCode");
+  const eventCode = localStorage.getItem("eventCode");
 
   let teams = new Map();
   let originalTitle = "";
@@ -62,14 +62,29 @@
   }
 
   async function loadTeamNumbers() {
-    const eventCode = localStorage.getItem("eventCode");
-    if (!eventCode) return alert("get an event code, fool");
-    console.log(eventCode);
-    const data = await (
-      await fetch("http://localhost:8000/teamNumbers?eventCode=" + eventCode)
-    ).json();
-    console.log("gotteam numbers:" + data);
-    return data;
+    const apiUrl = `https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/simple`;
+
+    try {
+      const response = await fetch(apiUrl, {
+        headers: {
+          "X-TBA-Auth-Key": apiKey,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      let teams = [];
+      for (let team_ of data) {
+        const teamNumber = parseInt(team_.team.slice(3));
+        teams.push(teamNumber);
+      }
+      return teams;
+    } catch (error) {
+      console.error("There was a problem fetching team data:", error);
+    }
   }
 
   function handleRatingClick(ratingEmoji: string) {
