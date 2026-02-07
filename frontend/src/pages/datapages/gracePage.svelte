@@ -127,7 +127,7 @@
     <div class="ratingButtonContainer">
       {#each rating as ratingEmoji}
         <button on:click={() => handleRatingClick(ratingEmoji)}>
-          <img src={ratingEmoji} alt="Rating Emoji" width="20" height="20"  />
+          <img src={ratingEmoji} alt="Rating Emoji" width="40" height="40"  />
         </button>
       {/each}
     </div>
@@ -144,7 +144,7 @@
           <tr>
             <td>{row.team}</td>
             <td>{row.name}</td>
-            <td><img src={row.rating} alt="Rating Emoji" width="20" height="20" /></td>
+            <td><img src={row.rating} alt="Rating Emoji" width="40" height="40" /></td>
           </tr>
         {/each}
       </tbody>
