@@ -37,7 +37,7 @@
     let selected_event = "";
     let showEventSelector = true;
 
-    const TBA_KEY = "zhTqFG7csJoif1sNXt3aZngy0LB1X4LxMgTfXBvPscNG0P9FifZCa2uGJcUk2gKW";
+    const TBA_KEY = import.meta.env.VITE_BA_AUTH_KEY;
 
     let allEvents = [];
     let events = [];

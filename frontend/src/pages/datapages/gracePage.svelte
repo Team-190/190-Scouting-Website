@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
 
   //Variables
   let allTeams = []; //for dropdown
@@ -8,9 +8,13 @@
   let rating = ["🤮", "😨", "🥱", "🙂", "🤑", "💍"];
   const apiKey = import.meta.env.VITE_BA_AUTH_KEY;
   const eventCode = "2026" + localStorage.getItem("eventCode");
-  
-let teams = new Map();
+
+  let teams = new Map();
+  let originalTitle = "";
+
   onMount(async () => {
+    originalTitle = document.title;
+    document.title = "GARCE PAGE";
     allTeams = await loadTeamNumbers();
     console.log(allTeams);
     console.log("AUTH Key:", apiKey);
@@ -20,25 +24,27 @@ let teams = new Map();
     fetchNames();
   });
 
+  onDestroy(() => {
+    document.title = originalTitle;
+  });
+
   async function fetchNames() {
     const apiUrl = `https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/simple`;
 
     try {
       const response = await fetch(apiUrl, {
         headers: {
-          "X-TBA-Auth-Key": apiKey
-        }
+          "X-TBA-Auth-Key": apiKey,
+        },
       });
 
       const data = await response.json();
-      allTeams = data
-        .map(team => team.team_number)
-        .sort((a, b) => a - b);
-      console.log("Fetched team data:", data);  
-      for (let i =0; i<data.length; i++){
+      allTeams = data.map((team) => team.team_number).sort((a, b) => a - b);
+      console.log("Fetched team data:", data);
+      for (let i = 0; i < data.length; i++) {
         teams.set(data[i].team_number, data[i].nickname);
       }
-      teams=teams;
+      teams = teams;
       console.log("Teams Map:", teams);
 
       if (!response.ok) {
@@ -50,23 +56,19 @@ let teams = new Map();
       // console.log("Team data:", data);
       // console.log("Selected Team Name:", selectedTeamName);
       // return selectedTeamName;
-      
-
     } catch (error) {
-      console.error('There was a problem fetching team data:', error);
-      
+      console.error("There was a problem fetching team data:", error);
     }
   }
-
 
   async function loadTeamNumbers() {
     const eventCode = localStorage.getItem("eventCode");
     if (!eventCode) return alert("get an event code, fool");
     console.log(eventCode);
     const data = await (
-      await fetch("http://localhost:8000/teamNumbers?eventCode="+eventCode)
+      await fetch("http://localhost:8000/teamNumbers?eventCode=" + eventCode)
     ).json();
-    console.log("gotteam numbers:"+data)
+    console.log("gotteam numbers:" + data);
     return data;
   }
 
@@ -84,8 +86,14 @@ let teams = new Map();
       tableData[existingIndex].rating = ratingEmoji;
       tableData[existingIndex].name = teams.get(selectedTeam);
     } else {
-      
-      tableData = [...tableData, { team: selectedTeam, name: teams.get(selectedTeam), rating: ratingEmoji }];
+      tableData = [
+        ...tableData,
+        {
+          team: selectedTeam,
+          name: teams.get(selectedTeam),
+          rating: ratingEmoji,
+        },
+      ];
     }
   }
 </script>
@@ -128,7 +136,6 @@ let teams = new Map();
     </table>
   </div>
 </div>
-
 
 <style>
   :root {
