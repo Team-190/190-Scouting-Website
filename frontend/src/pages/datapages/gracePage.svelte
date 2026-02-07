@@ -2,7 +2,6 @@
   import { onMount, onDestroy } from "svelte";
   import { postGracePage, fetchGracePage } from "../../utils/api";
   import Team from "../../components/Team.svelte";
-    import { init } from "echarts";
 
   //Variables
   let allTeams = []; //for dropdown
@@ -46,7 +45,7 @@
           {
             team: team,
             name: teams.get(parseInt(team)),
-            rating: data[team][Object.keys(data[team]).length - 1],
+            rating: rating[data[team][Object.keys(data[team]).length - 1]],
           },
         ];
       }
