@@ -80,7 +80,7 @@ app.post("/postEventCode", async (req, res) => {
         console.log(`Event code retrieved, ${eventCode}`);
         res.sendStatus(200);
     }
-})
+});
 
 app.post("/postRating", async (req, res) => {
     // json file fileData {
@@ -132,7 +132,7 @@ app.post("/postRating", async (req, res) => {
 
         res.sendStatus(200);
     }
-})
+});
 
 
 app.get("/allData", async (req, res) => {
@@ -179,8 +179,56 @@ app.get("/getRating", async (req, res) => {
 
 app.post("/postGompeiMadnessBracket", async (req, res) => {
     bracket = req.body.bracket;
-    if (!bracket) return res.sendStatus(400);
-    res.sendStatus(200);
+    if (!bracket) {
+        res.sendStatus(400);
+    } else {
+        res.sendStatus(200);
+    }
+});
+
+app.post("/postPitScouting", async (req, res) => {
+    // json file fileData {
+    //   "2026mabil": {
+    //     "190":  {data},
+    //     "1323": {data}
+    //   },
+    //   "2026mabos": {
+    //     "190":  {data},
+    //     "1323": {data}
+    //   }
+    // }
+
+    let event = req.body.event;
+    let team = req.body.team;
+    let formData = req.body.formData;
+    if (!formData || !team || !event) {
+        console.log("One or more fields could not be retrieved");
+        console.log(`${formData} ${team} ${event}`);
+        res.sendStatus(400);
+    }
+    else {
+        console.log(formData)
+        let fileData;
+        try {
+            fileData = JSON.parse(fs.readFileSync("pitScoutingData.json", { encoding: 'utf8', flag: 'r' }));
+        } catch (error) {
+            console.log("pitScoutingData.json does not exist, creating file...");
+        }
+
+        fileData ||= {};
+        fileData[event] ||= {};
+        fileData[event][team] = formData;
+
+        fs.writeFile("pitScoutingData.json", JSON.stringify(fileData, null, 4), "utf8", (err) => {
+            if (err) {
+                console.error("Error writing to file", err);
+            } else {
+                console.log("Data written to pitScoutingData.json successfully");
+            }
+        });
+
+        res.sendStatus(200);
+    }
 });
 
 app.get("/winnerOfGompeiMadness", async (req, res) => {
