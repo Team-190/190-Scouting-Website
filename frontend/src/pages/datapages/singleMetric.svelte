@@ -196,7 +196,7 @@
         const eventCode = localStorage.getItem("eventCode");
         console.log("eventCode: ", eventCode);
 
-        const response = await fetch("http://localhost:8000/allData?eventCode="+eventCode);
+        const response = await fetch("http://localhost:8000/allMetricData?eventCode="+eventCode);
         const result = await response.json();
         return result;
     }
@@ -267,6 +267,8 @@
             }
         }
 
+        console.log("Selected Metric: ", selectedMetric, "Data Metric: ", dataMetric);
+
 
         const firstTeam = availableTeams[0];
         const firstRows = teamData[firstTeam];
@@ -278,6 +280,7 @@
 
         // Check if metric is numeric
         const isNumericMetric = checkIsNumericMetric(dataMetric);
+        console.log("Is Numeric Metric: ", isNumericMetric);
 
         // Global stats (only for numeric metrics)
         let globalMean = 0;

@@ -43,6 +43,10 @@ async function allData(eventCode) {
     return result;
 }
 
+async function allMetricData(eventCode) {
+    const result = await allData(eventCode).neq("RecordType", "Match_Event");
+    return result;
+}
 
 async function allTeamsView(eventCode) {
     const {data, error} = await storage.retrieveConfig(eventCode);
@@ -110,6 +114,7 @@ async function availableTeamsView(eventCode) {
 
 
 module.exports = {
+    allMetricData,
     allData,
     getTeamNumbers,
     teamView,
