@@ -738,7 +738,7 @@
                         chart.instance = scatterGraph.createChart(chart.el);
                         break;
           case "radar":
-            // chart.instance = radarGraph.createChart(chart.el);
+            chart.instance = radarGraph.createChart(chart.el);
             break;
                 }
                 if (chart.instance) {
