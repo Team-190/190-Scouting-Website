@@ -1,10 +1,13 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
+  import { postGracePage, fetchGracePage } from "../../utils/api";
+  import Team from "../../components/Team.svelte";
 
   //Variables
   let allTeams = []; //for dropdown
   let selectedTeam = "Select a team";
   let tableData = [];
+  let isSubmitting = false;
   const rating = [new URL("../../images/DNP.png", import.meta.url).href, new URL("../../images/ProbNo.png", import.meta.url).href, new URL("../../images/NeutralBad.jpg", import.meta.url).href, new URL("../../images/NeutralGood.png", import.meta.url).href, new URL("../../images/PrettyGood.gif", import.meta.url).href, new URL("../../images/AHHHHH.png", import.meta.url).href, new URL("../../images/FIRSTpick.gif", import.meta.url).href ];
   const apiKey = import.meta.env.VITE_BA_AUTH_KEY;
   const eventCode = localStorage.getItem("eventCode");
@@ -21,12 +24,35 @@
     // for (let i = 0; i < allTeams.length; i++){
     //   teamNames.push(await fetchNames(allTeams[i]));
     // }
-    fetchNames();
+    fetchNames().then(() => {
+      fetchPastData();
+    });
   });
 
   onDestroy(() => {
     document.title = originalTitle;
   });
+
+  function fetchPastData() {
+    fetchGracePage(eventCode).then(res => {
+      if (!res.ok) throw new Error("Network response was not ok");
+      return res.json(); 
+    }).then(data => {
+      console.log(data);
+      for (let team of Object.keys(data)) {
+        tableData = [
+          ...tableData,
+          {
+            team: team,
+            name: teams.get(parseInt(team)),
+            rating: rating[data[team][Object.keys(data[team]).length - 1]],
+          },
+        ];
+      }
+    }).catch(err => {
+      console.error("Failed to fetch Grace page:", err);
+    });
+  }
 
   async function fetchNames() {
     const apiUrl = `https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/simple`;
@@ -87,11 +113,17 @@
     }
   }
 
-  function handleRatingClick(ratingEmoji: string) {
+  async function handleRatingClick(ratingEmoji: string, i) {
+    if (isSubmitting == true) return;
+
+    isSubmitting = true;
     if (selectedTeam === "Select a team") {
       alert("Please select a team first!");
+      isSubmitting = false;
       return;
-    }
+    } 
+
+    await postGracePage(eventCode, selectedTeam, i);
 
     const existingIndex = tableData.findIndex(
       (row) => row.team === selectedTeam,
@@ -110,6 +142,8 @@
         },
       ];
     }
+
+    isSubmitting = false;
   }
 </script>
 
@@ -125,8 +159,8 @@
   <div class="ratingSection">
     <p>Rating:</p>
     <div class="ratingButtonContainer">
-      {#each rating as ratingEmoji}
-        <button on:click={() => handleRatingClick(ratingEmoji)}>
+      {#each rating as ratingEmoji, i}
+        <button on:click={() => handleRatingClick(ratingEmoji, i + 1)}>
           <img src={ratingEmoji} alt="Rating Emoji" width="40" height="40"  />
         </button>
       {/each}
