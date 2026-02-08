@@ -14,13 +14,14 @@
   import * as lineGraph from "../../pages/graphcode/line.js";
   import * as pieGraph from "../../pages/graphcode/pie.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
+  import * as radarGraph from "../../pages/graphcode/radar.js";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
   // Graph state
   let rowData = []; // Exposed for charts
   let charts = [];
-  let chartTypes = ["bar", "line", "pie", "scatter"];
+  let chartTypes = ["bar", "line", "pie", "scatter", "radar"];
   let showDropdown = false;
 
   let domNode;
@@ -121,6 +122,25 @@
     return hasData; // If we have data and all values are numeric
   }
 
+  // Generate a random hex color
+  //the credit for this function bc i didn't make it - Adel
+  //https://www.geeksforgeeks.org/javascript/javascript-generate-random-hex-codes-color/
+  function randomHexColor() {
+    let letters = "0123456789ABCDEF";
+    let color = "#";
+
+    for (let i = 0; i < 6; i++)
+      color += letters[Math.floor(Math.random() * 16)];
+    return color;
+  }
+
+  function formatMaxValue(v) {
+    if (v == null) return "0";
+    const n = Number(v);
+    if (Number.isInteger(n)) return String(n);
+    return n.toFixed(2).replace(/\.00$/, "");
+  }
+
   function colorFromStats(v, mu, sigma, inverted = false) {
     // For non-numeric data, return neutral color
     if (!isNumeric(v)) {
@@ -209,6 +229,7 @@
       }
       teamData[teamNum] = [...teamData[teamNum], row];
     }
+    console.log("Processed team data:", teamData);
 
     availableTeams = availableTeams.sort();
   }
@@ -500,26 +521,57 @@
     charts = charts;
   }
 
-  function deselectChartAll(chart) {
-    chart.selectedTeams = new Set();
+  function toggleChartMetric(chart, metric) {
+    if (!chart.selectedMetrics) {
+      chart.selectedMetrics = new Set();
+    }
+    if (chart.selectedMetrics.has(metric)) {
+      if (chart.selectedMetrics.size > 3) {
+        chart.selectedMetrics.delete(metric);
+      }
+    } else {
+      chart.selectedMetrics.add(metric);
+    }
+    chart.selectedMetrics = new Set(chart.selectedMetrics);
     updateChartDataset(chart);
     charts = charts;
   }
 
-  // ===== Graph/Chart functionality =====
+  function selectChartAllMetrics(chart) {
+    const numericMetrics = metrics.filter((m) => checkIsNumericMetric(m));
+    chart.selectedMetrics = new Set(numericMetrics);
+    updateChartDataset(chart);
+    charts = charts;
+  }
+//this is only for the radar graph not the table
+  let excludedMetrics = [
+    "Time",
+    "Drive Station",
+    "Strategy",
+    "Avoidance",
+    "LadderLocation",
+    "Id",
+    "StartingLocation"
+  ];
+
   function addChart(type) {
-    charts = [
-      ...charts,
-      {
-        id: crypto.randomUUID(),
-        type,
-        el: null,
-        instance: null,
-        selectedTeams: new Set(availableTeams),
-        showFilter: false,
-        yAxisMetric: selectedMetric || "",
-      },
-    ];
+    const newChart = {
+      id: crypto.randomUUID(),
+      type,
+      el: null,
+      instance: null,
+      selectedTeams: new Set(availableTeams),
+      showFilter: false,
+      showMetricFilter: false,
+      yAxisMetric: selectedMetric || "",
+    };
+
+    if (type === "radar") {
+      const numericMetrics = metrics.filter((m) => checkIsNumericMetric(m));
+      newChart.selectedMetrics = new Set(numericMetrics.slice(0, 5));
+    }
+
+    charts = [...charts, newChart];
   }
 
   function removeChart(id) {
@@ -532,7 +584,6 @@
     });
   }
 
-  // Reactively Initialize charts
   $: {
     charts.forEach((chart) => {
       if (chart.el && !chart.instance) {
@@ -548,6 +599,9 @@
             break;
           case "scatter":
             chart.instance = scatterGraph.createChart(chart.el);
+            break;
+          case "radar":
+            chart.instance = radarGraph.createChart(chart.el);
             break;
         }
         if (chart.instance) {
@@ -598,6 +652,9 @@
           break;
         case "scatter":
           option = getScatterOption(chart.selectedTeams);
+          break;
+        case "radar":
+          option = getRadarOption(chart);
           break;
       }
     }
@@ -779,6 +836,94 @@
     };
   }
 
+  function getRadarOption(chart) {
+    const selectedMetrics =
+      chart.selectedMetrics && chart.selectedMetrics.size > 0
+        ? Array.from(chart.selectedMetrics).sort()
+        : metrics.filter((m) => checkIsNumericMetric(m));
+
+    const numericMetrics = selectedMetrics.filter(
+      (k) => checkIsNumericMetric(k) && !(excludedMetrics || []).includes(k),
+    );
+
+    const selectedTeams =
+      chart.selectedTeams && chart.selectedTeams.size > 0
+        ? Array.from(chart.selectedTeams).sort((a, b) => a - b)
+        : availableTeams;
+
+    if (numericMetrics.length < 3) {
+      return {
+        title: {
+          text:
+            "Radar chart requires at least 3 metrics. Selected: " +
+            numericMetrics.length,
+          left: "center",
+          top: "center",
+          textStyle: { color: "#fff", fontSize: 14 },
+        },
+      };
+    }
+
+    // generate colors per selected team
+    const colors = selectedTeams.map(() => randomHexColor());
+
+    // compute global max across ALL teams (availableTeams) so indicator scales to dataset
+    const maxValues = numericMetrics.map((metric) => {
+      let max = 0;
+      (availableTeams || []).forEach((team) => {
+        const teamRows = teamData[team] || [];
+        teamRows.forEach((row) => {
+          const val = Number(row[metric] || 0);
+          if (val > max) max = val;
+        });
+      });
+      return Math.max(max, 1);
+    });
+
+    const seriesData = selectedTeams.map((team, teamIndex) => {
+      const teamRows = teamData[team] || [];
+      const avgValues = numericMetrics.map((metric) => {
+        const values = teamRows.map((row) => {
+          const val = row[metric];
+          return isNumeric(val) ? Number(val) : 0;
+        });
+        return values.length > 0
+          ? values.reduce((a, b) => a + b, 0) / values.length
+          : 0;
+      });
+
+      const color = colors[teamIndex % colors.length];
+      return {
+        value: avgValues,
+        name: `Team ${team}`,
+        areaStyle: { opacity: 0.15 },
+        lineStyle: { color: color, width: 2 },
+        itemStyle: { color: color },
+        symbolSize: 6,
+      };
+    });
+
+    return {
+      tooltip: { trigger: "item", backgroundColor: "rgba(0,0,0,0.8)" },
+      radar: {
+        indicator: numericMetrics.map((k, i) => ({
+          name: `${k.replaceAll("_", " ")} (${formatMaxValue(maxValues[i])})`,
+          max: maxValues[i],
+        })),
+        splitNumber: 4,
+        axisLine: { lineStyle: { color: [[1, "#333"]] } },
+        splitLine: { lineStyle: { color: ["#444", "#555", "#666", "#777"] } },
+        name: { textStyle: { color: "#ccc" } },
+        splitArea: { areaStyle: { color: ["rgba(200,27,0,0.05)"] } },
+      },
+      series: [
+        {
+          type: "radar",
+          data: seriesData,
+        },
+      ],
+    };
+  }
   onMount(async () => {
     try {
       allDataResponse = await fetchAllData();
@@ -914,8 +1059,36 @@
                 <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"
                 ></polygon>
               </svg>
-              {chart.showFilter ? "Close Filter" : "Filter"}
+              {chart.showFilter ? "Close Teams" : "Teams"}
             </button>
+
+            {#if chart.type === "radar"}
+              <button
+                class="mini-btn"
+                on:click={() => {
+                  chart.showMetricFilter = !chart.showMetricFilter;
+                  charts = charts;
+                }}
+                aria-label="Filter metrics"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <line x1="4" y1="6" x2="20" y2="6"></line>
+                  <line x1="4" y1="12" x2="20" y2="12"></line>
+                  <line x1="4" y1="18" x2="20" y2="18"></line>
+                </svg>
+                {chart.showMetricFilter ? "Close Metrics" : "Metrics"}
+              </button>
+            {/if}
 
             <button
               class="mini-btn"
@@ -940,16 +1113,12 @@
             </button>
           </div>
 
-          <!-- Collapsible Filter Panel -->
+          <!-- Collapsible Filter Panel for Teams -->
           {#if chart.showFilter}
             <div class="local-filter-panel">
               <div class="local-filter-actions">
                 <button class="mini-btn" on:click={() => selectChartAll(chart)}
-                  >Select All</button
-                >
-                <button
-                  class="mini-btn"
-                  on:click={() => deselectChartAll(chart)}>Deselect All</button
+                  >Select All Teams</button
                 >
               </div>
               <div class="local-grid">
@@ -967,9 +1136,45 @@
             </div>
           {/if}
 
+          <!-- Collapsible Filter Panel for Metrics (Radar Only) -->
+          {#if chart.type === "radar" && chart.showMetricFilter}
+            <div class="local-filter-panel">
+              <div class="local-filter-actions">
+                <button
+                  class="mini-btn"
+                  on:click={() => selectChartAllMetrics(chart)}
+                  >Select All</button
+                >
+              </div>
+              <div class="local-grid">
+                {#each metrics.filter((m) => checkIsNumericMetric(m) && !(excludedMetrics || []).includes(m)) as metric}
+                  <label class="mini-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={chart.selectedMetrics &&
+                        chart.selectedMetrics.has(metric)}
+                      disabled={chart.selectedMetrics &&
+                        chart.selectedMetrics.size <= 3 &&
+                        chart.selectedMetrics.has(metric)}
+                      on:change={() => toggleChartMetric(chart, metric)}
+                    />
+                    <span title={metric}>{metric.replaceAll("_", " ")}</span>
+                  </label>
+                {/each}
+              </div>
+              <p style="font-size: 12px; color: #aaa; margin: 8px 0 0;">
+                Selected: {chart.selectedMetrics
+                  ? chart.selectedMetrics.size
+                  : 0}
+              </p>
+            </div>
+          {/if}
+
           <div class="chart-container" bind:this={chart.el}></div>
 
-          <p class="chart-label">{chart.type} Chart - {selectedMetric.replaceAll("_", " ")}</p>
+          <p class="chart-label">
+            {chart.type} Chart - {selectedMetric.replaceAll("_", " ")}
+          </p>
         </div>
       {/each}
     </div>
@@ -1147,7 +1352,7 @@
   }
   /* ===== Graph Section Styles ===== */
   .graph-section {
-    width: 80vw;
+    width: 100vw;
     margin-top: 30px;
     display: flex;
     flex-direction: column;
@@ -1225,8 +1430,7 @@
   .charts-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 20px;
-    width: 100%;
+    width: 100vw;
   }
 
   .chart-wrapper {
@@ -1234,7 +1438,7 @@
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    width: 100%;
+    width: 80vw;
     background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
     border: 2px solid var(--frc-190-red);
     border-radius: 8px;
@@ -1245,6 +1449,9 @@
   .chart-container {
     width: 100%;
     height: 350px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
     flex-grow: 1;
     background: rgba(255, 255, 255, 0.05);
     border-radius: 6px;
@@ -1330,9 +1537,10 @@
   }
 
   .local-grid {
-    display: grid;
+    display: flex;
+    justify-content: space-between;
     grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
-    gap: 8px;
+    gap: 10px;
   }
 
   .mini-checkbox {
