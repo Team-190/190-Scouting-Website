@@ -1,5 +1,6 @@
 <script>
     import { onMount } from "svelte";
+    import { postPitScouting } from "../../utils/api";
 
     // Form data
     let formData = {
@@ -25,6 +26,42 @@
     let submitting = false;
     let submitMessage = "";
     let submitError = false;
+
+    const eventCode = localStorage.getItem("eventCode");
+
+    let selectedTeam = "Select a team";
+    let allTeams = [];
+    const apiKey = import.meta.env.VITE_BA_AUTH_KEY;
+
+    onMount(async () => {
+        allTeams = await loadTeamNumbers();
+    });
+
+    async function loadTeamNumbers() {
+        const apiUrl = `https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/simple`;
+
+        try {
+            const response = await fetch(apiUrl, {
+                headers: {
+                "X-TBA-Auth-Key": apiKey,
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            let teams = [];
+            for (let team_ of data) {
+                const teamNumber = parseInt(team_.key.slice(3));
+                teams.push(teamNumber);
+            }
+            return teams;
+        } catch (error) {
+            console.error("There was a problem fetching team data:", error);
+        }
+    }
 
     function handleInput(field, event) {
         formData[field] = event.target.value;
@@ -78,11 +115,12 @@
         // Reset all text inputs
         document.querySelectorAll('input[type="text"]').forEach(input => input.value = '');
         document.querySelectorAll('select').forEach(select => select.value = '');
+        document.querySelectorAll('#teams').forEach(select => select.value = 'Select a team');
     }
 
     async function handleSubmit() {
         // Validation
-        if (!formData.teamNumber) {
+        if (!selectedTeam) {
             submitMessage = "Please enter a team number";
             submitError = true;
             return;
@@ -93,33 +131,30 @@
         submitError = false;
 
         try {
-            const apiFormData = new FormData();
+            let apiFormData = {};
             
             // Add all form fields
-            apiFormData.append('team', formData.teamNumber);
-            apiFormData.append('through_trench', formData.throughTrench === true ? 'Y' : formData.throughTrench === false ? 'N' : '');
-            apiFormData.append('over_bump', formData.overBump === true ? 'Y' : formData.overBump === false ? 'N' : '');
-            apiFormData.append('climb_levels', formData.climbLevels);
-            apiFormData.append('climb_during_auto', formData.climbDuringAuto === true ? 'Y' : formData.climbDuringAuto === false ? 'N' : '');
-            apiFormData.append('quantity_balls_hopper', formData.quantityBallsHopper);
-            apiFormData.append('avg_intake_speed', formData.avgIntakeSpeed);
-            apiFormData.append('avg_shoot_speed', formData.avgShootSpeed);
-            apiFormData.append('accuracy', formData.accuracy);
-            apiFormData.append('framesize', formData.framesize);
-            apiFormData.append('can_use_hp', formData.canUseHP === true ? 'Y' : formData.canUseHP === false ? 'N' : '');
-            apiFormData.append('can_use_depot', formData.canUseDepot === true ? 'Y' : formData.canUseDepot === false ? 'N' : '');
-            apiFormData.append('can_feed', formData.canFeed === true ? 'Y' : formData.canFeed === false ? 'N' : '');
-            apiFormData.append('starting_height', formData.startingHeight);
-            apiFormData.append('full_extension_height', formData.fullExtensionHeight);
+            apiFormData["overBump"] = formData.overBump === true ? 'Y' : formData.overBump === false ? 'N' : '';
+            apiFormData["throughTrench"] = formData.throughTrench === true ? 'Y' : formData.throughTrench === false ? 'N' : '';
+            apiFormData["climbLevels"] = formData.climbLevels;
+            apiFormData["climbDuringAuto"] = formData.climbDuringAuto === true ? 'Y' : formData.climbDuringAuto === false ? 'N' : '';
+            apiFormData["quantityBallsHopper"] = formData.quantityBallsHopper;
+            apiFormData["avgIntakeSpeed"] = formData.avgIntakeSpeed;
+            apiFormData["avgShootSpeed"] = formData.avgShootSpeed;
+            apiFormData["accuracy"] = formData.accuracy;
+            apiFormData["framesize"] = formData.framesize;
+            apiFormData["canUseHP"] = formData.canUseHP === true ? 'Y' : formData.canUseHP === false ? 'N' : '';
+            apiFormData["canUseDepot"] = formData.canUseDepot === true ? 'Y' : formData.canUseDepot === false ? 'N' : '';
+            apiFormData["canFeed"] = formData.canFeed === true ? 'Y' : formData.canFeed === false ? 'N' : '';
+            apiFormData["startingHeight"] = formData.startingHeight;
+            apiFormData["fullExtensionHeight"] = formData.fullExtensionHeight;
             
             if (formData.robotPicture) {
-                apiFormData.append('robot_picture', formData.robotPicture);
+                apiFormData['robotPicture'] = formData.robotPicture;
+                apiFormData['robotPicturePreview'] = formData.robotPicturePreview;
             }
 
-            const response = await fetch('http://localhost:8000/pitScouting', {
-                method: 'POST',
-                body: apiFormData
-            });
+            let response = await postPitScouting(eventCode, selectedTeam, apiFormData);
 
             if (response.ok) {
                 submitMessage = "✓ Pit scouting data submitted successfully!";
@@ -164,13 +199,13 @@
             
             <div class="form-group">
                 <label for="team-number">Team Number</label>
-                <input
-                    type="text"
-                    id="team-number"
-                    value={formData.teamNumber}
-                    on:input={(e) => handleInput('teamNumber', e)}
-                    placeholder="Enter team number"
-                />
+
+                <select id="teams" name="teams" bind:value={selectedTeam}>
+                    <option value="Select a team">Select a team</option>
+                    {#each allTeams as team}
+                    <option value={team}>{team}</option>
+                    {/each}
+                </select>
             </div>
         </div>
 
