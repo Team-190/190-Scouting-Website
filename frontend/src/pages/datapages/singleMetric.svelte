@@ -302,6 +302,13 @@
             const rows = teamData[team] || [];
             const values = [];
             const row = { team };
+            
+            // Track if this team has any data
+            const hasData = rows.length > 0 && rows.some(r => {
+                const v = r[selectedMetric];
+                return v !== undefined && v !== null && v !== "";
+            });
+            row.hasData = hasData;
 
             rows.forEach((r, i) => {
                 const label = qLabels[i];
@@ -335,6 +342,29 @@
                 return a.mean - b.mean; // Lower is better
             }
             return b.mean - a.mean; // Higher is better
+        }).map((row, index, array) => {
+            // Calculate percentile based on position in sorted list
+            if (isNumericMetric && row.mean !== 0) {
+                const totalTeams = array.filter(r => r.mean !== 0).length;
+                const position = array.filter(r => r.mean !== 0).indexOf(row);
+                const percentRank = position / totalTeams;
+                
+                // Assign percentile bracket based on position
+                if (percentRank < 0.2) {
+                    row.percentile = 80; // Top 20%
+                } else if (percentRank < 0.4) {
+                    row.percentile = 60; // Next 20%
+                } else if (percentRank < 0.6) {
+                    row.percentile = 40; // Middle 20%
+                } else if (percentRank < 0.8) {
+                    row.percentile = 20; // Next 20%
+                } else {
+                    row.percentile = 0;  // Bottom 20%
+                }
+            } else {
+                row.percentile = null;
+            }
+            return row;
         });
 
         const meanValues = isNumericMetric ? rowData.map(r => r.mean) : [];
@@ -345,8 +375,7 @@
                 headerName: "Team",
                 field: "team",
                 pinned: "left",
-                flex: 1,
-                minWidth: 120,
+                width: 100,
                 headerClass: "header-center",
                 cellClass: "cell-center",
                 cellStyle: {
@@ -405,8 +434,10 @@
                     if (!isNumericMetric) {
                         return normalizeValue(params.value);
                     }
+                    const hasData = params.data?.hasData;
+                    if (!hasData) return "";
                     const num = Number(params.value ?? 0);
-                    return num === 0 ? "0" : num.toFixed(2);
+                    return num.toFixed(2);
                 }
             })),
             {
@@ -430,12 +461,14 @@
                     };
                 },
                 valueFormatter: params => {
+                    const hasData = params.data?.hasData;
+                    if (!hasData) return "";
                     const num = Number(params.value ?? 0);
-                    return num === 0 ? "0" : num.toFixed(2);
+                    return num.toFixed(2);
                 }
             },
             {
-                headerName: "Median",
+                headerName: "Med.",
                 field: "median",
                 flex: 1,
                 minWidth: 80,
@@ -455,8 +488,61 @@
                     };
                 },
                 valueFormatter: params => {
+                    const hasData = params.data?.hasData;
+                    if (!hasData) return "";
                     const num = Number(params.value ?? 0);
-                    return num === 0 ? "0" : num.toFixed(2);
+                    return num.toFixed(2);
+                }
+            },
+            {
+                headerName: "Per.",
+                field: "percentile",
+                flex: 1,
+                minWidth: 100,
+                headerClass: "header-center",
+                cellClass: "cell-center",
+                hide: !isNumericMetric,
+                cellStyle: params => {
+                    const p = params.value;
+                    let background, color;
+                    
+                    switch(p) {
+                        case 80:
+                            background = "#0000FF";
+                            color = "white";
+                            break;
+                        case 60:
+                            background = "#00FF00"; // Green
+                            color = "black";
+                            break;
+                        case 40:
+                            background = "#FFFF00"; // Yellow
+                            color = "black";
+                            break;
+                        case 20:
+                            background = "#FF0000"; // Red
+                            color = "white";
+                            break;
+                        case 0:
+                        default:
+                            background = "black";
+                            color = "white";
+                            break;
+                    }
+                    
+                    return {
+                        background,
+                        color,
+                        fontWeight: "bold",
+                        fontSize: "18px",
+                        textAlign: "center",
+                        borderLeft: "2px solid #555"
+                    };
+                },
+                valueFormatter: params => {
+                    const hasData = params.data?.hasData;
+                    if (!hasData) return "";
+                    return params.value !== null ? params.value.toString() : "";
                 }
             }
         ];
@@ -1215,34 +1301,7 @@
         {/if}
     </div>
 
-    <!-- Percentile Statistics Section -->
-    {#if !loading && !error && selectedMetric && checkIsNumericMetric(selectedMetric)}
-        <div class="percentile-section">
-            <h3>Event Statistics - {selectedMetric.replaceAll("_", " ")}</h3>
-            <div class="percentile-grid">
-                <div class="percentile-item">
-                    <div class="percentile-label">0th Percentile</div>
-                    <div class="percentile-value">{percentiles.p0.toFixed(2)}</div>
-                </div>
-                <div class="percentile-item">
-                    <div class="percentile-label">20th Percentile</div>
-                    <div class="percentile-value">{percentiles.p20.toFixed(2)}</div>
-                </div>
-                <div class="percentile-item">
-                    <div class="percentile-label">40th Percentile</div>
-                    <div class="percentile-value">{percentiles.p40.toFixed(2)}</div>
-                </div>
-                <div class="percentile-item">
-                    <div class="percentile-label">60th Percentile</div>
-                    <div class="percentile-value">{percentiles.p60.toFixed(2)}</div>
-                </div>
-                <div class="percentile-item">
-                    <div class="percentile-label">80th Percentile</div>
-                    <div class="percentile-value">{percentiles.p80.toFixed(2)}</div>
-                </div>
-            </div>
-        </div>
-    {/if}
+
 
     <!-- Grid container -->
     <div class="grid-container ag-theme-quartz" bind:this={domNode} style="height: {gridHeight}px;"></div>
