@@ -494,6 +494,9 @@
                     }
                     const hasData = params.data?.hasData;
                     if (!hasData) return "";
+
+                    if (params.value === undefined || params.value === null) return "";
+
                     const num = Number(params.value ?? 0);
                     return num.toFixed(2);
                 }
