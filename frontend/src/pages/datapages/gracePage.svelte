@@ -18,14 +18,11 @@
   onMount(async () => {
     originalTitle = document.title;
     document.title = "GARCE PAGE";
-    allTeams = await loadTeamNumbers();
-    console.log(allTeams);
-    console.log("AUTH Key:", apiKey);
     // for (let i = 0; i < allTeams.length; i++){
     //   teamNames.push(await fetchNames(allTeams[i]));
     // }
     fetchNames().then(() => {
-      fetchPastData();
+      addPastData();
     });
   });
 
@@ -33,12 +30,11 @@
     document.title = originalTitle;
   });
 
-  function fetchPastData() {
+  function addPastData() {
     fetchGracePage(eventCode).then(res => {
       if (!res.ok) throw new Error("Network response was not ok");
       return res.json(); 
     }).then(data => {
-      console.log(data);
       for (let team of Object.keys(data)) {
         tableData = [
           ...tableData,
@@ -76,38 +72,6 @@
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-
-      // const data = await response.json();
-      // selectedTeamName = data.nickname || data.name || "Team name not found";
-      // console.log("Team data:", data);
-      // console.log("Selected Team Name:", selectedTeamName);
-      // return selectedTeamName;
-    } catch (error) {
-      console.error("There was a problem fetching team data:", error);
-    }
-  }
-
-  async function loadTeamNumbers() {
-    const apiUrl = `https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/simple`;
-
-    try {
-      const response = await fetch(apiUrl, {
-        headers: {
-          "X-TBA-Auth-Key": apiKey,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      let teams = [];
-      for (let team_ of data) {
-        const teamNumber = parseInt(team_.team.slice(3));
-        teams.push(teamNumber);
-      }
-      return teams;
     } catch (error) {
       console.error("There was a problem fetching team data:", error);
     }
