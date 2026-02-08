@@ -7,7 +7,7 @@ if not exist backend\node_modules (
     npm install
     cd ..
 )
-start "Backend" cmd /k "cd backend && npm start"
+start "Backend" cmd /k "cd backend && npm run start"
 
 echo Starting frontend server...
 if not exist frontend\node_modules (
