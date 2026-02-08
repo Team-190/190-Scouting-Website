@@ -12,6 +12,7 @@
     import * as barGraph from "../../pages/graphcode/bar.js";
     import * as lineGraph from "../../pages/graphcode/line.js";
     import * as pieGraph from "../../pages/graphcode/pie.js";
+    import * as radarGraph from "../../pages/graphcode/radar.js";
     import * as scatterGraph from "../../pages/graphcode/scatter.js";
 
     ModuleRegistry.registerModules([AllCommunityModule]);
@@ -737,11 +738,7 @@
                         chart.instance = scatterGraph.createChart(chart.el);
                         break;
           case "radar":
-<<<<<<< HEAD
-            // chart.instance = radarGraph.createChart(chart.el);
-=======
             chart.instance = radarGraph.createChart(chart.el);
->>>>>>> c7c64010e3e4826cb57b983885e00808cc69f1f8
             break;
                 }
                 if (chart.instance) {
@@ -993,16 +990,10 @@
       ],
     };
   }
-<<<<<<< HEAD
 
   onMount(async () => {
     try {
       allDataResponse = await fetchAllMetricData();
-=======
-  onMount(async () => {
-    try {
-      allDataResponse = await fetchAllData();
->>>>>>> c7c64010e3e4826cb57b983885e00808cc69f1f8
       console.log("Fetched data from backend:", allDataResponse);
 
       processTeamData(allDataResponse);
@@ -1032,230 +1023,6 @@
         }
     });
 </script>
-
-<div class="page-wrapper">
-  <!-- Header Section -->
-  <div class="header-section">
-    <h1>Event View</h1>
-    <p class="subtitle">FRC Team 190 - Scouting Data Analysis</p>
-  </div>
-
-  <!-- Controls -->
-  <div class="controls">
-    {#if loading}
-      Loading team data...
-    {:else if error}
-      {error}
-    {:else}
-      <div>
-        <label for="metric-select">Metric:</label>
-        <select
-          id="metric-select"
-          bind:value={selectedMetric}
-          on:change={onMetricChange}
-        >
-          {#each metrics as m}
-            <option value={m}>{m}</option>
-          {/each}
-        </select>
-      </div>
-
-      <div>
-        <label for="colorblind-select">Colorblind Mode:</label>
-        <select
-          id="colorblind-select"
-          bind:value={colorblindMode}
-          on:change={onColorblindChange}
-        >
-          {#each Object.entries(colorModes) as [key, mode]}
-            <option value={key}>{mode.name}</option>
-          {/each}
-        </select>
-      </div>
-    {/if}
-  </div>
-
-  <!-- Grid container -->
-  <div
-    class="grid-container ag-theme-quartz"
-    bind:this={domNode}
-    style="height: {gridHeight}px;"
-  ></div>
-
-  <!-- Graph Section -->
-  <div class="graph-section">
-    <h2 class="section-title">Charts & Graphs</h2>
-
-    <div class="dropdown-container">
-      <button class="plus-btn" on:click={() => (showDropdown = !showDropdown)}
-        >+</button
-      >
-      {#if showDropdown}
-        <ul class="dropdown">
-          {#each chartTypes as type}
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-            <li
-              on:click={() => {
-                addChart(type);
-                showDropdown = false;
-              }}
-            >
-              {type}
-            </li>
-          {/each}
-        </ul>
-      {/if}
-    </div>
-
-    <div class="charts-grid">
-      {#each charts as chart (chart.id)}
-        <div class="chart-wrapper">
-          <!-- Chart Controls Header -->
-          <div class="chart-controls">
-            <button
-              class="mini-btn"
-              on:click={() => {
-                chart.showFilter = !chart.showFilter;
-                charts = charts;
-              }}
-              aria-label="Filter teams"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"
-                ></polygon>
-              </svg>
-              {chart.showFilter ? "Close Teams" : "Teams"}
-            </button>
-
-            {#if chart.type === "radar"}
-              <button
-                class="mini-btn"
-                on:click={() => {
-                  chart.showMetricFilter = !chart.showMetricFilter;
-                  charts = charts;
-                }}
-                aria-label="Filter metrics"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <line x1="4" y1="6" x2="20" y2="6"></line>
-                  <line x1="4" y1="12" x2="20" y2="12"></line>
-                  <line x1="4" y1="18" x2="20" y2="18"></line>
-                </svg>
-                {chart.showMetricFilter ? "Close Metrics" : "Metrics"}
-              </button>
-            {/if}
-
-            <button
-              class="mini-btn"
-              on:click={() => removeChart(chart.id)}
-              aria-label="Remove chart"
-              style="border-color: #666;"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-              </svg>
-            </button>
-          </div>
-
-          <!-- Collapsible Filter Panel for Teams -->
-          {#if chart.showFilter}
-            <div class="local-filter-panel">
-              <div class="local-filter-actions">
-                <button class="mini-btn" on:click={() => selectChartAll(chart)}
-                  >Select All Teams</button
-                >
-              </div>
-              <div class="local-grid">
-                {#each availableTeams as team}
-                  <label class="mini-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={chart.selectedTeams.has(team)}
-                      on:change={() => toggleChartTeam(chart, team)}
-                    />
-                    {team}
-                  </label>
-                {/each}
-              </div>
-            </div>
-          {/if}
-
-          <!-- Collapsible Filter Panel for Metrics (Radar Only) -->
-          {#if chart.type === "radar" && chart.showMetricFilter}
-            <div class="local-filter-panel">
-              <div class="local-filter-actions">
-                <button
-                  class="mini-btn"
-                  on:click={() => selectChartAllMetrics(chart)}
-                  >Select All</button
-                >
-              </div>
-              <div class="local-grid">
-                {#each metrics.filter((m) => checkIsNumericMetric(m) && !(excludedMetrics || []).includes(m)) as metric}
-                  <label class="mini-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={chart.selectedMetrics &&
-                        chart.selectedMetrics.has(metric)}
-                      disabled={chart.selectedMetrics &&
-                        chart.selectedMetrics.size <= 3 &&
-                        chart.selectedMetrics.has(metric)}
-                      on:change={() => toggleChartMetric(chart, metric)}
-                    />
-                    <span title={metric}>{metric.replaceAll("_", " ")}</span>
-                  </label>
-                {/each}
-              </div>
-              <p style="font-size: 12px; color: #aaa; margin: 8px 0 0;">
-                Selected: {chart.selectedMetrics
-                  ? chart.selectedMetrics.size
-                  : 0}
-              </p>
-            </div>
-          {/if}
-
-          <div class="chart-container" bind:this={chart.el}></div>
-
-          <p class="chart-label">
-            {chart.type} Chart - {selectedMetric.replaceAll("_", " ")}
-          </p>
-        </div>
-      {/each}
-    </div>
-  </div>
-</div>
 
 <!-- svelte-ignore css_unused_selector -->
 <style>
@@ -1905,70 +1672,7 @@
             {chart.type} Chart - {selectedMetric.replaceAll("_", " ")}
           </p>
         </div>
-<<<<<<< HEAD
       {/each}
-=======
-
-        <div class="charts-grid">
-            {#each charts as chart (chart.id)}
-                <div class="chart-wrapper">
-                    <!-- Chart Controls Header -->
-                    <div class="chart-controls">
-                        <button 
-                             class="mini-btn" 
-                             on:click={() => {
-                                 chart.showFilter = !chart.showFilter;
-                                 charts = charts;
-                             }}
-                             aria-label="Filter teams"
-                        >
-                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                 <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
-                             </svg>
-                             {chart.showFilter ? 'Close Filter' : 'Filter'}
-                        </button>
-
-                        <button
-                            class="mini-btn"
-                            on:click={() => removeChart(chart.id)}
-                            aria-label="Remove chart"
-                            style="border-color: #666;"
-                        >
-                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                 <line x1="18" y1="6" x2="6" y2="18"></line>
-                                 <line x1="6" y1="6" x2="18" y2="18"></line>
-                             </svg>
-                        </button>
-                    </div>
-
-                    <!-- Collapsible Filter Panel -->
-                    {#if chart.showFilter}
-                        <div class="local-filter-panel">
-                            <div class="local-filter-actions">
-                                <button class="mini-btn" on:click={() => selectChartAll(chart)}>Select All</button>
-                            </div>
-                            <div class="local-grid">
-                                {#each availableTeams as team}
-                                    <label class="mini-checkbox">
-                                        <input 
-                                            type="checkbox" 
-                                            checked={chart.selectedTeams.has(team)} 
-                                            on:change={() => toggleChartTeam(chart, team)}
-                                        >
-                                        {team}
-                                    </label>
-                                {/each}
-                            </div>
-                        </div>
-                    {/if}
-
-                    <div class="chart-container" bind:this={chart.el}></div>
-
-                    <p class="chart-label">{chart.type} Chart - {selectedMetric}</p>
-                </div>
-            {/each}
-        </div>
->>>>>>> c7c64010e3e4826cb57b983885e00808cc69f1f8
     </div>
   </div>
 </div>
