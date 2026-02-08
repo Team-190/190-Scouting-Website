@@ -215,6 +215,15 @@
         const eventCode = localStorage.getItem("eventCode");
         console.log("eventCode: ", eventCode);
 
+        const response = await fetch("http://localhost:8000/allData?eventCode="+eventCode);
+        const result = await response.json();
+        return result;
+    }
+
+    async function fetchAllMetricData() {
+        const eventCode = localStorage.getItem("eventCode");
+        console.log("eventCode: ", eventCode);
+
         const response = await fetch("http://localhost:8000/allMetricData?eventCode="+eventCode);
         const result = await response.json();
         return result;
@@ -728,7 +737,7 @@
                         chart.instance = scatterGraph.createChart(chart.el);
                         break;
           case "radar":
-            chart.instance = radarGraph.createChart(chart.el);
+            // chart.instance = radarGraph.createChart(chart.el);
             break;
                 }
                 if (chart.instance) {
@@ -982,7 +991,7 @@
   }
   onMount(async () => {
     try {
-      allDataResponse = await fetchAllData();
+      allDataResponse = await fetchAllMetricData();
       console.log("Fetched data from backend:", allDataResponse);
 
       processTeamData(allDataResponse);

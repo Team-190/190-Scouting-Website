@@ -44,7 +44,11 @@ async function allData(eventCode) {
 }
 
 async function allMetricData(eventCode) {
-    const result = await allData(eventCode).neq("RecordType", "Match_Event");
+    let query = supabaseClient
+        .from(eventCode)
+        .select("*")
+        .neq("RecordType", "Match_Event");
+    const result = await query;
     return result;
 }
 
