@@ -299,13 +299,20 @@
         console.log("Selected Metric: ", selectedMetric, "Data Metric: ", dataMetric);
 
 
-        const firstTeam = availableTeams[0];
-        const firstRows = teamData[firstTeam];
-        if (!firstRows || firstRows.length === 0) return;
+        if (availableTeams.length === 0) return;
 
-        // Handle both "Match" and "match" field names
-        const matches = firstRows.map(m => m.Match || m.match);
-        const qLabels = matches.map((_, i) => `Q${i + 1}`);
+        // Find the maximum number of matches any team has played
+        let maxMatchCount = 0;
+        availableTeams.forEach(team => {
+            const rows = teamData[team] || [];
+            if (rows.length > maxMatchCount) {
+                maxMatchCount = rows.length;
+            }
+        });
+
+        if (maxMatchCount === 0) return;
+
+        const qLabels = Array.from({ length: maxMatchCount }, (_, i) => `Q${i + 1}`);
 
         // Check if metric is numeric
         const isNumericMetric = checkIsNumericMetric(dataMetric);
