@@ -39,6 +39,7 @@
     const ROW_HEIGHT = 25; // Height of each row in pixels
     const HEADER_HEIGHT = 32; // Height of the header row
 
+    //Human readable metric names for the dropdown - key is the actual data field, value is the display name
     const metricNames = new Map();
     metricNames.set("TimeOfClimb", "Match Climb Time");
     metricNames.set("Defense", "Defense Strategy");
@@ -55,6 +56,11 @@
     metricNames.set("FeedingTime", "Feeding Time");
     metricNames.set("EndState", "Climb State");
     metricNames.set("LadderLocation", "Ladder Location");
+    
+    const excludedFields = ["Match", "Team", "Id", "RecordType", "ScouterName", "ScouterError", "Time", "Mode", "DriveStation"];
+
+    // This is the metric that the database actually stores
+    let dataMetric = "";
     
     const colorModes = {
         normal: {
@@ -113,6 +119,14 @@
             Math.round(c1[2] + (c2[2] - c1[2]) * t)
         ].join(",")})`;
 
+    function getDataMetricName(){
+        for (const [key, value] of metricNames.entries()) {
+            if (value === selectedMetric) {
+                dataMetric = key;
+                break;
+            }
+        }
+    }
   function isNumeric(n) {
     if (n === null || n === undefined || n === "") return false;
     // Handle booleans
@@ -263,11 +277,6 @@
         if (availableTeams.length === 0) return [];
 
         const metricSet = new Set();
-        
-        // Fields to exclude from metrics dropdown (only system/meta fields)
-        const excludedFields = [
-            "Match", "Team", "Id", "RecordType", "ScouterName", "ScouterError", "Time", "Mode", "DriveStation"
-        ];
 
         for (const team of availableTeams) {
             const rows = teamData[team] || [];
@@ -286,16 +295,6 @@
 
     function buildGrid() {
         if (!domNode || !selectedMetric || availableTeams.length === 0) return;
-        
-        let dataMetric = "";
-
-        // Reverse lookup to get the actual data field name from the display name
-        for (const [key, value] of metricNames.entries()) {
-            if (value === selectedMetric) {
-                dataMetric = key;
-                break;
-            }
-        }
 
         console.log("Selected Metric: ", selectedMetric, "Data Metric: ", dataMetric);
 
@@ -633,6 +632,7 @@
 
     function onMetricChange(e) {
         selectedMetric = e.target.value;
+        getDataMetricName();
         buildGrid();
     }
 
@@ -681,15 +681,6 @@
     charts = charts;
   }
 //this is only for the radar graph not the table
-  let excludedMetrics = [
-    "Time",
-    "Drive Station",
-    "Strategy",
-    "Avoidance",
-    "LadderLocation",
-    "Id",
-    "StartingLocation"
-  ];
 
   function addChart(type) {
     const newChart = {
@@ -754,13 +745,14 @@
 
     function updateChartDataset(chart) {
         if (!chart.instance) return;
-        chart.yAxisMetric = selectedMetric;
+
+        chart.yAxisMetric = dataMetric;
 
         if (!chart.selectedTeams) {
             chart.selectedTeams = new Set(availableTeams);
         }
 
-        const isNumeric = checkIsNumericMetric(selectedMetric);
+        const isNumeric = checkIsNumericMetric(dataMetric);
 
         let option = {};
         
@@ -909,7 +901,7 @@
         : metrics.filter((m) => checkIsNumericMetric(m));
 
     const numericMetrics = selectedMetrics.filter(
-      (k) => checkIsNumericMetric(k) && !(excludedMetrics || []).includes(k),
+      (k) => checkIsNumericMetric(k) && !(excludedFields || []).includes(k),
     );
 
     const selectedTeams =
@@ -1013,6 +1005,7 @@
             }
 
             selectedMetric = metrics[0];
+            getDataMetricName();
             loading = false;
 
             buildGrid();
@@ -1643,7 +1636,7 @@
                 >
               </div>
               <div class="local-grid">
-                {#each metrics.filter((m) => checkIsNumericMetric(m) && !(excludedMetrics || []).includes(m)) as metric}
+                {#each metrics.filter((m) => checkIsNumericMetric(m) && !(excludedFields || []).includes(m)) as metric}
                   <label class="mini-checkbox">
                     <input
                       type="checkbox"
