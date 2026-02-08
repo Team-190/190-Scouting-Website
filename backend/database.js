@@ -38,8 +38,7 @@ async function getTeamNumbers() {
 async function allData(eventCode) {
     let query = supabaseClient
         .from(eventCode)
-        .select("*")
-        .neq("RecordType", "Match_Event");
+        .select("*");
     const result = await query;
     return result;
 }
