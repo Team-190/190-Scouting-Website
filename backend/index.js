@@ -145,6 +145,16 @@ app.get("/allData", async (req, res) => {
     res.send(result);
 });
 
+app.get("/allMetricData", async (req, res) => {
+    const eventCode = req.query.eventCode;
+    if (!eventCode) return res.sendStatus(403);
+
+    console.log("allMetricData requested, eventCode: "+eventCode);
+    let result = await database.allMetricData(eventCode);
+    console.log(result);
+    res.send(result);
+});
+
 app.get("/teamNumbers", async (req, res) => {
     const eventCode = req.query.eventCode;
     if (!eventCode) return res.sendStatus(403);

@@ -1,20 +1,18 @@
 <script>
-    import { onMount } from "svelte";
     import {
+        AllCommunityModule,
         createGrid,
-        ModuleRegistry,
-        AllCommunityModule
+        ModuleRegistry
     } from "ag-grid-community";
+    import { onMount } from "svelte";
 
-  import "ag-grid-community/styles/ag-grid.css";
-  import "ag-grid-community/styles/ag-theme-quartz.css";
-
-  // Graph imports
-  import * as barGraph from "../../pages/graphcode/bar.js";
-  import * as lineGraph from "../../pages/graphcode/line.js";
-  import * as pieGraph from "../../pages/graphcode/pie.js";
-  import * as scatterGraph from "../../pages/graphcode/scatter.js";
-  import * as radarGraph from "../../pages/graphcode/radar.js";
+    import "ag-grid-community/styles/ag-grid.css";
+    import "ag-grid-community/styles/ag-theme-quartz.css";
+// Graph imports
+    import * as barGraph from "../../pages/graphcode/bar.js";
+    import * as lineGraph from "../../pages/graphcode/line.js";
+    import * as pieGraph from "../../pages/graphcode/pie.js";
+    import * as scatterGraph from "../../pages/graphcode/scatter.js";
 
     ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -40,6 +38,23 @@
     const ROW_HEIGHT = 25; // Height of each row in pixels
     const HEADER_HEIGHT = 32; // Height of the header row
 
+    const metricNames = new Map();
+    metricNames.set("TimeOfClimb", "Match Climb Time");
+    metricNames.set("Defense", "Defense Strategy");
+    metricNames.set("Avoidance", "Avoidance Strategy");
+    metricNames.set("ClimbTime", "Climb Time");
+    metricNames.set("DefenseTime", "Defense Time");
+    metricNames.set("AutoClimb", "Auto Climb");
+    metricNames.set("AttemptClimb", "Climb Attempt");
+    metricNames.set("BumpTraversal", "Times Over Bump");
+    metricNames.set("StartingLocation", "Starting Location");
+    metricNames.set("MatchEvent", "Match Event");
+    metricNames.set("FuelIntakingTime", "Fuel Intaking Time");
+    metricNames.set("FuelShootingTime", "Fuel Shooting Time");
+    metricNames.set("FeedingTime", "Feeding Time");
+    metricNames.set("EndState", "Climb State");
+    metricNames.set("LadderLocation", "Ladder Location");
+    
     const colorModes = {
         normal: {
             name: "Normal",
@@ -200,7 +215,7 @@
         const eventCode = localStorage.getItem("eventCode");
         console.log("eventCode: ", eventCode);
 
-        const response = await fetch("http://localhost:8000/allData?eventCode="+eventCode);
+        const response = await fetch("http://localhost:8000/allMetricData?eventCode="+eventCode);
         const result = await response.json();
         return result;
     }
@@ -241,9 +256,7 @@
         
         // Fields to exclude from metrics dropdown (only system/meta fields)
         const excludedFields = [
-            "Match", "Team", "match", "team", 
-            "id", "created_at", "record_type", 
-            "scouter_name", "scouter_error"
+            "Match", "Team", "Id", "RecordType", "ScouterName", "ScouterError", "Time", "Mode", "DriveStation"
         ];
 
         for (const team of availableTeams) {
@@ -252,7 +265,8 @@
                 Object.keys(row).forEach((k) => {
                     // Skip only the system/meta fields
                     if (excludedFields.includes(k)) return;
-                    metricSet.add(k);
+                    const metricName = metricNames.get(k) || k;
+                    metricSet.add(metricName);
                 });
             }
         }
@@ -262,6 +276,19 @@
 
     function buildGrid() {
         if (!domNode || !selectedMetric || availableTeams.length === 0) return;
+        
+        let dataMetric = "";
+
+        // Reverse lookup to get the actual data field name from the display name
+        for (const [key, value] of metricNames.entries()) {
+            if (value === selectedMetric) {
+                dataMetric = key;
+                break;
+            }
+        }
+
+        console.log("Selected Metric: ", selectedMetric, "Data Metric: ", dataMetric);
+
 
         const firstTeam = availableTeams[0];
         const firstRows = teamData[firstTeam];
@@ -272,7 +299,8 @@
         const qLabels = matches.map((_, i) => `Q${i + 1}`);
 
         // Check if metric is numeric
-        const isNumericMetric = checkIsNumericMetric(selectedMetric);
+        const isNumericMetric = checkIsNumericMetric(dataMetric);
+        console.log("Is Numeric Metric: ", isNumericMetric);
 
         // Global stats (only for numeric metrics)
         let globalMean = 0;
@@ -282,7 +310,7 @@
             const allValues = [];
             availableTeams.forEach(team => {
                 const rows = teamData[team] || [];
-                const vals = rows.map(r => Number(r[selectedMetric] ?? 0));
+                const vals = rows.map(r => Number(r[dataMetric] ?? 0));
                 if (vals.some(v => v !== 0)) allValues.push(...vals);
             });
             
@@ -298,7 +326,7 @@
             availableTeams.forEach(team => {
                 const rows = teamData[team] || [];
                 rows.forEach(r => {
-                    const val = Number(r[selectedMetric] ?? 0);
+                    const val = Number(r[dataMetric] ?? 0);
                     if (val !== 0) allValues.push(val);
                 });
             });
@@ -326,14 +354,14 @@
             
             // Track if this team has any data
             const hasData = rows.length > 0 && rows.some(r => {
-                const v = r[selectedMetric];
+                const v = r[dataMetric];
                 return v !== undefined && v !== null && v !== "";
             });
             row.hasData = hasData;
 
             rows.forEach((r, i) => {
                 const label = qLabels[i];
-                let v = r[selectedMetric];
+                let v = r[dataMetric];
                 
                 if (isNumericMetric) {
                     const numValue = Number(v ?? 0);
@@ -359,7 +387,7 @@
             if (a.mean === 0 && b.mean !== 0) return 1;
             if (b.mean === 0 && a.mean !== 0) return -1;
 
-            if (["time_of_climb", "climb_time"].includes(selectedMetric)) {
+            if (["TimeOfClimb", "ClimbTime"].includes(dataMetric)) {
                 return a.mean - b.mean; // Lower is better
             }
             return b.mean - a.mean; // Higher is better
@@ -431,7 +459,7 @@
 
                     // Numeric data styling
                     const val = Number(v ?? 0);
-                    const inverted = ["time_of_climb", "climb_time"].includes(selectedMetric);
+                    const inverted = ["TimeOfClimb", "ClimbTime"].includes(dataMetric);
                     
                     if (val === 0) {
                         return {
@@ -471,7 +499,7 @@
                 hide: !isNumericMetric,
                 cellStyle: params => {
                     const v = params.value ?? 0;
-                    const inverted = ["time_of_climb", "climb_time"].includes(selectedMetric);
+                    const inverted = ["TimeOfClimb", "ClimbTime"].includes(dataMetric);
                     return {
                         background: summaryColor(v, meanValues, inverted),
                         color: v === 0 ? "white" : "black",
@@ -498,7 +526,7 @@
                 hide: !isNumericMetric,
                 cellStyle: params => {
                     const v = params.value ?? 0;
-                    const inverted = ["time_of_climb", "climb_time"].includes(selectedMetric);
+                    const inverted = ["TimeOfClimb", "ClimbTime"].includes(dataMetric);
                     return {
                         background: summaryColor(v, medianValues, inverted),
                         color: v === 0 ? "white" : "black",
