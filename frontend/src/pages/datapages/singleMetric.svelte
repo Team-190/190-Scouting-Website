@@ -245,32 +245,37 @@
     }
 
     function processTeamData(dataResponse) {
-        const allRows = Array.isArray(dataResponse?.data) ? dataResponse.data : [];
+      const allRows = Array.isArray(dataResponse?.data) ? dataResponse.data : [];
 
-        if (allRows.length === 0) {
-            throw new Error("No data found from backend");
+      if (allRows.length === 0) {
+          throw new Error("No data found from backend");
+      }
+
+      availableTeams = [];
+      teamData = {};
+      console.log("ALLLLALLALALALAL:\n\n\n"+allRows);
+
+      for (const row of allRows) {
+        console.log("recordty0e0: " + row["RecordType"])
+        if (row["RecordType"] == "Match_Event") {
+          console.log("exluced negative");
+          continue;
+        }
+        // Handle both "Team" and "team" field names (backend uses lowercase)
+        const teamNum = row.Team || row.team;
+        if (!teamNum) continue;
+
+        if (!availableTeams.includes(teamNum)) {
+            availableTeams = [...availableTeams, teamNum];
         }
 
-        availableTeams = [];
-        teamData = {};
-
-        for (const row of allRows) {
-            // Handle both "Team" and "team" field names (backend uses lowercase)
-            const teamNum = row.Team || row.team;
-            if (!teamNum) continue;
-
-            if (!availableTeams.includes(teamNum)) {
-                availableTeams = [...availableTeams, teamNum];
-            }
-
-      if (!teamData[teamNum]) {
-        teamData[teamNum] = [];
+        if (!teamData[teamNum]) {
+          teamData[teamNum] = [];
+        }
+        teamData[teamNum] = [...teamData[teamNum], row];
       }
-      teamData[teamNum] = [...teamData[teamNum], row];
-    }
-    console.log("Processed team data:", teamData);
-
-        availableTeams = availableTeams.sort();
+      console.log("Processed team data:", teamData);
+      availableTeams = availableTeams.sort();
     }
 
     function computeMetrics() {

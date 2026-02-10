@@ -173,6 +173,9 @@
       console.log(JSON.stringify(parsedData, null, 2));
 
       for (let element of parsedData) {
+        if (element["RecordType"] == "Match_Event") {
+          continue;
+        }
         if (
           element["Team"] &&
           !data.includes(parseInt(element["Team"].slice(3)))
