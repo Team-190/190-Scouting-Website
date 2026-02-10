@@ -7,7 +7,7 @@
   } from "ag-grid-community";
   let teamViewData = null;
   // it is populated automatically by onMount
-  console.log("teamview: " + teamViewData);
+  //console.log("teamview: " + teamViewData);
 
   import "ag-grid-community/styles/ag-grid.css";
   import "ag-grid-community/styles/ag-theme-quartz.css";
@@ -156,6 +156,7 @@
   async function loadTeamNumbers(eventCode) {
     let data = [];
     const storedData = localStorage.getItem("data");
+    console.log("STOREDDATA THAT GOES TO THE THINGER: "+storedData);
 
     if (!storedData) {
       console.warn("No data found in localStorage");
@@ -168,15 +169,21 @@
         console.warn("Parsed data is not an array");
         return [];
       }
+
       console.log(JSON.stringify(parsedData, null, 2));
+
       for (let element of parsedData) {
+        if (element["RecordType"] == "Match_Event") {
+          continue;
+        }
         if (
-          element["team"] &&
-          !data.includes(parseInt(element["team"].slice(3)))
+          element["Team"] &&
+          !data.includes(parseInt(element["Team"].slice(3)))
         ) {
-          data.push(parseInt(element["team"].slice(3)));
+          data.push(parseInt(element["Team"].slice(3)));
         }
       }
+
       if (data.length == 0) {
         alert("commit");
       }
@@ -193,7 +200,7 @@
     console.log("Changing to :" + teamNumber);
     let data = [];
     for (let element of teamViewData) {
-      if (element["team"] == `frc${teamNumber}`) {
+      if (element["Team"] == `frc${teamNumber}`) {
         data.push(element);
         //data = element;
       }
