@@ -520,7 +520,10 @@
 
     // Get max values from all data for proper scaling
     const maxValues = numericMetrics.map((k) => {
-      const allValues = (teamViewData || []).map((d) => {});
+      const allValues = (teamViewData || []).map((d) => {
+        const val = d[k];
+        return isNumeric(val) ? Number(val) : 0;
+      });
       return Math.max(...allValues, 1);
     });
 
@@ -588,8 +591,8 @@
     const globalStats = {};
     displayMetrics.forEach((metric) => {
       // Check if metric is numeric based on global data sample
-      const allRows = Array.isArray(teamViewData?.data)
-        ? teamViewData.data
+      const allRows = Array.isArray(teamViewData)
+        ? teamViewData
         : [];
       const allValues = [];
       let isNumericMetric = true;
@@ -848,7 +851,8 @@
 
     // Set initial selected team (first available team, or 190 if available)
     if (allTeams.length > 0) {
-      selectedTeam = allTeams.includes("190") ? "190" : allTeams[0].toString();
+      const team190 = allTeams.find(t => t.toString() === "190");
+      selectedTeam = team190 ? team190.toString() : allTeams[0].toString();
       loadTeamData(selectedTeam);
       console.log("Loading data from team", selectedTeam);
     }

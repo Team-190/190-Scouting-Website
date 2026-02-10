@@ -63,8 +63,50 @@
             below: [220, 20, 60],
             above: [0, 128, 0],
             mid: [110, 74, 30]
+        },
+        alex: {
+            name: "Alex Coloring",
+            below: [0, 0, 0],   // Not used in Alex mode but keeping structure
+            above: [0, 0, 255], // Not used in Alex mode but keeping structure
+            mid: [128, 128, 128] // Not used in Alex mode but keeping structure
         }
     };
+
+    function getAlexBgColor(p) {
+        if (p === null || p === undefined) return "black";
+        switch(p) {
+            case 75: return "#0000FF"; // Blue (Top 25%)
+            case 50: return "#00FF00"; // Green (Next 25%)
+            case 25: return "#FFFF00"; // Yellow (Next 25%)
+            case 0: return "#FF0000";  // Red (Bottom 25%)
+            default: return "black";
+        }
+    }
+
+    function getAlexTextColor(p) {
+        const bg = getAlexBgColor(p);
+        if (["#0000FF", "#FF0000", "black"].includes(bg)) return "white";
+        return "black";
+    }
+
+    function getAlexValuePercentile(v, inverted) {
+        if (!isNumeric(v)) return null;
+        const val = Number(v);
+        if (val === -1 || val === 0) return null;
+        
+        const p = percentiles;
+        if (inverted) {
+            if (val <= (p.p25 ?? 0)) return 75;
+            if (val <= (p.p50 ?? 0)) return 50;
+            if (val <= (p.p75 ?? 0)) return 25;
+            return 0;
+        } else {
+            if (val >= (p.p75 ?? 0)) return 75;
+            if (val >= (p.p50 ?? 0)) return 50;
+            if (val >= (p.p25 ?? 0)) return 25;
+            return 0;
+        }
+    }
 
     const mean = arr => arr.reduce((a, b) => a + b, 0) / arr.length;
 
@@ -141,6 +183,7 @@
         if (numValue === 0) {
             return "black";
         }
+
         if (sigma === 0) return "rgb(180,180,180)";
 
         const mode = colorModes[colorblindMode];
@@ -155,14 +198,14 @@
     }
 
     function summaryColor(v, values, inverted = false) {
-        if (!isNumeric(v) || v === 0) return "#4D4D4D";
+        if (!isNumeric(v) || v === 0 || v === -1) return "#4D4D4D";
 
         const numValue = Number(v);
-        const nonZero = values.filter(x => x !== 0);
-        if (nonZero.length === 0) return "rgb(180,180,180)";
+        const validValues = values.filter(x => x !== 0 && x !== -1);
+        if (validValues.length === 0) return "rgb(180,180,180)";
 
-        const mu = mean(nonZero);
-        const sigma = sd(nonZero, mu);
+        const mu = mean(validValues);
+        const sigma = sd(validValues, mu);
         if (sigma === 0) return "rgb(180,180,180)";
 
         const mode = colorModes[colorblindMode];
@@ -261,8 +304,9 @@
             const allValues = [];
             availableTeams.forEach(team => {
                 const rows = teamData[team] || [];
-                const vals = rows.map(r => Number(r[selectedMetric] ?? 0));
-                if (vals.some(v => v !== 0)) allValues.push(...vals);
+                const vals = rows.map(r => Number(r[selectedMetric] ?? 0))
+                                .filter(v => v !== 0 && v !== -1);
+                if (vals.length > 0) allValues.push(...vals);
             });
             
             if (allValues.length > 0) {
@@ -278,23 +322,26 @@
                 const rows = teamData[team] || [];
                 rows.forEach(r => {
                     const val = Number(r[selectedMetric] ?? 0);
-                    if (val !== 0) allValues.push(val);
+                    if (val !== 0 && val !== -1) allValues.push(val);
                 });
             });
             
             if (allValues.length > 0) {
                 percentiles = {
                     p0: percentile(allValues, 0),
+                    p25: percentile(allValues, 25),
+                    p50: percentile(allValues, 50),
+                    p75: percentile(allValues, 75),
                     p20: percentile(allValues, 20),
                     p40: percentile(allValues, 40),
                     p60: percentile(allValues, 60),
                     p80: percentile(allValues, 80)
                 };
             } else {
-                percentiles = { p0: 0, p20: 0, p40: 0, p60: 0, p80: 0 };
+                percentiles = { p0: 0, p25: 0, p50: 0, p75: 0, p20: 0, p40: 0, p60: 0, p80: 0 };
             }
         } else {
-            percentiles = { p0: 0, p20: 0, p40: 0, p60: 0, p80: 0 };
+            percentiles = { p0: 0, p25: 0, p50: 0, p75: 0, p20: 0, p40: 0, p60: 0, p80: 0 };
         }
 
 
@@ -335,8 +382,8 @@
         }).sort((a, b) => {
             if (!isNumericMetric) return a.team.localeCompare(b.team);
 
-            if (a.mean === 0 && b.mean !== 0) return 1;
-            if (b.mean === 0 && a.mean !== 0) return -1;
+            if ((a.mean === 0 || a.mean === -1) && (b.mean !== 0 && b.mean !== -1)) return 1;
+            if ((b.mean === 0 || b.mean === -1) && (a.mean !== 0 && a.mean !== -1)) return -1;
 
             if (["time_of_climb", "climb_time"].includes(selectedMetric)) {
                 return a.mean - b.mean; // Lower is better
@@ -344,9 +391,10 @@
             return b.mean - a.mean; // Higher is better
         }).map((row, index, array) => {
             // Calculate percentile based on position in sorted list
-            if (isNumericMetric && row.mean !== 0) {
-                const totalTeams = array.filter(r => r.mean !== 0).length;
-                const position = array.filter(r => r.mean !== 0).indexOf(row);
+            if (isNumericMetric && row.mean !== 0 && row.mean !== -1) {
+                const validRows = array.filter(r => r.mean !== 0 && r.mean !== -1);
+                const totalTeams = validRows.length;
+                const position = validRows.indexOf(row);
                 const percentRank = position / totalTeams;
                 
                 // Assign percentile bracket based on position
@@ -361,8 +409,20 @@
                 } else {
                     row.percentile = 0;  // Bottom 20%
                 }
+
+                // Alex Quartile Percentiles (25% increments)
+                if (percentRank < 0.25) {
+                    row.alexPercentile = 75; // Top 25%
+                } else if (percentRank < 0.5) {
+                    row.alexPercentile = 50; // Next 25%
+                } else if (percentRank < 0.75) {
+                    row.alexPercentile = 25; // Next 25%
+                } else {
+                    row.alexPercentile = 0;  // Bottom 25%
+                }
             } else {
                 row.percentile = null;
+                row.alexPercentile = null;
             }
             return row;
         });
@@ -390,14 +450,13 @@
                 headerName: q,
                 field: q,
                 flex: 1,
-                minWidth: 80,
+                minWidth: 70,
                 headerClass: "header-center",
                 cellClass: "cell-center",
-                cellStyle: params => {
+                        cellStyle: params => {
                     const v = params.value;
                     
                     if (!isNumericMetric) {
-                        // Non-numeric data styling
                         return {
                             background: "#333",
                             color: "white",
@@ -408,10 +467,20 @@
                         };
                     }
 
-                    // Numeric data styling
                     const val = Number(v ?? 0);
                     const inverted = ["time_of_climb", "climb_time"].includes(selectedMetric);
                     
+
+                    if (val === -1) {
+                        return {
+                            background: "#4D4D4D",
+                            color: "white",
+                            fontWeight: 600,
+                            fontSize: "18px",
+                            textAlign: "center"
+                        };
+                    }
+
                     if (val === 0) {
                         return {
                             background: "black",
@@ -422,9 +491,21 @@
                         };
                     }
 
+                    if (colorblindMode === 'alex') {
+                        const vp = getAlexValuePercentile(val, inverted);
+                        return {
+                            background: getAlexBgColor(vp),
+                            color: getAlexTextColor(vp),
+                            fontWeight: 600,
+                            fontSize: "18px",
+                            textAlign: "center"
+                        };
+                    }
+
+                    const bg = colorFromStats(val, globalMean, globalSd, inverted);
                     return {
-                        background: colorFromStats(val, globalMean, globalSd, inverted),
-                        color: "black",
+                        background: bg,
+                        color: ["#0000FF", "#FF0000", "black"].includes(bg) ? "white" : "black",
                         fontWeight: 600,
                         fontSize: "18px",
                         textAlign: "center"
@@ -451,9 +532,45 @@
                 cellStyle: params => {
                     const v = params.value ?? 0;
                     const inverted = ["time_of_climb", "climb_time"].includes(selectedMetric);
+                    
+                    if (v === -1) {
+                        return {
+                            background: "#4D4D4D",
+                            color: "white",
+                            fontWeight: "bold",
+                            fontSize: "18px",
+                            textAlign: "center",
+                            borderLeft: "3px solid #C81B00"
+                        };
+                    }
+
+                    if (v === 0) {
+                        return {
+                            background: "black",
+                            color: "white",
+                            fontWeight: "bold",
+                            fontSize: "18px",
+                            textAlign: "center",
+                            borderLeft: "3px solid #C81B00"
+                        };
+                    }
+
+                    if (colorblindMode === 'alex') {
+                        const p = params.data?.alexPercentile;
+                        return {
+                            background: getAlexBgColor(p),
+                            color: getAlexTextColor(p),
+                            fontWeight: "bold",
+                            fontSize: "18px",
+                            textAlign: "center",
+                            borderLeft: "3px solid #C81B00"
+                        };
+                    }
+
+                    const bg = summaryColor(v, meanValues, inverted);
                     return {
-                        background: summaryColor(v, meanValues, inverted),
-                        color: v === 0 ? "white" : "black",
+                        background: bg,
+                        color: ["#0000FF", "#FF0000", "black", "#4D4D4D"].includes(bg) ? "white" : "black",
                         fontWeight: "bold",
                         fontSize: "18px",
                         textAlign: "center",
@@ -478,9 +595,45 @@
                 cellStyle: params => {
                     const v = params.value ?? 0;
                     const inverted = ["time_of_climb", "climb_time"].includes(selectedMetric);
+                    
+                    if (v === -1) {
+                        return {
+                            background: "#4D4D4D",
+                            color: "white",
+                            fontWeight: "bold",
+                            fontSize: "18px",
+                            textAlign: "center",
+                            borderLeft: "2px solid #555"
+                        };
+                    }
+
+                    if (v === 0) {
+                        return {
+                            background: "black",
+                            color: "white",
+                            fontWeight: "bold",
+                            fontSize: "18px",
+                            textAlign: "center",
+                            borderLeft: "2px solid #555"
+                        };
+                    }
+
+                    if (colorblindMode === 'alex') {
+                        const p = params.data?.alexPercentile;
+                        return {
+                            background: getAlexBgColor(p),
+                            color: getAlexTextColor(p),
+                            fontWeight: "bold",
+                            fontSize: "18px",
+                            textAlign: "center",
+                            borderLeft: "2px solid #555"
+                        };
+                    }
+
+                    const bg = summaryColor(v, medianValues, inverted);
                     return {
-                        background: summaryColor(v, medianValues, inverted),
-                        color: v === 0 ? "white" : "black",
+                        background: bg,
+                        color: ["#0000FF", "#FF0000", "black", "#4D4D4D"].includes(bg) ? "white" : "black",
                         fontWeight: "bold",
                         fontSize: "18px",
                         textAlign: "center",
@@ -506,28 +659,33 @@
                     const p = params.value;
                     let background, color;
                     
-                    switch(p) {
-                        case 80:
-                            background = "#0000FF";
-                            color = "white";
-                            break;
-                        case 60:
-                            background = "#00FF00"; // Green
-                            color = "black";
-                            break;
-                        case 40:
-                            background = "#FFFF00"; // Yellow
-                            color = "black";
-                            break;
-                        case 20:
-                            background = "#FF0000"; // Red
-                            color = "white";
-                            break;
-                        case 0:
-                        default:
-                            background = "black";
-                            color = "white";
-                            break;
+                    if (p === null || p === undefined || p === -1) {
+                        background = "#4D4D4D";
+                        color = "white";
+                    } else {
+                        switch(p) {
+                            case 80:
+                                background = "#0000FF";
+                                color = "white";
+                                break;
+                            case 60:
+                                background = "#00FF00"; // Green
+                                color = "black";
+                                break;
+                            case 40:
+                                background = "#FFFF00"; // Yellow
+                                color = "black";
+                                break;
+                            case 20:
+                                background = "#FF0000"; // Red
+                                color = "white";
+                                break;
+                            case 0:
+                            default:
+                                background = "black";
+                                color = "white";
+                                break;
+                        }
                     }
                     
                     return {
