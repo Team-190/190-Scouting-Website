@@ -10,10 +10,10 @@
     import "ag-grid-community/styles/ag-theme-quartz.css";
 // Graph imports
     import * as barGraph from "../../pages/graphcode/bar.js";
-    import * as lineGraph from "../../pages/graphcode/line.js";
-    import * as pieGraph from "../../pages/graphcode/pie.js";
-    import * as radarGraph from "../../pages/graphcode/radar.js";
-    import * as scatterGraph from "../../pages/graphcode/scatter.js";
+  import * as lineGraph from "../../pages/graphcode/line.js";
+  import * as pieGraph from "../../pages/graphcode/pie.js";
+  import * as scatterGraph from "../../pages/graphcode/scatter.js";
+  import * as radarGraph from "../../pages/graphcode/radar.js";
 
     ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -824,20 +824,20 @@
     }
 
   function toggleChartMetric(chart, metric) {
-    if (!chart.selectedMetrics) {
-      chart.selectedMetrics = new Set();
-    }
-    if (chart.selectedMetrics.has(metric)) {
-      if (chart.selectedMetrics.size > 3) {
-        chart.selectedMetrics.delete(metric);
-      }
-    } else {
-      chart.selectedMetrics.add(metric);
-    }
-    chart.selectedMetrics = new Set(chart.selectedMetrics);
-    updateChartDataset(chart);
-    charts = charts;
+  if (!chart.selectedMetrics) {
+    chart.selectedMetrics = new Set();
   }
+
+  if (chart.selectedMetrics.has(metric)) {
+    chart.selectedMetrics.delete(metric);
+  } else {
+    chart.selectedMetrics.add(metric);
+  }
+
+  chart.selectedMetrics = new Set(chart.selectedMetrics);
+  updateChartDataset(chart);
+  charts = charts;
+}
 
   function selectChartAllMetrics(chart) {
     const numericMetrics = metrics.filter((m) => checkIsNumericMetric(m));
@@ -846,6 +846,15 @@
     charts = charts;
   }
 //this is only for the radar graph not the table
+  let excludedMetrics = [
+    "Time",
+    "Drive Station",
+    "Strategy",
+    "Avoidance",
+    "LadderLocation",
+    "Id",
+    "StartingLocation"
+  ];
 
   function addChart(type) {
     const newChart = {
@@ -1060,94 +1069,100 @@
     }
 
   function getRadarOption(chart) {
-    const selectedMetrics =
-      chart.selectedMetrics && chart.selectedMetrics.size > 0
-        ? Array.from(chart.selectedMetrics).sort()
-        : metrics.filter((m) => checkIsNumericMetric(m));
-
-    const numericMetrics = selectedMetrics.filter(
-      (k) => checkIsNumericMetric(k) && !(excludedFields || []).includes(k),
-    );
-
-    const selectedTeams =
-      chart.selectedTeams && chart.selectedTeams.size > 0
-        ? Array.from(chart.selectedTeams).sort((a, b) => a - b)
-        : availableTeams;
-
-    if (numericMetrics.length < 3) {
-      return {
-        title: {
-          text:
-            "Radar chart requires at least 3 metrics. Selected: " +
-            numericMetrics.length,
-          left: "center",
-          top: "center",
-          textStyle: { color: "#fff", fontSize: 14 },
-        },
-      };
+    let numericMetrics = [];
+  
+    for (let i = 0; i < metrics.length; i++) {
+        const metricName = metrics[i];
+        
+        let dataKey = metricName;
+        for (const [key, value] of metricNames.entries()) {
+            if (value === metricName) {
+                dataKey = key;
+                break;
+            }
+        }
+        if (checkIsNumericMetric(dataKey)) {
+            numericMetrics.push(metricName); 
+        }
     }
 
-    // generate colors per selected team
+    console.log("Numeric metrics identified:", numericMetrics);
+
+    const selectedTeams = chart.selectedTeams && chart.selectedTeams.size > 0 ?
+        Array.from(chart.selectedTeams).sort((a, b) => a - b) : availableTeams;
+
+    if (numericMetrics.length < 3) {
+        return {
+            title: {
+                text: "Radar chart requires at least 3 numeric metrics. Found: " + numericMetrics.length,
+                left: "center",
+                top: "center",
+                textStyle: { color: "#fff", fontSize: 14 },
+            },
+        };
+    }
+
     const colors = selectedTeams.map(() => randomHexColor());
 
-    // compute global max across ALL teams (availableTeams) so indicator scales to dataset
-    const maxValues = numericMetrics.map((metric) => {
-      let max = 0;
-      (availableTeams || []).forEach((team) => {
-        const teamRows = teamData[team] || [];
-        teamRows.forEach((row) => {
-          const val = Number(row[metric] || 0);
-          if (val > max) max = val;
+    const maxValues = numericMetrics.map((metricName) => {
+        let max = 0;
+        let dataKey = metricName;
+        for (const [key, value] of metricNames.entries()) {
+            if (value === metricName) { dataKey = key; break; }
+        }
+
+        availableTeams.forEach((team) => {
+            const teamRows = teamData[team] || [];
+            teamRows.forEach((row) => {
+                const val = Number(row[dataKey] || 0);
+                if (val > max) max = val;
+            });
         });
-      });
-      return Math.max(max, 1);
+        return Math.max(max, 1);
     });
 
     const seriesData = selectedTeams.map((team, teamIndex) => {
-      const teamRows = teamData[team] || [];
-      const avgValues = numericMetrics.map((metric) => {
-        const values = teamRows.map((row) => {
-          const val = row[metric];
-          return isNumeric(val) ? Number(val) : 0;
-        });
-        return values.length > 0
-          ? values.reduce((a, b) => a + b, 0) / values.length
-          : 0;
-      });
+        const teamRows = teamData[team] || [];
+        const avgValues = numericMetrics.map((metricName) => {
+            let dataKey = metricName;
+            for (const [key, value] of metricNames.entries()) {
+                if (value === metricName) { dataKey = key; break; }
+            }
 
-      const color = colors[teamIndex % colors.length];
-      return {
-        value: avgValues,
-        name: `Team ${team}`,
-        areaStyle: { opacity: 0.15 },
-        lineStyle: { color: color, width: 2 },
-        itemStyle: { color: color },
-        symbolSize: 6,
-      };
+            const values = teamRows.map((row) => {
+                const val = row[dataKey];
+                return isNumeric(val) ? Number(val) : 0;
+            });
+            return values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+        });
+
+        const color = colors[teamIndex % colors.length];
+        return {
+            value: avgValues,
+            name: `Team ${team}`,
+            areaStyle: { opacity: 0.15 },
+            lineStyle: { color: color, width: 2 },
+            itemStyle: { color: color },
+            symbolSize: 6,
+        };
     });
 
     return {
-      tooltip: { trigger: "item", backgroundColor: "rgba(0,0,0,0.8)" },
-      radar: {
-        indicator: numericMetrics.map((k, i) => ({
-          name: `${k.replaceAll("_", " ")} (${formatMaxValue(maxValues[i])})`,
-          max: maxValues[i],
-        })),
-        splitNumber: 4,
-        axisLine: { lineStyle: { color: [[1, "#333"]] } },
-        splitLine: { lineStyle: { color: ["#444", "#555", "#666", "#777"] } },
-        name: { textStyle: { color: "#ccc" } },
-        splitArea: { areaStyle: { color: ["rgba(200,27,0,0.05)"] } },
-      },
-      series: [
-        {
-          type: "radar",
-          data: seriesData,
+        tooltip: { trigger: "item", backgroundColor: "rgba(0,0,0,0.8)" },
+        radar: {
+            indicator: numericMetrics.map((k, i) => ({
+                name: `${k.replaceAll("_", " ")} (${formatMaxValue(maxValues[i])})`,
+                max: maxValues[i],
+            })),
+            splitNumber: 4,
+            axisLine: { lineStyle: { color: "#333" } },
+            splitLine: { lineStyle: { color: ["#444", "#555", "#666", "#777"] } },
+            name: { textStyle: { color: "#ccc" } },
+            splitArea: { areaStyle: { color: ["rgba(200,27,0,0.05)"] } },
         },
-      ],
+        series: [{ type: "radar", data: seriesData }],
     };
-  }
-
+}
   onMount(async () => {
     try {
       allDataResponse = await fetchAllMetricData();
@@ -1791,7 +1806,7 @@
           {/if}
 
           <!-- Collapsible Filter Panel for Metrics (Radar Only) -->
-          {#if chart.type === "radar" && chart.showMetricFilter}
+                    {#if chart.type === "radar" && chart.showMetricFilter}
             <div class="local-filter-panel">
               <div class="local-filter-actions">
                 <button
