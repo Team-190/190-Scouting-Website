@@ -1,13 +1,3 @@
-/*
-insert a specific link to a route containing data where it says "link"
-
-function fetchTeamView() {
-    const route = link;
-    let data = fetch(route);
-    return data;
-}
-*/
-
 export function fetchTeamView(teamNumber) {
     const route = `http://localhost:8000/getTeamView?teamNumber=${teamNumber}`;
     console.log(teamNumber);

@@ -1,4 +1,4 @@
-const apiKey = import.meta.env.VITE_BA_AUTH_KEY;
+const blueAllianceAPIKey = import.meta.env.VITE_BA_AUTH_KEY;
 
 export async function fetchTeams(eventCode) {
     const apiUrl = `https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/simple`;
@@ -6,7 +6,7 @@ export async function fetchTeams(eventCode) {
     try {
         const response = await fetch(apiUrl, {
             headers: {
-                "X-TBA-Auth-Key": apiKey,
+                "X-TBA-Auth-Key": blueAllianceAPIKey,
             },
         });
 
@@ -27,4 +27,13 @@ export async function fetchTeams(eventCode) {
         console.error("There was a problem fetching team data:", error);
         return { _teams: new Map(), _teamNumbers: [] };
     }
+}
+
+
+export async function fetchOPR(eventCode) {
+    return fetch(`https://www.thebluealliance.com/api/v3/event/${eventCode}/oprs`, {
+        headers: {
+            'X-TBA-Auth-Key': blueAllianceAPIKey
+        }
+    });
 }
