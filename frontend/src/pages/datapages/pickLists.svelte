@@ -2,10 +2,8 @@
     import baseX from 'base-x';
     import pako from 'pako';
     import Team from '../../components/Team.svelte';
-    import { onDestroy } from 'svelte';
     import { writable } from 'svelte/store';
-    import { AgCheckbox } from 'ag-grid-community';
-    import { onMount } from 'svelte';
+    import { fetchOPR } from '../../utils/blueAllianceApi';
 
     const BASE85_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~';
     const bs85 = baseX(BASE85_CHARS);
@@ -62,8 +60,6 @@
     let activeView = $state('picklists');
     let rankedTeams = $state([]);
     let isFourTeamAlliance = $state(false);
-    let loadingTeams = false;
-    let teamsError = '';
 
     let cachedAllianceSelections = null;
 
@@ -146,36 +142,6 @@
         } catch (err) {
             console.error('Failed to copy text: ', err);
             alert('Failed to copy picklists.');
-        }
-    }
-
-    async function fetchTeamsForEvent(key) {
-        if (!key) return;
-
-        loadingTeams = true;
-        teamsError = '';
-
-        try {
-            const res = await fetch(
-                `https://www.thebluealliance.com/api/v3/event/${key}/teams/simple`,
-                {
-                    headers: {
-                        'X-TBA-Auth-Key': tbaApiKey
-                    }
-                }
-            );
-
-            if (!res.ok) {
-                throw new Error(`TBA error ${res.status}`);
-            }
-
-            teams = await res.json();
-        } catch (err) {
-            console.error(err);
-            teamsError = 'Failed to load teams.';
-            teams = [];
-        } finally {
-            loadingTeams = false;
         }
     }
 
@@ -267,47 +233,47 @@
     }
 
     async function getTeams() {
-    if (!eventCode) {
-        alert('Please select an event first.');
-        return;
-    }
-
-    try {
-        console.log('Fetching teams for:', eventCode);
-        const teamPromise = fetch(`https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/simple`, {
-            headers: { 'X-TBA-Auth-Key': tbaApiKey }
-        }).then(res => res.json());
-
-        const statusesPromise = fetch(`https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/statuses`, {
-            headers: { 'X-TBA-Auth-Key': tbaApiKey }
-        }).then(res => res.ok ? res.json() : null);
-
-        const [teamList, statuses] = await Promise.all([teamPromise, statusesPromise]);
-
-        if (statuses) {
-            const teamRanks = Object.fromEntries(
-                Object.entries(statuses)
-                    .filter(([, status]) => status?.qual?.ranking?.rank != null)
-                    .map(([teamKey, status]) => [teamKey.replace('frc', ''), status.qual.ranking.rank])
-            );
-
-            teamList.sort((a, b) => {
-                const rankA = teamRanks[a.team_number];
-                const rankB = teamRanks[b.team_number];
-                if (rankA != null && rankB != null) return rankA - rankB;
-                if (rankA != null) return -1;
-                if (rankB != null) return 1;
-                return a.team_number - b.team_number;
-            });
+        if (!eventCode) {
+            alert('Please select an event first.');
+            return;
         }
 
-        teamsStore.set(teamList);
-        teams = teamList;
-    } catch (err) {
-        console.error(err);
-        alert('Failed to fetch teams for this event.');
+        try {
+            console.log('Fetching teams for:', eventCode);
+            const teamPromise = fetch(`https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/simple`, {
+                headers: { 'X-TBA-Auth-Key': tbaApiKey }
+            }).then(res => res.json());
+
+            const statusesPromise = fetch(`https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/statuses`, {
+                headers: { 'X-TBA-Auth-Key': tbaApiKey }
+            }).then(res => res.ok ? res.json() : null);
+
+            const [teamList, statuses] = await Promise.all([teamPromise, statusesPromise]);
+
+            if (statuses) {
+                const teamRanks = Object.fromEntries(
+                    Object.entries(statuses)
+                        .filter(([, status]) => status?.qual?.ranking?.rank != null)
+                        .map(([teamKey, status]) => [teamKey.replace('frc', ''), status.qual.ranking.rank])
+                );
+
+                teamList.sort((a, b) => {
+                    const rankA = teamRanks[a.team_number];
+                    const rankB = teamRanks[b.team_number];
+                    if (rankA != null && rankB != null) return rankA - rankB;
+                    if (rankA != null) return -1;
+                    if (rankB != null) return 1;
+                    return a.team_number - b.team_number;
+                });
+            }
+
+            teamsStore.set(teamList);
+            teams = teamList;
+        } catch (err) {
+            console.error(err);
+            alert('Failed to fetch teams for this event.');
+        }
     }
-}
 
     function handleDragStart(item, sourceList) {
         draggedItem = { item, sourceList };
@@ -485,9 +451,7 @@
             return;
         }
 
-        const response = await fetch(`https://www.thebluealliance.com/api/v3/event/${eventCode}/oprs`, {
-            headers: { 'X-TBA-Auth-Key': tbaApiKey }
-        });
+        const response = await fetchOPR(eventCode);
 
         if (!response.ok) {
             alert('Could not fetch OPRs for this event. They may not be available.');
@@ -777,11 +741,7 @@
             return;
         }
 
-        const response = await fetch(`https://www.thebluealliance.com/api/v3/event/${eventCode}/oprs`, {
-            headers: {
-                'X-TBA-Auth-Key': tbaApiKey
-            }
-        });
+        const response = await fetchOPR(eventCode);
 
         if (!response.ok) {
             alert('Could not fetch OPRs for this event. They may not be available.');

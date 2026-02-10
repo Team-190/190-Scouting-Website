@@ -2,8 +2,7 @@
     import { goto } from '@mateothegreat/svelte5-router';
     import { onMount } from "svelte";
 
-    let eventCode;
-    $: eventCode = selected_event ? selected_event : "2025nhalt1";
+    let eventCode = localStorage.getItem("eventCode");
 
     async function cacheAllData() {
         localStorage.clear();

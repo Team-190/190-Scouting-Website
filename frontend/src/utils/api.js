@@ -1,15 +1,3 @@
-/*
-insert a specific link to a route containing data where it says "link"
-
-function fetchTeamView() {
-    const route = link;
-    let data = fetch(route);
-    return data;
-}
-*/
-
-import { eventCode } from "../stores/selectedEvent";
-
 export function fetchTeamView(teamNumber) {
     const route = `http://localhost:8000/getTeamView?teamNumber=${teamNumber}`;
     console.log(teamNumber);
@@ -76,6 +64,20 @@ export async function postGracePage(event, team, rating) {
 }
 
 
+export async function postPitScouting(event, team, formData) {
+
+    const response = await fetch("http://localhost:8000/postPitScouting", {
+        method: 'POST',
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({event, team, formData})
+    });
+    
+    return response;
+}
+
+
 export async function postGompeiMadnessBracket(bracket) {
     // data: { name: "guy", r1: [{matchNumber: 1 , winner: "a1"}, "a2", "a3", "a4"], r2: ["a1", "a2"], r3: ["a1"] }
 
@@ -99,7 +101,7 @@ export async function postGompeiMadnessBracket(bracket) {
 }
 
 
-export async function retrieveWinners(eventCode) {
+export async function fetchWinners(eventCode) {
     const apiKey = import.meta.env.VITE_AUTH_KEY;
     const apiUrl = `https://www.thebluealliance.com/api/v3/team/frc${eventCode}`;
 
