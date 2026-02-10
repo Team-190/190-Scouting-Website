@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import {
     createGrid,
     ModuleRegistry,
@@ -7,11 +7,14 @@
   } from "ag-grid-community";
   let teamViewData = null;
   // it is populated automatically by onMount
-  //console.log("teamview: " + teamViewData);
+  // Rebuild grids whenever teamViewData is populated
+
+  console.log("teamview: " + teamViewData);
 
   import "ag-grid-community/styles/ag-grid.css";
   import "ag-grid-community/styles/ag-theme-quartz.css";
   import Team from "../../components/Team.svelte";
+  import type { ColDef } from 'ag-grid-community';
 
   // Graph imports
   import * as barGraph from "../../pages/graphcode/bar.js";
@@ -23,9 +26,17 @@
   ModuleRegistry.registerModules([AllCommunityModule]);
 
   let domNode;
+  let domNodeRight;
+  let domNode2;
+  let domNode3;
+  let domNode4;
+  let domNode5;
+  
   let colorblindMode = "normal";
   let populatecache;
   let gridHeight = 400; // Default height, will be calculated dynamically
+
+  let selectedTeam: string | null = null;
 
   const ROW_HEIGHT = 25; // Height of each row in pixels
   const HEADER_HEIGHT = 32; // Height of the header row
@@ -151,12 +162,93 @@
   }
 
   let allTeams = [];
-  let selectedTeam = "190";
+  let allMatches = [];
+  let eventKey = ""; // Will be loaded from localStorage
+  
+  // Blue Alliance API configuration
+  const TBA_API_KEY = import.meta.env.VITE_BA_AUTH_KEY;
+  const TBA_BASE_URL = "https://www.thebluealliance.com/api/v3";
+
+  // Alliance team selections (will be populated from API based on selected match)
+  let selectedMatch = "1";
+  let redAlliance = ["", "", ""];
+  let blueAlliance = ["", "", ""];
+
+  async function fetchEventMatches(eventKey) {
+    try {
+      const response = await fetch(`${TBA_BASE_URL}/event/${eventKey}/matches`, {
+        headers: {
+          "X-TBA-Auth-Key": TBA_API_KEY
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const matches = await response.json();
+      
+      // Filter for qualification matches and sort by match number
+      const qualMatches = matches
+        .filter(m => m.comp_level === "qm")
+        .sort((a, b) => a.match_number - b.match_number);
+      
+      return qualMatches;
+    } catch (error) {
+      console.error("Error fetching matches from Blue Alliance:", error);
+      return [];
+    }
+  }
+
+  function extractTeamNumber(teamKey) {
+    // teamKey format is "frcXXXX", extract just the number
+    return teamKey.replace("frc", "");
+  }
+
+  async function loadMatchData(matchNumber) {
+  if (!allMatches || allMatches.length === 0) return;
+
+  const match = allMatches.find(m => m.match_number === parseInt(matchNumber));
+  if (!match) return;
+
+  redAlliance = match.alliances.red.team_keys.map(k => k.replace("frc", ""));
+  blueAlliance = match.alliances.blue.team_keys.map(k => k.replace("frc", ""));
+
+  console.log("Red Alliance:", redAlliance, "Blue Alliance:", blueAlliance);
+
+  // Wait for DOM to bind
+  await tick();
+
+  // Now the grids have valid team numbers
+  loadAllAllianceTeams();
+}
+
+onMount(async () => {
+  const storedData = localStorage.getItem("data");
+  teamViewData = storedData ? JSON.parse(storedData) : [];
+
+  console.log("Loaded teamViewData:", teamViewData);
+
+  // Fetch matches if needed
+  allMatches = await fetchEventMatches(eventKey);
+
+  // Pick first match by default
+  selectedMatch = allMatches[0]?.match_number ?? "1";
+
+  // Load grids for that match
+  await loadMatchData(selectedMatch);
+});
+
+
+  function onMatchChange(e: Event) {
+    const target = e.target as HTMLSelectElement;
+    selectedMatch = target.value;
+    loadMatchData(selectedMatch);
+  }
 
   async function loadTeamNumbers(eventCode) {
     let data = [];
     const storedData = localStorage.getItem("data");
-    console.log("STOREDDATA THAT GOES TO THE THINGER: "+storedData);
 
     if (!storedData) {
       console.warn("No data found in localStorage");
@@ -169,21 +261,15 @@
         console.warn("Parsed data is not an array");
         return [];
       }
-
       console.log(JSON.stringify(parsedData, null, 2));
-
       for (let element of parsedData) {
-        if (element["RecordType"] == "Match_Event") {
-          continue;
-        }
         if (
-          element["Team"] &&
-          !data.includes(parseInt(element["Team"].slice(3)))
+          element["team"] &&
+          !data.includes(parseInt(element["team"].slice(3)))
         ) {
-          data.push(parseInt(element["Team"].slice(3)));
+          data.push(parseInt(element["team"].slice(3)));
         }
       }
-
       if (data.length == 0) {
         alert("commit");
       }
@@ -192,6 +278,7 @@
       return [];
     }
 
+    //const data = await(await fetch("http://localhost:8000/teamNumbers?eventCode"+eventCode)).json();
     return data;
   }
 
@@ -199,7 +286,7 @@
     console.log("Changing to :" + teamNumber);
     let data = [];
     for (let element of teamViewData) {
-      if (element["Team"] == `frc${teamNumber}`) {
+      if (element["team"] == `frc${teamNumber}`) {
         data.push(element);
         //data = element;
       }
@@ -526,10 +613,7 @@
 
     // Get max values from all data for proper scaling
     const maxValues = numericMetrics.map((k) => {
-      const allValues = (teamViewData || []).map((d) => {
-        const val = d[k];
-        return isNumeric(val) ? Number(val) : 0;
-      });
+      const allValues = (teamViewData || []).map((d) => {});
       return Math.max(...allValues, 1);
     });
 
@@ -570,6 +654,11 @@
   }
 
   let gridInstance = null;
+  let gridInstanceRight = null;
+  let gridInstance2 = null;
+  let gridInstance3 = null;
+  let gridInstance4 = null;
+  let gridInstance5 = null;
 
   function buildGrid(matches) {
     if (matches.length === 0) return;
@@ -597,8 +686,8 @@
     const globalStats = {};
     displayMetrics.forEach((metric) => {
       // Check if metric is numeric based on global data sample
-      const allRows = Array.isArray(teamViewData)
-        ? teamViewData
+      const allRows = Array.isArray(teamViewData?.data)
+        ? teamViewData.data
         : [];
       const allValues = [];
       let isNumericMetric = true;
@@ -812,13 +901,15 @@
     // Calculate grid height based on number of rows (metrics + matchNum row)
     gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT;
 
-    // Destroy old grid if it exists
-    if (gridInstance) {
-      gridInstance.destroy();
-    }
+    // Destroy old grids if they exist
+    if (gridInstance) gridInstance.destroy();
+    if (gridInstanceRight) gridInstanceRight.destroy();
+    if (gridInstance2) gridInstance2.destroy();
+    if (gridInstance3) gridInstance3.destroy();
+    if (gridInstance4) gridInstance4.destroy();
+    if (gridInstance5) gridInstance5.destroy();
 
-    // Create new grid
-    gridInstance = createGrid(domNode, {
+    const gridOptions = {
       rowData,
       columnDefs,
       defaultColDef: {
@@ -831,58 +922,318 @@
       },
       suppressColumnVirtualisation: true,
       suppressHorizontalScroll: true,
+    };
+
+    // Create grids for each alliance team
+    gridInstance = createGrid(domNode, gridOptions);
+    gridInstanceRight = createGrid(domNodeRight, gridOptions);
+    gridInstance2 = createGrid(domNode2, gridOptions);
+    gridInstance3 = createGrid(domNode3, gridOptions);
+    gridInstance4 = createGrid(domNode4, gridOptions);
+    gridInstance5 = createGrid(domNode5, gridOptions);
+  }
+
+  // New function to build grid for a specific team
+  function buildGridForTeam(teamNumber, domElement) {
+    if (!teamViewData) return;
+    
+    let data = [];
+    for (let element of teamViewData) {
+      if (element["team"] == `frc${teamNumber}`) {
+        data.push(element);
+      }
+    }
+    
+    if (data.length === 0) {
+      console.warn(`No data found for team ${teamNumber}`);
+      return;
+    }
+
+    const matches = data;
+    const matchNums = matches.map((m) => m.match);
+    const qLabels = matchNums.map((_, i) => `Q${i + 1}`);
+
+    const sample = matches[0];
+    const displayMetrics = Object.keys(sample).filter(
+      (k) =>
+        ![
+          "match",
+          "team",
+          "id",
+          "created_at",
+          "record_type",
+          "scouter_name",
+          "scouter_error",
+        ].includes(k),
+    );
+
+    const globalStats = {};
+    displayMetrics.forEach((metric) => {
+      const allRows = Array.isArray(teamViewData) ? teamViewData : [];
+      const allValues = [];
+      let isNumericMetric = true;
+      let hasData = false;
+
+      for (const r of allRows) {
+        const v = r[metric];
+        if (v !== undefined && v !== null && v !== "") {
+          hasData = true;
+          if (!isNumeric(v)) {
+            isNumericMetric = false;
+            break;
+          }
+        }
+      }
+      
+      if (!hasData) isNumericMetric = false;
+
+      if (isNumericMetric) {
+        allRows.forEach((row) => {
+          const val = row[metric];
+          if (isNumeric(val)) {
+            allValues.push(Number(val));
+          }
+        });
+        const filteredValues = allValues.filter((v) => v !== 0);
+        globalStats[metric] = {
+          mean: filteredValues.length > 0 ? mean(filteredValues) : 0,
+          sd:
+            filteredValues.length > 0
+              ? sd(filteredValues, mean(filteredValues))
+              : 0,
+          isNumeric: true,
+        };
+      } else {
+        globalStats[metric] = { mean: 0, sd: 0, isNumeric: false };
+      }
     });
+
+    const rowData = [];
+    const matchRow: any = { metric: "MatchNum" };
+    qLabels.forEach((q, i) => {
+      matchRow[q] = matchNums[i];
+    });
+    rowData.push(matchRow);
+
+    displayMetrics.forEach((metric) => {
+      const row: any = { metric };
+      const values = [];
+      const isNumericMetric = globalStats[metric]?.isNumeric ?? false;
+
+      qLabels.forEach((q, i) => {
+        const match = matches[i];
+        let val = match?.[metric];
+
+        if (isNumericMetric) {
+          const numVal = isNumeric(val) ? Number(val) : 0;
+          row[q] = numVal;
+          values.push(numVal);
+        } else {
+          row[q] = normalizeValue(val);
+        }
+      });
+
+      if (isNumericMetric) {
+        row.mean = values.length > 0 ? Number(mean(values).toFixed(2)) : 0;
+        row.median = values.length > 0 ? Number(median(values).toFixed(2)) : 0;
+      } else {
+        row.mean = null;
+        row.median = null;
+      }
+      rowData.push(row);
+    });
+
+  const columnDefs = [
+  ...qLabels.map((q) => ({
+    headerName: q,
+    field: q,
+    flex: 1,
+    minWidth: 60,
+    headerClass: "header-center",
+    cellClass: "cell-center",
+    cellStyle: (params) => {
+      if (params.data.metric === "  MatchNum") {
+        return {
+          background: "#333",
+          color: "white",
+          fontSize: "14px",
+          fontWeight: 800,
+          textAlign: "center",
+        };
+      }
+
+      const metricName = params.data.metric;
+      const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+
+      if (!stats.isNumeric) {
+        return {
+          background: "#333",
+          color: "white",
+          fontSize: "12px",
+          fontWeight: 600,
+          textAlign: "center",
+          border: "1px solid #555",
+        };
+      }
+
+      const val = params.value;
+      const numValue = isNumeric(val) ? Number(val) : 0;
+
+      return {
+        background: colorFromStats(numValue, stats.mean, stats.sd),
+        color: numValue === 0 ? "white" : "black",
+        fontSize: "14px",
+        fontWeight: 600,
+        textAlign: "center",
+      };
+    },
+    valueFormatter: (params) => {
+      const metricName = params.data.metric;
+      const stats = globalStats[metricName] || { isNumeric: false };
+
+      if (!stats.isNumeric) {
+        return String(normalizeValue(params.value)); // <- always string
+      }
+
+      const num = isNumeric(params.value) ? Number(params.value) : 0;
+      return num === 0 ? "0" : num.toFixed(2); // <- string
+    },
+  })),
+  {
+    headerName: "Mean",
+    field: "mean",
+    flex: 1,
+    minWidth: 60,
+    headerClass: "header-center",
+    cellClass: "cell-center",
+    cellStyle: (params) => {
+      const metricName = params.data.metric;
+      const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+
+      return {
+        background:
+          params.value === 0 || params.value === null
+            ? "#4D4D4D"
+            : colorFromStats(params.value, stats.mean, stats.sd),
+        color:
+          params.value === 0 || params.value === null ? "white" : "black",
+        fontSize: "14px",
+        fontWeight: "bold",
+        textAlign: "center",
+      };
+    },
+    valueFormatter: (params) => {
+      if (params.value === null || params.value === undefined) return "";
+      const num = Number(params.value);
+      return num === 0 ? "0" : num.toFixed(2); // <- string
+    },
+  },
+  {
+    headerName: "Median",
+    field: "median",
+    flex: 1,
+    minWidth: 60,
+    headerClass: "header-center",
+    cellClass: "cell-center",
+    cellStyle: (params) => {
+      const metricName = params.data.metric;
+      const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+
+      return {
+        background:
+          params.value === 0 || params.value === null
+            ? "#4D4D4D"
+            : colorFromStats(params.value, stats.mean, stats.sd),
+        color:
+          params.value === 0 || params.value === null ? "white" : "black",
+        fontSize: "14px",
+        fontWeight: "bold",
+        textAlign: "center",
+      };
+    },
+    valueFormatter: (params) => {
+      if (params.value === null || params.value === undefined) return "";
+      const num = Number(params.value);
+      return num === 0 ? "0" : num.toFixed(2); // <- string
+    },
+  },
+];
+
+    gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT;
+
+    return createGrid(domElement, {
+    rowData,
+    columnDefs,
+    defaultColDef: {
+      resizable: false,
+      sortable: false,
+      suppressMovable: true,
+      cellStyle: (params) => ({
+        fontSize: "14px",
+      }),
+  },
+  suppressColumnVirtualisation: true,
+  suppressHorizontalScroll: true,
+});
+
+  }
+
+  // Function to load all alliance teams
+  function loadAllAllianceTeams() {
+    if (!teamViewData || !domNode || !domNodeRight) return;
+
+    if (gridInstance) gridInstance.destroy();
+    if (gridInstanceRight) gridInstanceRight.destroy();
+    if (gridInstance2) gridInstance2.destroy();
+    if (gridInstance3) gridInstance3.destroy();
+    if (gridInstance4) gridInstance4.destroy();
+    if (gridInstance5) gridInstance5.destroy();
+
+    // Red alliance (left side)
+    if (domNode) gridInstance = buildGridForTeam(redAlliance[0], domNode);
+    if (domNode2) gridInstance2 = buildGridForTeam(redAlliance[1], domNode2);
+    if (domNode3) gridInstance3 = buildGridForTeam(redAlliance[2], domNode3);
+
+    // Blue alliance (right side)
+    if (domNodeRight) gridInstanceRight = buildGridForTeam(blueAlliance[0], domNodeRight);
+    if (domNode4) gridInstance4 = buildGridForTeam(blueAlliance[1], domNode4);
+    if (domNode5) gridInstance5 = buildGridForTeam(blueAlliance[2], domNode5);
   }
 
   onMount(async () => {
-    // Fetch all data from backend for global stats calculation
-    const storedData = localStorage.getItem("data");
-    let allDataResponse = [];
+  // Load data from localStorage (or your backend)
+  const storedData = localStorage.getItem("data");
+  teamViewData = storedData ? JSON.parse(storedData) : [];
 
-    if (storedData) {
-      try {
-        allDataResponse = JSON.parse(storedData);
-      } catch (e) {
-        console.error("Failed to parse data:", e);
-      }
-    }
+  console.log("All data loaded:", teamViewData);
 
-    teamViewData = allDataResponse;
-    console.log("All data loaded for global stats:", teamViewData);
+  // Wait for DOM nodes to be bound
+  await tick();
 
-    // Load team numbers from backend
-    allTeams = await loadTeamNumbers(localStorage.getItem("eventCode"));
+  // Load all alliance teams (grids)
+  loadAllAllianceTeams();
+});
 
-    console.log("Populated team list:", allTeams);
-
-    // Set initial selected team (first available team, or 190 if available)
-    if (allTeams.length > 0) {
-      const team190 = allTeams.find(t => t.toString() === "190");
-      selectedTeam = team190 ? team190.toString() : allTeams[0].toString();
-      loadTeamData(selectedTeam);
-      console.log("Loading data from team", selectedTeam);
-    }
-  });
 </script>
 
 <div class="page-wrapper">
   <!-- Header Section -->
   <div class="header-section">
-    <h1>Team View</h1>
+    <h1>Match Preview</h1>
     <p class="subtitle">FRC Team 190 - Scouting Data Analysis</p>
   </div>
 
   <!-- Controls -->
   <div class="controls">
     <div>
-      <label for="team-select">Team:</label>
+      <label for="match-select">Match:</label>
       <select
-        id="team-select"
-        bind:value={selectedTeam}
-        on:change={onTeamChange}
+        id="match-select"
+        bind:value={selectedMatch}
+        on:change={onMatchChange}
       >
-        {#each allTeams as team}
-          <option value={team}>{team}</option>
+        {#each allMatches as match}
+          <option value={match.match_number}>Q{match.match_number}</option>
         {/each}
       </select>
     </div>
@@ -900,12 +1251,68 @@
     </div>
   </div>
 
-  <!-- Grid container -->
-  <div
-    class="grid-container ag-theme-quartz"
-    bind:this={domNode}
-    style="height: {gridHeight}px;"
-  ></div>
+  <!-- Grid containers with dropdown in middle -->
+  <div class="grid-wrapper">
+    <div class="grid-column">
+      <div class="team-box">
+        <h3 class="team-label red-label">Red 1 - Team {redAlliance[0]}</h3>
+        <div
+          class="grid-container ag-theme-quartz"
+          bind:this={domNode}
+          style="height: {gridHeight}px;"
+        ></div>
+      </div>
+      <div class="team-box">
+        <h3 class="team-label red-label">Red 2 - Team {redAlliance[1]}</h3>
+        <div
+          class="grid-container ag-theme-quartz"
+          bind:this={domNode2}
+          style="height: {gridHeight}px;"
+        ></div>
+      </div>
+      <div class="team-box">
+        <h3 class="team-label red-label">Red 3 - Team {redAlliance[2]}</h3>
+        <div
+          class="grid-container ag-theme-quartz"
+          bind:this={domNode3}
+          style="height: {gridHeight}px;"
+        ></div>
+      </div>
+    </div>
+    
+    <div class="center-dropdown">
+      <select id="center-select">
+        <option value="">Select option</option>
+      </select>
+    </div>
+    
+    <div class="grid-column">
+      <div class="team-box">
+        <h3 class="team-label blue-label">Blue 1 - Team {blueAlliance[0]}</h3>
+        <div
+          class="grid-container ag-theme-quartz"
+          bind:this={domNodeRight}
+          style="height: {gridHeight}px;"
+        ></div>
+      </div>
+      <div class="team-box">
+        <h3 class="team-label blue-label">Blue 2 - Team {blueAlliance[1]}</h3>
+        <div
+          class="grid-container ag-theme-quartz"
+          bind:this={domNode4}
+          style="height: {gridHeight}px;"
+        ></div>
+      </div>
+      <div class="team-box">
+        <h3 class="team-label blue-label">Blue 3 - Team {blueAlliance[2]}</h3>
+        <div
+          class="grid-container ag-theme-quartz"
+          bind:this={domNode5}
+          style="height: {gridHeight}px;"
+        ></div>
+      </div>
+    </div>
+  </div>
 
   <!-- Graph Section -->
   <div class="graph-section">
@@ -1151,12 +1558,63 @@
     border-color: #e02200;
   }
 
-  .grid-container {
+  .grid-wrapper {
     width: 80vw;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+  }
+
+  .grid-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .team-box {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .team-label {
+    margin: 0 0 10px 0;
+    padding: 8px 15px;
+    font-size: 1.2rem;
+    font-weight: 700;
+    text-align: center;
+    border-radius: 6px 6px 0 0;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+  }
+
+  .red-label {
+    background: var(--frc-190-red);
+    color: white;
+  }
+
+  .blue-label {
+    background: linear-gradient(135deg, #003d7a 0%, #0066cc 100%);
+    color: white;
+  }
+
+  .grid-container {
+    width: 100%;
     background: var(--frc-190-black);
     box-sizing: border-box;
     border-radius: 8px;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+  }
+
+  .center-dropdown {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .center-dropdown select {
+    margin: 0;
+    padding: 10px 15px;
   }
 
   /* ===== Graph Section Styles ===== */

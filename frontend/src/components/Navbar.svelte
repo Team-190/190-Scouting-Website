@@ -3,6 +3,7 @@
     import logo from '../images/frc190_Logo.png';
 </script>
 
+
 <nav class="navbar">
     <div class="nav-brand" on:click={() => goto('/')}>
         <img src={logo} alt="FRC 190 Logo" class="logo" />
@@ -16,6 +17,7 @@
         <button on:click={() => goto('/pitScouting')}>Pit Scouting</button>
         <button on:click={() => goto('/gracePage')}>Grace Page</button>
         <button on:click={() => goto('/marchMadness')}>Gompei Madness</button>
+        <button on:click={() => goto('/matchPreview')}>Match Preview</button>
     </div>
 </nav>
 
