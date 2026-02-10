@@ -8,8 +8,6 @@ function fetchTeamView() {
 }
 */
 
-import { eventCode } from "../stores/selectedEvent";
-
 export function fetchTeamView(teamNumber) {
     const route = `http://localhost:8000/getTeamView?teamNumber=${teamNumber}`;
     console.log(teamNumber);

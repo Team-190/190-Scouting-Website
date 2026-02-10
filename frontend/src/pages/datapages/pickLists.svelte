@@ -149,36 +149,6 @@
         }
     }
 
-    async function fetchTeamsForEvent(key) {
-        if (!key) return;
-
-        loadingTeams = true;
-        teamsError = '';
-
-        try {
-            const res = await fetch(
-                `https://www.thebluealliance.com/api/v3/event/${key}/teams/simple`,
-                {
-                    headers: {
-                        'X-TBA-Auth-Key': tbaApiKey
-                    }
-                }
-            );
-
-            if (!res.ok) {
-                throw new Error(`TBA error ${res.status}`);
-            }
-
-            teams = await res.json();
-        } catch (err) {
-            console.error(err);
-            teamsError = 'Failed to load teams.';
-            teams = [];
-        } finally {
-            loadingTeams = false;
-        }
-    }
-
     function importPicklists() {
         if (!importData) {
             alert('Please paste the data to import.');

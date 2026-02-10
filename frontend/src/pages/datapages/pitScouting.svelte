@@ -1,6 +1,7 @@
 <script>
     import { onMount } from "svelte";
     import { postPitScouting } from "../../utils/api";
+    import { fetchTeams } from "../../utils/blueAllianceApi";
 
     // Form data
     let formData = {
@@ -31,37 +32,11 @@
 
     let selectedTeam = "Select a team";
     let allTeams = [];
-    const apiKey = import.meta.env.VITE_BA_AUTH_KEY;
 
     onMount(async () => {
-        allTeams = await loadTeamNumbers();
+        const {_teamNumbers} = await fetchTeams(eventCode);
+        allTeams = _teamNumbers;
     });
-
-    async function loadTeamNumbers() {
-        const apiUrl = `https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/simple`;
-
-        try {
-            const response = await fetch(apiUrl, {
-                headers: {
-                "X-TBA-Auth-Key": apiKey,
-                },
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const data = await response.json();
-            let teams = [];
-            for (let team_ of data) {
-                const teamNumber = parseInt(team_.key.slice(3));
-                teams.push(teamNumber);
-            }
-            return teams;
-        } catch (error) {
-            console.error("There was a problem fetching team data:", error);
-        }
-    }
 
     function handleInput(field, event) {
         formData[field] = event.target.value;

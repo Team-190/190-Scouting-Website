@@ -226,14 +226,6 @@
         }
     }
 
-    async function fetchAllData() {
-        const eventCode = localStorage.getItem("eventCode");
-        console.log("eventCode: ", eventCode);
-
-        const response = await fetch("http://localhost:8000/allData?eventCode="+eventCode);
-        const result = await response.json();
-        return result;
-    }
 
     async function fetchAllMetricData() {
         const eventCode = localStorage.getItem("eventCode");

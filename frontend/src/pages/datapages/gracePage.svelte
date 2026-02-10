@@ -1,29 +1,31 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { postGracePage, fetchGracePage } from "../../utils/api";
-  import Team from "../../components/Team.svelte";
+  import { fetchTeams } from "../../utils/blueAllianceApi";
 
   //Variables
-  let allTeams = []; //for dropdown
   let selectedTeam = "Select a team";
   let tableData = [];
   let isSubmitting = false;
   const rating = [new URL("../../images/DNP.png", import.meta.url).href, new URL("../../images/ProbNo.png", import.meta.url).href, new URL("../../images/NeutralBad.jpg", import.meta.url).href, new URL("../../images/NeutralGood.png", import.meta.url).href, new URL("../../images/PrettyGood.gif", import.meta.url).href, new URL("../../images/AHHHHH.png", import.meta.url).href, new URL("../../images/FIRSTpick.gif", import.meta.url).href ];
-  const apiKey = import.meta.env.VITE_BA_AUTH_KEY;
   const eventCode = localStorage.getItem("eventCode");
 
-  let teams = new Map();
   let originalTitle = "";
+  let teams = new Map();
+  let allTeams = [];
 
   onMount(async () => {
     originalTitle = document.title;
     document.title = "GARCE PAGE";
     // for (let i = 0; i < allTeams.length; i++){
-    //   teamNames.push(await fetchNames(allTeams[i]));
+    //   teamNames.push(await fetchTeams(allTeams[i]));
     // }
-    fetchNames().then(() => {
-      addPastData();
-    });
+
+    const result = await fetchTeams(eventCode);
+    teams = result._teams;
+    allTeams = result._teamNumbers;
+    
+    addPastData();
   });
 
   onDestroy(() => {
@@ -48,33 +50,6 @@
     }).catch(err => {
       console.error("Failed to fetch Grace page:", err);
     });
-  }
-
-  async function fetchNames() {
-    const apiUrl = `https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/simple`;
-
-    try {
-      const response = await fetch(apiUrl, {
-        headers: {
-          "X-TBA-Auth-Key": apiKey,
-        },
-      });
-
-      const data = await response.json();
-      allTeams = data.map((team) => team.team_number).sort((a, b) => a - b);
-      console.log("Fetched team data:", data);
-      for (let i = 0; i < data.length; i++) {
-        teams.set(data[i].team_number, data[i].nickname);
-      }
-      teams = teams;
-      console.log("Teams Map:", teams);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-    } catch (error) {
-      console.error("There was a problem fetching team data:", error);
-    }
   }
 
   async function handleRatingClick(ratingEmoji: string, i) {
