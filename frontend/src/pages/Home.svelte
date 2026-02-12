@@ -40,13 +40,26 @@
 
     let allEvents = [];
     let events = [];
+    let dbEvents = [];
 
     onMount(async () => {
         const currentYear = new Date().getFullYear();
         years = Array.from({ length: currentYear - 2014 }, (_, i) => 2015 + i);
-        await loadEventsForYear();
-        filterEvents();
+        // await loadEventsForYear();
+        // filterEvents();
+        await loadDbEvents();
     });
+
+    async function loadDbEvents() {
+        try {
+            const res = await fetch("http://localhost:8000/events");
+            if (res.ok) {
+                dbEvents = await res.json();
+            }
+        } catch (e) {
+            console.error("Failed to load events from backend", e);
+        }
+    }
 
     async function loadEventsForYear() {
         try {
@@ -95,19 +108,13 @@
         <h2>Event Selector</h2>
 
         <select class="select" bind:value={eventCode}>
-            <option value="2026_game">2026_game</option>
-            <option value="2026mabil">Minuteman Event</option>
-            <option value="2026mabos">Greater Boston Event</option>
-            <option value="2026mawor">WPI Event</option>
-            <option value="2026schop">Richland Event</option>
+            {#each dbEvents as event}
+                <option value={event.eventCode}>{event.name}</option>
+            {/each}
         </select>
 
         <p class="selected-event">
-            You selected: {eventCode === "2026_game" ? "2026_game" : 
-                        eventCode === "2026mabil" ? "Minuteman Event" : 
-                        eventCode === "2026mabos" ? "Greater Boston Event" : 
-                        eventCode === "2026mawor" ? "WPI Event" : 
-                        eventCode === "2026schop" ? "Richland Event" : "2026_game"}
+            You selected: {dbEvents.find(e => e.eventCode === eventCode)?.name || eventCode}
         </p>
 
         </div>

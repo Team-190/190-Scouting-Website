@@ -60,6 +60,16 @@ app.use((req, res, next) => {
     next();
 });
 
+app.get("/events", async (req, res) => {
+    try {
+        const events = await database.getEvents();
+        res.json(events);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Failed to fetch events" });
+    }
+});
+
 app.get("/", async (req, res) => {
     res.renderHtml("file.html");
 });

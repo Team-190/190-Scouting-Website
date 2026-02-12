@@ -205,7 +205,7 @@
       }
     }
     if (data.length == 0) {
-      alert("fuckass monkey give it a team number");
+      alert("Please give it a team number");
     }
     console.log("Data:\n" + JSON.stringify(data, null, 2));
     // Populate cache with team data for charts

@@ -1,123 +1,134 @@
 const fs = require("fs").promises;
-const supabaseUtil = require("./supabaseUtil");
-const storage = require("./storage");
+// const supabaseUtil = require("./supabaseUtil");
+// const storage = require("./storage");
+const sql = require('mssql/msnodesqlv8');
 require("dotenv").config();
 
+const config = {
+    connectionString: "Driver={ODBC Driver 17 for SQL Server};Server=localhost\\sqlexpress;Database=2026manualMatch;Trusted_Connection=yes;"
+}
+
+// module.exports removed here to avoid overwriting later
 const apiKey = process.env.VITE_AUTH_KEY;
 
-supabaseUtil.supabaseInit()
-    .then((value) => {supabaseClient = value})
-    .catch((error) => console.warn(error));
+// supabaseUtil.supabaseInit()
+//    .then((value) => {supabaseClient = value})
+//    .catch((error) => console.warn(error));
 
 async function teamView(teamNumber) {
-    let query = supabaseClient
-        .from("2026_game")
-        .select("*")
-        .eq("team", `frc${teamNumber}`);
-
-    const result = await query;
-    console.log(result);
-    return result;
+    // Legacy: assumes default DB and 'Activities' table
+    try {
+        await sql.connect(config);
+        const result = await sql.query(`SELECT * FROM [2026manualMatch].[dbo].[Activities] WHERE team = 'frc${teamNumber}'`);
+        console.log(result.recordset);
+        return { data: result.recordset, error: null };
+    } catch (err) {
+        console.error("teamView error:", err);
+        return { data: null, error: err };
+    }
 }
 
 async function getTeamNumbers() {
-    let query = supabaseClient
-        .from("2026_game")
-        .select("team")
-
-    let result = (await query).data
-    console.log("result: "+JSON.stringify(result))
-    result = result.map((element, _index, _array) => {
-        return element.team.slice(3)
-    });
-    
-    console.log(result);
-    return result;
+    try {
+        await sql.connect(config);
+        const result = await sql.query(`SELECT team FROM [2026manualMatch].[dbo].[Activities]`);
+        const queryData = result.recordset;
+        const teams = queryData.map((element) => element.team.slice(3)); // 'frc190' -> '190'
+        console.log(teams);
+        return { data: teams, error: null };
+    } catch (err) {
+        console.error("getTeamNumbers error:", err);
+        return { data: null, error: err };
+    }
 }
 
 async function allData(eventCode) {
-    let query = supabaseClient
-        .from(eventCode)
-        .select("*");
-    const result = await query;
-    return result;
+    try {
+        await sql.connect(config);
+        const query = `SELECT * FROM [${eventCode}].[dbo].[Activities]`;
+        const result = await sql.query(query);
+        return { data: result.recordset, error: null };
+    } catch (err) {
+        console.error("allData error:", err);
+        return { data: null, error: err };
+    }
 }
 
 async function allMetricData(eventCode) {
-    let query = supabaseClient
-        .from(eventCode)
-        .select("*")
-        .neq("RecordType", "Match_Event");
-    const result = await query;
-    return result;
+    try {
+        await sql.connect(config);
+        const query = `SELECT * FROM [${eventCode}].[dbo].[Activities] WHERE RecordType <> 'Match_Event'`;
+        const result = await sql.query(query);
+        return { data: result.recordset, error: null };
+    } catch (err) {
+        console.error("allMetricData error:", err);
+        return { data: null, error: err };
+    }
 }
 
 async function allTeamsView(eventCode) {
-    const {data, error} = await storage.retrieveConfig(eventCode);
-
-    if (parseInt(process.env.USE_CUSTOM_CONFIG)) {
-        try {
-            const raw = await fs.readFile(`test/${eventCode}-config.json`, 'utf8');
-            config = JSON.parse(raw);
-        } catch (error) {
-            return error;
-        }
-    } else {
-        if (!error) config = JSON.parse(await data.text()) 
-        else return error;
+    let jsonConfig;
+    try {
+        const raw = await fs.readFile(`test/${eventCode}-config.json`, 'utf8');
+        jsonConfig = JSON.parse(raw);
+    } catch (error) {
+        console.error(`Failed to load config for ${eventCode}:`, error);
+        return { data: null, error };
     }
 
-    console.log(["Team"].concat(config.teamView[0].columns));
+    console.log(["Team"].concat(jsonConfig.teamView[0].columns));
+    const columns = ["Team"].concat(jsonConfig.teamView[0].columns).map(c => `[${c}]`).join(", ");
 
-    let query = supabaseClient
-        .from(eventCode)
-        .select(["Team"].concat(config.teamView[0].columns).toString());
-    
-    query = query.eq("RecordType", "EndMatch");
-
-    return query;
+    try {
+        await sql.connect(config);
+        const query = `SELECT ${columns} FROM [${eventCode}].[dbo].[Activities] WHERE RecordType = 'EndMatch'`;
+        const result = await sql.query(query);
+        return { data: result.recordset, error: null }; 
+    } catch (err) {
+        console.error("allTeamsView error:", err);
+        return { data: null, error: err };
+    }
 }
 
-
 async function availableTeamsView(eventCode) {
-
-    // const {data, error} = await storage.retrieveConfig(eventCode);
-
-    // if (parseInt(process.env.USE_CUSTOM_CONFIG)) {
-    //     try {
-    //         const raw = await fs.readFile(`test/${eventCode}-config.json`, 'utf8');
-    //         config = JSON.parse(raw);
-    //     } catch (error) {
-    //         return error;
-    //     }
-    // } else {
-    //     if (!error) config = JSON.parse(await data.text()) 
-    //     else return error;
-    // }
-
-    let query = supabaseClient
-        .from(eventCode)
-        .select("team");
-    
-    query = await query;
-    console.log(query);
-    const queryData = query.data;
-    console.log(queryData);
-
-    let teams = [];
-    for (let team_ of queryData) {
-        const teamNumber = parseInt(team_.team.slice(3));
-        teams.push(teamNumber);
+    try {
+        await sql.connect(config);
+        const query = `SELECT team FROM [${eventCode}].[dbo].[Activities]`;
+        const result = await sql.query(query);
+        
+        let teams = [];
+        for (let team_ of result.recordset) {
+            const teamNumber = parseInt(team_.team.slice(3));
+            teams.push(teamNumber);
+        }
+        teams = [...new Set(teams)];
+        return teams;
+    } catch (err) {
+        console.error("availableTeamsView error:", err);
+        return [];
     }
+}
 
-    teams = [...new Set(teams)];
-
-    return teams;
-
+async function getEvents() {
+    try {
+        await sql.connect(config);
+        // Query system databases to get a list of all database names, excluding system ones
+        const result = await sql.query("SELECT name FROM sys.databases WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb')");
+        return result.recordset.map(row => ({
+            eventCode: row.name,
+            name: row.name
+        }));
+    } catch (err) {
+        console.error("Error fetching events:", err);
+        return [];
+    }
 }
 
 
 module.exports = {
+    connect: () => sql.connect(config), // Re-adding this just in case
+    sql, // Re-adding this just in case
+    getEvents,
     allMetricData,
     allData,
     getTeamNumbers,
