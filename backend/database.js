@@ -5,22 +5,18 @@ const sql = require('mssql/msnodesqlv8');
 require("dotenv").config();
 
 const config = {
-    connectionString: "Driver={ODBC Driver 17 for SQL Server};Server=localhost\\sqlexpress;Database=2026manualMatch;Trusted_Connection=yes;"
+    connectionString: `Driver={ODBC Driver 17 for SQL Server};Server=96.236.26.155,49172;Database=2026manualMatch;Uid=${process.env.DB_USER};Pwd=${process.env.DB_PASSWORD};TrustServerCertificate=yes;Encrypt=no;`
 }
 
 // module.exports removed here to avoid overwriting later
 const apiKey = process.env.VITE_AUTH_KEY;
 
-// supabaseUtil.supabaseInit()
-//    .then((value) => {supabaseClient = value})
-//    .catch((error) => console.warn(error));
-
 async function teamView(teamNumber) {
     // Legacy: assumes default DB and 'Activities' table
     try {
         await sql.connect(config);
-        const result = await sql.query(`SELECT * FROM [2026manualMatch].[dbo].[Activities] WHERE team = 'frc${teamNumber}'`);
-        console.log(result.recordset);
+        const result = await sql.query(`SELECT * FROM [${eventCode}].[dbo].[Activities] WHERE team = 'frc${teamNumber}'`);
+        console.log("TeamView Result:", result.recordset);
         return { data: result.recordset, error: null };
     } catch (err) {
         console.error("teamView error:", err);
@@ -31,10 +27,12 @@ async function teamView(teamNumber) {
 async function getTeamNumbers() {
     try {
         await sql.connect(config);
-        const result = await sql.query(`SELECT team FROM [2026manualMatch].[dbo].[Activities]`);
+        const result = await sql.query(`SELECT DISTINCT team FROM [${eventCode}].[dbo].[Activities]`);
         const queryData = result.recordset;
-        const teams = queryData.map((element) => element.team.slice(3)); // 'frc190' -> '190'
-        console.log(teams);
+        // const teams = queryData.map((element) => element.team.slice(3)); 
+        // Handles 'frc190' or '190' or 'team190' gracefully
+        const teams = queryData.map(e => String(e.team).replace(/\D/g, "")).filter(t => t);
+        console.log("Teams Found:", teams);
         return { data: teams, error: null };
     } catch (err) {
         console.error("getTeamNumbers error:", err);
