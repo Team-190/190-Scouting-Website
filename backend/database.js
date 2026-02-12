@@ -5,9 +5,16 @@ const sql = require('mssql/msnodesqlv8');
 require("dotenv").config();
 
 const config = {
-    connectionString: `Driver={ODBC Driver 17 for SQL Server};Server=96.236.26.155,49172;Database=2026manualMatch;Uid=${process.env.DB_USER};Pwd=${process.env.DB_PASSWORD};TrustServerCertificate=yes;Encrypt=no;`
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    server: '96.236.26.155',
+    port: 49172,
+    database: '2026manualMatch',
+    options: {
+        encrypt: false,
+        trustServerCertificate: true
+    }
 }
-
 // module.exports removed here to avoid overwriting later
 const apiKey = process.env.VITE_AUTH_KEY;
 
@@ -55,7 +62,7 @@ async function allData(eventCode) {
 async function allMetricData(eventCode) {
     try {
         await sql.connect(config);
-        const query = `SELECT * FROM [${eventCode}].[dbo].[Activities] WHERE RecordType <> 'Match_Event'`;
+        const query = `SELECT * FROM [${eventCode}].[dbo].[Activities]`;
         const result = await sql.query(query);
         return { data: result.recordset, error: null };
     } catch (err) {

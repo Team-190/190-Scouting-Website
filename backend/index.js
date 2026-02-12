@@ -63,6 +63,7 @@ app.use((req, res, next) => {
 app.get("/events", async (req, res) => {
     try {
         const events = await database.getEvents();
+        console.log("GOT EVENTSS:\n"+JSON.stringify(events, null, 2));
         res.json(events);
     } catch (error) {
         console.error(error);
