@@ -30,6 +30,38 @@
   const ROW_HEIGHT = 25; // Height of each row in pixels
   const HEADER_HEIGHT = 32; // Height of the header row
 
+    const metricNames = new Map();
+    metricNames.set("TimeOfClimb", "Match Climb Time");
+    metricNames.set("Defense", "Defense Strategy");
+    metricNames.set("Avoidance", "Avoidance Strategy");
+    metricNames.set("ClimbTime", "Climb Time");
+    metricNames.set("DefenseTime", "Defense Time");
+    metricNames.set("AutoClimb", "Auto Climb");
+    metricNames.set("AttemptClimb", "Climb Attempt");
+    metricNames.set("BumpTraversal", "Times Over Bump");
+    metricNames.set("StartingLocation", "Starting Location");
+    metricNames.set("MatchEvent", "Match Event");
+    metricNames.set("FuelIntakingTime", "Fuel Intaking Time");
+    metricNames.set("FuelShootingTime", "Fuel Shooting Time");
+    metricNames.set("FeedingTime", "Feeding Time");
+    metricNames.set("EndState", "Climb State");
+    metricNames.set("LadderLocation", "Ladder Location");
+    metricNames.set("Strategy", "Strategy");
+    
+    const excludedFields = ["Match", "Team", "Id", "RecordType", "ScouterName", "ScouterError", "Time", "Mode", "DriveStation"];
+
+    // This is the metric that the database actually stores
+    let dataMetric = "";
+
+    function getDataMetricName(){
+        for (const [key, value] of metricNames.entries()) {
+            if (value === selectedMetric) {
+                dataMetric = key;
+                break;
+            }
+        }
+    }
+
   const colorModes = {
     normal: {
       name: "Normal",
@@ -144,9 +176,7 @@
     }
   }
 
-  function onTeamChange(e: Event) {
-    const target = e.target as HTMLSelectElement;
-    selectedTeam = target.value;
+  function onTeamChange() {
     loadTeamData(selectedTeam);
   }
 
@@ -176,16 +206,25 @@
         if (element["RecordType"] == "Match_Event") {
           continue;
         }
-        if (
-          element["Team"] &&
-          !data.includes(parseInt(element["Team"].slice(3)))
-        ) {
-          data.push(parseInt(element["Team"].slice(3)));
+        
+        const rawTeam = element["Team"] || element["team"];
+        if (!rawTeam) continue;
+
+        // Robust team number extraction
+        const teamStr = String(rawTeam).replace(/\D/g, "");
+        if (!teamStr) continue;
+
+        const teamNum = parseInt(teamStr);
+
+        if (!data.includes(teamNum)) {
+          data.push(teamNum);
         }
       }
+      
+      data.sort((a, b) => a - b); // Sort numerically
 
       if (data.length == 0) {
-        alert("commit");
+        console.warn("No teams found in data");
       }
     } catch (e) {
       console.error("Error parsing data from localStorage:", e);
@@ -195,17 +234,130 @@
     return data;
   }
 
+  function aggregateMatches(rawData) {
+    const matches = {};
+    const seenString = {}; // key: fieldName -> boolean (true if we have seen a string for this field in ANY match? No, per field logic, but maybe global heuristic is safer. Actually per match is safer for aggregation)
+    
+    // We process grouping by match first
+    const grouped = {};
+    rawData.forEach(row => {
+        const m = row["Match"];
+        if (!m) return;
+        if (!grouped[m]) grouped[m] = [];
+        grouped[m].push(row);
+    });
+
+    const result = [];
+    
+    Object.keys(grouped).forEach(matchNum => {
+        const rows = grouped[matchNum];
+        // Sort rows by Id if possible to ensure time order (lower ID first)
+        rows.sort((a,b) => (Number(a.Id)||0) - (Number(b.Id)||0));
+        
+        const aggregated = { ...rows[0] }; // Start with metadata from first row
+        // Reset counters for summation
+        // We will rebuild the metric values from scratch to be safe
+        
+        // Identify all keys present in any row
+        const allKeys = new Set();
+        rows.forEach(r => Object.keys(r).forEach(k => allKeys.add(k)));
+        
+        const fieldState = {}; // key -> { type: 'numeric'|'string', val: ... }
+
+        allKeys.forEach(key => {
+            // Skip metadata fields from aggregation logic (retain from first row or overwrite)
+            if (["Match", "Team", "team", "Id", "Time", "RecordType", "Mode", "DriveStation", "ScouterName", "ScouterError"].includes(key)) {
+                // Usually we just keep the last one or first one. 
+                // Let's keep the last one for status like "EndMatch"? Or first? 
+                // Rows are sorted by ID. 
+                // metadata in aggregated is already set to rows[0].
+                // Let's rely on rows[0] for basic metadata.
+                return;
+            }
+
+            // For metrics:
+            fieldState[key] = { type: 'none', val: 0 };
+        });
+
+        rows.forEach(row => {
+            Object.keys(row).forEach(key => {
+                if (!fieldState[key]) return; // Skip metadata
+                
+                const val = row[key];
+                // Ignore invalid values
+                if (val === -1 || val === "-1" || val === "-" || val === null || val === undefined || val === "") return;
+
+                const isNum = isNumeric(val);
+                
+                if (fieldState[key].type === 'string') {
+                   // If we already decided it's a string field
+                   if (!isNum) {
+                       fieldState[key].val = val; // Overwrite with latest string
+                   }
+                   // If isNum (e.g. 0), ignore it as noise if we have string mode
+                } else if (fieldState[key].type === 'numeric') {
+                   if (isNum) {
+                       fieldState[key].val += Number(val);
+                   } else {
+                       // Switch to string mode!
+                       fieldState[key].type = 'string';
+                       fieldState[key].val = val;
+                   }
+                } else { // type is 'none'
+                   if (isNum) {
+                       fieldState[key].type = 'numeric';
+                       fieldState[key].val = Number(val);
+                   } else {
+                       fieldState[key].type = 'string';
+                       fieldState[key].val = val;
+                   }
+                }
+            });
+        });
+
+        // Apply back to aggregated object
+        Object.keys(fieldState).forEach(key => {
+            aggregated[key] = fieldState[key].val;
+        });
+        
+        result.push(aggregated);
+    });
+
+    return result.sort((a,b) => a.Match - b.Match);
+  }
+
   async function loadTeamData(teamNumber) {
     console.log("Changing to :" + teamNumber);
     let data = [];
+    if (!teamViewData) {
+        console.warn("teamViewData is missing");
+        return;
+    }
+
     for (let element of teamViewData) {
-      if (element["Team"] == `frc${teamNumber}`) {
+      if (element["RecordType"] == "Match_Event") {
+        continue;
+      }
+      // Check both "Team" and "team" keys
+      const rawTeam = element["Team"] || element["team"];
+      if (!rawTeam) continue;
+
+      // Extract numeric part for comparison (handles "frc190", "frc 190", "190")
+      const elementTeamNum = String(rawTeam).replace(/\D/g, ""); 
+      const targetTeamNum = String(teamNumber).replace(/\D/g, "");
+
+      if (elementTeamNum === targetTeamNum) {
         data.push(element);
-        //data = element;
       }
     }
+
+    if (data.length > 0) {
+      data = aggregateMatches(data);
+    } 
+
     if (data.length == 0) {
-      alert("fuckass monkey give it a team number");
+      console.warn("No data found for team: " + teamNumber);
+      // alert("No data found for team " + teamNumber); 
     }
     console.log("Data:\n" + JSON.stringify(data, null, 2));
     // Populate cache with team data for charts
@@ -223,21 +375,14 @@
       ? Object.keys(teamViewData[0]).filter((k) => {
           // Exclude trivial/metadata fields
           if (
-            [
-              "id",
-              "created_at",
-              "team",
-              "match",
-              "record_type",
-              "scouter_name",
-              "scouter_error",
-            ].includes(k)
+            excludedFields.includes(k)
           ) {
             return false;
           }
 
           // Only include numeric metrics
-          return checkIsNumericMetric(k, teamViewData);
+          // return checkIsNumericMetric(k, teamViewData);
+          return true;
         })
       : [];
 
@@ -370,12 +515,12 @@
 
     return {
       tooltip: { trigger: "item" },
-      title: { text: `Team ${selectedTeam} - ${metric.replaceAll("_", " ")}` },
+      title: { text: `Team ${selectedTeam} - ${metricNames.get(metric) || metric.replaceAll("_", " ")}` },
       series: [
         {
           type: "pie",
           data: pieData,
-          name: metric,
+          name: metricNames.get(metric) || metric.replaceAll("_", " "),
           radius: "60%",
         },
       ],
@@ -392,7 +537,7 @@
 
     return {
       title: {
-        text: `Team ${selectedTeam} - ${metric.replaceAll("_", " ")}`,
+        text: `Team ${selectedTeam} - ${metricNames.get(metric) || metric.replaceAll("_", " ")}`,
         textStyle: { color: "#ffffff", fontSize: 16 },
       },
       tooltip: { trigger: "axis" },
@@ -433,7 +578,7 @@
 
     return {
       title: {
-        text: `Team ${selectedTeam} - ${metric.replaceAll("_", " ")}`,
+        text: `Team ${selectedTeam} - ${metricNames.get(metric) || metric.replaceAll("_", " ")}`,
         textStyle: { color: "#ffffff", fontSize: 16 },
       },
       tooltip: { trigger: "axis" },
@@ -476,7 +621,7 @@
 
     return {
       title: {
-        text: `Team ${selectedTeam} - ${metric.replaceAll("_", " ")}`,
+        text: `Team ${selectedTeam} - ${metricNames.get(metric) || metric.replaceAll("_", " ")}`,
         textStyle: { color: "#ffffff", fontSize: 16 },
       },
       tooltip: { trigger: "axis" },
@@ -548,7 +693,7 @@
       tooltip: { trigger: "item" },
       radar: {
         indicator: numericMetrics.map((k, i) => ({
-          name: k,
+          name: metricNames.get(k) || k.replaceAll("_", " "),
           max: maxValues[i],
         })),
       },
@@ -582,15 +727,7 @@
     // Allow all non-excluded metrics, regardless of type
     const displayMetrics = Object.keys(sample).filter(
       (k) =>
-        ![
-          "match",
-          "team",
-          "id",
-          "created_at",
-          "record_type",
-          "scouter_name",
-          "scouter_error",
-        ].includes(k),
+        !excludedFields.includes(k),
     );
 
     // Calculate global stats for each metric across all teams/matches (only for numeric)
@@ -641,13 +778,6 @@
 
     const rowData = [];
 
-    // First row: Match Numbers
-    const matchRow: any = { metric: "MatchNum" };
-    qLabels.forEach((q, i) => {
-      matchRow[q] = matchNums[i];
-    });
-    rowData.push(matchRow);
-
     // Other metrics with mean and median
     displayMetrics.forEach((metric) => {
       const row: any = { metric };
@@ -679,6 +809,7 @@
 
     const columnDefs = [
       {
+        headerName: "MatchNum",
         field: "metric",
         pinned: "left",
         flex: 1,
@@ -692,9 +823,10 @@
           fontWeight: "bold",
           textAlign: "center",
         },
+        valueFormatter: (params) => metricNames.get(params.value) || params.value
       },
-      ...qLabels.map((q) => ({
-        headerName: q,
+      ...qLabels.map((q, i) => ({
+        headerName: matchNums[i],
         field: q,
         flex: 1,
         minWidth: 80,
@@ -702,16 +834,6 @@
         headerClass: "header-center",
         cellClass: "cell-center",
         cellStyle: (params) => {
-          if (params.data.metric === "MatchNum") {
-            return {
-              background: "#333",
-              color: "white",
-              fontSize: "18px",
-              fontWeight: 800,
-              textAlign: "center",
-            };
-          }
-
           const metricName = params.data.metric;
           const stats = globalStats[metricName] || { mean: 0, sd: 0 };
 
@@ -964,7 +1086,7 @@
             >
               <option value="">Choose metric</option>
               {#each metricOptions as m}
-                <option value={m}>{m}</option>
+                <option value={m}>{metricNames.get(m) || m}</option>
               {/each}
             </select>
           {/if}

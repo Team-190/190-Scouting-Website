@@ -56,6 +56,7 @@
     metricNames.set("FeedingTime", "Feeding Time");
     metricNames.set("EndState", "Climb State");
     metricNames.set("LadderLocation", "Ladder Location");
+    metricNames.set("Strategy", "Strategy");
     
     const excludedFields = ["Match", "Team", "Id", "RecordType", "ScouterName", "ScouterError", "Time", "Mode", "DriveStation"];
 
