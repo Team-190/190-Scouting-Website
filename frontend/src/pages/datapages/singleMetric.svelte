@@ -780,7 +780,6 @@
         } else {
             gridApi = createGrid(domNode, {
                 rowData,
-                columnDefs,
                 defaultColDef: {
                     resizable: false,
                     sortable: false,

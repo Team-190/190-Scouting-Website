@@ -4,6 +4,7 @@ const fs = require("fs").promises;
 const sql = require('mssql/msnodesqlv8');
 require("dotenv").config();
 
+
 const config = {
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,

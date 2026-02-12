@@ -19,7 +19,7 @@ const e = require("express");
 require("dotenv").config();
 
 const app = express();
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 8000;
 const testingMode = parseInt(process.env.TESTING) || 0;
 const DIR = process.env.DIR || "test/public";
 
@@ -36,7 +36,7 @@ app.use(express.json());
 
 app.use(
     session({
-        secret: process.env.SESSION_SECRET,
+        secret: "ffyufytfytfuytftfhgfhgfhfhgfhgfhgf",
         resave: false,
         saveUninitialized: false,
         cookie: {

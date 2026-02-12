@@ -1405,12 +1405,6 @@
         font-weight: bold;
     }
 
-    .api-controls {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-    }
-
     /* Main Content Area */
     .main-content {
         display: flex;
@@ -1515,7 +1509,7 @@
         flex: 1;
     }
     
-    .share-controls h2, .share-controls h3 {
+    .share-controls h3 {
         margin-top: 0;
         color: var(--frc-190-red);
     }
@@ -1648,26 +1642,6 @@
 
     .sidebar-team:active {
         cursor: grabbing;
-    }
-
-    .rank-number {
-        text-align: center;
-        color: var(--frc-190-red);
-        font-weight: bold;
-        font-size: 0.85rem;
-    }
-
-    .team-number {
-        font-weight: bold;
-        color: #fff;
-    }
-
-    .team-name {
-        color: #aaa;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        font-size: 0.85rem;
     }
 
     /* Bottom Fixed Bar style */
