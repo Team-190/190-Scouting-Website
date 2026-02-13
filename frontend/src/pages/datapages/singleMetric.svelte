@@ -164,12 +164,15 @@
 
     function getDataMetricName(){
         for (const [key, value] of metricNames.entries()) {
+          console.log(`iterating key: ${key} : value: ${value}`);
             if (value === selectedMetric) {
+              console.log("SETTING DATAMETRIC TO "+key);
                 dataMetric = key;
                 break;
             }
         }
     }
+
   function isNumeric(n) {
     if (n === null || n === undefined || n === "") return false;
     // Handle booleans
@@ -297,6 +300,7 @@
           console.log("exluced negative");
           continue;
         }
+
         // Handle both "Team" and "team" field names (backend uses lowercase)
         const teamNum = row.Team || row.team;
         if (!teamNum) continue;
@@ -338,9 +342,13 @@
         if (!domNode || !selectedMetric || availableTeams.length === 0) return;
 
         console.log("Selected Metric: ", selectedMetric, "Data Metric: ", dataMetric);
+    
 
 
         if (availableTeams.length === 0) return;
+        if (checkIsNumericMetric(dataMetric)) {
+          console.log("its numeric.");
+        }
 
         // Find the maximum number of matches any team has played
         let maxMatchCount = 0;
@@ -358,6 +366,7 @@
         // Check if metric is numeric
         const isNumericMetric = checkIsNumericMetric(dataMetric);
         console.log("Is Numeric Metric: ", isNumericMetric);
+        
 
         // Global stats (only for numeric metrics)
         let globalMean = 0;
@@ -409,7 +418,17 @@
 
 
         rowData = availableTeams.map(team => {
-            const rows = teamData[team] || [];
+            let rows;
+            if (checkIsNumericMetric(dataMetric)) {
+              const rawRows = teamData[team] || [];
+              rows = rawRows.filter(r => {
+                      const val = Number(r[dataMetric]);
+                      return val >= 0; // Keeps 0 and positives, dumps -1 or -5, etc.
+                  });
+            } else {
+              rows = teamData[team] || [];
+
+            }
             const values = [];
             const row = { team };
             
