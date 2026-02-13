@@ -1089,6 +1089,7 @@
 
   function getRadarOption(chart) {
     let numericMetrics = [];
+    let maxValues = [];
   
     for (let i = 0; i < metrics.length; i++) {
         const metricName = metrics[i];
@@ -1123,22 +1124,31 @@
 
     const colors = selectedTeams.map(() => randomHexColor());
 
-    const maxValues = numericMetrics.map((metricName) => {
-        let max = 0;
-        let dataKey = metricName;
+    for (let i =0; i<numericMetrics.length; i++) {
+        const metric = numericMetrics[i];
+        let dataKey = metric;
         for (const [key, value] of metricNames.entries()) {
-            if (value === metricName) { dataKey = key; break; }
+            if (value === metric) {
+                dataKey = key;
+                break;
+            }
         }
 
-        availableTeams.forEach((team) => {
-            const teamRows = teamData[team] || [];
-            teamRows.forEach((row) => {
-                const val = Number(row[dataKey] || 0);
-                if (val > max) max = val;
+        let maxVal = 0;
+        selectedTeams.forEach(team => {
+            const rows = teamData[team] || [];
+            rows.forEach(r => {
+                const v = r[dataKey];
+                if (isNumeric(v)) {
+                    const numValue = Number(v);
+                    if (numValue !== 0 && numValue !== -1 && numValue > maxVal) {
+                        maxVal = numValue;
+                    }
+                }
             });
         });
-        return Math.max(max, 1);
-    });
+        maxValues.push(maxVal);
+    }
 
     const seriesData = selectedTeams.map((team, teamIndex) => {
         const teamRows = teamData[team] || [];
