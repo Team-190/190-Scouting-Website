@@ -582,7 +582,6 @@
     }
 
     input[type="text"],
-    input[type="number"],
     select {
         width: 100%;
         padding: 12px 15px;
@@ -597,7 +596,6 @@
     }
 
     input[type="text"]:focus,
-    input[type="number"]:focus,
     select:focus {
         outline: none;
         border-color: var(--frc-190-red);

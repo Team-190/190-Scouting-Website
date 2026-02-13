@@ -177,8 +177,6 @@
     transform: none;
   }
 
-  input[type="text"],
-  textarea,
   select {
     padding: 8px 12px;
     border: 2px solid var(--frc-190-red);
@@ -188,8 +186,6 @@
     font-size: 14px;
   }
 
-  input[type="text"]:focus,
-  textarea:focus,
   select:focus {
     outline: none;
     box-shadow: 0 0 0 2px rgba(200, 27, 0, 0.4);

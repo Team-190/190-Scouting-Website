@@ -41,6 +41,28 @@
   const ROW_HEIGHT = 25; // Height of each row in pixels
   const HEADER_HEIGHT = 32; // Height of the header row
 
+  // ===== ADDED FROM teamView.svelte - START =====
+  const metricNames = new Map();
+  metricNames.set("TimeOfClimb", "Match Climb Time");
+  metricNames.set("Defense", "Defense Strategy");
+  metricNames.set("Avoidance", "Avoidance Strategy");
+  metricNames.set("ClimbTime", "Climb Time");
+  metricNames.set("DefenseTime", "Defense Time");
+  metricNames.set("AutoClimb", "Auto Climb");
+  metricNames.set("AttemptClimb", "Climb Attempt");
+  metricNames.set("BumpTraversal", "Times Over Bump");
+  metricNames.set("StartingLocation", "Starting Location");
+  metricNames.set("MatchEvent", "Match Event");
+  metricNames.set("FuelIntakingTime", "Fuel Intaking Time");
+  metricNames.set("FuelShootingTime", "Fuel Shooting Time");
+  metricNames.set("FeedingTime", "Feeding Time");
+  metricNames.set("EndState", "Climb State");
+  metricNames.set("LadderLocation", "Ladder Location");
+  metricNames.set("Strategy", "Strategy");
+  
+  const excludedFields = ["Match", "Team", "Id", "RecordType", "ScouterName", "ScouterError", "Time", "Mode", "DriveStation", "match", "team", "id", "created_at", "record_type", "scouter_name", "scouter_error"];
+  // ===== ADDED FROM teamView.svelte - END =====
+
   const colorModes = {
     normal: {
       name: "Normal",
@@ -153,6 +175,8 @@
     if (selectedTeam) {
       loadTeamData(selectedTeam);
     }
+    // ===== ADDED - Reload all alliance grids =====
+    loadAllAllianceTeams();
   }
 
   function onTeamChange(e: Event) {
@@ -205,6 +229,95 @@
     return teamKey.replace("frc", "");
   }
 
+  // ===== ADDED FROM teamView.svelte - START =====
+  function aggregateMatches(rawData) {
+    const matches = {};
+    const seenString = {};
+    
+    // We process grouping by match first
+    const grouped = {};
+    rawData.forEach(row => {
+        const m = row["Match"] || row["match"];
+        if (!m) return;
+        if (!grouped[m]) grouped[m] = [];
+        grouped[m].push(row);
+    });
+
+    const result = [];
+    
+    Object.keys(grouped).forEach(matchNum => {
+        const rows = grouped[matchNum];
+        // Sort rows by Id if possible to ensure time order (lower ID first)
+        rows.sort((a,b) => (Number(a.Id || a.id)||0) - (Number(b.Id || b.id)||0));
+        
+        const aggregated = { ...rows[0] }; // Start with metadata from first row
+        // Reset counters for summation
+        // We will rebuild the metric values from scratch to be safe
+        
+        // Identify all keys present in any row
+        const allKeys = new Set();
+        rows.forEach(r => Object.keys(r).forEach(k => allKeys.add(k)));
+        
+        const fieldState = {}; // key -> { type: 'numeric'|'string', val: ... }
+
+        allKeys.forEach(key => {
+            // Skip metadata fields from aggregation logic (retain from first row or overwrite)
+            if (["Match", "Team", "team", "Id", "Time", "RecordType", "Mode", "DriveStation", "ScouterName", "ScouterError", "match", "id", "created_at", "record_type", "scouter_name", "scouter_error"].includes(key)) {
+                return;
+            }
+
+            // For metrics:
+            fieldState[key] = { type: 'none', val: 0 };
+        });
+
+        rows.forEach(row => {
+            Object.keys(row).forEach(key => {
+                if (!fieldState[key]) return; // Skip metadata
+                
+                const val = row[key];
+                // Ignore invalid values
+                if (val === -1 || val === "-1" || val === "-" || val === null || val === undefined || val === "") return;
+
+                const isNum = isNumeric(val);
+                
+                if (fieldState[key].type === 'string') {
+                   // If we already decided it's a string field
+                   if (!isNum) {
+                       fieldState[key].val = val; // Overwrite with latest string
+                   }
+                   // If isNum (e.g. 0), ignore it as noise if we have string mode
+                } else if (fieldState[key].type === 'numeric') {
+                   if (isNum) {
+                       fieldState[key].val += Number(val);
+                   } else {
+                       // Switch to string mode!
+                       fieldState[key].type = 'string';
+                       fieldState[key].val = val;
+                   }
+                } else { // type is 'none'
+                   if (isNum) {
+                       fieldState[key].type = 'numeric';
+                       fieldState[key].val = Number(val);
+                   } else {
+                       fieldState[key].type = 'string';
+                       fieldState[key].val = val;
+                   }
+                }
+            });
+        });
+
+        // Apply back to aggregated object
+        Object.keys(fieldState).forEach(key => {
+            aggregated[key] = fieldState[key].val;
+        });
+        
+        result.push(aggregated);
+    });
+
+    return result.sort((a,b) => (a.Match || a.match) - (b.Match || b.match));
+  }
+  // ===== ADDED FROM teamView.svelte - END =====
+
   async function loadMatchData(matchNumber) {
   if (!allMatches || allMatches.length === 0) return;
 
@@ -229,14 +342,29 @@ onMount(async () => {
 
   console.log("Loaded teamViewData:", teamViewData);
 
+  // Load event key from localStorage
+  eventKey = localStorage.getItem("eventCode") || "";
+  console.log("Event Key:", eventKey);
+
   // Fetch matches if needed
-  allMatches = await fetchEventMatches(eventKey);
+  if (eventKey) {
+    allMatches = await fetchEventMatches(eventKey);
+    console.log("Fetched matches:", allMatches);
+  }
 
   // Pick first match by default
-  selectedMatch = allMatches[0]?.match_number ?? "1";
-
-  // Load grids for that match
-  await loadMatchData(selectedMatch);
+  if (allMatches && allMatches.length > 0) {
+    selectedMatch = allMatches[0].match_number.toString();
+    console.log("Selected match:", selectedMatch);
+    
+    // Wait for DOM
+    await tick();
+    
+    // Load grids for that match
+    await loadMatchData(selectedMatch);
+  } else {
+    console.warn("No matches found or event key missing");
+  }
 });
 
 
@@ -933,38 +1061,57 @@ onMount(async () => {
     gridInstance5 = createGrid(domNode5, gridOptions);
   }
 
+  // ===== ADDED FROM teamView.svelte - START =====
   // New function to build grid for a specific team
   function buildGridForTeam(teamNumber, domElement) {
-    if (!teamViewData) return;
+    console.log(`buildGridForTeam called for team ${teamNumber}`);
+    
+    if (!teamViewData) {
+      console.error("No teamViewData available in buildGridForTeam");
+      return;
+    }
+    
+    if (!domElement) {
+      console.error(`No DOM element provided for team ${teamNumber}`);
+      return;
+    }
     
     let data = [];
+    console.log(`Searching for team ${teamNumber} in ${teamViewData.length} records`);
+    
     for (let element of teamViewData) {
-      if (element["team"] == `frc${teamNumber}`) {
+      const rawTeam = element["Team"] || element["team"];
+      if (!rawTeam) continue;
+
+      // Extract numeric part for comparison (handles "frc190", "frc 190", "190")
+      const elementTeamNum = String(rawTeam).replace(/\D/g, ""); 
+      const targetTeamNum = String(teamNumber).replace(/\D/g, "");
+
+      if (elementTeamNum === targetTeamNum) {
         data.push(element);
       }
     }
+    
+    console.log(`Found ${data.length} records for team ${teamNumber}`);
     
     if (data.length === 0) {
       console.warn(`No data found for team ${teamNumber}`);
       return;
     }
 
+    // Aggregate matches
+    if (data.length > 0) {
+      data = aggregateMatches(data);
+      console.log(`After aggregation: ${data.length} matches for team ${teamNumber}`);
+    }
+
     const matches = data;
-    const matchNums = matches.map((m) => m.match);
+    const matchNums = matches.map((m) => m.Match || m.match);
     const qLabels = matchNums.map((_, i) => `Q${i + 1}`);
 
     const sample = matches[0];
     const displayMetrics = Object.keys(sample).filter(
-      (k) =>
-        ![
-          "match",
-          "team",
-          "id",
-          "created_at",
-          "record_type",
-          "scouter_name",
-          "scouter_error",
-        ].includes(k),
+      (k) => !excludedFields.includes(k)
     );
 
     const globalStats = {};
@@ -1009,11 +1156,6 @@ onMount(async () => {
     });
 
     const rowData = [];
-    const matchRow: any = { metric: "MatchNum" };
-    qLabels.forEach((q, i) => {
-      matchRow[q] = matchNums[i];
-    });
-    rowData.push(matchRow);
 
     displayMetrics.forEach((metric) => {
       const row: any = { metric };
@@ -1044,24 +1186,31 @@ onMount(async () => {
     });
 
   const columnDefs = [
-  ...qLabels.map((q) => ({
-    headerName: q,
+    {
+      headerName: "Metric",
+      field: "metric",
+      pinned: "left",
+      flex: 1,
+      minWidth: 100,
+      headerClass: "header-center",
+      cellClass: "cell-center",
+      cellStyle: {
+        background: "#C81B00",
+        color: "white",
+        fontSize: "14px",
+        fontWeight: "bold",
+        textAlign: "center",
+      },
+      valueFormatter: (params) => metricNames.get(params.value) || params.value
+    },
+  ...qLabels.map((q, i) => ({
+    headerName: matchNums[i],
     field: q,
     flex: 1,
     minWidth: 60,
     headerClass: "header-center",
     cellClass: "cell-center",
     cellStyle: (params) => {
-      if (params.data.metric === "  MatchNum") {
-        return {
-          background: "#333",
-          color: "white",
-          fontSize: "14px",
-          fontWeight: 800,
-          textAlign: "center",
-        };
-      }
-
       const metricName = params.data.metric;
       const stats = globalStats[metricName] || { mean: 0, sd: 0 };
 
@@ -1092,11 +1241,11 @@ onMount(async () => {
       const stats = globalStats[metricName] || { isNumeric: false };
 
       if (!stats.isNumeric) {
-        return String(normalizeValue(params.value)); // <- always string
+        return String(normalizeValue(params.value));
       }
 
       const num = isNumeric(params.value) ? Number(params.value) : 0;
-      return num === 0 ? "0" : num.toFixed(2); // <- string
+      return num === 0 ? "0" : num.toFixed(2);
     },
   })),
   {
@@ -1125,7 +1274,7 @@ onMount(async () => {
     valueFormatter: (params) => {
       if (params.value === null || params.value === undefined) return "";
       const num = Number(params.value);
-      return num === 0 ? "0" : num.toFixed(2); // <- string
+      return num === 0 ? "0" : num.toFixed(2);
     },
   },
   {
@@ -1154,7 +1303,7 @@ onMount(async () => {
     valueFormatter: (params) => {
       if (params.value === null || params.value === undefined) return "";
       const num = Number(params.value);
-      return num === 0 ? "0" : num.toFixed(2); // <- string
+      return num === 0 ? "0" : num.toFixed(2);
     },
   },
 ];
@@ -1180,7 +1329,21 @@ onMount(async () => {
 
   // Function to load all alliance teams
   function loadAllAllianceTeams() {
-    if (!teamViewData || !domNode || !domNodeRight) return;
+    console.log("loadAllAllianceTeams called");
+    console.log("teamViewData:", teamViewData);
+    console.log("Red Alliance:", redAlliance);
+    console.log("Blue Alliance:", blueAlliance);
+    console.log("DOM nodes:", { domNode, domNodeRight, domNode2, domNode3, domNode4, domNode5 });
+    
+    if (!teamViewData) {
+      console.error("No teamViewData available");
+      return;
+    }
+    
+    if (!domNode || !domNodeRight) {
+      console.error("DOM nodes not ready");
+      return;
+    }
 
     if (gridInstance) gridInstance.destroy();
     if (gridInstanceRight) gridInstanceRight.destroy();
@@ -1190,29 +1353,34 @@ onMount(async () => {
     if (gridInstance5) gridInstance5.destroy();
 
     // Red alliance (left side)
-    if (domNode) gridInstance = buildGridForTeam(redAlliance[0], domNode);
-    if (domNode2) gridInstance2 = buildGridForTeam(redAlliance[1], domNode2);
-    if (domNode3) gridInstance3 = buildGridForTeam(redAlliance[2], domNode3);
+    if (domNode && redAlliance[0]) {
+      console.log("Building grid for Red 1:", redAlliance[0]);
+      gridInstance = buildGridForTeam(redAlliance[0], domNode);
+    }
+    if (domNode2 && redAlliance[1]) {
+      console.log("Building grid for Red 2:", redAlliance[1]);
+      gridInstance2 = buildGridForTeam(redAlliance[1], domNode2);
+    }
+    if (domNode3 && redAlliance[2]) {
+      console.log("Building grid for Red 3:", redAlliance[2]);
+      gridInstance3 = buildGridForTeam(redAlliance[2], domNode3);
+    }
 
     // Blue alliance (right side)
-    if (domNodeRight) gridInstanceRight = buildGridForTeam(blueAlliance[0], domNodeRight);
-    if (domNode4) gridInstance4 = buildGridForTeam(blueAlliance[1], domNode4);
-    if (domNode5) gridInstance5 = buildGridForTeam(blueAlliance[2], domNode5);
+    if (domNodeRight && blueAlliance[0]) {
+      console.log("Building grid for Blue 1:", blueAlliance[0]);
+      gridInstanceRight = buildGridForTeam(blueAlliance[0], domNodeRight);
+    }
+    if (domNode4 && blueAlliance[1]) {
+      console.log("Building grid for Blue 2:", blueAlliance[1]);
+      gridInstance4 = buildGridForTeam(blueAlliance[1], domNode4);
+    }
+    if (domNode5 && blueAlliance[2]) {
+      console.log("Building grid for Blue 3:", blueAlliance[2]);
+      gridInstance5 = buildGridForTeam(blueAlliance[2], domNode5);
+    }
   }
-
-  onMount(async () => {
-  // Load data from localStorage (or your backend)
-  const storedData = localStorage.getItem("data");
-  teamViewData = storedData ? JSON.parse(storedData) : [];
-
-  console.log("All data loaded:", teamViewData);
-
-  // Wait for DOM nodes to be bound
-  await tick();
-
-  // Load all alliance teams (grids)
-  loadAllAllianceTeams();
-});
+  // ===== ADDED FROM teamView.svelte - END =====
 
 </script>
 
@@ -1254,13 +1422,13 @@ onMount(async () => {
   <!-- Grid containers with dropdown in middle -->
   <div class="grid-wrapper">
     <div class="grid-column">
-      <div class="team-box">
-        <h3 class="team-label red-label">Red 1 - Team {redAlliance[0]}</h3>
-        <div
-          class="grid-container ag-theme-quartz"
-          bind:this={domNode}
-          style="height: {gridHeight}px;"
-        ></div>
+        <div class="team-box">
+          <h3 class="team-label red-label">Red 1 - Team {redAlliance[0]}</h3>
+          <div
+            class="grid-container ag-theme-quartz"
+            bind:this={domNode}
+            style="height: {gridHeight}px;"
+          ></div>
       </div>
       <div class="team-box">
         <h3 class="team-label red-label">Red 2 - Team {redAlliance[1]}</h3>
@@ -1278,12 +1446,6 @@ onMount(async () => {
           style="height: {gridHeight}px;"
         ></div>
       </div>
-    </div>
-    
-    <div class="center-dropdown">
-      <select id="center-select">
-        <option value="">Select option</option>
-      </select>
     </div>
     
     <div class="grid-column">
@@ -1599,7 +1761,7 @@ onMount(async () => {
   }
 
   .grid-container {
-    width: 100%;
+    width: 700px;
     background: var(--frc-190-black);
     box-sizing: border-box;
     border-radius: 8px;
