@@ -10,10 +10,10 @@
     import "ag-grid-community/styles/ag-theme-quartz.css";
 // Graph imports
     import * as barGraph from "../../pages/graphcode/bar.js";
-  import * as lineGraph from "../../pages/graphcode/line.js";
-  import * as pieGraph from "../../pages/graphcode/pie.js";
-  import * as scatterGraph from "../../pages/graphcode/scatter.js";
-  import * as radarGraph from "../../pages/graphcode/radar.js";
+    import * as lineGraph from "../../pages/graphcode/line.js";
+    import * as pieGraph from "../../pages/graphcode/pie.js";
+    import * as scatterGraph from "../../pages/graphcode/scatter.js";
+    import * as radarGraph from "../../pages/graphcode/radar.js";
 
     ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -109,8 +109,7 @@
 
     function getAlexTextColor(p) {
         const bg = getAlexBgColor(p);
-        if (["#0000FF", "#FF0000", "black"].includes(bg)) return "white";
-        return "black";
+        return textColorForBgStrict(bg);
     }
 
     function getAlexValuePercentile(v, inverted) {
@@ -162,13 +161,55 @@
             Math.round(c1[2] + (c2[2] - c1[2]) * t)
         ].join(",")})`;
 
+    // Determine readable text color (black or white) for a background color
+    function getContrastColor(bg) {
+        if (!bg) return "black";
+        let r, g, b;
+        try {
+            bg = String(bg).trim();
+            if (bg.startsWith("#")) {
+                const hex = bg.replace("#", "");
+                r = parseInt(hex.substring(0, 2), 16);
+                g = parseInt(hex.substring(2, 4), 16);
+                b = parseInt(hex.substring(4, 6), 16);
+            } else if (bg.startsWith("rgb")) {
+                const parts = bg.match(/\d+/g);
+                r = Number(parts[0]);
+                g = Number(parts[1]);
+                b = Number(parts[2]);
+            } else {
+                // Fallback: treat unknown strings as dark
+                return "white";
+            }
+
+            // Perceived brightness
+            const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+            return brightness > 150 ? "black" : "white";
+        } catch (e) {
+            return "white";
+        }
+    }
+
+    // Return white only for strict dark backgrounds (black or the dark gray used), else black
+    function textColorForBgStrict(bg) {
+        if (!bg) return "black";
+        const s = String(bg).trim().toLowerCase();
+        if (s === "black" || s === "#000" || s === "#000000" || s === "rgb(0,0,0)") return "white";
+        // Match the dark gray used in styles (#4D4D4D) in hex or rgb
+        if (s === "#4d4d4d" || s === "rgb(77,77,77)") return "white";
+        return "black";
+    }
+
     function getDataMetricName(){
+        dataMetric = "";
         for (const [key, value] of metricNames.entries()) {
             if (value === selectedMetric) {
                 dataMetric = key;
                 break;
             }
         }
+        // If not found in map, assume the selectedMetric is the actual data key
+        if (!dataMetric) dataMetric = selectedMetric;
     }
   function isNumeric(n) {
     if (n === null || n === undefined || n === "") return false;
@@ -367,7 +408,7 @@
             const allValues = [];
             availableTeams.forEach(team => {
                 const rows = teamData[team] || [];
-                const vals = rows.map(r => Number(r[selectedMetric] ?? 0))
+                const vals = rows.map(r => Number(r[dataMetric] ?? 0))
                                 .filter(v => v !== 0 && v !== -1);
                 if (vals.length > 0) allValues.push(...vals);
             });
@@ -379,12 +420,12 @@
         }
 
         // Calculate percentiles for numeric metrics
-        if (isNumericMetric) {
+            if (isNumericMetric) {
             const allValues = [];
             availableTeams.forEach(team => {
                 const rows = teamData[team] || [];
                 rows.forEach(r => {
-                    const val = Number(r[selectedMetric] ?? 0);
+                    const val = Number(r[dataMetric] ?? 0);
                     if (val !== 0 && val !== -1) allValues.push(val);
                 });
             });
@@ -423,11 +464,19 @@
             rows.forEach((r, i) => {
                 const label = qLabels[i];
                 let v = r[dataMetric];
-                
+
                 if (isNumericMetric) {
-                    const numValue = Number(v ?? 0);
-                    values.push(numValue);
-                    row[label] = numValue;
+                    if (v === undefined || v === null || v === "") {
+                        row[label] = null;
+                    } else if (isNumeric(v)) {
+                        const numValue = Number(v);
+                        // Only include raw numeric values (including 0 if explicitly provided)
+                        values.push(numValue);
+                        row[label] = numValue;
+                    } else {
+                        // Non-numeric string in a numeric metric - treat as null
+                        row[label] = null;
+                    }
                 } else {
                     // For non-numeric data (strings, booleans), store normalized value
                     row[label] = normalizeValue(v);
@@ -517,63 +566,73 @@
                 headerClass: "header-center",
                 cellClass: "cell-center",
                         cellStyle: params => {
-                    const v = params.value;
-                    
-                    if (!isNumericMetric) {
-                        return {
-                            background: "#333",
-                            color: "white",
-                            fontWeight: 600,
-                            fontSize: "16px",
-                            textAlign: "center",
-                            border: "1px solid #555"
-                        };
-                    }
+                            const v = params.value;
 
-                    const val = Number(v ?? 0);
-                    const inverted = ["time_of_climb", "climb_time"].includes(selectedMetric);
-                    
+                            if (v === undefined || v === null || v === "") {
+                                return {
+                                    background: "#333",
+                                    color: "white",
+                                    fontWeight: 600,
+                                    fontSize: "16px",
+                                    textAlign: "center",
+                                    border: "1px solid #555"
+                                };
+                            }
 
-                    if (val === -1) {
-                        return {
-                            background: "#4D4D4D",
-                            color: "white",
-                            fontWeight: 600,
-                            fontSize: "18px",
-                            textAlign: "center"
-                        };
-                    }
+                            if (!isNumericMetric) {
+                                return {
+                                    background: "#333",
+                                    color: "white",
+                                    fontWeight: 600,
+                                    fontSize: "16px",
+                                    textAlign: "center",
+                                    border: "1px solid #555"
+                                };
+                            }
 
-                    if (val === 0) {
-                        return {
-                            background: "black",
-                            color: "white",
-                            fontWeight: 600,
-                            fontSize: "18px",
-                            textAlign: "center"
-                        };
-                    }
+                            const val = Number(v ?? 0);
+                            const inverted = ["TimeOfClimb", "ClimbTime"].includes(dataMetric);
 
-                    if (colorblindMode === 'alex') {
-                        const vp = getAlexValuePercentile(val, inverted);
-                        return {
-                            background: getAlexBgColor(vp),
-                            color: getAlexTextColor(vp),
-                            fontWeight: 600,
-                            fontSize: "18px",
-                            textAlign: "center"
-                        };
-                    }
+                            if (val === -1) {
+                                return {
+                                    background: "#4D4D4D",
+                                    color: "white",
+                                    fontWeight: 600,
+                                    fontSize: "18px",
+                                    textAlign: "center"
+                                };
+                            }
 
-                    const bg = colorFromStats(val, globalMean, globalSd, inverted);
-                    return {
-                        background: bg,
-                        color: ["#0000FF", "#FF0000", "black"].includes(bg) ? "white" : "black",
-                        fontWeight: 600,
-                        fontSize: "18px",
-                        textAlign: "center"
-                    };
-                },
+                            if (val === 0) {
+                                return {
+                                    background: "black",
+                                    color: "white",
+                                    fontWeight: 600,
+                                    fontSize: "18px",
+                                    textAlign: "center"
+                                };
+                            }
+
+                            if (colorblindMode === 'alex') {
+                                const vp = getAlexValuePercentile(val, inverted);
+                                return {
+                                    background: getAlexBgColor(vp),
+                                    color: getAlexTextColor(vp),
+                                    fontWeight: 600,
+                                    fontSize: "18px",
+                                    textAlign: "center"
+                                };
+                            }
+
+                            const bg = colorFromStats(val, globalMean, globalSd, inverted);
+                            return {
+                                background: bg,
+                                color: textColorForBgStrict(bg),
+                                fontWeight: 600,
+                                fontSize: "18px",
+                                textAlign: "center"
+                            };
+                        },
                 valueFormatter: params => {
                     if (!isNumericMetric) {
                         return normalizeValue(params.value);
@@ -597,7 +656,7 @@
                 hide: !isNumericMetric,
                 cellStyle: params => {
                     const v = params.value ?? 0;
-                    const inverted = ["time_of_climb", "climb_time"].includes(selectedMetric);
+                    const inverted = ["TimeOfClimb", "ClimbTime"].includes(dataMetric);
                     
                     if (v === -1) {
                         return {
@@ -636,7 +695,7 @@
                     const bg = summaryColor(v, meanValues, inverted);
                     return {
                         background: bg,
-                        color: ["#0000FF", "#FF0000", "black", "#4D4D4D"].includes(bg) ? "white" : "black",
+                        color: textColorForBgStrict(bg),
                         fontWeight: "bold",
                         fontSize: "18px",
                         textAlign: "center",
@@ -660,7 +719,7 @@
                 hide: !isNumericMetric,
                 cellStyle: params => {
                     const v = params.value ?? 0;
-                    const inverted = ["time_of_climb", "climb_time"].includes(selectedMetric);
+                    const inverted = ["TimeOfClimb", "ClimbTime"].includes(dataMetric);
                     
                     if (v === -1) {
                         return {
@@ -699,7 +758,7 @@
                     const bg = summaryColor(v, medianValues, inverted);
                     return {
                         background: bg,
-                        color: ["#0000FF", "#FF0000", "black", "#4D4D4D"].includes(bg) ? "white" : "black",
+                        color: textColorForBgStrict(bg),
                         fontWeight: "bold",
                         fontSize: "18px",
                         textAlign: "center",
@@ -727,33 +786,30 @@
                     
                     if (p === null || p === undefined || p === -1) {
                         background = "#4D4D4D";
-                        color = "white";
                     } else {
                         switch(p) {
                             case 80:
                                 background = "#0000FF";
-                                color = "white";
                                 break;
                             case 60:
                                 background = "#00FF00"; // Green
-                                color = "black";
                                 break;
                             case 40:
                                 background = "#FFFF00"; // Yellow
-                                color = "black";
                                 break;
                             case 20:
                                 background = "#FF0000"; // Red
-                                color = "white";
                                 break;
                             case 0:
                             default:
                                 background = "black";
-                                color = "white";
                                 break;
                         }
                     }
-                    
+
+                    // Enforce white text only on black or the dark gray used
+                    color = textColorForBgStrict(background);
+
                     return {
                         background,
                         color,
@@ -1017,7 +1073,7 @@
                 if (!filterSet.has(team)) return;
                 const rows = teamData[team] || [];
                 rows.forEach(r => {
-                    const rawValue = r[selectedMetric];
+                    const rawValue = r[dataMetric];
                     const v = normalizeValue(rawValue);
                     counts[v] = (counts[v] || 0) + 1;
                 });
@@ -1045,7 +1101,7 @@
         sortedTeams.forEach((team) => {
              const rows = teamData[team] || [];
              rows.forEach(r => {
-                 const v = r[selectedMetric];
+                 const v = r[dataMetric];
                  if (isNumeric(v)) {
                      const numValue = Number(v);
                      if (numValue !== 0) {
