@@ -53,6 +53,8 @@
     // This is the metric that the database actually stores
     let dataMetric = "";
 
+    let selectedMetric = "";
+
     function getDataMetricName(){
         for (const [key, value] of metricNames.entries()) {
             if (value === selectedMetric) {
@@ -371,20 +373,18 @@
   let showDropdown = false;
 
   $: metricOptions =
-    teamViewData?.length > 0
-      ? Object.keys(teamViewData[0]).filter((k) => {
-          // Exclude trivial/metadata fields
-          if (
-            excludedFields.includes(k)
-          ) {
-            return false;
-          }
+  teamViewData?.length > 0
+    ? Object.keys(teamViewData[0]).filter((k: string) => {
+        // Exclude trivial/metadata fields
+        if (excludedFields.includes(k)) {
+          return false;
+        }
 
-          // Only include numeric metrics
-          // return checkIsNumericMetric(k, teamViewData);
-          return true;
-        })
-      : [];
+        // Only include numeric metrics
+        // return checkIsNumericMetric(k, teamViewData);
+        return true;
+      })
+    : [];
 
   function addChart(type) {
     charts = [
