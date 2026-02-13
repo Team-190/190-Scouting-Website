@@ -195,6 +195,8 @@
         if (!bg) return "black";
         const s = String(bg).trim().toLowerCase();
         if (s === "black" || s === "#000" || s === "#000000" || s === "rgb(0,0,0)") return "white";
+        // Treat blue and dark gray as backgrounds that require white text
+        if (s === "#0000ff" || s === "#00f" || s === "rgb(0,0,255)") return "white";
         // Match the dark gray used in styles (#4D4D4D) in hex or rgb
         if (s === "#4d4d4d" || s === "rgb(77,77,77)") return "white";
         return "black";
@@ -489,9 +491,9 @@
                         row[label] = null;
                     } else if (isNumeric(v)) {
                         const numValue = Number(v);
-                        // Only include raw numeric values (including 0 if explicitly provided)
-                        values.push(numValue);
+                        // store the raw numeric value for display
                         row[label] = numValue;
+                        values.push(numValue);
                     } else {
                         // Non-numeric string in a numeric metric - treat as null
                         row[label] = null;
@@ -503,8 +505,16 @@
             });
 
             if (isNumericMetric) {
-                row.mean = values.length ? Number(mean(values).toFixed(2)) : 0;
-                row.median = values.length ? Number(median(values).toFixed(2)) : 0;
+                // Exclude zeros (and -1) when computing mean/median unless there are no non-zero values
+                const nonZero = values.filter(v => v !== 0 && v !== -1);
+                if (nonZero.length > 0) {
+                    row.mean = Number(mean(nonZero).toFixed(2));
+                    row.median = Number(median(nonZero).toFixed(2));
+                } else {
+                    // No meaningful numeric data for this team
+                    row.mean = null;
+                    row.median = null;
+                }
             } else {
                 row.mean = null;
                 row.median = null;
