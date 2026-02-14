@@ -1,7 +1,8 @@
 const fs = require("fs").promises;
 // const supabaseUtil = require("./supabaseUtil");
 // const storage = require("./storage");
-const sql = require('mssql/msnodesqlv8');
+// const sql = require('mssql/msnodesqlv8');
+const sql = require('mssql');
 require("dotenv").config();
 
 
