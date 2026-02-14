@@ -348,9 +348,25 @@
   }
 
   // Main color calculation function for gradient modes
-  function colorFromStats(v, stats, inverted = false) {
+  function colorFromStats(v, stats, inverted = false, metricName = null, attemptClimbValue = null) {
     // For non-numeric data, return neutral color
     if (!isNumeric(v)) {
+      // Special handling for EndState (Climb State)
+      if (metricName === "EndState") {
+        const val = String(v).toLowerCase();
+        
+        // Check if no climb
+        if (val === "no attempt" || val === "no_climb" || val === "0" || v === 0 || val === "" || val === "null") {
+          return "#FF0000"; // Red (Failed - no climb)
+        }
+        
+        if (val === "fail" || val === "failed" || val === "f") return "#FF0000"; // Red
+        if (val === "l1") return "#FFFF00"; // Yellow
+        if (val === "l2" || val === "level 2" || val === "2") return "#00FF00"; // Green
+        if (val === "l3" || val === "level 3" || val === "3") return "#0000FF"; // Blue
+        return "#333"; // Default for unknown values
+      }
+      
       return "#4D4D4D";
     }
 
@@ -1026,7 +1042,32 @@
           }
 
           // Use appropriate coloring
-          const bg = colorFromStats(val, globalStats, inverted);
+          if (dataMetric === "EndState") {
+            const attempt = params.data?.AttemptClimb;
+
+            // No attempt → Black N/A
+            if (!attempt || attempt === 0 || attempt === "0") {
+                return {
+                background: "black",
+                color: "white",
+                fontWeight: 600,
+                fontSize: "18px",
+                textAlign: "center",
+                };
+            }
+
+            // Attempted but no successful climb → Red Failed
+            if (attempt && (val === 0 || val === -1 || !val)) {
+                return {
+                background: "#C81B00",
+                color: "white",
+                fontWeight: 600,
+                fontSize: "18px",
+                textAlign: "center",
+                };
+            }
+            }
+
           return {
             background: bg,
             color: textColorForBgStrict(bg),
@@ -1036,9 +1077,23 @@
           };
         },
         valueFormatter: (params) => {
-          if (!isNumericMetric) {
-            return normalizeValue(params.value);
-          }
+          if (dataMetric === "EndState") {
+            const attempt = params.data?.AttemptClimb;
+            const val = params.value;
+
+            // No attempt → N/A
+            if (!attempt || attempt === 0 || attempt === "0") {
+                return "N/A";
+            }
+
+            // Attempted but no climb
+            if (attempt && (val === 0 || val === -1 || !val)) {
+                return "Failed";
+            }
+
+            return normalizeValue(val);
+            }
+
           const hasData = params.data?.hasData;
           if (!hasData) return "";
 
@@ -1074,7 +1129,8 @@
             };
           }
 
-          const bg = colorFromStats(v, globalStats, inverted);
+          const attemptVal = dataMetric === "EndState" ? params.data?.AttemptClimb : null;
+          const bg = colorFromStats(v, globalStats, inverted, dataMetric, attemptVal);
           return {
             background: bg,
             color: textColorForBgStrict(bg),
@@ -1114,14 +1170,15 @@
             };
           }
 
-          const bg = colorFromStats(v, globalStats, inverted);
+          const attemptVal = dataMetric === "EndState" ? params.data?.AttemptClimb : null;
+          const bg = colorFromStats(v, globalStats, inverted, dataMetric, attemptVal);
           return {
             background: bg,
             color: textColorForBgStrict(bg),
             fontWeight: "bold",
             fontSize: "18px",
             textAlign: "center",
-            borderLeft: "2px solid #555",
+            borderLeft: "2px solid #555"
           };
         },
         valueFormatter: (params) => {
