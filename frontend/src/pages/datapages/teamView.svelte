@@ -50,6 +50,9 @@
     
     const excludedFields = ["Match", "Team", "Id", "RecordType", "ScouterName", "ScouterError", "Time", "Mode", "DriveStation"];
 
+    // Metrics where lower values are better (e.g., time-based metrics)
+    const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime"];
+
     // This is the metric that the database actually stores
     let dataMetric = "";
 
@@ -67,9 +70,9 @@
   const colorModes = {
     normal: {
       name: "Gradient",
-      below: [255, 0, 0],
-      above: [0, 255, 0],
-      mid: [255, 255, 0],
+      below: [255, 0, 0],      // Red
+      above: [0, 255, 0],      // Green
+      mid: [255, 255, 0]       // Yellow
     },
     protanopia: {
       name: "Protanopia (Red-blind)",
@@ -91,9 +94,9 @@
     },
     alex: {
       name: "Alex Coloring",
-      below: [0, 0, 0],
-      above: [0, 0, 255],
-      mid: [128, 128, 128],
+      below: [234, 67, 53],    // Google Red - RGB: 234 67 53
+      above: [66, 133, 244],   // Google Blue - RGB: 66 133 244
+      mid: [251, 188, 4]       // Google Yellow - RGB: 251 188 4
     },
   };
 
@@ -197,10 +200,23 @@
   function textColorForBgStrict(bg) {
     if (!bg) return "black";
     const s = String(bg).trim().toLowerCase();
+    
+    // Black
     if (s === "black" || s === "#000" || s === "#000000" || s === "rgb(0,0,0)") return "white";
-    // Treat blue and dark gray as backgrounds that require white text
-    if (s === "#0000ff" || s === "#00f" || s === "rgb(0,0,255)") return "white";
+    
+    // Dark gray
     if (s === "#4d4d4d" || s === "rgb(77,77,77)") return "white";
+    
+    // Bright primary colors (need white text)
+    if (s === "#0000ff" || s === "#00f" || s === "rgb(0,0,255)") return "white"; // Bright Blue
+    if (s === "#ff0000" || s === "#f00" || s === "rgb(255,0,0)") return "white"; // Bright Red
+    
+    // Google colors for Alex mode
+    if (s === "#4285f4" || s === "rgb(66,133,244)" || s === "rgb(66, 133, 244)") return "white"; // Google Blue
+    if (s === "#34a853" || s === "rgb(52,168,83)" || s === "rgb(52, 168, 83)") return "white"; // Google Green
+    if (s === "#ea4335" || s === "rgb(234,67,53)" || s === "rgb(234, 67, 53)") return "white"; // Google Red
+    if (s === "#fbbc04" || s === "rgb(251,188,4)" || s === "rgb(251, 188, 4)") return "black"; // Google Yellow (bright)
+    
     return "black";
   }
 
@@ -208,22 +224,22 @@
     if (p === null || p === undefined) return "#4D4D4D";
     
     if (isAlexMode) {
-      // Alex mode: quartiles with blue/green/yellow/red (75, 50, 25, 0)
+      // Alex mode: quartiles with Google colors (75, 50, 25, 0)
       switch(p) {
-        case 75: return "#0000FF"; // Blue (Top 25%)
-        case 50: return "#00FF00"; // Green (50th-75th percentile)
-        case 25: return "#FFFF00"; // Yellow (25th-50th percentile)
-        case 0: return "#FF0000";  // Red (Bottom 25%)
+        case 75: return "#4285F4"; // Blue (Top 25%) - RGB: 66 133 244
+        case 50: return "#34A853"; // Green (50th-75th percentile) - RGB: 52 168 83
+        case 25: return "#FBBC04"; // Yellow (25th-50th percentile) - RGB: 251 188 4
+        case 0: return "#EA4335";  // Red (Bottom 25%) - RGB: 234 67 53
         default: return "#4D4D4D";
       }
     } else {
       // Per. column: quintiles with gradient (0, 20, 40, 60, 80)
       switch(p) {
         case 0:  return "#000000"; // Black (0-20%)
-        case 20: return "#FF0000"; // Red (20-40%)
-        case 40: return "#FFFF00"; // Yellow (40-60%)
-        case 60: return "#00FF00"; // Green (60-80%)
-        case 80: return "#0000FF"; // Blue (80-100%)
+        case 20: return "#FF0000"; // Bright Red (20-40%)
+        case 40: return "#FFFF00"; // Bright Yellow (40-60%)
+        case 60: return "#00FF00"; // Bright Green (60-80%)
+        case 80: return "#0000FF"; // Bright Blue (80-100%)
         default: return "#4D4D4D";
       }
     }
@@ -1040,7 +1056,7 @@
       }
 
       const meanValue = row.mean;
-      const inverted = ["TimeOfClimb", "ClimbTime"].includes(metricName);
+      const inverted = INVERTED_METRICS.includes(metricName);
 
       // Determine which percentile bucket based on global p25/p50/p75
       if (inverted) {
@@ -1126,7 +1142,7 @@
           }
 
           const numValue = isNumeric(val) ? Number(val) : 0;
-          const inverted = ["TimeOfClimb", "ClimbTime"].includes(metricName);
+          const inverted = INVERTED_METRICS.includes(metricName);
 
           if (numValue === -1) {
             return { background: "#4D4D4D", color: "white", fontSize: "18px", fontWeight: 600, textAlign: "center" };
@@ -1167,7 +1183,7 @@
           const metricName = params.data.metric;
           const stats = globalStats[metricName] || { mean: 0, sd: 0 };
             const v = params.value;
-            const inverted = ["TimeOfClimb", "ClimbTime"].includes(metricName);
+            const inverted = INVERTED_METRICS.includes(metricName);
 
             if (v === undefined || v === null || v === "") {
               return { background: "#4D4D4D", color: "white", fontSize: "18px", fontWeight: "bold", textAlign: "center", borderLeft: "3px solid #C81B00" };
@@ -1208,7 +1224,7 @@
           const stats = globalStats[metricName] || { mean: 0, sd: 0 };
 
             const v = params.value;
-            const inverted = ["TimeOfClimb", "ClimbTime"].includes(metricName);
+            const inverted = INVERTED_METRICS.includes(metricName);
 
             if (v === undefined || v === null || v === "") {
               return { background: "#4D4D4D", color: "white", fontSize: "18px", fontWeight: "bold", textAlign: "center", borderLeft: "2px solid #555" };
