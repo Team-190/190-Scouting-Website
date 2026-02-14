@@ -58,6 +58,8 @@
   metricNames.set("LadderLocation", "Ladder Location");
   metricNames.set("Strategy", "Strategy");
 
+  const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime"];
+
   const excludedFields = [
     "Match",
     "Team",
