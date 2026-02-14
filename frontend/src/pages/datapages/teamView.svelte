@@ -66,7 +66,7 @@
 
   const colorModes = {
     normal: {
-      name: "Normal",
+      name: "Gradient",
       below: [255, 0, 0],
       above: [0, 255, 0],
       mid: [255, 255, 0],
