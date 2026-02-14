@@ -1015,15 +1015,25 @@
     const values = filteredData.map((r) => r.mean);
 
     return {
-      tooltip: { trigger: "axis" },
-      xAxis: { type: "category", data: teams },
-      yAxis: { type: "value", name: selectedMetric },
+      tooltip: { trigger: "axis"},
+      xAxis: { type: "category", data: teams, axisLabel: {
+        interval: 0,
+        rotate: 90,
+          color: "#ffffff",
+        }, },
+      yAxis: { type: "value", name: selectedMetric, axisLabel: {
+          color: "#ffffff",
+        }, },
       series: [
         {
           data: values,
           type: "bar",
           name: selectedMetric,
           itemStyle: { color: "#C81B00" },
+          label: {
+            show: true,
+            color: "#ffffff",
+          },
         },
       ],
     };
@@ -1036,8 +1046,14 @@
 
     return {
       tooltip: { trigger: "axis" },
-      xAxis: { type: "category", data: teams },
-      yAxis: { type: "value", name: selectedMetric },
+      xAxis: { type: "category", data: teams , axisLabel: {
+          color: "#ffffff",
+          interval: 0,
+        rotate: 90,
+        }},
+      yAxis: { type: "value", name: selectedMetric, axisLabel: {
+          color: "#ffffff",
+        } },
       series: [
         {
           data: values,
@@ -1045,6 +1061,10 @@
           name: selectedMetric,
           lineStyle: { color: "#C81B00" },
           itemStyle: { color: "#C81B00" },
+          label: {
+            show: true,
+            color: "#ffffff",
+          },
         },
       ],
     };
@@ -1100,7 +1120,7 @@
                      const numValue = Number(v);
                      // Exclude 0 and -1 from scatter plot
                      if (numValue !== 0 && numValue !== -1) {
-                         scatterData.push([team, numValue]);
+                         scatterData.push([team, numValue.toFixed(2)]);
                      }
                  }
              });
@@ -1108,14 +1128,24 @@
 
     return {
       tooltip: { trigger: "item" },
-      xAxis: { type: "category", data: sortedTeams, name: "Team" },
-      yAxis: { type: "value", name: selectedMetric },
+      xAxis: { type: "category", data: sortedTeams, name: "Team", axisLabel: {
+          color: "#ffffff",
+          interval: 0,
+        rotate: 90,
+        }, },
+      yAxis: { type: "value", name: selectedMetric,  axisLabel: {
+          color: "#ffffff",
+        },},
       series: [
         {
           symbolSize: 10,
           data: scatterData,
           type: "scatter",
           itemStyle: { color: "#C81B00" },
+          label: {
+            show: true,
+            color: "#ffffff",
+          },
         },
       ],
     };

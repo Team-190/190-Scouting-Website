@@ -8,7 +8,8 @@
   let tableData = [];
   let isSubmitting = false;
   const rating = [new URL("../../images/DNP.png", import.meta.url).href, new URL("../../images/ProbNo.png", import.meta.url).href, new URL("../../images/NeutralBad.jpg", import.meta.url).href, new URL("../../images/NeutralGood.png", import.meta.url).href, new URL("../../images/PrettyGood.gif", import.meta.url).href, new URL("../../images/AHHHHH.png", import.meta.url).href, new URL("../../images/FIRSTpick.gif", import.meta.url).href ];
-  const eventCode = localStorage.getItem("eventCode");
+  // const eventCode = localStorage.getItem("eventCode");
+  const eventCode = "2026mabos";
 
   let originalTitle = "";
   let teams = new Map();
