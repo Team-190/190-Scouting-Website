@@ -1,4 +1,5 @@
 const fs = require("fs").promises;
+const { writeFile } = require("fs");
 // const supabaseUtil = require("./supabaseUtil");
 // const storage = require("./storage");
 // const sql = require('mssql/msnodesqlv8');
@@ -17,23 +18,25 @@ const config = {
         trustServerCertificate: true
     }
 }
-// module.exports removed here to avoid overwriting later
-const apiKey = process.env.VITE_AUTH_KEY;
 
-async function teamView(teamNumber) {
-    // Legacy: assumes default DB and 'Activities' table
+// Get all event names
+async function getEvents() {
     try {
         await sql.connect(config);
-        const result = await sql.query(`SELECT * FROM [${eventCode}].[dbo].[Activities] WHERE team = 'frc${teamNumber}'`);
-        console.log("TeamView Result:", result.recordset);
-        return { data: result.recordset, error: null };
+        // Query system databases to get a list of all database names, excluding system ones
+        const result = await sql.query("SELECT name FROM sys.databases WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb')");
+        return result.recordset.map(row => ({
+            eventCode: row.name,
+            name: row.name
+        }));
     } catch (err) {
-        console.error("teamView error:", err);
-        return { data: null, error: err };
+        console.error("Error fetching events:", err);
+        return [];
     }
 }
 
-async function getTeamNumbers() {
+// Get the teams participating in an event
+async function getAvailableTeams() {
     try {
         await sql.connect(config);
         const result = await sql.query(`SELECT DISTINCT team FROM [${eventCode}].[dbo].[Activities]`);
@@ -49,31 +52,21 @@ async function getTeamNumbers() {
     }
 }
 
-async function allData(eventCode) {
+// Gets the data of all the teams in an event
+async function getAllData(eventCode) {
     try {
         await sql.connect(config);
         const query = `SELECT * FROM [${eventCode}].[dbo].[Activities]`;
         const result = await sql.query(query);
         return { data: result.recordset, error: null };
     } catch (err) {
-        console.error("allData error:", err);
+        console.error("getAllData error:", err);
         return { data: null, error: err };
     }
 }
 
-async function allMetricData(eventCode) {
-    try {
-        await sql.connect(config);
-        const query = `SELECT * FROM [${eventCode}].[dbo].[Activities]`;
-        const result = await sql.query(query);
-        return { data: result.recordset, error: null };
-    } catch (err) {
-        console.error("allMetricData error:", err);
-        return { data: null, error: err };
-    }
-}
-
-async function allTeamsView(eventCode) {
+// Get all 
+async function getAllTeamsView(eventCode) {
     let jsonConfig;
     try {
         const raw = await fs.readFile(`test/${eventCode}-config.json`, 'utf8');
@@ -92,54 +85,38 @@ async function allTeamsView(eventCode) {
         const result = await sql.query(query);
         return { data: result.recordset, error: null }; 
     } catch (err) {
-        console.error("allTeamsView error:", err);
+        console.error("getAllTeamsView error:", err);
         return { data: null, error: err };
     }
 }
 
-async function availableTeamsView(eventCode) {
+async function readJSONFile(filename) {
     try {
-        await sql.connect(config);
-        const query = `SELECT team FROM [${eventCode}].[dbo].[Activities]`;
-        const result = await sql.query(query);
-        
-        let teams = [];
-        for (let team_ of result.recordset) {
-            const teamNumber = parseInt(team_.team.slice(3));
-            teams.push(teamNumber);
+        fileData = JSON.parse(fs.readFileSync(filename+".json", { encoding: 'utf8', flag: 'r' }));
+        return fileData;
+    } catch (error) {
+        console.log("No data");
+        return {};
+    }
+}
+
+async function writeJSONFile(filename, data) {
+    fs.writeFile(filename+".json", JSON.stringify(data, null, 4), "utf8", (err) => {
+        if (err) {
+            console.error("Error writing to file", err);
+        } else {
+            console.log("Data written to " + filename + ".json successfully");
         }
-        teams = [...new Set(teams)];
-        return teams;
-    } catch (err) {
-        console.error("availableTeamsView error:", err);
-        return [];
-    }
+    });
 }
-
-async function getEvents() {
-    try {
-        await sql.connect(config);
-        // Query system databases to get a list of all database names, excluding system ones
-        const result = await sql.query("SELECT name FROM sys.databases WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb')");
-        return result.recordset.map(row => ({
-            eventCode: row.name,
-            name: row.name
-        }));
-    } catch (err) {
-        console.error("Error fetching events:", err);
-        return [];
-    }
-}
-
 
 module.exports = {
     connect: () => sql.connect(config), // Re-adding this just in case
     sql, // Re-adding this just in case
     getEvents,
-    allMetricData,
-    allData,
-    getTeamNumbers,
-    teamView,
-    allTeamsView,
-    availableTeamsView
+    getAllData,
+    getAvailableTeams,
+    getAllTeamsView,
+    readJSONFile,
+    writeJSONFile,
 }

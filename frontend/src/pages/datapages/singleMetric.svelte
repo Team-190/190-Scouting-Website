@@ -368,7 +368,7 @@
     console.log("eventCode: ", eventCode);
 
     const response = await fetch(
-      "http://localhost:8000/allMetricData?eventCode=" + eventCode,
+      "http://localhost:8000/getAllData?eventCode=" + eventCode,
     );
     const result = await response.json();
     return result;
