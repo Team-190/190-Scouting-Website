@@ -30,6 +30,12 @@
   const ROW_HEIGHT = 25; // Height of each row in pixels
   const HEADER_HEIGHT = 32; // Height of the header row
 
+  const TBA_API_KEY = import.meta.env.VITE_BA_AUTH_KEY;
+  const TBA_BASE_URL = "https://www.thebluealliance.com/api/v3";
+
+  let teamOPR: number | null = null;
+  let eventKey = ""; // Will be loaded from localStorage
+
     const metricNames = new Map();
     metricNames.set("TimeOfClimb", "Match Climb Time");
     metricNames.set("Defense", "Defense Strategy");
@@ -170,20 +176,22 @@
       : lerpColor(mode.mid, mode.above, t);
   }
 
+  function onTeamChange() {
+  const teamStr = String(selectedTeam);
+  loadTeamData(teamStr);
+  fetchTeamOPR(teamStr, eventKey);
+}
+
   function onColorblindChange(e: Event) {
     const target = e.target as HTMLSelectElement;
     colorblindMode = target.value;
     if (selectedTeam) {
-      loadTeamData(selectedTeam);
+      loadTeamData(String(selectedTeam));
     }
-  }
-
-  function onTeamChange() {
-    loadTeamData(selectedTeam);
-  }
+}
 
   let allTeams = [];
-  let selectedTeam = "190";
+  let selectedTeam: string | number = ""; // Allow both types
 
   async function loadTeamNumbers(eventCode) {
     let data = [];
@@ -235,6 +243,41 @@
 
     return data;
   }
+
+  async function fetchTeamOPR(teamNumber: string, eventKey: string) {
+  if (!eventKey || !teamNumber) {
+    teamOPR = null;
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `${TBA_BASE_URL}/event/${eventKey}/oprs`,
+      {
+        headers: {
+          "X-TBA-Auth-Key": TBA_API_KEY
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    // OPR data is in data.oprs object with team keys like "frc190"
+    const teamKey = `frc${teamNumber}`;
+    if (data.oprs && data.oprs[teamKey] !== undefined) {
+      teamOPR = data.oprs[teamKey];
+    } else {
+      teamOPR = null;
+    }
+  } catch (error) {
+    console.error("Error fetching OPR:", error);
+    teamOPR = null;
+  }
+}
 
   function aggregateMatches(rawData) {
     const matches = {};
@@ -956,35 +999,47 @@
     });
   }
 
-  onMount(async () => {
-    // Fetch all data from backend for global stats calculation
-    const storedData = localStorage.getItem("data");
-    let allDataResponse = [];
 
-    if (storedData) {
-      try {
-        allDataResponse = JSON.parse(storedData);
-      } catch (e) {
-        console.error("Failed to parse data:", e);
-      }
+onMount(async () => {
+  // Fetch all data from backend for global stats calculation
+  const storedData = localStorage.getItem("data");
+  let allDataResponse = [];
+
+  if (storedData) {
+    try {
+      allDataResponse = JSON.parse(storedData);
+    } catch (e) {
+      console.error("Failed to parse data:", e);
     }
+  }
 
-    teamViewData = allDataResponse;
-    console.log("All data loaded for global stats:", teamViewData);
+  teamViewData = allDataResponse;
+  console.log("All data loaded for global stats:", teamViewData);
 
-    // Load team numbers from backend
-    allTeams = await loadTeamNumbers(localStorage.getItem("eventCode"));
+  // Load event key from localStorage
+  eventKey = localStorage.getItem("eventCode") || "";
+  console.log("Event Key:", eventKey);
 
-    console.log("Populated team list:", allTeams);
+  // Load team numbers from backend
+  allTeams = await loadTeamNumbers(eventKey);
 
-    // Set initial selected team (first available team, or 190 if available)
-    if (allTeams.length > 0) {
-      const team190 = allTeams.find(t => t.toString() === "190");
-      selectedTeam = team190 ? team190.toString() : allTeams[0].toString();
-      loadTeamData(selectedTeam);
-      console.log("Loading data from team", selectedTeam);
-    }
-  });
+  console.log("Populated team list:", allTeams);
+
+  // Set initial selected team (first available team, or 190 if available)
+  if (allTeams.length > 0) {
+  const team190 = allTeams.find(t => t.toString() === "190");
+  selectedTeam = team190 ? "190" : allTeams[0].toString();
+  
+  await new Promise(resolve => setTimeout(resolve, 0));
+  
+  loadTeamData(String(selectedTeam));
+  
+  // Fetch OPR for initial team
+  await fetchTeamOPR(String(selectedTeam), eventKey);
+  
+  console.log("Loading data from team", selectedTeam);
+}
+});
 </script>
 
 <div class="page-wrapper">
@@ -995,32 +1050,39 @@
   </div>
 
   <!-- Controls -->
-  <div class="controls">
-    <div>
-      <label for="team-select">Team:</label>
-      <select
-        id="team-select"
-        bind:value={selectedTeam}
-        on:change={onTeamChange}
-      >
-        {#each allTeams as team}
-          <option value={team}>{team}</option>
-        {/each}
-      </select>
-    </div>
-    <div>
-      <label for="colorblind-select">Colorblind Mode:</label>
-      <select
-        id="colorblind-select"
-        bind:value={colorblindMode}
-        on:change={onColorblindChange}
-      >
-        {#each Object.entries(colorModes) as [key, mode]}
-          <option value={key}>{mode.name}</option>
-        {/each}
-      </select>
-    </div>
+<div class="controls">
+  <div class="opr-display">
+    {#if teamOPR !== null}
+      <span class="opr-label">OPR: {teamOPR.toFixed(2)}</span>
+    {:else}
+      <span class="opr-label">OPR: N/A</span>
+    {/if}
   </div>
+  <div>
+    <label for="team-select">Team:</label>
+    <select
+      id="team-select"
+      bind:value={selectedTeam}
+      on:change={onTeamChange}
+    >
+      {#each allTeams as team}
+        <option value={team.toString()}>{team}</option>
+      {/each}
+    </select>
+  </div>
+  <div>
+    <label for="colorblind-select">Colorblind Mode:</label>
+    <select
+      id="colorblind-select"
+      bind:value={colorblindMode}
+      on:change={onColorblindChange}
+    >
+      {#each Object.entries(colorModes) as [key, mode]}
+        <option value={key}>{mode.name}</option>
+      {/each}
+    </select>
+  </div>
+</div>
 
   <!-- Grid container -->
   <div
@@ -1430,4 +1492,20 @@
       grid-template-columns: 1fr;
     }
   }
+
+  .opr-display {
+  display: flex;
+  align-items: center;
+  }
+
+  .opr-label {
+    color: white;
+    font-size: 18px;
+    font-weight: 600;
+    padding: 8px 15px;
+    background: linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%);
+    border: 2px solid var(--frc-190-red);
+    border-radius: 6px;
+  }
+
 </style>
