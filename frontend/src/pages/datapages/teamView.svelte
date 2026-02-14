@@ -66,7 +66,7 @@
 
   const colorModes = {
     normal: {
-      name: "Gradient",
+      name: "Normal",
       below: [255, 0, 0],
       above: [0, 255, 0],
       mid: [255, 255, 0],
@@ -88,12 +88,6 @@
       below: [220, 20, 60],
       above: [0, 128, 0],
       mid: [110, 74, 30],
-    },
-    alex: {
-      name: "Alex Coloring",
-      below: [0, 0, 0],
-      above: [0, 0, 255],
-      mid: [128, 128, 128],
     },
   };
 
@@ -148,16 +142,6 @@
     return Math.sqrt(variance);
   }
 
-  const percentile = (arr, p) => {
-    if (arr.length === 0) return 0;
-    const sorted = [...arr].sort((a, b) => a - b);
-    const index = (p / 100) * (sorted.length - 1);
-    const lower = Math.floor(index);
-    const upper = Math.ceil(index);
-    const weight = index % 1;
-    return sorted[lower] * (1 - weight) + sorted[upper] * weight;
-  };
-
   function lerpColor(c1, c2, t) {
     return `rgb(${[
       Math.round(c1[0] + (c2[0] - c1[0]) * t),
@@ -166,142 +150,24 @@
     ].join(",")})`;
   }
 
-  // Determine readable text color (black or white) for a background color
-  function getContrastColor(bg) {
-    if (!bg) return "black";
-    let r, g, b;
-    try {
-      bg = String(bg).trim();
-      if (bg.startsWith("#")) {
-        const hex = bg.replace("#", "");
-        r = parseInt(hex.substring(0, 2), 16);
-        g = parseInt(hex.substring(2, 4), 16);
-        b = parseInt(hex.substring(4, 6), 16);
-      } else if (bg.startsWith("rgb")) {
-        const parts = bg.match(/\d+/g);
-        r = Number(parts[0]);
-        g = Number(parts[1]);
-        b = Number(parts[2]);
-      } else {
-        return "white";
-      }
-
-      const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-      return brightness > 150 ? "black" : "white";
-    } catch (e) {
-      return "white";
-    }
-  }
-
-  // Return white only for strict dark backgrounds (black or the dark gray used), else black
-  function textColorForBgStrict(bg) {
-    if (!bg) return "black";
-    const s = String(bg).trim().toLowerCase();
-    if (s === "black" || s === "#000" || s === "#000000" || s === "rgb(0,0,0)") return "white";
-    // Treat blue and dark gray as backgrounds that require white text
-    if (s === "#0000ff" || s === "#00f" || s === "rgb(0,0,255)") return "white";
-    if (s === "#4d4d4d" || s === "rgb(77,77,77)") return "white";
-    return "black";
-  }
-
-  function getAlexBgColor(p) {
-    if (p === null || p === undefined) return "black";
-    switch (p) {
-      case 75:
-        return "#0000FF";
-      case 50:
-        return "#00FF00";
-      case 25:
-        return "#FFFF00";
-      case 0:
-        return "#FF0000";
-      default:
-        return "black";
-    }
-  }
-
-  function getAlexTextColor(p) {
-    const bg = getAlexBgColor(p);
-    return textColorForBgStrict(bg);
-  }
-
-  function getAlexValuePercentile(v, p, inverted = false) {
-    if (!isNumeric(v)) return null;
-    const val = Number(v);
-    if (val === -1 || val === 0) return null;
-    if (!p) return null;
-    if (inverted) {
-      if (val <= (p.p25 ?? 0)) return 75;
-      if (val <= (p.p50 ?? 0)) return 50;
-      if (val <= (p.p75 ?? 0)) return 25;
-      return 0;
-    } else {
-      if (val >= (p.p75 ?? 0)) return 75;
-      if (val >= (p.p50 ?? 0)) return 50;
-      if (val >= (p.p25 ?? 0)) return 25;
-      return 0;
-    }
-  }
-
-  function colorFromStats(v, stats, inverted = false) {
+  function colorFromStats(v, mu, sigma) {
     // For non-numeric data, return neutral color
     if (!isNumeric(v)) {
       return "#333";
     }
 
     const numValue = Number(v);
+
     if (numValue === 0) return "#000";
+    if (sigma === 0) return "rgb(180,180,180)";
 
     const mode = colorModes[colorblindMode];
+    const z = (numValue - mu) / sigma;
+    const t = Math.min(1, Math.abs(z));
 
-    // Prefer percentile-based mapping (p25/p50/p75) to avoid sigma sensitivity.
-    const p25 = stats?.p25;
-    const p50 = stats?.p50;
-    const p75 = stats?.p75;
-
-    if (p25 != null && p50 != null && p75 != null && p25 !== p50 && p50 !== p75) {
-      // Non-inverted: low -> below (red), mid -> mid (yellow), high -> above (green)
-      if (!inverted) {
-        if (numValue <= p25) return lerpColor(mode.mid, mode.below, 1);
-        if (numValue <= p50) {
-          const t = (numValue - p25) / (p50 - p25);
-          return lerpColor(mode.below, mode.mid, Math.max(0, Math.min(1, t)));
-        }
-        if (numValue <= p75) {
-          const t = (numValue - p50) / (p75 - p50);
-          return lerpColor(mode.mid, mode.above, Math.max(0, Math.min(1, t)));
-        }
-        return lerpColor(mode.mid, mode.above, 1);
-      } else {
-        // Inverted: lower is better (green), higher is worse (red)
-        if (numValue <= p25) return lerpColor(mode.mid, mode.above, 1);
-        if (numValue <= p50) {
-          const t = (numValue - p25) / (p50 - p25);
-          return lerpColor(mode.above, mode.mid, Math.max(0, Math.min(1, t)));
-        }
-        if (numValue <= p75) {
-          const t = (numValue - p50) / (p75 - p50);
-          return lerpColor(mode.mid, mode.below, Math.max(0, Math.min(1, t)));
-        }
-        return lerpColor(mode.mid, mode.below, 1);
-      }
-    }
-
-    // Fallback to z-score based mapping when percentiles are not available or degenerate
-    if (stats && typeof stats.mean === "number" && typeof stats.sd === "number" && stats.sd !== 0) {
-      const z = (numValue - stats.mean) / stats.sd;
-      const t = Math.min(1, Math.abs(z));
-      if (inverted) {
-        return z < 0
-          ? lerpColor(mode.mid, mode.above, t)
-          : lerpColor(mode.mid, mode.below, t);
-      }
-      return z < 0
-        ? lerpColor(mode.mid, mode.below, t)
-        : lerpColor(mode.mid, mode.above, t);
-    }
-
-    return "rgb(180,180,180)";
+    return z < 0
+      ? lerpColor(mode.mid, mode.below, t)
+      : lerpColor(mode.mid, mode.above, t);
   }
 
   function onColorblindChange(e: Event) {
@@ -896,7 +762,7 @@
             allValues.push(Number(val));
           }
         });
-        const filteredValues = allValues.filter((v) => v !== 0 && v !== -1);
+        const filteredValues = allValues.filter((v) => v !== 0);
         globalStats[metric] = {
           mean: filteredValues.length > 0 ? mean(filteredValues) : 0,
           sd:
@@ -904,9 +770,6 @@
               ? sd(filteredValues, mean(filteredValues))
               : 0,
           isNumeric: true,
-          p25: filteredValues.length > 0 ? percentile(filteredValues, 25) : 0,
-          p50: filteredValues.length > 0 ? percentile(filteredValues, 50) : 0,
-          p75: filteredValues.length > 0 ? percentile(filteredValues, 75) : 0,
         };
       } else {
         globalStats[metric] = { mean: 0, sd: 0, isNumeric: false };
@@ -926,23 +789,17 @@
         let val = match?.[metric];
 
         if (isNumericMetric) {
-          const numVal = isNumeric(val) ? Number(val) : null;
-          row[q] = numVal === null ? null : numVal;
-          if (numVal !== null) values.push(numVal);
+          const numVal = isNumeric(val) ? Number(val) : 0;
+          row[q] = numVal;
+          values.push(numVal);
         } else {
           row[q] = normalizeValue(val);
         }
       });
 
       if (isNumericMetric) {
-        const nonZero = values.filter(v => v !== 0 && v !== -1);
-        if (nonZero.length > 0) {
-          row.mean = Number(mean(nonZero).toFixed(2));
-          row.median = Number(median(nonZero).toFixed(2));
-        } else {
-          row.mean = null;
-          row.median = null;
-        }
+        row.mean = values.length > 0 ? Number(mean(values).toFixed(2)) : 0;
+        row.median = values.length > 0 ? Number(median(values).toFixed(2)) : 0;
       } else {
         row.mean = null;
         row.median = null;
@@ -992,35 +849,15 @@
           }
 
           const val = params.value;
-          if (val === undefined || val === null || val === "") {
-            return {
-              background: "#333",
-              color: "white",
-              fontSize: "16px",
-              fontWeight: 600,
-              textAlign: "center",
-              border: "1px solid #555",
-            };
-          }
-
           const numValue = isNumeric(val) ? Number(val) : 0;
-          const inverted = ["TimeOfClimb", "ClimbTime"].includes(metricName);
 
-          if (numValue === -1) {
-            return { background: "#4D4D4D", color: "white", fontSize: "18px", fontWeight: 600, textAlign: "center" };
-          }
-          if (numValue === 0) {
-            return { background: "black", color: "white", fontSize: "18px", fontWeight: 600, textAlign: "center" };
-          }
-
-          if (colorblindMode === 'alex') {
-            const vp = getAlexValuePercentile(numValue, stats, inverted);
-            const bg = getAlexBgColor(vp);
-            return { background: bg, color: getAlexTextColor(vp), fontSize: "18px", fontWeight: 600, textAlign: "center" };
-          }
-
-          const bg = colorFromStats(numValue, stats, inverted);
-          return { background: bg, color: textColorForBgStrict(bg), fontSize: "18px", fontWeight: 600, textAlign: "center" };
+          return {
+            background: colorFromStats(numValue, stats.mean, stats.sd),
+            color: numValue === 0 ? "white" : "black",
+            fontSize: "18px",
+            fontWeight: 600,
+            textAlign: "center",
+          };
         },
         valueFormatter: (params) => {
           const metricName = params.data.metric;
@@ -1044,29 +881,18 @@
         cellStyle: (params) => {
           const metricName = params.data.metric;
           const stats = globalStats[metricName] || { mean: 0, sd: 0 };
-            const v = params.value;
-            const inverted = ["TimeOfClimb", "ClimbTime"].includes(metricName);
 
-            if (v === undefined || v === null || v === "") {
-              return { background: "#4D4D4D", color: "white", fontSize: "18px", fontWeight: "bold", textAlign: "center", borderLeft: "3px solid #C81B00" };
-            }
-
-            const numValue = isNumeric(v) ? Number(v) : 0;
-            if (numValue === -1) {
-              return { background: "#4D4D4D", color: "white", fontSize: "18px", fontWeight: "bold", textAlign: "center", borderLeft: "3px solid #C81B00" };
-            }
-            if (numValue === 0) {
-              return { background: "black", color: "white", fontSize: "18px", fontWeight: "bold", textAlign: "center", borderLeft: "3px solid #C81B00" };
-            }
-
-            if (colorblindMode === 'alex') {
-              const vp = getAlexValuePercentile(numValue, stats, inverted);
-              const bg = getAlexBgColor(vp);
-              return { background: bg, color: getAlexTextColor(vp), fontSize: "18px", fontWeight: "bold", textAlign: "center", borderLeft: "3px solid #C81B00" };
-            }
-
-            const bg = colorFromStats(numValue, stats, inverted);
-            return { background: bg, color: textColorForBgStrict(bg), fontSize: "18px", fontWeight: "bold", textAlign: "center", borderLeft: "3px solid #C81B00" };
+          return {
+            background:
+              params.value === 0 || params.value === null
+                ? "#4D4D4D"
+                : colorFromStats(params.value, stats.mean, stats.sd),
+            color:
+              params.value === 0 || params.value === null ? "white" : "black",
+            fontSize: "18px",
+            fontWeight: "bold",
+            textAlign: "center",
+          };
         },
         valueFormatter: (params) => {
           if (params.value === null || params.value === undefined) return "";
@@ -1085,29 +911,17 @@
           const metricName = params.data.metric;
           const stats = globalStats[metricName] || { mean: 0, sd: 0 };
 
-            const v = params.value;
-            const inverted = ["TimeOfClimb", "ClimbTime"].includes(metricName);
-
-            if (v === undefined || v === null || v === "") {
-              return { background: "#4D4D4D", color: "white", fontSize: "18px", fontWeight: "bold", textAlign: "center", borderLeft: "2px solid #555" };
-            }
-
-            const numValue = isNumeric(v) ? Number(v) : 0;
-            if (numValue === -1) {
-              return { background: "#4D4D4D", color: "white", fontSize: "18px", fontWeight: "bold", textAlign: "center", borderLeft: "2px solid #555" };
-            }
-            if (numValue === 0) {
-              return { background: "black", color: "white", fontSize: "18px", fontWeight: "bold", textAlign: "center", borderLeft: "2px solid #555" };
-            }
-
-            if (colorblindMode === 'alex') {
-              const vp = getAlexValuePercentile(numValue, stats, inverted);
-              const bg = getAlexBgColor(vp);
-              return { background: bg, color: getAlexTextColor(vp), fontSize: "18px", fontWeight: "bold", textAlign: "center", borderLeft: "2px solid #555" };
-            }
-
-            const bg = colorFromStats(numValue, stats, inverted);
-            return { background: bg, color: textColorForBgStrict(bg), fontSize: "18px", fontWeight: "bold", textAlign: "center", borderLeft: "2px solid #555" };
+          return {
+            background:
+              params.value === 0 || params.value === null
+                ? "#4D4D4D"
+                : colorFromStats(params.value, stats.mean, stats.sd),
+            color:
+              params.value === 0 || params.value === null ? "white" : "black",
+            fontSize: "18px",
+            fontWeight: "bold",
+            textAlign: "center",
+          };
         },
         valueFormatter: (params) => {
           if (params.value === null || params.value === undefined) return "";
