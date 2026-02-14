@@ -347,8 +347,8 @@ onMount(async () => {
   console.log("Event Key:", eventKey);
 
   // Fetch matches if needed
-  if (eventKey) {
-    allMatches = await fetchEventMatches(eventKey);
+  if (true) {
+    allMatches = await fetchEventMatches("2025micmp1");
     console.log("Fetched matches:", allMatches);
   }
 

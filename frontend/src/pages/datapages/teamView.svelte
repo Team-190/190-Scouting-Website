@@ -254,51 +254,49 @@
 
     const mode = colorModes[colorblindMode];
 
-    // Prefer percentile-based mapping (p25/p50/p75) to avoid sigma sensitivity.
-    const p25 = stats?.p25;
-    const p50 = stats?.p50;
-    const p75 = stats?.p75;
+    // For Alex mode: use percentile-based buckets
+    if (colorblindMode === 'alex') {
+      const p25 = stats?.p25;
+      const p50 = stats?.p50;
+      const p75 = stats?.p75;
 
-    if (p25 != null && p50 != null && p75 != null && p25 !== p50 && p50 !== p75) {
-      // Non-inverted: low -> below (red), mid -> mid (yellow), high -> above (green)
-      if (!inverted) {
-        if (numValue <= p25) return lerpColor(mode.mid, mode.below, 1);
-        if (numValue <= p50) {
-          const t = (numValue - p25) / (p50 - p25);
-          return lerpColor(mode.below, mode.mid, Math.max(0, Math.min(1, t)));
+      if (p25 != null && p50 != null && p75 != null && p25 !== p50 && p50 !== p75) {
+        if (inverted) {
+          if (numValue <= p25) return lerpColor(mode.mid, mode.above, 1);
+          if (numValue <= p50) {
+            const t = (numValue - p25) / (p50 - p25);
+            return lerpColor(mode.above, mode.mid, Math.max(0, Math.min(1, t)));
+          }
+          if (numValue <= p75) {
+            const t = (numValue - p50) / (p75 - p50);
+            return lerpColor(mode.mid, mode.below, Math.max(0, Math.min(1, t)));
+          }
+          return lerpColor(mode.mid, mode.below, 1);
+        } else {
+          if (numValue <= p25) return lerpColor(mode.mid, mode.below, 1);
+          if (numValue <= p50) {
+            const t = (numValue - p25) / (p50 - p25);
+            return lerpColor(mode.below, mode.mid, Math.max(0, Math.min(1, t)));
+          }
+          if (numValue <= p75) {
+            const t = (numValue - p50) / (p75 - p50);
+            return lerpColor(mode.mid, mode.above, Math.max(0, Math.min(1, t)));
+          }
+          return lerpColor(mode.mid, mode.above, 1);
         }
-        if (numValue <= p75) {
-          const t = (numValue - p50) / (p75 - p50);
-          return lerpColor(mode.mid, mode.above, Math.max(0, Math.min(1, t)));
-        }
-        return lerpColor(mode.mid, mode.above, 1);
-      } else {
-        // Inverted: lower is better (green), higher is worse (red)
-        if (numValue <= p25) return lerpColor(mode.mid, mode.above, 1);
-        if (numValue <= p50) {
-          const t = (numValue - p25) / (p50 - p25);
-          return lerpColor(mode.above, mode.mid, Math.max(0, Math.min(1, t)));
-        }
-        if (numValue <= p75) {
-          const t = (numValue - p50) / (p75 - p50);
-          return lerpColor(mode.mid, mode.below, Math.max(0, Math.min(1, t)));
-        }
-        return lerpColor(mode.mid, mode.below, 1);
       }
     }
 
-    // Fallback to z-score based mapping when percentiles are not available or degenerate
+    // For non-Alex modes: use z-score based smooth gradient
+    // FIXED: Swapped below and above so higher values = green, lower values = red
     if (stats && typeof stats.mean === "number" && typeof stats.sd === "number" && stats.sd !== 0) {
-      const z = (numValue - stats.mean) / stats.sd;
+      let z = (numValue - stats.mean) / stats.sd;
+      if (inverted) z = -z; // Negate z for inverted metrics so lower values are green
       const t = Math.min(1, Math.abs(z));
-      if (inverted) {
-        return z < 0
-          ? lerpColor(mode.mid, mode.above, t)
-          : lerpColor(mode.mid, mode.below, t);
-      }
+      
       return z < 0
-        ? lerpColor(mode.mid, mode.below, t)
-        : lerpColor(mode.mid, mode.above, t);
+        ? lerpColor(mode.mid, mode.below, t)  // z < 0 (below mean/bad) → red
+        : lerpColor(mode.mid, mode.above, t); // z >= 0 (above mean/good) → green
     }
 
     return "rgb(180,180,180)";
