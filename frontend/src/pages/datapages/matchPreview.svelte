@@ -198,31 +198,57 @@
   let redAlliance = ["", "", ""];
   let blueAlliance = ["", "", ""];
 
-  async function fetchEventMatches(eventKey) {
-    try {
-      const response = await fetch(`${TBA_BASE_URL}/event/${eventKey}/matches`, {
-        headers: {
-          "X-TBA-Auth-Key": TBA_API_KEY
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+async function fetchEventMatches(eventKey) {
+  try {
+    const response = await fetch(`${TBA_BASE_URL}/event/${eventKey}/matches`, {
+      headers: {
+        "X-TBA-Auth-Key": TBA_API_KEY
       }
-      
-      const matches = await response.json();
-      
-      // Filter for qualification matches and sort by match number
-      const qualMatches = matches
-        .filter(m => m.comp_level === "qm")
-        .sort((a, b) => a.match_number - b.match_number);
-      
-      return qualMatches;
-    } catch (error) {
-      console.error("Error fetching matches from Blue Alliance:", error);
-      return [];
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
+    
+    const matches = await response.json();
+    
+    // Filter and sort matches by their actual play order
+    const sortedMatches = matches
+      .filter(m => ["qm", "ef", "qf", "sf", "f"].includes(m.comp_level))
+      .sort((a, b) => {
+        // Sort by comp level first
+        const levelOrder = { qm: 0, ef: 1, qf: 2, sf: 3, f: 4 };
+        const aLevel = levelOrder[a.comp_level];
+        const bLevel = levelOrder[b.comp_level];
+        
+        if (aLevel !== bLevel) {
+          return aLevel - bLevel;
+        }
+        
+        // For elimination matches, sort by set_number then match_number
+        if (a.comp_level !== "qm") {
+          const aSet = Number(a.set_number) || 0;
+          const bSet = Number(b.set_number) || 0;
+          
+          if (aSet !== bSet) {
+            return aSet - bSet;
+          }
+        }
+        
+        // Then by match number (ensure numeric comparison)
+        const aMatch = Number(a.match_number) || 0;
+        const bMatch = Number(b.match_number) || 0;
+        
+        return aMatch - bMatch;
+      });
+
+    return sortedMatches;
+
+  } catch (error) {
+    console.error("Error fetching matches from Blue Alliance:", error);
+    return [];
   }
+}
 
   function extractTeamNumber(teamKey) {
     // teamKey format is "frcXXXX", extract just the number
@@ -317,22 +343,95 @@
     return result.sort((a,b) => (a.Match || a.match) - (b.Match || b.match));
   }
   // ===== ADDED FROM teamView.svelte - END =====
-
-  async function loadMatchData(matchNumber) {
+  async function loadMatchData(matchKey: string) {
   if (!allMatches || allMatches.length === 0) return;
 
-  const match = allMatches.find(m => m.match_number === parseInt(matchNumber));
-  if (!match) return;
+  const parts = matchKey.split("_");
+  if (parts.length < 2) return;
 
-  redAlliance = match.alliances.red.team_keys.map(k => k.replace("frc", ""));
-  blueAlliance = match.alliances.blue.team_keys.map(k => k.replace("frc", ""));
+  const matchPart = parts[1];
+  
+  // Extract competition level (first 2-3 characters)
+  let compLevel: string;
+  let remainder: string;
+  
+  if (matchPart.startsWith("qm")) {
+    compLevel = "qm";
+    remainder = matchPart.slice(2);
+  } else if (matchPart.startsWith("ef")) {
+    compLevel = "ef";
+    remainder = matchPart.slice(2);
+  } else if (matchPart.startsWith("qf")) {
+    compLevel = "qf";
+    remainder = matchPart.slice(2);
+  } else if (matchPart.startsWith("sf")) {
+    compLevel = "sf";
+    remainder = matchPart.slice(2);
+  } else if (matchPart.startsWith("f")) {
+    compLevel = "f";
+    remainder = matchPart.slice(1);
+  } else {
+    console.error("Unknown competition level in match key:", matchKey);
+    return;
+  }
+
+  let setNumber = 1;
+  let matchNumber = 1;
+
+  if (compLevel === "qm") {
+    // Qualification match: just a number
+    matchNumber = parseInt(remainder);
+  } else {
+    // Elimination match: format is like "1m1" (set 1, match 1)
+    if (remainder.includes("m")) {
+      const [setStr, matchStr] = remainder.split("m");
+      setNumber = parseInt(setStr);
+      matchNumber = parseInt(matchStr);
+    } else {
+      // Fallback: just a number (shouldn't happen but just in case)
+      matchNumber = parseInt(remainder);
+    }
+  }
+
+  if (isNaN(matchNumber)) {
+    console.error("Could not parse match number from:", matchKey);
+    return;
+  }
+
+  // Find match in allMatches
+  let match;
+  if (compLevel === "qm") {
+    // For quals, only match on comp_level and match_number
+    match = allMatches.find(
+      (m) => m.comp_level === compLevel && m.match_number === matchNumber
+    );
+  } else {
+    // For elims, also match on set_number
+    match = allMatches.find(
+      (m) => 
+        m.comp_level === compLevel && 
+        m.match_number === matchNumber &&
+        m.set_number === setNumber
+    );
+  }
+
+  if (!match) {
+    console.warn("Match not found for key:", matchKey, 
+      "comp_level:", compLevel, 
+      "set_number:", setNumber, 
+      "match_number:", matchNumber);
+    return;
+  }
+
+  // Populate alliances
+  redAlliance = match.alliances.red.team_keys.map((k) => k.replace("frc", ""));
+  blueAlliance = match.alliances.blue.team_keys.map((k) => k.replace("frc", ""));
 
   console.log("Red Alliance:", redAlliance, "Blue Alliance:", blueAlliance);
 
   // Wait for DOM to bind
   await tick();
 
-  // Now the grids have valid team numbers
   loadAllAllianceTeams();
 }
 
@@ -348,13 +447,13 @@ onMount(async () => {
 
   // Fetch matches if needed
   if (eventKey) {
-    allMatches = await fetchEventMatches(eventKey);
+    allMatches = await fetchEventMatches(eventKey);  // Use the actual eventKey variable
     console.log("Fetched matches:", allMatches);
   }
 
   // Pick first match by default
   if (allMatches && allMatches.length > 0) {
-    selectedMatch = allMatches[0].match_number.toString();
+    selectedMatch = allMatches[0].key; // Use the full match key
     console.log("Selected match:", selectedMatch);
     
     // Wait for DOM
@@ -369,10 +468,10 @@ onMount(async () => {
 
 
   function onMatchChange(e: Event) {
-    const target = e.target as HTMLSelectElement;
-    selectedMatch = target.value;
-    loadMatchData(selectedMatch);
-  }
+  const target = e.target as HTMLSelectElement;
+  selectedMatch = target.value;
+  loadMatchData(target.value); // This should now be the match key, not just the number
+}
 
   async function loadTeamNumbers(eventCode) {
     let data = [];
@@ -1400,8 +1499,17 @@ onMount(async () => {
         bind:value={selectedMatch}
         on:change={onMatchChange}
       >
-        {#each allMatches as match}
-          <option value={match.match_number}>Q{match.match_number}</option>
+        {#each allMatches as match, index}
+          {@const elimIndex = allMatches.slice(0, index).filter(m => m.comp_level !== "qm" && m.comp_level !== "f").length + 1}
+          <option value={match.key}>
+            {#if match.comp_level === "qm"}
+              Q{match.match_number}
+            {:else if match.comp_level === "f"}
+              F{match.match_number}
+            {:else}
+              M{elimIndex}
+            {/if}
+          </option>
         {/each}
       </select>
     </div>
