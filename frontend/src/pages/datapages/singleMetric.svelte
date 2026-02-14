@@ -23,21 +23,29 @@
   let chartTypes = ["bar", "line", "pie", "scatter", "radar"];
   let showDropdown = false;
 
-  let domNode;
-  let availableTeams = [];
-  let teamData = {};
-  let allDataResponse = null;
-  let metrics = [];
-  let selectedMetric = "";
-  let colorblindMode = "normal";
-  let gridApi = null;
-  let loading = true;
-  let error = "";
-  let gridHeight = 400; // Default height, will be calculated dynamically
-  let globalStats = { mean: 0, sd: 0, p25: 0, p50: 0, p75: 0, isNumeric: false };
+    let domNode;
+    let availableTeams = [];
+    let teamData = {};
+    let allDataResponse = null;
+    let metrics = [];
+    let selectedMetric = "";
+    let colorblindMode = "normal";
+    let gridApi = null;
+    let loading = true;
+    let error = "";
+    let gridHeight = 400; // Default height, will be calculated dynamically
+    let globalStats = { mean: 0, sd: 0, p25: 0, p50: 0, p75: 0, isNumeric: false };
 
-  const ROW_HEIGHT = 25; // Height of each row in pixels
-  const HEADER_HEIGHT = 32; // Height of the header row
+    // Blue Alliance API configuration
+    const TBA_API_KEY = import.meta.env.VITE_AUTH_KEY;
+    const TBA_BASE_URL = "https://www.thebluealliance.com/api/v3";
+
+    let eventKey = ""; // Will be loaded from localStorage
+    let teamOPRs = {}; // Cache for OPR values { teamNumber: oprValue }
+    let oprLoading = false;
+        
+    const ROW_HEIGHT = 25; // Height of each row in pixels
+    const HEADER_HEIGHT = 32; // Height of the header row
 
   //Human readable metric names for the dropdown - key is the actual data field, value is the display name
   const metricNames = new Map();
@@ -57,6 +65,7 @@
   metricNames.set("EndState", "Climb State");
   metricNames.set("LadderLocation", "Ladder Location");
   metricNames.set("Strategy", "Strategy");
+    metricNames.set("OPR", "OPR (Offensive Power Rating)");
 
   const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime"];
 
@@ -72,107 +81,118 @@
     "DriveStation",
   ];
 
-    // This is the metric that the database actually stores
-    let dataMetric = "";
-    
-    const colorModes = {
-        normal: {
-            name: "Gradient",
-            below: [255, 0, 0],    // Red (below mean/bad)
-            above: [0, 255, 0],    // Green (above mean/good)
-            mid: [255, 255, 0]     // Yellow (at mean)
-        },
-        protanopia: {
-            name: "Protanopia (Red-blind)",
-            below: [0, 114, 178],       // Blue (bad)
-            above: [240, 228, 66],      // Yellow (good)
-            mid: [120, 171, 121]        // Teal (mid)
-        },
-        deuteranopia: {
-            name: "Deuteranopia (Green-blind)",
-            below: [213, 94, 0],        // Orange (bad)
-            above: [86, 180, 233],      // Sky blue (good)
-            mid: [150, 137, 117]        // Brown (mid)
-        },
-        tritanopia: {
-            name: "Tritanopia (Blue-yellow blind)",
-            below: [220, 20, 60],       // Crimson (bad)
-            above: [0, 128, 0],         // Dark green (good)
-            mid: [110, 74, 30]          // Brown (mid)
-        },
-        alex: {
-            name: "Alex Coloring",
-            // These aren't used in Alex mode but keeping structure consistent
-            below: [255, 0, 0],         // Red (bottom 25%)
-            above: [0, 0, 255],         // Blue (top 25%)
-            mid: [255, 255, 0]          // Yellow (middle)
-        }
-    };
+  // This is the metric that the database actually stores
+  let dataMetric = "";
 
-    // Helper function to check if a metric should be inverted
-    function isInvertedMetric(metric) {
-        return INVERTED_METRICS.includes(metric);
+  const colorModes = {
+    normal: {
+      name: "Gradient",
+      below: [255, 0, 0], // Red (below mean/bad)
+      above: [0, 255, 0], // Green (above mean/good)
+      mid: [255, 255, 0], // Yellow (at mean)
+    },
+    protanopia: {
+      name: "Protanopia (Red-blind)",
+      below: [0, 114, 178], // Blue (bad)
+      above: [240, 228, 66], // Yellow (good)
+      mid: [120, 171, 121], // Teal (mid)
+    },
+    deuteranopia: {
+      name: "Deuteranopia (Green-blind)",
+      below: [213, 94, 0], // Orange (bad)
+      above: [86, 180, 233], // Sky blue (good)
+      mid: [150, 137, 117], // Brown (mid)
+    },
+    tritanopia: {
+      name: "Tritanopia (Blue-yellow blind)",
+      below: [220, 20, 60], // Crimson (bad)
+      above: [0, 128, 0], // Dark green (good)
+      mid: [110, 74, 30], // Brown (mid)
+    },
+    alex: {
+      name: "Alex Coloring",
+      // These aren't used in Alex mode but keeping structure consistent
+      below: [255, 0, 0], // Red (bottom 25%)
+      above: [0, 0, 255], // Blue (top 25%)
+      mid: [255, 255, 0], // Yellow (middle)
+    },
+  };
+
+  // Helper function to check if a metric should be inverted
+  function isInvertedMetric(metric) {
+    return INVERTED_METRICS.includes(metric);
+  }
+
+  // Returns background color for percentile column
+  // For Alex mode: uses 0, 25, 50, 75 (quartiles)
+  // For other modes: uses 0, 20, 40, 60, 80 (quintiles)
+  function getAlexBgColor(p, isAlexMode = false) {
+    if (p === null || p === undefined) return "#4D4D4D";
+
+    if (isAlexMode) {
+      // Alex mode: quartiles with blue/green/yellow/red
+      switch (p) {
+        case 75:
+          return "#0000FF"; // Blue (Top 25%)
+        case 50:
+          return "#00FF00"; // Green (Next 25%)
+        case 25:
+          return "#FFFF00"; // Yellow (Next 25%)
+        case 0:
+          return "#FF0000"; // Red (Bottom 25%)
+        default:
+          return "#4D4D4D";
+      }
+    } else {
+      // Non-Alex mode: quintiles with gradient
+      switch (p) {
+        case 0:
+          return "#000000"; // Black (0-20%)
+        case 20:
+          return "#FF0000";
+        case 40:
+          return "#FFFF00";
+        case 60:
+          return "#00FF00";
+        case 80:
+          return "#0000FF";
+        default:
+          return "#4D4D4D";
+      }
+    }
+  }
+
+  function getAlexTextColor(p, isAlexMode = false) {
+    const bg = getAlexBgColor(p, isAlexMode);
+    return textColorForBgStrict(bg);
+  }
+
+  // Calculate which percentile bucket a value falls into for Alex mode
+  function getAlexValuePercentile(v, stats, inverted = false) {
+    if (!isNumeric(v)) return null;
+    const val = Number(v);
+
+    // -1 is false, 0 is zero - neither get percentile coloring
+    if (val === -1 || val === 0) return null;
+
+    if (!stats || stats.p25 == null || stats.p50 == null || stats.p75 == null) {
+      return null;
     }
 
-    // Returns background color for percentile column
-    // For Alex mode: uses 0, 25, 50, 75 (quartiles)
-    // For other modes: uses 0, 20, 40, 60, 80 (quintiles)
-    function getAlexBgColor(p, isAlexMode = false) {
-        if (p === null || p === undefined) return "#4D4D4D";
-        
-        if (isAlexMode) {
-            // Alex mode: quartiles with blue/green/yellow/red
-            switch(p) {
-                case 75: return "#0000FF"; // Blue (Top 25%)
-                case 50: return "#00FF00"; // Green (Next 25%)
-                case 25: return "#FFFF00"; // Yellow (Next 25%)
-                case 0: return "#FF0000";  // Red (Bottom 25%)
-                default: return "#4D4D4D";
-            }
-        } else {
-            // Non-Alex mode: quintiles with gradient
-            switch(p) {
-                case 0:  return "#000000"; // Black (0-20%)
-                case 20: return "#FF0000";
-                case 40: return "#FFFF00";
-                case 60: return "#00FF00";
-                case 80: return "#0000FF";
-                default: return "#4D4D4D";
-            }
-        }
+    if (inverted) {
+      // For inverted metrics (lower is better)
+      if (val <= stats.p25) return 75; // Bottom 25% of values = Top performance
+      if (val <= stats.p50) return 50; // 25-50% of values
+      if (val <= stats.p75) return 25; // 50-75% of values
+      return 0; // Top 25% of values = Bottom performance
+    } else {
+      // For normal metrics (higher is better)
+      if (val >= stats.p75) return 75; // Top 25% of values = Top performance
+      if (val >= stats.p50) return 50; // 50-75% of values
+      if (val >= stats.p25) return 25; // 25-50% of values
+      return 0; // Bottom 25% of values = Bottom performance
     }
-
-    function getAlexTextColor(p, isAlexMode = false) {
-        const bg = getAlexBgColor(p, isAlexMode);
-        return textColorForBgStrict(bg);
-    }
-
-    // Calculate which percentile bucket a value falls into for Alex mode
-    function getAlexValuePercentile(v, stats, inverted = false) {
-        if (!isNumeric(v)) return null;
-        const val = Number(v);
-        
-        // -1 is false, 0 is zero - neither get percentile coloring
-        if (val === -1 || val === 0) return null;
-        
-        if (!stats || stats.p25 == null || stats.p50 == null || stats.p75 == null) {
-            return null;
-        }
-
-        if (inverted) {
-            // For inverted metrics (lower is better)
-            if (val <= stats.p25) return 75;      // Bottom 25% of values = Top performance
-            if (val <= stats.p50) return 50;      // 25-50% of values
-            if (val <= stats.p75) return 25;      // 50-75% of values
-            return 0;                              // Top 25% of values = Bottom performance
-        } else {
-            // For normal metrics (higher is better)
-            if (val >= stats.p75) return 75;      // Top 25% of values = Top performance
-            if (val >= stats.p50) return 50;      // 50-75% of values
-            if (val >= stats.p25) return 25;      // 25-50% of values
-            return 0;                              // Bottom 25% of values = Bottom performance
-        }
-    }
+  }
 
   const mean = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
 
@@ -206,47 +226,68 @@
       Math.round(c1[2] + (c2[2] - c1[2]) * t),
     ].join(",")})`;
 
-    // Return white only for strict dark backgrounds (black or the dark gray used), else black
-    function textColorForBgStrict(bg) {
-        if (!bg) return "black";
-        const s = String(bg).trim().toLowerCase();
-        
-        // Check for black
-        if (s === "black" || s === "#000" || s === "#000000" || s === "rgb(0,0,0)" || s === "rgb(0, 0, 0)") {
-            return "white";
-        }
-        
-        // Check for blue
-        if (s === "#0000ff" || s === "#00f" || s === "rgb(0,0,255)" || s === "rgb(0, 0, 255)") {
-            return "white";
-        }
-        
-        // Check for dark gray (#4D4D4D)
-        if (s === "#4d4d4d" || s === "rgb(77,77,77)" || s === "rgb(77, 77, 77)") {
-            return "white";
-        }
-        
-        // Check for red
-        if (s === "#ff0000" || s === "#f00" || s === "rgb(255,0,0)" || s === "rgb(255, 0, 0)") {
-            return "white";
-        }
-        
-        return "black";
+  // Return white only for strict dark backgrounds (black or the dark gray used), else black
+  function textColorForBgStrict(bg) {
+    if (!bg) return "black";
+    const s = String(bg).trim().toLowerCase();
+
+    // Check for black
+    if (
+      s === "black" ||
+      s === "#000" ||
+      s === "#000000" ||
+      s === "rgb(0,0,0)" ||
+      s === "rgb(0, 0, 0)"
+    ) {
+      return "white";
     }
 
-  function getDataMetricName() {
+    // Check for blue
+    if (
+      s === "#0000ff" ||
+      s === "#00f" ||
+      s === "rgb(0,0,255)" ||
+      s === "rgb(0, 0, 255)"
+    ) {
+      return "white";
+    }
+
+    // Check for dark gray (#4D4D4D)
+    if (s === "#4d4d4d" || s === "rgb(77,77,77)" || s === "rgb(77, 77, 77)") {
+      return "white";
+    }
+
+    // Check for red
+    if (
+      s === "#ff0000" ||
+      s === "#f00" ||
+      s === "rgb(255,0,0)" ||
+      s === "rgb(255, 0, 0)"
+    ) {
+      return "white";
+    }
+
+    return "black";
+  }
+
+    function getDataMetricName(){
     dataMetric = "";
+    
+    // Special case for OPR
+    if (selectedMetric === "OPR (Offensive Power Rating)") {
+        dataMetric = "OPR";
+        return;
+    }
+    
     for (const [key, value] of metricNames.entries()) {
-      console.log(`iterating key: ${key} : value: ${value}`);
-      if (value === selectedMetric) {
-        console.log("SETTING DATAMETRIC TO " + key);
-        dataMetric = key;
-        break;
-      }
+        if (value === selectedMetric) {
+            dataMetric = key;
+            break;
+        }
     }
     // If not found in map, assume the selectedMetric is the actual data key
     if (!dataMetric) dataMetric = selectedMetric;
-  }
+}
 
   function isNumeric(n) {
     if (n === null || n === undefined || n === "") return false;
@@ -266,21 +307,26 @@
   }
 
   function checkIsNumericMetric(metric) {
+    // Special case for OPR
+    if (metric === "OPR" || metric === "OPR (Offensive Power Rating)") {
+        return Object.keys(teamOPRs).length > 0;
+    }
+    
     let hasData = false;
     for (const team of availableTeams) {
-      const rows = teamData[team] || [];
-      for (const r of rows) {
-        const v = r[metric];
-        if (v !== undefined && v !== null && v !== "") {
-          hasData = true;
-          if (!isNumeric(v)) {
-            return false; // Found a non-numeric value
-          }
+        const rows = teamData[team] || [];
+        for (const r of rows) {
+            const v = r[metric];
+            if (v !== undefined && v !== null && v !== "") {
+                hasData = true;
+                if (!isNumeric(v)) {
+                    return false; // Found a non-numeric value
+                }
+            }
         }
-      }
     }
     return hasData; // If we have data and all values are numeric
-  }
+}
 
   // Generate a random hex color
   //the credit for this function bc i didn't make it - Adel
@@ -301,78 +347,127 @@
     return n.toFixed(2).replace(/\.00$/, "");
   }
 
-    // Main color calculation function for gradient modes
-    function colorFromStats(v, stats, inverted = false) {
-        // For non-numeric data, return neutral color
-        if (!isNumeric(v)) {
-            return "#4D4D4D";
-        }
-        
-        const numValue = Number(v);
-        
-        // -1 means false
-        if (numValue === -1) return "#4D4D4D";
-        
-        // 0 means zero/null
-        if (numValue === 0) return "#000";
-
-        const mode = colorModes[colorblindMode];
-
-        // For Alex mode: use percentile-based buckets
-        if (colorblindMode === 'alex') {
-            const percentileBucket = getAlexValuePercentile(numValue, stats, inverted);
-            return getAlexBgColor(percentileBucket, true); // isAlexMode = true
-        }
-
-        // For non-Alex modes: use mean ± standard deviations gradient
-        if (stats && typeof stats.mean === "number" && typeof stats.sd === "number" && stats.sd > 0) {
-            const mean = stats.mean;
-            const sd = stats.sd;
-            
-            // Calculate how many standard deviations away from mean
-            // We'll map: mean-2sd to mean+2sd → 0 to 1
-            const minBound = mean - (2 * sd);
-            const maxBound = mean + (2 * sd);
-            
-            // Avoid division by zero
-            if (maxBound === minBound) return lerpColor(mode.below, mode.above, 0.5);
-            
-            // Calculate position in range (0 to 1)
-            // For NORMAL metrics: low value = 0 (red), high value = 1 (green)
-            // For INVERTED metrics: low value = 1 (green), high value = 0 (red)
-            let t = (numValue - minBound) / (maxBound - minBound);
-            
-            // For inverted metrics, flip it
-            if (inverted) {
-                t = 1 - t;
-            }
-            
-            // Clamp to 0-1 range
-            t = Math.max(0, Math.min(1, t));
-            
-            // Create smooth gradient: Red (0) → Yellow (0.5) → Green (1)
-            if (t < 0.5) {
-                // Red to Yellow (first half)
-                return lerpColor(mode.below, mode.mid, t * 2);
-            } else {
-                // Yellow to Green (second half)
-                return lerpColor(mode.mid, mode.above, (t - 0.5) * 2);
-            }
-        }
-
-        return "#4D4D4D"; // Fallback for insufficient stats
+  // Main color calculation function for gradient modes
+  function colorFromStats(v, stats, inverted = false) {
+    // For non-numeric data, return neutral color
+    if (!isNumeric(v)) {
+      return "#4D4D4D";
     }
+
+    const numValue = Number(v);
+
+    // -1 means false
+    if (numValue === -1) return "#4D4D4D";
+
+    // 0 means zero/null
+    if (numValue === 0) return "#000";
+
+    const mode = colorModes[colorblindMode];
+
+    // For Alex mode: use percentile-based buckets
+    if (colorblindMode === "alex") {
+      const percentileBucket = getAlexValuePercentile(
+        numValue,
+        stats,
+        inverted,
+      );
+      return getAlexBgColor(percentileBucket, true); // isAlexMode = true
+    }
+
+    // For non-Alex modes: use mean ± standard deviations gradient
+    if (
+      stats &&
+      typeof stats.mean === "number" &&
+      typeof stats.sd === "number" &&
+      stats.sd > 0
+    ) {
+      const mean = stats.mean;
+      const sd = stats.sd;
+
+      // Calculate how many standard deviations away from mean
+      // We'll map: mean-2sd to mean+2sd → 0 to 1
+      const minBound = mean - 2 * sd;
+      const maxBound = mean + 2 * sd;
+
+      // Avoid division by zero
+      if (maxBound === minBound) return lerpColor(mode.below, mode.above, 0.5);
+
+      // Calculate position in range (0 to 1)
+      // For NORMAL metrics: low value = 0 (red), high value = 1 (green)
+      // For INVERTED metrics: low value = 1 (green), high value = 0 (red)
+      let t = (numValue - minBound) / (maxBound - minBound);
+
+      // For inverted metrics, flip it
+      if (inverted) {
+        t = 1 - t;
+      }
+
+      // Clamp to 0-1 range
+      t = Math.max(0, Math.min(1, t));
+
+      // Create smooth gradient: Red (0) → Yellow (0.5) → Green (1)
+      if (t < 0.5) {
+        // Red to Yellow (first half)
+        return lerpColor(mode.below, mode.mid, t * 2);
+      } else {
+        // Yellow to Green (second half)
+        return lerpColor(mode.mid, mode.above, (t - 0.5) * 2);
+      }
+    }
+
+    return "#4D4D4D"; // Fallback for insufficient stats
+  }
 
   async function fetchAllMetricData() {
     const eventCode = localStorage.getItem("eventCode");
     console.log("eventCode: ", eventCode);
 
-    const response = await fetch(
-      "http://localhost:8000/getAllData?eventCode=" + eventCode,
-    );
-    const result = await response.json();
-    return result;
+        const response = await fetch("http://localhost:8000/getAllData?eventCode="+eventCode);
+        const result = await response.json();
+        return result;
+    }
+
+    async function fetchEventOPRs(eventKey) {
+  if (!eventKey) {
+    console.warn("No event key provided for OPR fetch");
+    return {};
   }
+
+  oprLoading = true;
+  try {
+    const response = await fetch(
+      `${TBA_BASE_URL}/event/${eventKey}/oprs`,
+      {
+        headers: {
+          "X-TBA-Auth-Key": TBA_API_KEY
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    // Convert from { "frc190": 45.2, "frc191": 38.5 } to { "190": 45.2, "191": 38.5 }
+    const oprCache = {};
+    if (data.oprs) {
+      Object.entries(data.oprs).forEach(([teamKey, oprValue]) => {
+        const teamNum = teamKey.replace("frc", "");
+        oprCache[teamNum] = oprValue;
+      });
+    }
+    
+    console.log("Fetched OPR data:", oprCache);
+    return oprCache;
+  } catch (error) {
+    console.error("Error fetching OPR:", error);
+    return {};
+  } finally {
+    oprLoading = false;
+  }
+}
 
   function processTeamData(dataResponse) {
     const allRows = Array.isArray(dataResponse?.data) ? dataResponse.data : [];
@@ -381,13 +476,13 @@
       throw new Error("No data found from backend");
     }
 
-      availableTeams = [];
-      teamData = {};
+    availableTeams = [];
+    teamData = {};
 
-      for (const row of allRows) {
-        if (row["RecordType"] == "Match_Event") {
-          continue;
-        }
+    for (const row of allRows) {
+      if (row["RecordType"] == "Match_Event") {
+        continue;
+      }
 
       // Handle both "Team" and "team" field names (backend uses lowercase)
       const teamNum = row.Team || row.team;
@@ -406,37 +501,264 @@
     availableTeams = availableTeams.sort();
   }
 
-  function computeMetrics() {
+    function computeMetrics() {
     if (availableTeams.length === 0) return [];
 
     const metricSet = new Set();
 
+    if (eventKey) {
+        metricSet.add("OPR (Offensive Power Rating)");
+    }
+
+    // Add OPR if we    have OPR data OR an event key is set (so the user can select it)
+    // This ensures the Metric dropdown shows OPR even if the fetch failed or returned empty.
+    if (eventKey || Object.keys(teamOPRs).length > 0) {
+        metricSet.add("OPR (Offensive Power Rating)");
+    }
+
     for (const team of availableTeams) {
-      const rows = teamData[team] || [];
-      for (const row of rows) {
-        Object.keys(row).forEach((k) => {
-          // Skip only the system/meta fields
-          if (excludedFields.includes(k)) return;
-          const metricName = metricNames.get(k) || k;
-          metricSet.add(metricName);
-        });
-      }
+        const rows = teamData[team] || [];
+        for (const row of rows) {
+            Object.keys(row).forEach((k) => {
+                // Skip only the system/meta fields
+                if (excludedFields.includes(k)) return;
+                const metricName = metricNames.get(k) || k;
+                metricSet.add(metricName);
+            });
+        }
     }
 
     return Array.from(metricSet).sort();
-  }
+}
+
+    function buildOPRGrid() {
+    console.log("=== INSIDE buildOPRGrid ===");
+    console.log("teamOPRs:", teamOPRs);
+    console.log("domNode:", domNode);
+    console.log("gridApi:", gridApi);
+    
+    // Check if we have OPR data
+    if (Object.keys(teamOPRs).length === 0) {
+        console.warn("No OPR data available");
+        // Show message in grid
+        rowData = [];
+        const columnDefs = [{
+            headerName: "Message",
+            field: "message",
+            flex: 1,
+            cellStyle: { textAlign: 'center', padding: '20px', color: 'white' }
+        }];
+        
+        gridHeight = 100;
+        
+        if (gridApi) {
+            gridApi.setGridOption("columnDefs", columnDefs);
+            gridApi.setGridOption("rowData", [{ message: oprLoading ? "Loading OPR data..." : "No OPR data available for this event" }]);
+        }
+        return;
+    }
+
+    const isNumericMetric = true; // OPR is always numeric
+    
+    // Build availableTeams from OPR data (in case it's not populated from backend)
+    const oprTeams = Object.keys(teamOPRs).sort((a, b) => parseInt(a) - parseInt(b));
+    console.log("Teams from OPR:", oprTeams);
+    
+    // Build rowData with OPR values
+    console.log("About to build rowData...");
+    rowData = oprTeams.map(team => {
+        const row = { team };
+        const oprValue = teamOPRs[team] || null;
+        
+        row.hasData = oprValue !== null;
+        row.mean = oprValue;
+        row.median = oprValue;
+        row.alexPercentile = null; // We'll calculate this below
+        
+        return row;
+    }).filter(row => row.mean !== null) // Only show teams with OPR data
+      .sort((a, b) => b.mean - a.mean) // Sort by OPR descending (higher is better)
+      .map((row, index, array) => {
+        // Calculate percentile based on position
+        const totalTeams = array.length;
+        const position = index;
+        const percentRank = (totalTeams - position - 1) / totalTeams;
+        
+        if (percentRank < 0.2) {
+            row.alexPercentile = 0;
+        } else if (percentRank < 0.4) {
+            row.alexPercentile = 20;
+        } else if (percentRank < 0.6) {
+            row.alexPercentile = 40;
+        } else if (percentRank < 0.8) {
+            row.alexPercentile = 60;
+        } else {
+            row.alexPercentile = 80;
+        }
+        return row;
+    });
+
+    console.log("rowData built:", rowData);
+    console.log("rowData length:", rowData.length);
+
+    // Calculate global stats for OPR
+    const allOPRValues = rowData.map(r => r.mean).filter(v => v !== null);
+    if (allOPRValues.length > 0) {
+        const mu = mean(allOPRValues);
+        globalStats = {
+            mean: mu,
+            sd: sd(allOPRValues, mu),
+            p25: percentile(allOPRValues, 25),
+            p50: percentile(allOPRValues, 50),
+            p75: percentile(allOPRValues, 75),
+            isNumeric: true
+        };
+        console.log("Global OPR stats:", globalStats);
+    }
+
+    const columnDefs = [
+        {
+            headerName: "Team",
+            field: "team",
+            pinned: "left",
+            width: 100,
+            headerClass: "header-center",
+            cellClass: "cell-center",
+            cellStyle: {
+                background: "#C81B00",
+                color: "white",
+                fontWeight: "bold",
+                fontSize: "18px",
+                textAlign: "center"
+            }
+        },
+        {
+            headerName: "OPR",
+            field: "mean",
+            flex: 1,
+            minWidth: 150,
+            headerClass: "header-center",
+            cellClass: "cell-center",
+            cellStyle: params => {
+                const v = params.value;
+                if (v === null || v === undefined) {
+                    return {
+                        background: "#4D4D4D",
+                        color: "white",
+                        fontWeight: "bold",
+                        fontSize: "18px",
+                        textAlign: "center"
+                    };
+                }
+
+                const bg = colorFromStats(v, globalStats, false); // OPR is NOT inverted
+                return {
+                    background: bg,
+                    color: textColorForBgStrict(bg),
+                    fontWeight: "bold",
+                    fontSize: "18px",
+                    textAlign: "center"
+                };
+            },
+            valueFormatter: params => {
+                if (params.value === null || params.value === undefined) return "N/A";
+                return Number(params.value).toFixed(2);
+            }
+        },
+        {
+            headerName: "Per.",
+            field: "alexPercentile",
+            flex: 1,
+            minWidth: 100,
+            headerClass: "header-center",
+            cellClass: "cell-center",
+            cellStyle: params => {
+                const p = params.value;
+                let background;
+                
+                if (p === null || p === undefined) {
+                    background = "#4D4D4D";
+                } else {
+                    background = getAlexBgColor(p, false);
+                }
+
+                const color = textColorForBgStrict(background);
+
+                return {
+                    background,
+                    color,
+                    fontWeight: "bold",
+                    fontSize: "18px",
+                    textAlign: "center",
+                    borderLeft: "2px solid #555"
+                };
+            },
+            valueFormatter: params => {
+                return params.value !== null && params.value !== undefined ? params.value.toString() : "";
+            }
+        }
+    ];
+
+    console.log("columnDefs created:", columnDefs);
+
+    gridHeight = (rowData.length * ROW_HEIGHT) + HEADER_HEIGHT;
+    console.log("Grid height set to:", gridHeight);
+
+    // Destroy existing grid and create fresh one for OPR
+    if (gridApi) {
+        console.log("Destroying existing grid");
+        gridApi.destroy();
+        gridApi = null;
+    }
+
+    console.log("Creating new OPR grid");
+    gridApi = createGrid(domNode, {
+        rowData,
+        columnDefs,
+        defaultColDef: {
+            resizable: false,
+            sortable: false,
+            suppressMovable: true,
+            cellStyle: {
+                fontSize: "18px"
+            }
+        },
+        suppressColumnVirtualisation: true,
+        suppressHorizontalScroll: true
+    });
+    console.log("Grid created:", gridApi);
+}
 
   function buildGrid() {
     if (!domNode || !selectedMetric || availableTeams.length === 0) return;
 
-    console.log(
-      "Selected Metric: ",
-      selectedMetric,
-      "Data Metric: ",
-      dataMetric,
-    );
+    console.log("=== buildGrid called ===");
+    console.log("Selected Metric: ", selectedMetric, "Data Metric: ", dataMetric);
+    console.log("domNode exists:", !!domNode);
+    console.log("availableTeams:", availableTeams);
 
-        if (availableTeams.length === 0) return;
+    // Special handling for OPR
+    const isOPRMetric = selectedMetric === "OPR (Offensive Power Rating)";
+    console.log("Is OPR Metric:", isOPRMetric);
+    
+    if (isOPRMetric) {
+        console.log("Building OPR grid, OPR data:", teamOPRs);
+        console.log("Number of OPR entries:", Object.keys(teamOPRs).length);
+        
+        // If OPR data hasn't been fetched yet, fetch it
+        if (Object.keys(teamOPRs).length === 0 && eventKey) {
+            console.log("Fetching OPR data...");
+            fetchEventOPRs(eventKey).then(oprs => {
+                teamOPRs = oprs;
+                buildOPRGrid();
+            });
+            return;
+        }
+        // Build OPR-specific grid
+        console.log("Calling buildOPRGrid()");
+        buildOPRGrid();
+        return;
+    }
 
     // Find the maximum number of matches any team has played
     let maxMatchCount = 0;
@@ -454,148 +776,182 @@
       (_, i) => `Q${i + 1}`,
     );
 
-        // Check if metric is numeric
-        const isNumericMetric = checkIsNumericMetric(dataMetric);
-        console.log("Is Numeric Metric: ", isNumericMetric);
-        
-        const inverted = isInvertedMetric(dataMetric);
+    // Check if metric is numeric
+    const isNumericMetric = checkIsNumericMetric(dataMetric);
+    console.log("Is Numeric Metric: ", isNumericMetric);
 
-        // Global stats (only for numeric metrics)
-        if (isNumericMetric) {
-            const allValues = [];
-            availableTeams.forEach(team => {
-                const rows = teamData[team] || [];
-                rows.forEach(r => {
-                    const val = Number(r[dataMetric] ?? 0);
-                    // Exclude -1 (false) and 0 from stats calculations
-                    if (val !== 0 && val !== -1 && isNumeric(r[dataMetric])) {
-                        allValues.push(val);
-                    }
-                });
-            });
-            
-            if (allValues.length > 0) {
-                const mu = mean(allValues);
-                globalStats = {
-                    mean: mu,
-                    sd: sd(allValues, mu),
-                    p25: percentile(allValues, 25),
-                    p50: percentile(allValues, 50),
-                    p75: percentile(allValues, 75),
-                    isNumeric: true
-                };
-                
-                // DEBUG LOGGING
-                console.log("========== COLORING DEBUG ==========");
-                console.log("Metric:", dataMetric);
-                console.log("Is Inverted:", inverted);
-                console.log("All Values:", allValues.sort((a,b) => a-b));
-                console.log("Global Stats:", globalStats);
-                console.log("Mean - 2SD:", globalStats.mean - (2 * globalStats.sd));
-                console.log("Mean:", globalStats.mean);
-                console.log("Mean + 2SD:", globalStats.mean + (2 * globalStats.sd));
-                console.log("Test value 3.58 color:", colorFromStats(3.58, globalStats, inverted));
-                console.log("Test value 7.88 color:", colorFromStats(7.88, globalStats, inverted));
-                console.log("Test value 17 color:", colorFromStats(17, globalStats, inverted));
-                console.log("Test value 31 color:", colorFromStats(31, globalStats, inverted));
-                console.log("====================================");
-            } else {
-                globalStats = { mean: 0, sd: 0, p25: 0, p50: 0, p75: 0, isNumeric: true };
-            }
-        } else {
-            globalStats = { mean: 0, sd: 0, p25: 0, p50: 0, p75: 0, isNumeric: false };
-        }
+    const inverted = isInvertedMetric(dataMetric);
 
-        rowData = availableTeams.map(team => {
-            const rows = teamData[team] || [];
-            const values = [];
-            const row = { team };
-            
-            // Track if this team has any data
-            const hasData = rows.length > 0 && rows.some(r => {
-                const v = r[dataMetric];
-                return v !== undefined && v !== null && v !== "";
-            });
-            row.hasData = hasData;
+    // Global stats (only for numeric metrics)
+    if (isNumericMetric) {
+      const allValues = [];
+      availableTeams.forEach((team) => {
+        const rows = teamData[team] || [];
+        rows.forEach((r) => {
+          const val = Number(r[dataMetric] ?? 0);
+          // Exclude -1 (false) and 0 from stats calculations
+          if (val !== 0 && val !== -1 && isNumeric(r[dataMetric])) {
+            allValues.push(val);
+          }
+        });
+      });
+
+      if (allValues.length > 0) {
+        const mu = mean(allValues);
+        globalStats = {
+          mean: mu,
+          sd: sd(allValues, mu),
+          p25: percentile(allValues, 25),
+          p50: percentile(allValues, 50),
+          p75: percentile(allValues, 75),
+          isNumeric: true,
+        };
+
+        // DEBUG LOGGING
+        console.log("========== COLORING DEBUG ==========");
+        console.log("Metric:", dataMetric);
+        console.log("Is Inverted:", inverted);
+        console.log(
+          "All Values:",
+          allValues.sort((a, b) => a - b),
+        );
+        console.log("Global Stats:", globalStats);
+        console.log("Mean - 2SD:", globalStats.mean - 2 * globalStats.sd);
+        console.log("Mean:", globalStats.mean);
+        console.log("Mean + 2SD:", globalStats.mean + 2 * globalStats.sd);
+        console.log(
+          "Test value 3.58 color:",
+          colorFromStats(3.58, globalStats, inverted),
+        );
+        console.log(
+          "Test value 7.88 color:",
+          colorFromStats(7.88, globalStats, inverted),
+        );
+        console.log(
+          "Test value 17 color:",
+          colorFromStats(17, globalStats, inverted),
+        );
+        console.log(
+          "Test value 31 color:",
+          colorFromStats(31, globalStats, inverted),
+        );
+        console.log("====================================");
+      } else {
+        globalStats = {
+          mean: 0,
+          sd: 0,
+          p25: 0,
+          p50: 0,
+          p75: 0,
+          isNumeric: true,
+        };
+      }
+    } else {
+      globalStats = {
+        mean: 0,
+        sd: 0,
+        p25: 0,
+        p50: 0,
+        p75: 0,
+        isNumeric: false,
+      };
+    }
+
+    rowData = availableTeams
+      .map((team) => {
+        const rows = teamData[team] || [];
+        const values = [];
+        const row = { team };
+
+        // Track if this team has any data
+        const hasData =
+          rows.length > 0 &&
+          rows.some((r) => {
+            const v = r[dataMetric];
+            return v !== undefined && v !== null && v !== "";
+          });
+        row.hasData = hasData;
 
         rows.forEach((r, i) => {
           const label = qLabels[i];
           let v = r[dataMetric];
 
-                if (isNumericMetric) {
-                    if (v === undefined || v === null || v === "") {
-                        row[label] = null;
-                    } else if (isNumeric(v)) {
-                        const numValue = Number(v);
-                        row[label] = numValue;
-                        // Only include in values array if not -1 or 0
-                        if (numValue !== 0 && numValue !== -1) {
-                            values.push(numValue);
-                        }
-                    } else {
-                        // Non-numeric string in a numeric metric - treat as null
-                        row[label] = null;
-                    }
-                } else {
-                    // For non-numeric data (strings, booleans), store normalized value
-                    row[label] = normalizeValue(v);
-                }
-            });
-
-            if (isNumericMetric) {
-                // Calculate mean/median only from valid positive values (excluding 0 and -1)
-                if (values.length > 0) {
-                    row.mean = Number(mean(values).toFixed(2));
-                    row.median = Number(median(values).toFixed(2));
-                } else {
-                    // No meaningful numeric data for this team
-                    row.mean = null;
-                    row.median = null;
-                }
+          if (isNumericMetric) {
+            if (v === undefined || v === null || v === "") {
+              row[label] = null;
+            } else if (isNumeric(v)) {
+              const numValue = Number(v);
+              row[label] = numValue;
+              // Only include in values array if not -1 or 0
+              if (numValue !== 0 && numValue !== -1) {
+                values.push(numValue);
+              }
             } else {
-                row.mean = null;
-                row.median = null;
+              // Non-numeric string in a numeric metric - treat as null
+              row[label] = null;
             }
-            return row;
-        }).sort((a, b) => {
-            if (!isNumericMetric) return a.team.localeCompare(b.team);
-
-            // Handle null means
-            if (a.mean === null && b.mean !== null) return 1;
-            if (b.mean === null && a.mean !== null) return -1;
-            if (a.mean === null && b.mean === null) return 0;
-
-            // Sort based on whether metric is inverted
-            if (inverted) {
-                return a.mean - b.mean; // Lower is better
-            }
-            return b.mean - a.mean; // Higher is better
-        }).map((row, index, array) => {
-            // Calculate percentile based on position in sorted list
-            if (isNumericMetric && row.mean !== null) {
-                const validRows = array.filter(r => r.mean !== null);
-                const totalTeams = validRows.length;
-                const position = validRows.indexOf(row);
-                // Flip percentRank so position 0 (best) maps to high percentile
-                const percentRank = (totalTeams - position - 1) / totalTeams;
-                
-                // For percentile column: use quintiles (0, 20, 40, 60, 80) based on position
-                if (percentRank < 0.2) {
-                    row.alexPercentile = 0;   // 0-20% (worst)
-                } else if (percentRank < 0.4) {
-                    row.alexPercentile = 20;  // 20-40%
-                } else if (percentRank < 0.6) {
-                    row.alexPercentile = 40;  // 40-60%
-                } else if (percentRank < 0.8) {
-                    row.alexPercentile = 60;  // 60-80%
-                } else {
-                    row.alexPercentile = 80;  // 80-100% (best)
-                }
-            } else {
-                row.alexPercentile = null;
-            }
-            return row;
+          } else {
+            // For non-numeric data (strings, booleans), store normalized value
+            row[label] = normalizeValue(v);
+          }
         });
+
+        if (isNumericMetric) {
+          // Calculate mean/median only from valid positive values (excluding 0 and -1)
+          if (values.length > 0) {
+            row.mean = Number(mean(values).toFixed(2));
+            row.median = Number(median(values).toFixed(2));
+          } else {
+            // No meaningful numeric data for this team
+            row.mean = null;
+            row.median = null;
+          }
+        } else {
+          row.mean = null;
+          row.median = null;
+        }
+        return row;
+      })
+      .sort((a, b) => {
+        if (!isNumericMetric) return a.team.localeCompare(b.team);
+
+        // Handle null means
+        if (a.mean === null && b.mean !== null) return 1;
+        if (b.mean === null && a.mean !== null) return -1;
+        if (a.mean === null && b.mean === null) return 0;
+
+        // Sort based on whether metric is inverted
+        if (inverted) {
+          return a.mean - b.mean; // Lower is better
+        }
+        return b.mean - a.mean; // Higher is better
+      })
+      .map((row, index, array) => {
+        // Calculate percentile based on position in sorted list
+        if (isNumericMetric && row.mean !== null) {
+          const validRows = array.filter((r) => r.mean !== null);
+          const totalTeams = validRows.length;
+          const position = validRows.indexOf(row);
+          // Flip percentRank so position 0 (best) maps to high percentile
+          const percentRank = (totalTeams - position - 1) / totalTeams;
+
+          // For percentile column: use quintiles (0, 20, 40, 60, 80) based on position
+          if (percentRank < 0.2) {
+            row.alexPercentile = 0; // 0-20% (worst)
+          } else if (percentRank < 0.4) {
+            row.alexPercentile = 20; // 20-40%
+          } else if (percentRank < 0.6) {
+            row.alexPercentile = 40; // 40-60%
+          } else if (percentRank < 0.8) {
+            row.alexPercentile = 60; // 60-80%
+          } else {
+            row.alexPercentile = 80; // 80-100% (best)
+          }
+        } else {
+          row.alexPercentile = null;
+        }
+        return row;
+      });
 
     const columnDefs = [
       {
@@ -645,199 +1001,201 @@
             };
           }
 
-                    const val = Number(v ?? 0);
+          const val = Number(v ?? 0);
 
-                    // -1 means false
-                    if (val === -1) {
-                        return {
-                            background: "#4D4D4D",
-                            color: "white",
-                            fontWeight: 600,
-                            fontSize: "18px",
-                            textAlign: "center"
-                        };
-                    }
+          // -1 means false
+          if (val === -1) {
+            return {
+              background: "#4D4D4D",
+              color: "white",
+              fontWeight: 600,
+              fontSize: "18px",
+              textAlign: "center",
+            };
+          }
 
-                    // 0 means zero/null value
-                    if (val === 0) {
-                        return {
-                            background: "black",
-                            color: "white",
-                            fontWeight: 600,
-                            fontSize: "18px",
-                            textAlign: "center"
-                        };
-                    }
+          // 0 means zero/null value
+          if (val === 0) {
+            return {
+              background: "black",
+              color: "white",
+              fontWeight: 600,
+              fontSize: "18px",
+              textAlign: "center",
+            };
+          }
 
-                    // Use appropriate coloring
-                    const bg = colorFromStats(val, globalStats, inverted);
-                    return {
-                        background: bg,
-                        color: textColorForBgStrict(bg),
-                        fontWeight: 600,
-                        fontSize: "18px",
-                        textAlign: "center"
-                    };
-                },
-                valueFormatter: params => {
-                    if (!isNumericMetric) {
-                        return normalizeValue(params.value);
-                    }
-                    const hasData = params.data?.hasData;
-                    if (!hasData) return "";
+          // Use appropriate coloring
+          const bg = colorFromStats(val, globalStats, inverted);
+          return {
+            background: bg,
+            color: textColorForBgStrict(bg),
+            fontWeight: 600,
+            fontSize: "18px",
+            textAlign: "center",
+          };
+        },
+        valueFormatter: (params) => {
+          if (!isNumericMetric) {
+            return normalizeValue(params.value);
+          }
+          const hasData = params.data?.hasData;
+          if (!hasData) return "";
 
           if (params.value === undefined || params.value === null) return "";
 
-                    const num = Number(params.value ?? 0);
-                    
-                    // Format -1 as "False" for display
-                    if (num === -1) return "False";
-                    
-                    return num.toFixed(2);
-                }
-            })),
-            {
-                headerName: "Mean",
-                field: "mean",
-                flex: 1,
-                minWidth: 80,
-                headerClass: "header-center",
-                cellClass: "cell-center",
-                hide: !isNumericMetric,
-                cellStyle: params => {
-                    const v = params.value;
-                    
-                    if (v === null || v === undefined) {
-                        return {
-                            background: "#4D4D4D",
-                            color: "white",
-                            fontWeight: "bold",
-                            fontSize: "18px",
-                            textAlign: "center",
-                            borderLeft: "3px solid #C81B00"
-                        };
-                    }
+          const num = Number(params.value ?? 0);
 
-                    const bg = colorFromStats(v, globalStats, inverted);
-                    return {
-                        background: bg,
-                        color: textColorForBgStrict(bg),
-                        fontWeight: "bold",
-                        fontSize: "18px",
-                        textAlign: "center",
-                        borderLeft: "3px solid #C81B00"
-                    };
-                },
-                valueFormatter: params => {
-                    const hasData = params.data?.hasData;
-                    if (!hasData) return "";
-                    if (params.value === null || params.value === undefined) return "";
-                    const num = Number(params.value ?? 0);
-                    return num.toFixed(2);
-                }
-            },
-            {
-                headerName: "Med.",
-                field: "median",
-                flex: 1,
-                minWidth: 80,
-                headerClass: "header-center",
-                cellClass: "cell-center",
-                hide: !isNumericMetric,
-                cellStyle: params => {
-                    const v = params.value;
-                    
-                    if (v === null || v === undefined) {
-                        return {
-                            background: "#4D4D4D",
-                            color: "white",
-                            fontWeight: "bold",
-                            fontSize: "18px",
-                            textAlign: "center",
-                            borderLeft: "2px solid #555"
-                        };
-                    }
+          // Format -1 as "False" for display
+          if (num === -1) return "False";
 
-                    const bg = colorFromStats(v, globalStats, inverted);
-                    return {
-                        background: bg,
-                        color: textColorForBgStrict(bg),
-                        fontWeight: "bold",
-                        fontSize: "18px",
-                        textAlign: "center",
-                        borderLeft: "2px solid #555"
-                    };
-                },
-                valueFormatter: params => {
-                    const hasData = params.data?.hasData;
-                    if (!hasData) return "";
-                    if (params.value === null || params.value === undefined) return "";
-                    const num = Number(params.value ?? 0);
-                    return num.toFixed(2);
-                }
-            },
-            {
-                headerName: "Per.",
-                field: "alexPercentile",
-                flex: 1,
-                minWidth: 100,
-                headerClass: "header-center",
-                cellClass: "cell-center",
-                hide: !isNumericMetric,
-                cellStyle: params => {
-                    const p = params.value;
-                    let background;
-                    
-                    if (p === null || p === undefined) {
-                        background = "#4D4D4D";
-                    } else {
-                        // Per. column always uses quintile colors, regardless of colorblindMode
-                        background = getAlexBgColor(p, false);
-                    }
+          return num.toFixed(2);
+        },
+      })),
+      {
+        headerName: "Mean",
+        field: "mean",
+        flex: 1,
+        minWidth: 80,
+        headerClass: "header-center",
+        cellClass: "cell-center",
+        hide: !isNumericMetric,
+        cellStyle: (params) => {
+          const v = params.value;
 
-                    const color = textColorForBgStrict(background);
+          if (v === null || v === undefined) {
+            return {
+              background: "#4D4D4D",
+              color: "white",
+              fontWeight: "bold",
+              fontSize: "18px",
+              textAlign: "center",
+              borderLeft: "3px solid #C81B00",
+            };
+          }
 
-                    return {
-                        background,
-                        color,
-                        fontWeight: "bold",
-                        fontSize: "18px",
-                        textAlign: "center",
-                        borderLeft: "2px solid #555"
-                    };
-                },
-                valueFormatter: params => {
-                    const hasData = params.data?.hasData;
-                    if (!hasData) return "";
-                    return params.value !== null && params.value !== undefined ? params.value.toString() : "";
-                }
-            }
-        ];
+          const bg = colorFromStats(v, globalStats, inverted);
+          return {
+            background: bg,
+            color: textColorForBgStrict(bg),
+            fontWeight: "bold",
+            fontSize: "18px",
+            textAlign: "center",
+            borderLeft: "3px solid #C81B00",
+          };
+        },
+        valueFormatter: (params) => {
+          const hasData = params.data?.hasData;
+          if (!hasData) return "";
+          if (params.value === null || params.value === undefined) return "";
+          const num = Number(params.value ?? 0);
+          return num.toFixed(2);
+        },
+      },
+      {
+        headerName: "Med.",
+        field: "median",
+        flex: 1,
+        minWidth: 80,
+        headerClass: "header-center",
+        cellClass: "cell-center",
+        hide: !isNumericMetric,
+        cellStyle: (params) => {
+          const v = params.value;
+
+          if (v === null || v === undefined) {
+            return {
+              background: "#4D4D4D",
+              color: "white",
+              fontWeight: "bold",
+              fontSize: "18px",
+              textAlign: "center",
+              borderLeft: "2px solid #555",
+            };
+          }
+
+          const bg = colorFromStats(v, globalStats, inverted);
+          return {
+            background: bg,
+            color: textColorForBgStrict(bg),
+            fontWeight: "bold",
+            fontSize: "18px",
+            textAlign: "center",
+            borderLeft: "2px solid #555",
+          };
+        },
+        valueFormatter: (params) => {
+          const hasData = params.data?.hasData;
+          if (!hasData) return "";
+          if (params.value === null || params.value === undefined) return "";
+          const num = Number(params.value ?? 0);
+          return num.toFixed(2);
+        },
+      },
+      {
+        headerName: "Per.",
+        field: "alexPercentile",
+        flex: 1,
+        minWidth: 100,
+        headerClass: "header-center",
+        cellClass: "cell-center",
+        hide: !isNumericMetric,
+        cellStyle: (params) => {
+          const p = params.value;
+          let background;
+
+          if (p === null || p === undefined) {
+            background = "#4D4D4D";
+          } else {
+            // Per. column always uses quintile colors, regardless of colorblindMode
+            background = getAlexBgColor(p, false);
+          }
+
+          const color = textColorForBgStrict(background);
+
+          return {
+            background,
+            color,
+            fontWeight: "bold",
+            fontSize: "18px",
+            textAlign: "center",
+            borderLeft: "2px solid #555",
+          };
+        },
+        valueFormatter: (params) => {
+          const hasData = params.data?.hasData;
+          if (!hasData) return "";
+          return params.value !== null && params.value !== undefined
+            ? params.value.toString()
+            : "";
+        },
+      },
+    ];
 
     // Calculate grid height based on number of teams
     gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT;
 
-        if (gridApi) {
-            gridApi.setGridOption("columnDefs", columnDefs);
-            gridApi.setGridOption("rowData", rowData);
-        } else {
-            gridApi = createGrid(domNode, {
-                rowData,
-                columnDefs,
-                defaultColDef: {
-                    resizable: false,
-                    sortable: false,
-                    suppressMovable: true,
-                    cellStyle: {
-                        fontSize: "18px"
-                    }
-                },
-                suppressColumnVirtualisation: true,
-                suppressHorizontalScroll: true
-            });
-        }
-        updateAllCharts();
+    if (gridApi) {
+      gridApi.setGridOption("columnDefs", columnDefs);
+      gridApi.setGridOption("rowData", rowData);
+    } else {
+      gridApi = createGrid(domNode, {
+        rowData,
+        columnDefs,
+        defaultColDef: {
+          resizable: false,
+          sortable: false,
+          suppressMovable: true,
+          cellStyle: {
+            fontSize: "18px",
+          },
+        },
+        suppressColumnVirtualisation: true,
+        suppressHorizontalScroll: true,
+      });
     }
+    updateAllCharts();
+  }
 
   function onMetricChange(e) {
     selectedMetric = e.target.value;
@@ -961,53 +1319,56 @@
     charts.forEach((c) => updateChartDataset(c));
   }
 
-  function updateChartDataset(chart) {
+    function updateChartDataset(chart) {
     if (!chart.instance) return;
 
     chart.yAxisMetric = dataMetric;
+    chart.yAxisMetric = dataMetric;
 
     if (!chart.selectedTeams) {
-      chart.selectedTeams = new Set(availableTeams);
+        chart.selectedTeams = new Set(availableTeams);
     }
 
-    const isNumeric = checkIsNumericMetric(dataMetric);
+    // Special handling for OPR metric
+    const isOPRMetric = selectedMetric === "OPR (Offensive Power Rating)";
+    const isNumeric = isOPRMetric ? true : checkIsNumericMetric(dataMetric);
 
     let option = {};
-
-    if (!isNumeric && chart.type !== "pie" && chart.type !== "radar") {
-      // Show "Not Supported" for numeric charts on string data
-      option = {
-        title: {
-          text: "This chart requires numeric data.",
-          left: "center",
-          top: "center",
-          textStyle: { color: "#fff", fontSize: 16 },
-        },
-        xAxis: { show: false },
-        yAxis: { show: false },
-        series: [],
-      };
+    
+    if (!isNumeric && chart.type !== 'pie') {
+        // Show "Not Supported" for numeric charts on string data
+        option = {
+            title: { 
+                text: 'This chart requires numeric data.',
+                left: 'center',
+                top: 'center',
+                textStyle: { color: '#fff', fontSize: 16 }
+            },
+            xAxis: { show: false },
+            yAxis: { show: false },
+            series: []
+        };
     } else {
-      switch (chart.type) {
-        case "bar":
-          option = getBarOption(chart.selectedTeams);
-          break;
-        case "line":
-          option = getLineOption(chart.selectedTeams);
-          break;
-        case "pie":
-          option = getPieOption(chart.selectedTeams, isNumeric);
-          break;
-        case "scatter":
-          option = getScatterOption(chart.selectedTeams);
-          break;
-        case "radar":
-          option = getRadarOption(chart);
-          break;
-      }
+        switch (chart.type) {
+            case "bar":
+                option = getBarOption(chart.selectedTeams);
+                break;
+            case "line":
+                option = getLineOption(chart.selectedTeams);
+                break;
+            case "pie":
+                option = getPieOption(chart.selectedTeams, isNumeric);
+                break;
+            case "scatter":
+                option = getScatterOption(chart.selectedTeams);
+                break;
+            case "radar":
+                option = getRadarOption(chart);
+                break;
+        }
     }
     chart.instance.setOption(option, true);
-  }
+}
 
   function getBarOption(filterSet) {
     const filteredData = rowData.filter((r) => filterSet.has(r.team));
@@ -1016,14 +1377,35 @@
 
     return {
       tooltip: { trigger: "axis" },
-      xAxis: { type: "category", data: teams },
-      yAxis: { type: "value", name: selectedMetric },
+      xAxis: {
+        type: "category",
+        data: teams,
+        axisLabel: {
+          interval: 0,
+          rotate: 90,
+          color: "#ffffff",
+        },
+      },
+      yAxis: {
+        type: "value",
+        name: selectedMetric,
+        axisLabel: {
+          color: "#ffffff",
+        },
+        nameTextStyle: {
+          color: "#ffffff",
+        },
+      },
       series: [
         {
           data: values,
           type: "bar",
           name: selectedMetric,
           itemStyle: { color: "#C81B00" },
+          label: {
+            show: true,
+            color: "#ffffff",
+          },
         },
       ],
     };
@@ -1036,8 +1418,25 @@
 
     return {
       tooltip: { trigger: "axis" },
-      xAxis: { type: "category", data: teams },
-      yAxis: { type: "value", name: selectedMetric },
+      xAxis: {
+        type: "category",
+        data: teams,
+        axisLabel: {
+          color: "#ffffff",
+          interval: 0,
+          rotate: 90,
+        },
+      },
+      yAxis: {
+        type: "value",
+        name: selectedMetric,
+        axisLabel: {
+          color: "#ffffff",
+        },
+        nameTextStyle: {
+          color: "#ffffff",
+        },
+      },
       series: [
         {
           data: values,
@@ -1045,6 +1444,10 @@
           name: selectedMetric,
           lineStyle: { color: "#C81B00" },
           itemStyle: { color: "#C81B00" },
+          label: {
+            show: true,
+            color: "#ffffff",
+          },
         },
       ],
     };
@@ -1084,38 +1487,65 @@
           data: data,
           name: selectedMetric,
           radius: "60%",
+          label: {
+            color: "#ffffff",
+          },
         },
       ],
     };
   }
 
-    function getScatterOption(filterSet) {
-        const sortedTeams = rowData.filter(r => filterSet.has(r.team)).map(r => r.team);
-        const scatterData = [];
-        sortedTeams.forEach((team) => {
-             const rows = teamData[team] || [];
-             rows.forEach(r => {
-                 const v = r[dataMetric];
-                 if (isNumeric(v)) {
-                     const numValue = Number(v);
-                     // Exclude 0 and -1 from scatter plot
-                     if (numValue !== 0 && numValue !== -1) {
-                         scatterData.push([team, numValue]);
-                     }
-                 }
-             });
-        });
+  function getScatterOption(filterSet) {
+    const sortedTeams = rowData
+      .filter((r) => filterSet.has(r.team))
+      .map((r) => r.team);
+    const scatterData = [];
+    sortedTeams.forEach((team) => {
+      const rows = teamData[team] || [];
+      rows.forEach((r) => {
+        const v = r[dataMetric];
+        if (isNumeric(v)) {
+          const numValue = Number(v);
+          // Exclude 0 and -1 from scatter plot
+          if (numValue !== 0 && numValue !== -1) {
+            scatterData.push([team, numValue.toFixed(2)]);
+          }
+        }
+      });
+    });
 
     return {
       tooltip: { trigger: "item" },
-      xAxis: { type: "category", data: sortedTeams, name: "Team" },
-      yAxis: { type: "value", name: selectedMetric },
+      xAxis: {
+        type: "category",
+        data: sortedTeams,
+        name: "Team",
+        axisLabel: {
+          color: "#ffffff",
+          interval: 0,
+          rotate: 90,
+        },
+      },
+      yAxis: {
+        type: "value",
+        name: selectedMetric,
+        axisLabel: {
+          color: "#ffffff",
+        },
+        nameTextStyle: {
+          color: "#ffffff",
+        },
+      },
       series: [
         {
           symbolSize: 10,
           data: scatterData,
           type: "scatter",
           itemStyle: { color: "#C81B00" },
+          label: {
+            show: true,
+            color: "#ffffff",
+          },
         },
       ],
     };
@@ -1125,18 +1555,23 @@
     numericMetrics = [];
     let maxValues = [];
 
-    let availableNumeric = metrics.filter(m => {
-    let dataKey = m;
-    for (const [key, value] of metricNames.entries()) {
-      if (value === m) { dataKey = key; break; }
-    }
-    return checkIsNumericMetric(dataKey) && !excludedMetrics.includes(dataKey);
-  });
+    let availableNumeric = metrics.filter((m) => {
+      let dataKey = m;
+      for (const [key, value] of metricNames.entries()) {
+        if (value === m) {
+          dataKey = key;
+          break;
+        }
+      }
+      return (
+        checkIsNumericMetric(dataKey) && !excludedMetrics.includes(dataKey)
+      );
+    });
 
-  
-  numericMetrics = (chart.selectedMetrics && chart.selectedMetrics.size > 0)
-    ? availableNumeric.filter(m => chart.selectedMetrics.has(m))
-    : availableNumeric.slice(0, availableNumeric.length);
+    numericMetrics =
+      chart.selectedMetrics && chart.selectedMetrics.size > 0
+        ? availableNumeric.filter((m) => chart.selectedMetrics.has(m))
+        : availableNumeric.slice(0, availableNumeric.length);
     console.log("Numeric metrics identified:", numericMetrics);
     console.log("maxValues before calculation:", maxValues);
 
@@ -1230,14 +1665,13 @@
         splitNumber: 4,
         axisLine: { lineStyle: { color: "#333" } },
         splitLine: { lineStyle: { color: ["#444", "#555", "#666", "#777"] } },
-        name: { textStyle: { color: "#ccc" } },
+        name: { textStyle: { color: "#ffffff" } },
         splitArea: { areaStyle: { color: ["rgba(200,27,0,0.05)"] } },
       },
       series: [{ type: "radar", data: seriesData }],
     };
-  }
-
-  onMount(async () => {
+}
+onMount(async () => {
     try {
       allDataResponse = await fetchAllMetricData();
       console.log("Fetched data from backend:", allDataResponse);
@@ -1245,17 +1679,28 @@
       processTeamData(allDataResponse);
 
       if (availableTeams.length === 0) {
-        error = "No team data found from backend.";
-        loading = false;
-        return;
+          error = "No team data found from backend.";
+          loading = false;
+          return;
       }
 
+      // IMPORTANT: Fetch OPR data BEFORE computing metrics
+      eventKey = eventKey || localStorage.getItem("eventCode") || "";
+      console.log("Event Key:", eventKey);
+      
+      if (eventKey) {
+          teamOPRs = await fetchEventOPRs(eventKey);
+          console.log("OPR cache populated:", teamOPRs);
+      }
+
+      // Compute metrics AFTER OPR data is loaded
       metrics = computeMetrics();
+      console.log("Computed metrics:", metrics);
 
       if (metrics.length === 0) {
-        error = "Team data loaded, but no metrics were found.";
-        loading = false;
-        return;
+          error = "Team data loaded, but no metrics were found.";
+          loading = false;
+          return;
       }
 
       selectedMetric = metrics[0];
@@ -1264,11 +1709,15 @@
 
       buildGrid();
     } catch (e) {
-      error = e.message;
-      loading = false;
-      console.error("Error loading data:", e);
+        error = e.message;
+        loading = false;
+        console.error("Error loading data:", e);
     }
-  });
+});
+
+$: if (selectedMetric === "OPR (Offensive Power Rating)" && Object.keys(teamOPRs).length > 0 && !loading) {
+    buildGrid();
+}
 </script>
 
 <div class="page-wrapper">
@@ -1489,7 +1938,7 @@
                       type="checkbox"
                       checked={chart.selectedMetrics &&
                         chart.selectedMetrics.has(metric)}
-                        disabled={chart.selectedMetrics &&
+                      disabled={chart.selectedMetrics &&
                         chart.selectedMetrics.size <= 3 &&
                         chart.selectedMetrics.has(metric)}
                       on:change={() => toggleChartMetric(chart, metric)}
@@ -1817,8 +2266,9 @@
   }
 
   .charts-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
     width: 100vw;
   }
 

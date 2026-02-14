@@ -7,8 +7,17 @@
   let selectedTeam = "Select a team";
   let tableData = [];
   let isSubmitting = false;
-  const rating = [new URL("../../images/DNP.png", import.meta.url).href, new URL("../../images/ProbNo.png", import.meta.url).href, new URL("../../images/NeutralBad.jpg", import.meta.url).href, new URL("../../images/NeutralGood.png", import.meta.url).href, new URL("../../images/PrettyGood.gif", import.meta.url).href, new URL("../../images/AHHHHH.png", import.meta.url).href, new URL("../../images/FIRSTpick.gif", import.meta.url).href ];
-  const eventCode = localStorage.getItem("eventCode");
+  const rating = [
+    new URL("../../images/DNP.png", import.meta.url).href,
+    new URL("../../images/ProbNo.png", import.meta.url).href,
+    new URL("../../images/NeutralBad.jpg", import.meta.url).href,
+    new URL("../../images/NeutralGood.png", import.meta.url).href,
+    new URL("../../images/PrettyGood.gif", import.meta.url).href,
+    new URL("../../images/AHHHHH.png", import.meta.url).href,
+    new URL("../../images/FIRSTpick.gif", import.meta.url).href,
+  ];
+  // const eventCode = localStorage.getItem("eventCode");
+  const eventCode = "2026mabos";
 
   let originalTitle = "";
   let teams = new Map();
@@ -24,7 +33,7 @@
     const result = await fetchTeams(eventCode);
     teams = result._teams;
     allTeams = result._teamNumbers;
-    
+
     addPastData();
   });
 
@@ -33,23 +42,34 @@
   });
 
   function addPastData() {
-    fetchGracePage(eventCode).then(res => {
-      if (!res.ok) throw new Error("Network response was not ok");
-      return res.json(); 
-    }).then(data => {
-      for (let team of Object.keys(data)) {
-        tableData = [
-          ...tableData,
-          {
-            team: team,
-            name: teams.get(parseInt(team)),
-            rating: rating[data[team][Object.keys(data[team]).length - 1]],
-          },
-        ];
-      }
-    }).catch(err => {
-      console.error("Failed to fetch Grace page:", err);
-    });
+    fetchGracePage(eventCode)
+      .then((res) => {
+        if (!res.ok) throw new Error("Network response was not ok");
+        return res.json();
+      })
+      .then((data) => {
+        for (let team of Object.keys(data)) {
+          tableData = [
+            ...tableData,
+            {
+              team: team,
+              name: teams.get(parseInt(team)),
+              rating: rating[data[team][Object.keys(data[team]).length - 1]],
+            },
+          ];
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to fetch garce page:", err);
+      });
+
+    fetchGracePage(eventCode)
+      .then((res) => {
+        return res.json();
+      })
+      .then((data) => {
+        console.log(data);
+      });
   }
 
   async function handleRatingClick(ratingEmoji: string, i) {
@@ -60,7 +80,7 @@
       alert("Please select a team first!");
       isSubmitting = false;
       return;
-    } 
+    }
 
     await postGracePage(eventCode, selectedTeam, i);
 
@@ -99,8 +119,8 @@
     <p>Rating:</p>
     <div class="ratingButtonContainer">
       {#each rating as ratingEmoji, i}
-        <button on:click={() => handleRatingClick(ratingEmoji, i + 1)}>
-          <img src={ratingEmoji} alt="Rating Emoji" width="40" height="40"  />
+        <button on:click={() => handleRatingClick(ratingEmoji, i)}>
+          <img src={ratingEmoji} alt="Rating Emoji" width="40" height="40" />
         </button>
       {/each}
     </div>
@@ -117,7 +137,14 @@
           <tr>
             <td>{row.team}</td>
             <td>{row.name}</td>
-            <td><img src={row.rating} alt="Rating Emoji" width="40" height="40" /></td>
+            <td
+              ><img
+                src={row.rating}
+                alt="Rating Emoji"
+                width="40"
+                height="40"
+              /></td
+            >
           </tr>
         {/each}
       </tbody>
