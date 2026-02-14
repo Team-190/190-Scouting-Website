@@ -11,7 +11,6 @@
 
   import "ag-grid-community/styles/ag-grid.css";
   import "ag-grid-community/styles/ag-theme-quartz.css";
-  import Team from "../../components/Team.svelte";
 
   // Graph imports
   import * as barGraph from "../../pages/graphcode/bar.js";
@@ -19,6 +18,7 @@
   import * as pieGraph from "../../pages/graphcode/pie.js";
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
+  import { fetchGracePage } from "../../utils/api";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -104,6 +104,23 @@
       mid: [251, 188, 4]       // Google Yellow - RGB: 251 188 4
     },
   };
+ let garceData;
+  fetchGracePage("2026mabos")
+    .then((res) => {
+      return res.json();
+    })
+    .then((data) => {
+      garceData = data;
+    });
+  const rating = [
+    new URL("../../images/DNP.png", import.meta.url).href,
+    new URL("../../images/ProbNo.png", import.meta.url).href,
+    new URL("../../images/NeutralBad.jpg", import.meta.url).href,
+    new URL("../../images/NeutralGood.png", import.meta.url).href,
+    new URL("../../images/PrettyGood.gif", import.meta.url).href,
+    new URL("../../images/AHHHHH.png", import.meta.url).href,
+    new URL("../../images/FIRSTpick.gif", import.meta.url).href,
+  ];
 
   let cache = {};
 
@@ -374,10 +391,27 @@
     }
   }
 
+  function fetchGraceRating(team) {
+    if (garceData[team]===undefined){
+      return;
+    }else{
+    return rating[garceData[team][Object.keys(garceData[team]).length - 1]];
+  }
+  }
+
   function onTeamChange() {
     const teamStr = String(selectedTeam);
     loadTeamData(teamStr);
     fetchTeamOPR(teamStr, eventKey);
+    console.log("Selected team: " + selectedTeam);
+    console.log(
+      "Garce rating for team " +
+        selectedTeam +
+        ": " +
+        fetchGraceRating(selectedTeam),
+    );
+    document.getElementById('grace-rating').src = fetchGraceRating(selectedTeam);
+
   }
 
   let allTeams = [];
@@ -1435,6 +1469,7 @@
         {/each}
       </select>
     </div>
+    <img src="" alt="" id="grace-rating" />
   </div>
 
   <!-- Grid container -->
