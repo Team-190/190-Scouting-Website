@@ -40,7 +40,7 @@
     const TBA_API_KEY = import.meta.env.VITE_AUTH_KEY;
     const TBA_BASE_URL = "https://www.thebluealliance.com/api/v3";
 
-    let eventKey = ""; // Will be loaded from localStorage
+    let eventKey = "2025mawor"; // Will be loaded from localStorage
     let teamOPRs = {}; // Cache for OPR values { teamNumber: oprValue }
     let oprLoading = false;
         

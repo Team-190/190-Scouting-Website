@@ -198,6 +198,52 @@
   let redAlliance = ["", "", ""];
   let blueAlliance = ["", "", ""];
 
+  // OPR data
+let teamOPRs = {}; // Cache for OPR values { teamNumber: oprValue }
+let oprLoading = false;
+
+async function fetchEventOPRs(eventKey) {
+  if (!eventKey) {
+    console.warn("No event key provided for OPR fetch");
+    return {};
+  }
+
+  oprLoading = true;
+  try {
+    const response = await fetch(
+      `${TBA_BASE_URL}/event/${eventKey}/oprs`,
+      {
+        headers: {
+          "X-TBA-Auth-Key": TBA_API_KEY
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    // Convert from { "frc190": 45.2, "frc191": 38.5 } to { "190": 45.2, "191": 38.5 }
+    const oprCache = {};
+    if (data.oprs) {
+      Object.entries(data.oprs).forEach(([teamKey, oprValue]) => {
+        const teamNum = teamKey.replace("frc", "");
+        oprCache[teamNum] = oprValue;
+      });
+    }
+    
+    console.log("Fetched OPR data:", oprCache);
+    return oprCache;
+  } catch (error) {
+    console.error("Error fetching OPR:", error);
+    return {};
+  } finally {
+    oprLoading = false;
+  }
+}
+
 async function fetchEventMatches(eventKey) {
   try {
     const response = await fetch(`${TBA_BASE_URL}/event/${eventKey}/matches`, {
@@ -351,7 +397,6 @@ async function fetchEventMatches(eventKey) {
 
   const matchPart = parts[1];
   
-  // Extract competition level (first 2-3 characters)
   let compLevel: string;
   let remainder: string;
   
@@ -379,16 +424,13 @@ async function fetchEventMatches(eventKey) {
   let matchNumber = 1;
 
   if (compLevel === "qm") {
-    // Qualification match: just a number
     matchNumber = parseInt(remainder);
   } else {
-    // Elimination match: format is like "1m1" (set 1, match 1)
     if (remainder.includes("m")) {
       const [setStr, matchStr] = remainder.split("m");
       setNumber = parseInt(setStr);
       matchNumber = parseInt(matchStr);
     } else {
-      // Fallback: just a number (shouldn't happen but just in case)
       matchNumber = parseInt(remainder);
     }
   }
@@ -398,15 +440,12 @@ async function fetchEventMatches(eventKey) {
     return;
   }
 
-  // Find match in allMatches
   let match;
   if (compLevel === "qm") {
-    // For quals, only match on comp_level and match_number
     match = allMatches.find(
       (m) => m.comp_level === compLevel && m.match_number === matchNumber
     );
   } else {
-    // For elims, also match on set_number
     match = allMatches.find(
       (m) => 
         m.comp_level === compLevel && 
@@ -416,50 +455,49 @@ async function fetchEventMatches(eventKey) {
   }
 
   if (!match) {
-    console.warn("Match not found for key:", matchKey, 
-      "comp_level:", compLevel, 
-      "set_number:", setNumber, 
-      "match_number:", matchNumber);
+    console.warn("Match not found for key:", matchKey);
     return;
   }
 
-  // Populate alliances
   redAlliance = match.alliances.red.team_keys.map((k) => k.replace("frc", ""));
   blueAlliance = match.alliances.blue.team_keys.map((k) => k.replace("frc", ""));
 
   console.log("Red Alliance:", redAlliance, "Blue Alliance:", blueAlliance);
 
-  // Wait for DOM to bind
-  await tick();
+  // Fetch OPR data if we don't have it yet
+  if (Object.keys(teamOPRs).length === 0 && eventKey) {
+    teamOPRs = await fetchEventOPRs(eventKey);
+  }
 
+  await tick();
   loadAllAllianceTeams();
 }
-
 onMount(async () => {
   const storedData = localStorage.getItem("data");
   teamViewData = storedData ? JSON.parse(storedData) : [];
 
   console.log("Loaded teamViewData:", teamViewData);
 
-  // Load event key from localStorage
   eventKey = localStorage.getItem("eventCode") || "";
   console.log("Event Key:", eventKey);
 
-  // Fetch matches if needed
-  if (true) {
-    allMatches = await fetchEventMatches("2025micmp1");  // Use the actual eventKey variable
+  // Fetch OPR data early
+  if (eventKey) {
+    teamOPRs = await fetchEventOPRs(eventKey);
+    console.log("OPR cache populated:", teamOPRs);
+  }
+
+  // Fetch matches
+  if (eventKey) {
+    allMatches = await fetchEventMatches(eventKey);
     console.log("Fetched matches:", allMatches);
   }
 
-  // Pick first match by default
   if (allMatches && allMatches.length > 0) {
-    selectedMatch = allMatches[0].key; // Use the full match key
+    selectedMatch = allMatches[0].key;
     console.log("Selected match:", selectedMatch);
     
-    // Wait for DOM
     await tick();
-    
-    // Load grids for that match
     await loadMatchData(selectedMatch);
   } else {
     console.warn("No matches found or event key missing");
@@ -1529,126 +1567,90 @@ onMount(async () => {
 
   <!-- Grid containers with dropdown in middle -->
   <div class="grid-wrapper">
-    <div class="grid-column">
-        <div class="team-box">
-          <h3 class="team-label red-label">Red 1 - Team {redAlliance[0]}</h3>
-          <div
-            class="grid-container ag-theme-quartz"
-            bind:this={domNode}
-            style="height: {gridHeight}px;"
-          ></div>
-      </div>
+  <div class="grid-column">
       <div class="team-box">
-        <h3 class="team-label red-label">Red 2 - Team {redAlliance[1]}</h3>
-        <div
-          class="grid-container ag-theme-quartz"
-          bind:this={domNode2}
-          style="height: {gridHeight}px;"
-        ></div>
-      </div>
-      <div class="team-box">
-        <h3 class="team-label red-label">Red 3 - Team {redAlliance[2]}</h3>
-        <div
-          class="grid-container ag-theme-quartz"
-          bind:this={domNode3}
-          style="height: {gridHeight}px;"
-        ></div>
-      </div>
-    </div>
-    
-    <div class="grid-column">
-      <div class="team-box">
-        <h3 class="team-label blue-label">Blue 1 - Team {blueAlliance[0]}</h3>
-        <div
-          class="grid-container ag-theme-quartz"
-          bind:this={domNodeRight}
-          style="height: {gridHeight}px;"
-        ></div>
-      </div>
-      <div class="team-box">
-        <h3 class="team-label blue-label">Blue 2 - Team {blueAlliance[1]}</h3>
-        <div
-          class="grid-container ag-theme-quartz"
-          bind:this={domNode4}
-          style="height: {gridHeight}px;"
-        ></div>
-      </div>
-      <div class="team-box">
-        <h3 class="team-label blue-label">Blue 3 - Team {blueAlliance[2]}</h3>
-        <div
-          class="grid-container ag-theme-quartz"
-          bind:this={domNode5}
-          style="height: {gridHeight}px;"
-        ></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Graph Section -->
-  <div class="graph-section">
-    <h2 class="section-title">Charts & Graphs</h2>
-
-    <div class="dropdown-container">
-      <button class="plus-btn" on:click={() => (showDropdown = !showDropdown)}
-        >+</button
-      >
-      {#if showDropdown}
-        <ul class="dropdown">
-          {#each chartTypes as type}
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-            <li
-              on:click={() => {
-                addChart(type);
-                showDropdown = false;
-              }}
-            >
-              {type}
-            </li>
-          {/each}
-        </ul>
-      {/if}
-    </div>
-
-    <div class="charts-grid">
-      {#each charts as chart (chart.id)}
-        <div class="chart-wrapper">
-          <button
-            class="remove-btn"
-            on:click={() => removeChart(chart.id)}
-            aria-label="Remove chart"
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              width="16"
-              height="16"
-              fill="white"
-            >
-              <path d="M3 6h18v2H3V6zm2 3h14l-1.5 12H6.5L5 9zm3-7h4v2H8V2z" />
-            </svg>
-          </button>
-
-          <div class="chart-container" bind:this={chart.el}></div>
-
-          <p class="chart-label">{chart.type} Chart</p>
-
-          {#if chart.type !== "radar"}
-            <select
-              class="metric-select"
-              bind:value={chart.yAxisMetric}
-              on:change={() => updateChartDataset(chart)}
-            >
-              <option value="">Choose metric</option>
-              {#each metricOptions as m}
-                <option value={m}>{m}</option>
-              {/each}
-            </select>
+        <h3 class="team-label red-label">
+          Red 1 - Team {redAlliance[0]}
+          {#if teamOPRs[redAlliance[0]]}
+            <span class="opr-badge">OPR: {teamOPRs[redAlliance[0]].toFixed(2)}</span>
           {/if}
-        </div>
-      {/each}
+        </h3>
+        <div
+          class="grid-container ag-theme-quartz"
+          bind:this={domNode}
+          style="height: {gridHeight}px;"
+        ></div>
+    </div>
+    <div class="team-box">
+      <h3 class="team-label red-label">
+        Red 2 - Team {redAlliance[1]}
+        {#if teamOPRs[redAlliance[1]]}
+          <span class="opr-badge">OPR: {teamOPRs[redAlliance[1]].toFixed(2)}</span>
+        {/if}
+      </h3>
+      <div
+        class="grid-container ag-theme-quartz"
+        bind:this={domNode2}
+        style="height: {gridHeight}px;"
+      ></div>
+    </div>
+    <div class="team-box">
+      <h3 class="team-label red-label">
+        Red 3 - Team {redAlliance[2]}
+        {#if teamOPRs[redAlliance[2]]}
+          <span class="opr-badge">OPR: {teamOPRs[redAlliance[2]].toFixed(2)}</span>
+        {/if}
+      </h3>
+      <div
+        class="grid-container ag-theme-quartz"
+        bind:this={domNode3}
+        style="height: {gridHeight}px;"
+      ></div>
     </div>
   </div>
+  
+  <div class="grid-column">
+    <div class="team-box">
+      <h3 class="team-label blue-label">
+        Blue 1 - Team {blueAlliance[0]}
+        {#if teamOPRs[blueAlliance[0]]}
+          <span class="opr-badge">OPR: {teamOPRs[blueAlliance[0]].toFixed(2)}</span>
+        {/if}
+      </h3>
+      <div
+        class="grid-container ag-theme-quartz"
+        bind:this={domNodeRight}
+        style="height: {gridHeight}px;"
+      ></div>
+    </div>
+    <div class="team-box">
+      <h3 class="team-label blue-label">
+        Blue 2 - Team {blueAlliance[1]}
+        {#if teamOPRs[blueAlliance[1]]}
+          <span class="opr-badge">OPR: {teamOPRs[blueAlliance[1]].toFixed(2)}</span>
+        {/if}
+      </h3>
+      <div
+        class="grid-container ag-theme-quartz"
+        bind:this={domNode4}
+        style="height: {gridHeight}px;"
+      ></div>
+    </div>
+    <div class="team-box">
+      <h3 class="team-label blue-label">
+        Blue 3 - Team {blueAlliance[2]}
+        {#if teamOPRs[blueAlliance[2]]}
+          <span class="opr-badge">OPR: {teamOPRs[blueAlliance[2]].toFixed(2)}</span>
+        {/if}
+      </h3>
+      <div
+        class="grid-container ag-theme-quartz"
+        bind:this={domNode5}
+        style="height: {gridHeight}px;"
+      ></div>
+    </div>
+  </div>
+</div>
 </div>
 
 <style>
@@ -1886,6 +1888,15 @@ onMount(async () => {
     margin: 0;
     padding: 10px 15px;
   }
+
+  .opr-badge {
+  margin-left: 10px;
+  padding: 4px 10px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
 
   /* ===== Graph Section Styles ===== */
   .graph-section {

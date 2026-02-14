@@ -30,6 +30,12 @@
   const ROW_HEIGHT = 25; // Height of each row in pixels
   const HEADER_HEIGHT = 32; // Height of the header row
 
+  const TBA_API_KEY = import.meta.env.VITE_AUTH_KEY;
+  const TBA_BASE_URL = "https://www.thebluealliance.com/api/v3";
+
+  let teamOPR: number | null = null;
+  let eventKey = ""; // Will be loaded from localStorage
+
     const metricNames = new Map();
     metricNames.set("TimeOfClimb", "Match Climb Time");
     metricNames.set("Defense", "Defense Strategy");
@@ -50,9 +56,6 @@
     
     const excludedFields = ["Match", "Team", "Id", "RecordType", "ScouterName", "ScouterError", "Time", "Mode", "DriveStation"];
 
-    // Metrics where lower values are better (e.g., time-based metrics)
-    const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime"];
-
     // This is the metric that the database actually stores
     let dataMetric = "";
 
@@ -69,10 +72,10 @@
 
   const colorModes = {
     normal: {
-      name: "Gradient",
-      below: [255, 0, 0],      // Red
-      above: [0, 255, 0],      // Green
-      mid: [255, 255, 0]       // Yellow
+      name: "Normal",
+      below: [255, 0, 0],
+      above: [0, 255, 0],
+      mid: [255, 255, 0],
     },
     protanopia: {
       name: "Protanopia (Red-blind)",
@@ -91,12 +94,6 @@
       below: [220, 20, 60],
       above: [0, 128, 0],
       mid: [110, 74, 30],
-    },
-    alex: {
-      name: "Alex Coloring",
-      below: [234, 67, 53],    // Google Red - RGB: 234 67 53
-      above: [66, 133, 244],   // Google Blue - RGB: 66 133 244
-      mid: [251, 188, 4]       // Google Yellow - RGB: 251 188 4
     },
   };
 
@@ -151,16 +148,6 @@
     return Math.sqrt(variance);
   }
 
-  const percentile = (arr, p) => {
-    if (arr.length === 0) return 0;
-    const sorted = [...arr].sort((a, b) => a - b);
-    const index = (p / 100) * (sorted.length - 1);
-    const lower = Math.floor(index);
-    const upper = Math.ceil(index);
-    const weight = index % 1;
-    return sorted[lower] * (1 - weight) + sorted[upper] * weight;
-  };
-
   function lerpColor(c1, c2, t) {
     return `rgb(${[
       Math.round(c1[0] + (c2[0] - c1[0]) * t),
@@ -169,212 +156,42 @@
     ].join(",")})`;
   }
 
-  // Determine readable text color (black or white) for a background color
-  function getContrastColor(bg) {
-    if (!bg) return "black";
-    let r, g, b;
-    try {
-      bg = String(bg).trim();
-      if (bg.startsWith("#")) {
-        const hex = bg.replace("#", "");
-        r = parseInt(hex.substring(0, 2), 16);
-        g = parseInt(hex.substring(2, 4), 16);
-        b = parseInt(hex.substring(4, 6), 16);
-      } else if (bg.startsWith("rgb")) {
-        const parts = bg.match(/\d+/g);
-        r = Number(parts[0]);
-        g = Number(parts[1]);
-        b = Number(parts[2]);
-      } else {
-        return "white";
-      }
-
-      const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-      return brightness > 150 ? "black" : "white";
-    } catch (e) {
-      return "white";
-    }
-  }
-
-  // Return white only for strict dark backgrounds (black or the dark gray used), else black
-  function textColorForBgStrict(bg) {
-    if (!bg) return "black";
-    const s = String(bg).trim().toLowerCase();
-    
-    // Black
-    if (s === "black" || s === "#000" || s === "#000000" || s === "rgb(0,0,0)") return "white";
-    
-    // Dark gray
-    if (s === "#4d4d4d" || s === "rgb(77,77,77)") return "white";
-    
-    // Bright primary colors (need white text)
-    if (s === "#0000ff" || s === "#00f" || s === "rgb(0,0,255)") return "white"; // Bright Blue
-    if (s === "#ff0000" || s === "#f00" || s === "rgb(255,0,0)") return "white"; // Bright Red
-    
-    // Google colors for Alex mode
-    if (s === "#4285f4" || s === "rgb(66,133,244)" || s === "rgb(66, 133, 244)") return "white"; // Google Blue
-    if (s === "#34a853" || s === "rgb(52,168,83)" || s === "rgb(52, 168, 83)") return "white"; // Google Green
-    if (s === "#ea4335" || s === "rgb(234,67,53)" || s === "rgb(234, 67, 53)") return "white"; // Google Red
-    if (s === "#fbbc04" || s === "rgb(251,188,4)" || s === "rgb(251, 188, 4)") return "black"; // Google Yellow (bright)
-    
-    return "black";
-  }
-
-  function getAlexBgColor(p, isAlexMode = false) {
-    if (p === null || p === undefined) return "#4D4D4D";
-    
-    if (isAlexMode) {
-      // Alex mode: quartiles with Google colors (75, 50, 25, 0)
-      switch(p) {
-        case 75: return "#4285F4"; // Blue (Top 25%) - RGB: 66 133 244
-        case 50: return "#34A853"; // Green (50th-75th percentile) - RGB: 52 168 83
-        case 25: return "#FBBC04"; // Yellow (25th-50th percentile) - RGB: 251 188 4
-        case 0: return "#EA4335";  // Red (Bottom 25%) - RGB: 234 67 53
-        default: return "#4D4D4D";
-      }
-    } else {
-      // Per. column: quintiles with gradient (0, 20, 40, 60, 80)
-      switch(p) {
-        case 0:  return "#000000"; // Black (0-20%)
-        case 20: return "#FF0000"; // Bright Red (20-40%)
-        case 40: return "#FFFF00"; // Bright Yellow (40-60%)
-        case 60: return "#00FF00"; // Bright Green (60-80%)
-        case 80: return "#0000FF"; // Bright Blue (80-100%)
-        default: return "#4D4D4D";
-      }
-    }
-  }
-
-  function getAlexTextColor(p) {
-    const bg = getAlexBgColor(p, true); // isAlexMode = true for quartile colors
-    return textColorForBgStrict(bg);
-  }
-
-  function getAlexValuePercentile(v, stats, inverted = false) {
-    if (!isNumeric(v)) return null;
-    const val = Number(v);
-    if (val === -1 || val === 0) return null;
-    if (!stats || stats.p25 == null || stats.p50 == null || stats.p75 == null) return null;
-    
-    const p25 = stats.p25;
-    const p50 = stats.p50;
-    const p75 = stats.p75;
-    
-    if (inverted) {
-      // For inverted metrics (lower is better, like ClimbTime)
-      if (val <= p25) return 75;        // Best (below 25th percentile)
-      else if (val <= p50) return 50;   // Good (25th-50th percentile)
-      else if (val <= p75) return 25;   // Below average (50th-75th percentile)
-      else return 0;                     // Worst (above 75th percentile)
-    } else {
-      // For normal metrics (higher is better)
-      if (val >= p75) return 75;        // Best (above 75th percentile)
-      else if (val >= p50) return 50;   // Good (50th-75th percentile)
-      else if (val >= p25) return 25;   // Below average (25th-50th percentile)
-      else return 0;                     // Worst (below 25th percentile)
-    }
-  }
-
-  function colorFromStats(v, stats, inverted = false) {
+  function colorFromStats(v, mu, sigma) {
     // For non-numeric data, return neutral color
     if (!isNumeric(v)) {
       return "#333";
     }
 
     const numValue = Number(v);
+
     if (numValue === 0) return "#000";
+    if (sigma === 0) return "rgb(180,180,180)";
 
     const mode = colorModes[colorblindMode];
+    const z = (numValue - mu) / sigma;
+    const t = Math.min(1, Math.abs(z));
 
-    // For Alex mode: use percentile-based buckets (discrete colors)
-    if (colorblindMode === 'alex') {
-      const percentileBucket = getAlexValuePercentile(numValue, stats, inverted);
-      if (percentileBucket !== null) {
-        return getAlexBgColor(percentileBucket, true); // isAlexMode = true for quartile colors
-      }
-      // Fallback if percentile calculation fails
-      return "#333";
-    }
-
-    // For non-Alex modes: use percentile-based smooth gradient
-    // This works better than z-scores for skewed distributions
-    if (stats && stats.p25 != null && stats.p50 != null && stats.p75 != null) {
-      const p25 = stats.p25;
-      const p50 = stats.p50;
-      const p75 = stats.p75;
-      
-      // Avoid division by zero
-      if (p25 === p50 && p50 === p75) {
-        return lerpColor(mode.below, mode.above, 0.5); // All values same, use mid color
-      }
-      
-      let t; // Position in 0-1 range
-      
-      if (inverted) {
-        // For inverted metrics (lower is better)
-        if (numValue <= p25) {
-          // Below 25th percentile (best) → green
-          const below = (p25 - numValue) / Math.max(p50 - p25, 0.001);
-          t = Math.min(1, 0.75 + below * 0.25);
-        } else if (numValue <= p50) {
-          // 25th-50th percentile → yellow to green
-          t = 0.5 + 0.25 * (1 - (numValue - p25) / Math.max(p50 - p25, 0.001));
-        } else if (numValue <= p75) {
-          // 50th-75th percentile → red to yellow  
-          t = 0.25 + 0.25 * (1 - (numValue - p50) / Math.max(p75 - p50, 0.001));
-        } else {
-          // Above 75th percentile (worst) → pure red at p75, darker above
-          const beyond = (numValue - p75) / Math.max(p75 - p50, 0.001);
-          t = Math.max(0, 0.25 * (1 - beyond));
-        }
-      } else {
-        // For normal metrics (higher is better)
-        if (numValue >= p75) {
-          // Above 75th percentile (best) → green
-          // Scale up further for values way above p75
-          const beyond = (numValue - p75) / Math.max(p75 - p50, 0.001);
-          t = Math.min(1, 0.75 + beyond * 0.25);
-        } else if (numValue >= p50) {
-          // 50th-75th percentile → yellow to green
-          t = 0.5 + 0.25 * ((numValue - p50) / Math.max(p75 - p50, 0.001));
-        } else if (numValue >= p25) {
-          // 25th-50th percentile → red to yellow
-          t = 0.25 + 0.25 * ((numValue - p25) / Math.max(p50 - p25, 0.001));
-        } else {
-          // Below 25th percentile (worst) → pure red at p25, darker below
-          const below = (p25 - numValue) / Math.max(p50 - p25, 0.001);
-          t = Math.max(0, 0.25 * (1 - below));
-        }
-      }
-      
-      // Clamp t to 0-1
-      t = Math.max(0, Math.min(1, t));
-      
-      // Map t through the gradient: Red (0) → Yellow (0.5) → Green (1)
-      if (t < 0.5) {
-        return lerpColor(mode.below, mode.mid, t * 2);
-      } else {
-        return lerpColor(mode.mid, mode.above, (t - 0.5) * 2);
-      }
-    }
-
-    return "rgb(180,180,180)";
+    return z < 0
+      ? lerpColor(mode.mid, mode.below, t)
+      : lerpColor(mode.mid, mode.above, t);
   }
+
+  function onTeamChange() {
+  const teamStr = String(selectedTeam);
+  loadTeamData(teamStr);
+  fetchTeamOPR(teamStr, eventKey);
+}
 
   function onColorblindChange(e: Event) {
     const target = e.target as HTMLSelectElement;
     colorblindMode = target.value;
     if (selectedTeam) {
-      loadTeamData(selectedTeam);
+      loadTeamData(String(selectedTeam));
     }
-  }
-
-  function onTeamChange() {
-    loadTeamData(selectedTeam);
-  }
+}
 
   let allTeams = [];
-  let selectedTeam = "190";
+  let selectedTeam: string | number = ""; // Allow both types
 
   async function loadTeamNumbers(eventCode) {
     let data = [];
@@ -426,6 +243,41 @@
 
     return data;
   }
+
+  async function fetchTeamOPR(teamNumber: string, eventKey: string) {
+  if (!eventKey || !teamNumber) {
+    teamOPR = null;
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      `${TBA_BASE_URL}/event/${eventKey}/oprs`,
+      {
+        headers: {
+          "X-TBA-Auth-Key": TBA_API_KEY
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    // OPR data is in data.oprs object with team keys like "frc190"
+    const teamKey = `frc${teamNumber}`;
+    if (data.oprs && data.oprs[teamKey] !== undefined) {
+      teamOPR = data.oprs[teamKey];
+    } else {
+      teamOPR = null;
+    }
+  } catch (error) {
+    console.error("Error fetching OPR:", error);
+    teamOPR = null;
+  }
+}
 
   function aggregateMatches(rawData) {
     const matches = {};
@@ -921,39 +773,19 @@
         !excludedFields.includes(k),
     );
 
-    // FIRST: Aggregate ALL teams' data to get proper statistics
-    const allTeamsAggregatedData = [];
-    if (Array.isArray(teamViewData)) {
-      // Group by team
-      const teamGroups = {};
-      teamViewData.forEach(row => {
-        if (row["RecordType"] == "Match_Event") return;
-        const rawTeam = row["Team"] || row["team"];
-        if (!rawTeam) return;
-        const teamNum = String(rawTeam).replace(/\D/g, "");
-        if (!teamNum) return;
-        
-        if (!teamGroups[teamNum]) teamGroups[teamNum] = [];
-        teamGroups[teamNum].push(row);
-      });
-      
-      // Aggregate each team's data
-      Object.values(teamGroups).forEach(teamData => {
-        const aggregated = aggregateMatches(teamData);
-        allTeamsAggregatedData.push(...aggregated);
-      });
-    }
-
     // Calculate global stats for each metric across all teams/matches (only for numeric)
     const globalStats = {};
     displayMetrics.forEach((metric) => {
-      const allValues = []; // Reset for each metric!
-      
+      // Check if metric is numeric based on global data sample
+      const allRows = Array.isArray(teamViewData)
+        ? teamViewData
+        : [];
+      const allValues = [];
       let isNumericMetric = true;
       let hasData = false;
 
-      // Check ALL aggregated values to determine type
-      for (const r of allTeamsAggregatedData) {
+      // Check ALL values to determine type
+      for (const r of allRows) {
         const v = r[metric];
         if (v !== undefined && v !== null && v !== "") {
           hasData = true;
@@ -967,37 +799,21 @@
       if (!hasData) isNumericMetric = false;
 
       if (isNumericMetric) {
-        allTeamsAggregatedData.forEach((row) => {
+        allRows.forEach((row) => {
           const val = row[metric];
           if (isNumeric(val)) {
-            const numVal = Number(val);
-            // Only include non-zero, non-negative-one values
-            if (numVal !== 0 && numVal !== -1) {
-              allValues.push(numVal);
-            }
+            allValues.push(Number(val));
           }
         });
-        
+        const filteredValues = allValues.filter((v) => v !== 0);
         globalStats[metric] = {
-          mean: allValues.length > 0 ? mean(allValues) : 0,
-          sd: allValues.length > 0 ? sd(allValues, mean(allValues)) : 0,
+          mean: filteredValues.length > 0 ? mean(filteredValues) : 0,
+          sd:
+            filteredValues.length > 0
+              ? sd(filteredValues, mean(filteredValues))
+              : 0,
           isNumeric: true,
-          p25: allValues.length > 0 ? percentile(allValues, 25) : 0,
-          p50: allValues.length > 0 ? percentile(allValues, 50) : 0,
-          p75: allValues.length > 0 ? percentile(allValues, 75) : 0,
         };
-        
-        // DEBUG LOGGING
-        if (metric === "FuelShootingTime" || metric === "FuelIntakingTime") {
-          console.log(`========== ${metric.toUpperCase()} DEBUG ==========`);
-          console.log("All values (sorted):", [...allValues].sort((a, b) => a - b));
-          console.log("Count:", allValues.length);
-          console.log("Stats:", globalStats[metric]);
-          console.log("p25:", globalStats[metric].p25);
-          console.log("p50:", globalStats[metric].p50);
-          console.log("p75:", globalStats[metric].p75);
-          console.log("=============================================");
-        }
       } else {
         globalStats[metric] = { mean: 0, sd: 0, isNumeric: false };
       }
@@ -1016,76 +832,22 @@
         let val = match?.[metric];
 
         if (isNumericMetric) {
-          const numVal = isNumeric(val) ? Number(val) : null;
-          row[q] = numVal === null ? null : numVal;
-          if (numVal !== null) values.push(numVal);
+          const numVal = isNumeric(val) ? Number(val) : 0;
+          row[q] = numVal;
+          values.push(numVal);
         } else {
           row[q] = normalizeValue(val);
         }
       });
 
       if (isNumericMetric) {
-        const nonZero = values.filter(v => v !== 0 && v !== -1);
-        if (nonZero.length > 0) {
-          row.mean = Number(mean(nonZero).toFixed(2));
-          row.median = Number(median(nonZero).toFixed(2));
-        } else {
-          row.mean = null;
-          row.median = null;
-        }
+        row.mean = values.length > 0 ? Number(mean(values).toFixed(2)) : 0;
+        row.median = values.length > 0 ? Number(median(values).toFixed(2)) : 0;
       } else {
         row.mean = null;
         row.median = null;
       }
       rowData.push(row);
-    });
-
-    // Assign percentile buckets to each row based on where its mean falls in the global distribution
-    rowData.forEach(row => {
-      if (row.mean === null || row.mean === undefined) {
-        row.percentile = null;
-        return;
-      }
-
-      const metricName = row.metric;
-      const stats = globalStats[metricName];
-      
-      if (!stats || !stats.isNumeric || !stats.p25 || !stats.p50 || !stats.p75) {
-        row.percentile = null;
-        return;
-      }
-
-      const meanValue = row.mean;
-      const inverted = INVERTED_METRICS.includes(metricName);
-
-      // Determine which percentile bucket based on global p25/p50/p75
-      if (inverted) {
-        // For inverted metrics (lower is better)
-        if (meanValue <= stats.p25) {
-          row.percentile = 80;  // Top 20% (best - lowest values)
-        } else if (meanValue <= stats.p50) {
-          row.percentile = 60;  // 20-50%
-        } else if (meanValue <= stats.p75) {
-          row.percentile = 40;  // 50-75%
-        } else if (meanValue <= stats.p75 * 1.5) {
-          row.percentile = 20;  // 75-90%
-        } else {
-          row.percentile = 0;   // Bottom (worst - highest values)
-        }
-      } else {
-        // For normal metrics (higher is better)
-        if (meanValue >= stats.p75) {
-          row.percentile = 80;  // Top 20% (best - highest values)
-        } else if (meanValue >= stats.p50) {
-          row.percentile = 60;  // 50-75%
-        } else if (meanValue >= stats.p25) {
-          row.percentile = 40;  // 25-50%
-        } else if (meanValue >= stats.p25 * 0.5) {
-          row.percentile = 20;  // 10-25%
-        } else {
-          row.percentile = 0;   // Bottom (worst - lowest values)
-        }
-      }
     });
 
     const columnDefs = [
@@ -1130,35 +892,15 @@
           }
 
           const val = params.value;
-          if (val === undefined || val === null || val === "") {
-            return {
-              background: "#333",
-              color: "white",
-              fontSize: "16px",
-              fontWeight: 600,
-              textAlign: "center",
-              border: "1px solid #555",
-            };
-          }
-
           const numValue = isNumeric(val) ? Number(val) : 0;
-          const inverted = INVERTED_METRICS.includes(metricName);
 
-          if (numValue === -1) {
-            return { background: "#4D4D4D", color: "white", fontSize: "18px", fontWeight: 600, textAlign: "center" };
-          }
-          if (numValue === 0) {
-            return { background: "black", color: "white", fontSize: "18px", fontWeight: 600, textAlign: "center" };
-          }
-
-          if (colorblindMode === 'alex') {
-            const vp = getAlexValuePercentile(numValue, stats, inverted);
-            const bg = getAlexBgColor(vp, true); // isAlexMode = true for quartile colors
-            return { background: bg, color: getAlexTextColor(vp), fontSize: "18px", fontWeight: 600, textAlign: "center" };
-          }
-
-          const bg = colorFromStats(numValue, stats, inverted);
-          return { background: bg, color: textColorForBgStrict(bg), fontSize: "18px", fontWeight: 600, textAlign: "center" };
+          return {
+            background: colorFromStats(numValue, stats.mean, stats.sd),
+            color: numValue === 0 ? "white" : "black",
+            fontSize: "18px",
+            fontWeight: 600,
+            textAlign: "center",
+          };
         },
         valueFormatter: (params) => {
           const metricName = params.data.metric;
@@ -1182,29 +924,18 @@
         cellStyle: (params) => {
           const metricName = params.data.metric;
           const stats = globalStats[metricName] || { mean: 0, sd: 0 };
-            const v = params.value;
-            const inverted = INVERTED_METRICS.includes(metricName);
 
-            if (v === undefined || v === null || v === "") {
-              return { background: "#4D4D4D", color: "white", fontSize: "18px", fontWeight: "bold", textAlign: "center", borderLeft: "3px solid #C81B00" };
-            }
-
-            const numValue = isNumeric(v) ? Number(v) : 0;
-            if (numValue === -1) {
-              return { background: "#4D4D4D", color: "white", fontSize: "18px", fontWeight: "bold", textAlign: "center", borderLeft: "3px solid #C81B00" };
-            }
-            if (numValue === 0) {
-              return { background: "black", color: "white", fontSize: "18px", fontWeight: "bold", textAlign: "center", borderLeft: "3px solid #C81B00" };
-            }
-
-            if (colorblindMode === 'alex') {
-              const vp = getAlexValuePercentile(numValue, stats, inverted);
-              const bg = getAlexBgColor(vp, true); // isAlexMode = true for quartile colors
-              return { background: bg, color: getAlexTextColor(vp), fontSize: "18px", fontWeight: "bold", textAlign: "center", borderLeft: "3px solid #C81B00" };
-            }
-
-            const bg = colorFromStats(numValue, stats, inverted);
-            return { background: bg, color: textColorForBgStrict(bg), fontSize: "18px", fontWeight: "bold", textAlign: "center", borderLeft: "3px solid #C81B00" };
+          return {
+            background:
+              params.value === 0 || params.value === null
+                ? "#4D4D4D"
+                : colorFromStats(params.value, stats.mean, stats.sd),
+            color:
+              params.value === 0 || params.value === null ? "white" : "black",
+            fontSize: "18px",
+            fontWeight: "bold",
+            textAlign: "center",
+          };
         },
         valueFormatter: (params) => {
           if (params.value === null || params.value === undefined) return "";
@@ -1223,67 +954,22 @@
           const metricName = params.data.metric;
           const stats = globalStats[metricName] || { mean: 0, sd: 0 };
 
-            const v = params.value;
-            const inverted = INVERTED_METRICS.includes(metricName);
-
-            if (v === undefined || v === null || v === "") {
-              return { background: "#4D4D4D", color: "white", fontSize: "18px", fontWeight: "bold", textAlign: "center", borderLeft: "2px solid #555" };
-            }
-
-            const numValue = isNumeric(v) ? Number(v) : 0;
-            if (numValue === -1) {
-              return { background: "#4D4D4D", color: "white", fontSize: "18px", fontWeight: "bold", textAlign: "center", borderLeft: "2px solid #555" };
-            }
-            if (numValue === 0) {
-              return { background: "black", color: "white", fontSize: "18px", fontWeight: "bold", textAlign: "center", borderLeft: "2px solid #555" };
-            }
-
-            if (colorblindMode === 'alex') {
-              const vp = getAlexValuePercentile(numValue, stats, inverted);
-              const bg = getAlexBgColor(vp, true); // isAlexMode = true for quartile colors
-              return { background: bg, color: getAlexTextColor(vp), fontSize: "18px", fontWeight: "bold", textAlign: "center", borderLeft: "2px solid #555" };
-            }
-
-            const bg = colorFromStats(numValue, stats, inverted);
-            return { background: bg, color: textColorForBgStrict(bg), fontSize: "18px", fontWeight: "bold", textAlign: "center", borderLeft: "2px solid #555" };
+          return {
+            background:
+              params.value === 0 || params.value === null
+                ? "#4D4D4D"
+                : colorFromStats(params.value, stats.mean, stats.sd),
+            color:
+              params.value === 0 || params.value === null ? "white" : "black",
+            fontSize: "18px",
+            fontWeight: "bold",
+            textAlign: "center",
+          };
         },
         valueFormatter: (params) => {
           if (params.value === null || params.value === undefined) return "";
           const num = Number(params.value);
           return num === 0 ? "0" : num.toFixed(2);
-        },
-      },
-      {
-        headerName: "Per.",
-        field: "percentile",
-        flex: 1,
-        minWidth: 80,
-        headerClass: "header-center",
-        cellClass: "cell-center",
-        cellStyle: (params) => {
-          const p = params.value;
-          let background;
-          
-          if (p === null || p === undefined) {
-            background = "#4D4D4D";
-          } else {
-            // Per. column always uses quintile colors (0, 20, 40, 60, 80)
-            background = getAlexBgColor(p, false);
-          }
-
-          const color = textColorForBgStrict(background);
-
-          return {
-            background,
-            color,
-            fontWeight: "bold",
-            fontSize: "18px",
-            textAlign: "center",
-            borderLeft: "2px solid #555"
-          };
-        },
-        valueFormatter: (params) => {
-          return params.value !== null && params.value !== undefined ? params.value.toString() : "";
         },
       },
     ];
@@ -1313,35 +999,47 @@
     });
   }
 
-  onMount(async () => {
-    // Fetch all data from backend for global stats calculation
-    const storedData = localStorage.getItem("data");
-    let allDataResponse = [];
 
-    if (storedData) {
-      try {
-        allDataResponse = JSON.parse(storedData);
-      } catch (e) {
-        console.error("Failed to parse data:", e);
-      }
+onMount(async () => {
+  // Fetch all data from backend for global stats calculation
+  const storedData = localStorage.getItem("data");
+  let allDataResponse = [];
+
+  if (storedData) {
+    try {
+      allDataResponse = JSON.parse(storedData);
+    } catch (e) {
+      console.error("Failed to parse data:", e);
     }
+  }
 
-    teamViewData = allDataResponse;
-    console.log("All data loaded for global stats:", teamViewData);
+  teamViewData = allDataResponse;
+  console.log("All data loaded for global stats:", teamViewData);
 
-    // Load team numbers from backend
-    allTeams = await loadTeamNumbers(localStorage.getItem("eventCode"));
+  // Load event key from localStorage
+  eventKey = localStorage.getItem("eventCode") || "";
+  console.log("Event Key:", eventKey);
 
-    console.log("Populated team list:", allTeams);
+  // Load team numbers from backend
+  allTeams = await loadTeamNumbers(eventKey);
 
-    // Set initial selected team (first available team, or 190 if available)
-    if (allTeams.length > 0) {
-      const team190 = allTeams.find(t => t.toString() === "190");
-      selectedTeam = team190 ? team190.toString() : allTeams[0].toString();
-      loadTeamData(selectedTeam);
-      console.log("Loading data from team", selectedTeam);
-    }
-  });
+  console.log("Populated team list:", allTeams);
+
+  // Set initial selected team (first available team, or 190 if available)
+  if (allTeams.length > 0) {
+  const team190 = allTeams.find(t => t.toString() === "190");
+  selectedTeam = team190 ? "190" : allTeams[0].toString();
+  
+  await new Promise(resolve => setTimeout(resolve, 0));
+  
+  loadTeamData(String(selectedTeam));
+  
+  // Fetch OPR for initial team
+  await fetchTeamOPR(String(selectedTeam), eventKey);
+  
+  console.log("Loading data from team", selectedTeam);
+}
+});
 </script>
 
 <div class="page-wrapper">
@@ -1352,32 +1050,39 @@
   </div>
 
   <!-- Controls -->
-  <div class="controls">
-    <div>
-      <label for="team-select">Team:</label>
-      <select
-        id="team-select"
-        bind:value={selectedTeam}
-        on:change={onTeamChange}
-      >
-        {#each allTeams as team}
-          <option value={team}>{team}</option>
-        {/each}
-      </select>
-    </div>
-    <div>
-      <label for="colorblind-select">Colorblind Mode:</label>
-      <select
-        id="colorblind-select"
-        bind:value={colorblindMode}
-        on:change={onColorblindChange}
-      >
-        {#each Object.entries(colorModes) as [key, mode]}
-          <option value={key}>{mode.name}</option>
-        {/each}
-      </select>
-    </div>
+<div class="controls">
+  <div class="opr-display">
+    {#if teamOPR !== null}
+      <span class="opr-label">OPR: {teamOPR.toFixed(2)}</span>
+    {:else}
+      <span class="opr-label">OPR: N/A</span>
+    {/if}
   </div>
+  <div>
+    <label for="team-select">Team:</label>
+    <select
+      id="team-select"
+      bind:value={selectedTeam}
+      on:change={onTeamChange}
+    >
+      {#each allTeams as team}
+        <option value={team.toString()}>{team}</option>
+      {/each}
+    </select>
+  </div>
+  <div>
+    <label for="colorblind-select">Colorblind Mode:</label>
+    <select
+      id="colorblind-select"
+      bind:value={colorblindMode}
+      on:change={onColorblindChange}
+    >
+      {#each Object.entries(colorModes) as [key, mode]}
+        <option value={key}>{mode.name}</option>
+      {/each}
+    </select>
+  </div>
+</div>
 
   <!-- Grid container -->
   <div
@@ -1787,4 +1492,20 @@
       grid-template-columns: 1fr;
     }
   }
+
+  .opr-display {
+  display: flex;
+  align-items: center;
+  }
+
+  .opr-label {
+    color: white;
+    font-size: 18px;
+    font-weight: 600;
+    padding: 8px 15px;
+    background: linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%);
+    border: 2px solid var(--frc-190-red);
+    border-radius: 6px;
+  }
+
 </style>
