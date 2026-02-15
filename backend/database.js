@@ -1,5 +1,4 @@
-const fs = require("fs").promises;
-const { writeFile } = require("fs");
+const fs = require("fs");
 // const supabaseUtil = require("./supabaseUtil");
 // const storage = require("./storage");
 // const sql = require('mssql/msnodesqlv8');
@@ -65,11 +64,11 @@ async function getAllData(eventCode) {
     }
 }
 
-// Get all 
+// Legacy code for getting team view. may be implemented again
 async function getAllTeamsView(eventCode) {
     let jsonConfig;
     try {
-        const raw = await fs.readFile(`test/${eventCode}-config.json`, 'utf8');
+        const raw = fs.readFileSync(`test/${eventCode}-config.json`, 'utf8');
         jsonConfig = JSON.parse(raw);
     } catch (error) {
         console.error(`Failed to load config for ${eventCode}:`, error);
@@ -95,7 +94,7 @@ async function readJSONFile(filename) {
         fileData = JSON.parse(fs.readFileSync(filename+".json", { encoding: 'utf8', flag: 'r' }));
         return fileData;
     } catch (error) {
-        console.log("No data");
+        console.log("Error reading file", error);
         return {};
     }
 }

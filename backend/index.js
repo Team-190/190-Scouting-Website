@@ -136,6 +136,7 @@ app.post("/postRatings", async (req, res) => {
     let event = req.body.event;
     let rating = req.body.rating;
     let team = req.body.team;
+    let file = "driverRatings";
     if (!rating || !team || !event) {
         console.log("One or more fields could not be retrieved");
         console.log(`${rating} ${team} ${event}`);
@@ -143,7 +144,8 @@ app.post("/postRatings", async (req, res) => {
     }
     else {
 
-        let fileData = database.readJSONFile("driverRatings");
+        let fileData = await database.readJSONFile(file);
+        console.log(fileData)
         fileData[event] ||= {};
 
         if (fileData[event][team]) {
@@ -154,7 +156,7 @@ app.post("/postRatings", async (req, res) => {
             fileData[event][team] = {0: rating};
         }
 
-        database.writeJSONFile("driverRatings", fileData);
+        database.writeJSONFile(file, fileData);
 
         res.sendStatus(200);
     }
@@ -175,6 +177,7 @@ app.post("/postPitScouting", async (req, res) => {
     let event = req.body.event;
     let team = req.body.team;
     let formData = req.body.formData;
+    let file = "pitScoutingData";
     if (!formData || !team || !event) {
         console.log("One or more fields could not be retrieved");
         console.log(`${formData} ${team} ${event}`);
@@ -182,11 +185,11 @@ app.post("/postPitScouting", async (req, res) => {
     }
     else {
         console.log(formData)
-        let fileData = database.readJSONFile("pitScoutingData");
+        let fileData = await database.readJSONFile(file);
         fileData[event] ||= {};
         fileData[event][team] = formData;
 
-        database.writeJSONFile("pitScoutingData", fileData);
+        database.writeJSONFile(file, fileData);
 
 
         res.sendStatus(200);
