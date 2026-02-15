@@ -33,7 +33,7 @@
   const TBA_BASE_URL = "https://www.thebluealliance.com/api/v3";
 
   let teamOPR: number | null = null;
-  let eventKey = "2025mawor"; // Will be set in onMount from localStorage
+  let eventKey = ""; // Will be set in onMount from localStorage
 
   const metricNames = new Map();
   metricNames.set("TimeOfClimb", "Match Climb Time");
@@ -529,7 +529,7 @@
     }
 
     try {
-      const response = await fetch(`${TBA_BASE_URL}/event/2025mawor/oprs`, {
+      const response = await fetch(`${TBA_BASE_URL}/event/${eventKey}/oprs`, {
         headers: {
           "X-TBA-Auth-Key": TBA_API_KEY,
         },
