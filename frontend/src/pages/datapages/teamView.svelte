@@ -11,7 +11,6 @@
 
   import "ag-grid-community/styles/ag-grid.css";
   import "ag-grid-community/styles/ag-theme-quartz.css";
-  import { fetchGracePage } from "../../utils/api";
 
   // Graph imports
   import * as barGraph from "../../pages/graphcode/bar.js";
@@ -19,6 +18,7 @@
   import * as pieGraph from "../../pages/graphcode/pie.js";
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
+  import { fetchGracePage } from "../../utils/api";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -29,23 +29,12 @@
 
   const ROW_HEIGHT = 25; // Height of each row in pixels
   const HEADER_HEIGHT = 32; // Height of the header row
-  let garceData;
-  fetchGracePage("2026mabos")
-    .then((res) => {
-      return res.json();
-    })
-    .then((data) => {
-      garceData = data;
-    });
-  const rating = [
-    new URL("../../images/DNP.png", import.meta.url).href,
-    new URL("../../images/ProbNo.png", import.meta.url).href,
-    new URL("../../images/NeutralBad.jpg", import.meta.url).href,
-    new URL("../../images/NeutralGood.png", import.meta.url).href,
-    new URL("../../images/PrettyGood.gif", import.meta.url).href,
-    new URL("../../images/AHHHHH.png", import.meta.url).href,
-    new URL("../../images/FIRSTpick.gif", import.meta.url).href,
-  ];
+  const TBA_API_KEY = import.meta.env.VITE_AUTH_KEY;
+  const TBA_BASE_URL = "https://www.thebluealliance.com/api/v3";
+
+  let teamOPR: number | null = null;
+  let eventKey = ""; // Will be set in onMount from localStorage
+
   const metricNames = new Map();
   metricNames.set("TimeOfClimb", "Match Climb Time");
   metricNames.set("Defense", "Defense Strategy");
@@ -125,12 +114,43 @@
       mid: [251, 188, 4], // Google Yellow - RGB: 251 188 4
     },
   };
+  let garceData;
+  let eventCode = localStorage.getItem("eventCode");
+  fetchGracePage(eventCode)
+    .then((res) => {
+      return res.json();
+    })
+    .then((data) => {
+      garceData = data;
+    });
+  const rating = [
+    new URL("../../images/DNP.png", import.meta.url).href,
+    new URL("../../images/ProbNo.png", import.meta.url).href,
+    new URL("../../images/NeutralBad.jpg", import.meta.url).href,
+    new URL("../../images/NeutralGood.png", import.meta.url).href,
+    new URL("../../images/PrettyGood.gif", import.meta.url).href,
+    new URL("../../images/AHHHHH.png", import.meta.url).href,
+    new URL("../../images/FIRSTpick.gif", import.meta.url).href,
+  ];
 
-  function fetchGraceRating(team) {
-    return rating[garceData[team][Object.keys(garceData[team]).length - 1]];
-  }
-
+  // fetchGracePage("2026mabos")
+  //   .then((res) => {
+  //     return res.json();
+  //   })
+  //   .then((data) => {
+  //     garceData = data;
+  //   });
+  // const rating = [
+  //   new URL("../../images/DNP.png", import.meta.url).href,
+  //   new URL("../../images/ProbNo.png", import.meta.url).href,
+  //   new URL("../../images/NeutralBad.jpg", import.meta.url).href,
+  //   new URL("../../images/NeutralGood.png", import.meta.url).href,
+  //   new URL("../../images/PrettyGood.gif", import.meta.url).href,
+  //   new URL("../../images/AHHHHH.png", import.meta.url).href,
+  //   new URL("../../images/FIRSTpick.gif", import.meta.url).href,
+  // ];
   let cache = {};
+
   function isNumeric(n) {
     if (n === null || n === undefined || n === "") return false;
     // Handle booleans
@@ -425,8 +445,18 @@
     }
   }
 
+  function fetchGraceRating(team) {
+    if (garceData[team] === undefined) {
+      return;
+    } else {
+      return rating[garceData[team][Object.keys(garceData[team]).length - 1]];
+    }
+  }
+
   function onTeamChange() {
-    loadTeamData(selectedTeam);
+    const teamStr = String(selectedTeam);
+    loadTeamData(teamStr);
+    fetchTeamOPR(teamStr, eventKey);
     console.log("Selected team: " + selectedTeam);
     console.log(
       "Garce rating for team " +
@@ -434,8 +464,8 @@
         ": " +
         fetchGraceRating(selectedTeam),
     );
-    document.getElementById('grace-rating').src = fetchGraceRating(selectedTeam);
-
+    document.getElementById("grace-rating").src =
+      fetchGraceRating(selectedTeam);
   }
 
   let allTeams = [];
@@ -490,6 +520,38 @@
     }
 
     return data;
+  }
+
+  async function fetchTeamOPR(teamNumber: string, eventKey: string) {
+    if (!eventKey || !teamNumber) {
+      teamOPR = null;
+      return;
+    }
+
+    try {
+      const response = await fetch(`${TBA_BASE_URL}/event/${eventKey}/oprs`, {
+        headers: {
+          "X-TBA-Auth-Key": TBA_API_KEY,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // OPR data is in data.oprs object with team keys like "frc190"
+      const teamKey = `frc${teamNumber}`;
+      if (data.oprs && data.oprs[teamKey] !== undefined) {
+        teamOPR = data.oprs[teamKey];
+      } else {
+        teamOPR = null;
+      }
+    } catch (error) {
+      console.error("Error fetching OPR:", error);
+      teamOPR = null;
+    }
   }
 
   function aggregateMatches(rawData) {
@@ -1508,6 +1570,10 @@
   }
 
   onMount(async () => {
+    // Load event key from localStorage
+    eventKey = localStorage.getItem("eventCode") || "";
+    console.log("Event key loaded:", eventKey);
+
     // Fetch all data from backend for global stats calculation
     const storedData = localStorage.getItem("data");
     let allDataResponse = [];
@@ -1524,7 +1590,7 @@
     console.log("All data loaded for global stats:", teamViewData);
 
     // Load team numbers from backend
-    allTeams = await loadTeamNumbers(localStorage.getItem("eventCode"));
+    allTeams = await loadTeamNumbers(eventKey);
 
     console.log("Populated team list:", allTeams);
 
@@ -1535,6 +1601,11 @@
       loadTeamData(selectedTeam);
       console.log("Loading data from team", selectedTeam);
     }
+
+    // Fetch OPR for initial team
+    await fetchTeamOPR(String(selectedTeam), eventKey);
+
+    console.log("Loading data from team", selectedTeam);
   });
 </script>
 
@@ -1544,8 +1615,16 @@
     <h1>Team View</h1>
     <p class="subtitle">FRC Team 190 - Scouting Data Analysis</p>
   </div>
+
   <!-- Controls -->
   <div class="controls">
+    <div class="opr-display">
+      {#if teamOPR !== null}
+        <span class="opr-label">OPR: {teamOPR.toFixed(2)}</span>
+      {:else}
+        <span class="opr-label">OPR: N/A</span>
+      {/if}
+    </div>
     <div>
       <label for="team-select">Team:</label>
       <select
@@ -1943,6 +2022,20 @@
     text-align: center;
     color: white;
     font-size: 1rem;
+  }
+  .opr-display {
+    display: flex;
+    align-items: center;
+  }
+
+  .opr-label {
+    color: white;
+    font-size: 18px;
+    font-weight: 600;
+    padding: 8px 15px;
+    background: linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%);
+    border: 2px solid var(--frc-190-red);
+    border-radius: 6px;
   }
 
   .remove-btn {

@@ -16,8 +16,8 @@
     new URL("../../images/AHHHHH.png", import.meta.url).href,
     new URL("../../images/FIRSTpick.gif", import.meta.url).href,
   ];
-  // const eventCode = localStorage.getItem("eventCode");
-  const eventCode = "2026mabos";
+  const eventCode = localStorage.getItem("eventCode");
+  // const eventCode = "2026mabos";
 
   let originalTitle = "";
   let teams = new Map();
