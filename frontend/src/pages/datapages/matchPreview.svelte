@@ -543,7 +543,6 @@ onMount(async () => {
       return [];
     }
 
-    //const data = await(await fetch("http://localhost:8000/teamNumbers?eventCode"+eventCode)).json();
     return data;
   }
 

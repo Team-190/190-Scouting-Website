@@ -18,7 +18,7 @@ export function fetchAvailableTeams() {
 }
 
 export function fetchGracePage(eventCode) {
-    const route = `http://localhost:8000/getRating?eventCode=${eventCode}`;
+    const route = `http://localhost:8000/getRatings?eventCode=${eventCode}`;
     let data = fetch(route);
     return data;
 }
@@ -44,7 +44,7 @@ export async function postEventCode(eventCode) {
 }
 
 export async function postGracePage(event, team, rating) {
-    const response = await fetch("http://localhost:8000/postRating", {
+    const response = await fetch("http://localhost:8000/postRatings", {
         method: 'POST',
         headers: {
             "Content-Type": "application/json"

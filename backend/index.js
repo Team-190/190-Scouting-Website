@@ -1,6 +1,4 @@
 // REQUIRED .env PARAMETERS:
-// SUPABASE_URL - Supabase API endpoint
-// SUPABASE_KEY - Supabase API key 
 // PORT - Localhost port to run server
 // SESSION_SECRET - Random string to sign off session cookies
 // DIR - Project directory where files to be served are
@@ -60,17 +58,6 @@ app.use((req, res, next) => {
     next();
 });
 
-app.get("/events", async (req, res) => {
-    try {
-        const events = await database.getEvents();
-        console.log("GOT EVENTSS:\n"+JSON.stringify(events, null, 2));
-        res.json(events);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: "Failed to fetch events" });
-    }
-});
-
 app.get("/", async (req, res) => {
     res.renderHtml("file.html");
 });
@@ -79,6 +66,47 @@ app.get("/login", (req, res) => {
     res.renderHtml("login.html");
 
     test.test();
+});
+
+app.get("/getEvents", async (req, res) => {
+    try {
+        const events = await database.getEvents();
+        console.log("GOT EVENTS:\n"+JSON.stringify(events, null, 2));
+        res.json(events);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Failed to fetch events" });
+    }
+});
+
+app.get("/getAvailableTeams", async (req, res) => {
+    const eventCode = req.query.eventCode;
+    if (!eventCode) return res.sendStatus(403);
+    let result = await database.getAvailableTeams(eventCode);
+    res.send(result);
+});
+
+app.get("/getAllData", async (req, res) => {
+    const eventCode = req.query.eventCode;
+    if (!eventCode) return res.sendStatus(403);
+
+    console.log("alldata requested, eventCode: "+eventCode);
+    let result = await database.getAllData(eventCode);
+    console.log(result);
+    res.send(result);
+});
+
+app.get("/getRatings", async (req, res) => {
+    const eventCode = req.query.eventCode;
+    if (!eventCode) return res.sendStatus(403);
+    
+    let fileData = await database.readJSONFile("driverRatings");
+    fileData = fileData[eventCode];
+    res.send(fileData);
+});
+
+app.get("/winnerOfGompeiMadness", async (req, res) => {
+    let winner = req.body.winner;
 });
 
 app.post("/postEventCode", async (req, res) => {
@@ -93,7 +121,7 @@ app.post("/postEventCode", async (req, res) => {
     }
 });
 
-app.post("/postRating", async (req, res) => {
+app.post("/postRatings", async (req, res) => {
     // json file fileData {
     //   "2026mabil": {
     //     "190":  {1: 4, 2: 3},
@@ -108,6 +136,7 @@ app.post("/postRating", async (req, res) => {
     let event = req.body.event;
     let rating = req.body.rating;
     let team = req.body.team;
+    let file = "driverRatings";
     if (!rating || !team || !event) {
         console.log("One or more fields could not be retrieved");
         console.log(`${rating} ${team} ${event}`);
@@ -115,14 +144,8 @@ app.post("/postRating", async (req, res) => {
     }
     else {
 
-        let fileData;
-        try {
-            fileData = JSON.parse(fs.readFileSync("driverRatings.json", { encoding: 'utf8', flag: 'r' }));
-        } catch (error) {
-            console.log("driverRatings.json does not exist, creating file...");
-        }
-
-        fileData ||= {};
+        let fileData = await database.readJSONFile(file);
+        console.log(fileData)
         fileData[event] ||= {};
 
         if (fileData[event][team]) {
@@ -133,66 +156,8 @@ app.post("/postRating", async (req, res) => {
             fileData[event][team] = {0: rating};
         }
 
-        fs.writeFile("driverRatings.json", JSON.stringify(fileData, null, 4), "utf8", (err) => {
-            if (err) {
-                console.error("Error writing to file", err);
-            } else {
-                console.log("Data written to driverRatings.json successfully");
-            }
-        });
+        database.writeJSONFile(file, fileData);
 
-        res.sendStatus(200);
-    }
-});
-
-
-app.get("/allData", async (req, res) => {
-    const eventCode = req.query.eventCode;
-    if (!eventCode) return res.sendStatus(403);
-
-    console.log("alldata requested, eventCode: "+eventCode);
-    let result = await database.allData(eventCode);
-    console.log(result);
-    res.send(result);
-});
-
-app.get("/allMetricData", async (req, res) => {
-    const eventCode = req.query.eventCode;
-    if (!eventCode) return res.sendStatus(403);
-
-    console.log("allMetricData requested, eventCode: "+eventCode);
-    let result = await database.allMetricData(eventCode);
-    console.log(result);
-    res.send(result);
-});
-
-app.get("/teamNumbers", async (req, res) => {
-    const eventCode = req.query.eventCode;
-    if (!eventCode) return res.sendStatus(403);
-    let result = await database.availableTeamsView(eventCode);
-    res.send(result);
-});
-
-app.get("/getRating", async (req, res) => {
-    const eventCode = req.query.eventCode;
-    if (!eventCode) return res.sendStatus(403);
-    
-    let fileData;
-    try {
-        fileData = JSON.parse(fs.readFileSync("driverRatings.json", { encoding: 'utf8', flag: 'r' }));
-        fileData = fileData[eventCode];
-    } catch (error) {
-        console.log("No data");
-    }
-
-    res.send(fileData);
-});
-
-app.post("/postGompeiMadnessBracket", async (req, res) => {
-    bracket = req.body.bracket;
-    if (!bracket) {
-        res.sendStatus(400);
-    } else {
         res.sendStatus(200);
     }
 });
@@ -212,6 +177,7 @@ app.post("/postPitScouting", async (req, res) => {
     let event = req.body.event;
     let team = req.body.team;
     let formData = req.body.formData;
+    let file = "pitScoutingData";
     if (!formData || !team || !event) {
         console.log("One or more fields could not be retrieved");
         console.log(`${formData} ${team} ${event}`);
@@ -219,31 +185,24 @@ app.post("/postPitScouting", async (req, res) => {
     }
     else {
         console.log(formData)
-        let fileData;
-        try {
-            fileData = JSON.parse(fs.readFileSync("pitScoutingData.json", { encoding: 'utf8', flag: 'r' }));
-        } catch (error) {
-            console.log("pitScoutingData.json does not exist, creating file...");
-        }
-
-        fileData ||= {};
+        let fileData = await database.readJSONFile(file);
         fileData[event] ||= {};
         fileData[event][team] = formData;
 
-        fs.writeFile("pitScoutingData.json", JSON.stringify(fileData, null, 4), "utf8", (err) => {
-            if (err) {
-                console.error("Error writing to file", err);
-            } else {
-                console.log("Data written to pitScoutingData.json successfully");
-            }
-        });
+        database.writeJSONFile(file, fileData);
+
 
         res.sendStatus(200);
     }
 });
 
-app.get("/winnerOfGompeiMadness", async (req, res) => {
-    let winner = req.body.winner;
+app.post("/postGompeiMadnessBracket", async (req, res) => {
+    bracket = req.body.bracket;
+    if (!bracket) {
+        res.sendStatus(400);
+    } else {
+        res.sendStatus(200);
+    }
 });
 
 app.listen(PORT, () => {
