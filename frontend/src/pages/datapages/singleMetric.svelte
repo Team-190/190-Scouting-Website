@@ -37,7 +37,7 @@
     let globalStats = { mean: 0, sd: 0, p25: 0, p50: 0, p75: 0, isNumeric: false };
 
     // Blue Alliance API configuration
-    const TBA_API_KEY = import.meta.env.VITE_AUTH_KEY;
+    const TBA_API_KEY = import.meta.env.VITE_BA_AUTH_KEY;
     const TBA_BASE_URL = "https://www.thebluealliance.com/api/v3";
 
     let eventKey = ""; // Will be loaded from localStorage
@@ -65,7 +65,7 @@
   metricNames.set("EndState", "Climb State");
   metricNames.set("LadderLocation", "Ladder Location");
   metricNames.set("Strategy", "Strategy");
-    metricNames.set("OPR", "OPR (Offensive Power Rating)");
+  metricNames.set("OPR", "OPR (Offensive Power Rating)");
 
   const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime"];
 
@@ -522,11 +522,7 @@
 
     const metricSet = new Set();
 
-    if (eventKey) {
-        metricSet.add("OPR (Offensive Power Rating)");
-    }
-
-    // Add OPR if we    have OPR data OR an event key is set (so the user can select it)
+    // Add OPR if we have OPR data OR an event key is set (so the user can select it)
     // This ensures the Metric dropdown shows OPR even if the fetch failed or returned empty.
     if (eventKey || Object.keys(teamOPRs).length > 0) {
         metricSet.add("OPR (Offensive Power Rating)");
@@ -835,22 +831,6 @@
         console.log("Mean - 2SD:", globalStats.mean - 2 * globalStats.sd);
         console.log("Mean:", globalStats.mean);
         console.log("Mean + 2SD:", globalStats.mean + 2 * globalStats.sd);
-        console.log(
-          "Test value 3.58 color:",
-          colorFromStats(3.58, globalStats, inverted),
-        );
-        console.log(
-          "Test value 7.88 color:",
-          colorFromStats(7.88, globalStats, inverted),
-        );
-        console.log(
-          "Test value 17 color:",
-          colorFromStats(17, globalStats, inverted),
-        );
-        console.log(
-          "Test value 31 color:",
-          colorFromStats(31, globalStats, inverted),
-        );
         console.log("====================================");
       } else {
         globalStats = {
@@ -1059,15 +1039,16 @@
             // Attempted but no successful climb → Red Failed
             if (attempt && (val === 0 || val === -1 || !val)) {
                 return {
-                background: "#C81B00",
+                background: "#FF0000",
                 color: "white",
                 fontWeight: 600,
                 fontSize: "18px",
                 textAlign: "center",
                 };
             }
-            }
+          }
 
+          const bg = colorFromStats(val, globalStats, inverted, dataMetric);
           return {
             background: bg,
             color: textColorForBgStrict(bg),
@@ -1092,7 +1073,7 @@
             }
 
             return normalizeValue(val);
-            }
+          }
 
           const hasData = params.data?.hasData;
           if (!hasData) return "";
@@ -1380,7 +1361,6 @@
     if (!chart.instance) return;
 
     chart.yAxisMetric = dataMetric;
-    chart.yAxisMetric = dataMetric;
 
     if (!chart.selectedTeams) {
         chart.selectedTeams = new Set(availableTeams);
@@ -1607,6 +1587,7 @@
       ],
     };
   }
+  
   let numericMetrics;
   function getRadarOption(chart) {
     numericMetrics = [];
@@ -1728,6 +1709,7 @@
       series: [{ type: "radar", data: seriesData }],
     };
 }
+
 onMount(async () => {
     try {
       allDataResponse = await fetchAllMetricData();
@@ -1742,7 +1724,7 @@ onMount(async () => {
       }
 
       // IMPORTANT: Fetch OPR data BEFORE computing metrics
-      eventKey = eventKey || localStorage.getItem("eventCode") || "";
+      eventKey = localStorage.getItem("eventCode") || "";
       console.log("Event Key:", eventKey);
       
       if (eventKey) {
@@ -2185,59 +2167,6 @@ $: if (selectedMetric === "OPR (Offensive Power Rating)" && Object.keys(teamOPRs
     box-shadow: 0 0 0 3px rgba(200, 27, 0, 0.4);
   }
 
-  .percentile-section {
-    width: 80%;
-    max-width: 1200px;
-    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-    border: 2px solid var(--frc-190-red);
-    border-radius: 10px;
-    padding: 20px;
-    margin-bottom: 20px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-  }
-
-  .percentile-section h3 {
-    color: var(--frc-190-red);
-    font-size: 1.4rem;
-    font-weight: 700;
-    margin: 0 0 15px 0;
-    text-align: center;
-  }
-
-  .percentile-grid {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 15px;
-  }
-
-  .percentile-item {
-    background: rgba(0, 0, 0, 0.4);
-    border: 1px solid #444;
-    border-radius: 6px;
-    padding: 12px;
-    text-align: center;
-  }
-
-  .percentile-label {
-    color: #aaa;
-    font-size: 0.9rem;
-    font-weight: 600;
-    margin-bottom: 5px;
-  }
-
-  .percentile-value {
-    color: white;
-    font-size: 1.3rem;
-    font-weight: bold;
-  }
-
-  .percentile-hidden {
-    color: #666;
-    font-size: 0.9rem;
-    text-align: center;
-    font-style: italic;
-  }
-
   .grid-container {
     width: 80vw;
     background: var(--frc-190-black);
@@ -2340,6 +2269,7 @@ $: if (selectedMetric === "OPR (Offensive Power Rating)" && Object.keys(teamOPRs
     border-radius: 8px;
     padding: 15px;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    margin-bottom: 20px;
   }
 
   .chart-container {
@@ -2360,33 +2290,6 @@ $: if (selectedMetric === "OPR (Offensive Power Rating)" && Object.keys(teamOPRs
     text-align: center;
     color: white;
     font-size: 1rem;
-  }
-
-  .remove-btn {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    border: none;
-    background: var(--frc-190-red);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    z-index: 10;
-    transition: background 0.2s ease;
-  }
-
-  .remove-btn:hover {
-    background: #e02200;
-  }
-
-  @media (max-width: 1024px) {
-    .charts-grid {
-      grid-template-columns: 1fr;
-    }
   }
 
   /* Chart-specific filter styles */
@@ -2435,7 +2338,7 @@ $: if (selectedMetric === "OPR (Offensive Power Rating)" && Object.keys(teamOPRs
   .local-grid {
     display: flex;
     justify-content: space-between;
-    grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+    flex-wrap: wrap;
     gap: 10px;
   }
 
