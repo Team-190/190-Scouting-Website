@@ -346,7 +346,7 @@
     const numValue = Number(v);
 
     if (numValue === 0) return "#000";
-    if (sigma === 0) return "rgb(180,180,180)";
+    if (!stats || stats.sd === 0) return "rgb(180,180,180)";
 
     const mode = colorModes[colorblindMode];
 
@@ -1054,7 +1054,7 @@
     if (matches.length === 0) return;
     console.log("MATCHES LOADING GRID:" + JSON.stringify(matches, null, 2));
 
-    const matchNums = matches.map((m) => m.match);
+    const matchNums = matches.map((m) => m.Match);
     const qLabels = matchNums.map((_, i) => `Q${i + 1}`);
 
     const sample = matches[0];
@@ -1086,11 +1086,25 @@
       });
     }
 
+    // helper: percentile calculation
+    function percentile(arr, p) {
+      if (!arr || arr.length === 0) return 0;
+      const sorted = [...arr].sort((a, b) => a - b);
+      const idx = (p / 100) * (sorted.length - 1);
+      const lo = Math.floor(idx);
+      const hi = Math.ceil(idx);
+      if (lo === hi) return sorted[lo];
+      const w = idx - lo;
+      return sorted[lo] * (1 - w) + sorted[hi] * w;
+    }
+
+    // Choose rows to compute global stats from (fall back to matches if needed)
+    const allRows = allTeamsAggregatedData.length > 0 ? allTeamsAggregatedData : matches;
+
     // Calculate global stats for each metric across all teams/matches (only for numeric)
     const globalStats = {};
     displayMetrics.forEach((metric) => {
       const allValues = []; // Reset for each metric!
-
       let isNumericMetric = true;
       let hasData = false;
 
@@ -1116,32 +1130,16 @@
           }
         });
 
+        const filteredValues = allValues.filter((v) => v !== null && v !== undefined && !isNaN(v));
+
         globalStats[metric] = {
           mean: filteredValues.length > 0 ? mean(filteredValues) : 0,
-          sd:
-            filteredValues.length > 0
-              ? sd(filteredValues, mean(filteredValues))
-              : 0,
+          sd: filteredValues.length > 0 ? sd(filteredValues, mean(filteredValues)) : 0,
           isNumeric: true,
           p25: allValues.length > 0 ? percentile(allValues, 25) : 0,
           p50: allValues.length > 0 ? percentile(allValues, 50) : 0,
           p75: allValues.length > 0 ? percentile(allValues, 75) : 0,
         };
-
-        // DEBUG LOGGING
-        if (metric === "FuelShootingTime" || metric === "FuelIntakingTime") {
-          console.log(`========== ${metric.toUpperCase()} DEBUG ==========`);
-          console.log(
-            "All values (sorted):",
-            [...allValues].sort((a, b) => a - b),
-          );
-          console.log("Count:", allValues.length);
-          console.log("Stats:", globalStats[metric]);
-          console.log("p25:", globalStats[metric].p25);
-          console.log("p50:", globalStats[metric].p50);
-          console.log("p75:", globalStats[metric].p75);
-          console.log("=============================================");
-        }
       } else {
         globalStats[metric] = { mean: 0, sd: 0, isNumeric: false };
       }
@@ -1509,6 +1507,9 @@
           const p = params.value;
           let background;
 
+          const metricName = params.data?.metric;
+          const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+
           if (p === null || p === undefined) {
             background = "#4D4D4D";
           } else {
@@ -1516,13 +1517,11 @@
             background = getAlexBgColor(p, false);
           }
 
-          const color = textColorForBgStrict(background);
-
           return {
             background:
               params.value === 0 || params.value === null
                 ? "#4D4D4D"
-                : colorFromStats(params.value, stats.mean, stats.sd),
+                : colorFromStats(params.value, stats, false),
             color:
               params.value === 0 || params.value === null ? "white" : "black",
             fontSize: "18px",
