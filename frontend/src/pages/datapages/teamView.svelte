@@ -1505,25 +1505,39 @@
         cellClass: "cell-center",
         cellStyle: (params) => {
           const p = params.value;
+
+          // Map percentile buckets to fixed colors:
+          // 0 -> black, 20 -> red, 40 -> yellow, 60 -> green, 80 -> blue
           let background;
-
-          const metricName = params.data?.metric;
-          const stats = globalStats[metricName] || { mean: 0, sd: 0 };
-
           if (p === null || p === undefined) {
             background = "#4D4D4D";
           } else {
-            // Per. column always uses quintile colors (0, 20, 40, 60, 80)
-            background = getAlexBgColor(p, false);
+            switch (p) {
+              case 0:
+                background = "#000000";
+                break;
+              case 20:
+                background = "#FF0000";
+                break;
+              case 40:
+                background = "#FFFF00";
+                break;
+              case 60:
+                background = "#00FF00";
+                break;
+              case 80:
+                background = "#0000FF";
+                break;
+              default:
+                background = "#4D4D4D";
+            }
           }
 
+          const color = textColorForBgStrict(background);
+
           return {
-            background:
-              params.value === 0 || params.value === null
-                ? "#4D4D4D"
-                : colorFromStats(params.value, stats, false),
-            color:
-              params.value === 0 || params.value === null ? "white" : "black",
+            background: background,
+            color: color,
             fontSize: "18px",
             fontWeight: "bold",
             textAlign: "center",
