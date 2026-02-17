@@ -67,6 +67,12 @@
 
   // Metrics where lower values are better (e.g., time-based metrics)
   const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime"];
+  
+  // Boolean metrics that should be colored green (Yes) or red (No)
+  const BOOLEAN_METRICS = ["AutoClimb"];
+  
+  // ClimbState metric needs special handling
+  const CLIMBSTATE_METRIC = "EndState";
 
   // This is the metric that the database actually stores
   let dataMetric = "";
@@ -246,6 +252,9 @@
 
     // Dark gray
     if (s === "#4d4d4d" || s === "rgb(77,77,77)") return "white";
+    
+    // Medium gray (for null/0 in boolean fields)
+    if (s === "#808080" || s === "rgb(128,128,128)" || s === "rgb(128, 128, 128)") return "white";
 
     // Bright primary colors (need white text)
     if (s === "#0000ff" || s === "#00f" || s === "rgb(0,0,255)") return "white"; // Bright Blue
@@ -260,6 +269,10 @@
       return "white"; // Google Red
     if (s === "#fbbc04" || s === "rgb(251,188,4)" || s === "rgb(251, 188, 4)")
       return "black"; // Google Yellow (bright)
+    
+    // Green color for boolean "Yes"
+    if (s === "#00ff00" || s === "rgb(0,255,0)" || s === "rgb(0, 255, 0)")
+      return "black"; // Bright Green
 
     return "black";
   }
@@ -337,7 +350,89 @@
     }
   }
 
-  function colorFromStats(v, stats, inverted = false) {
+  function getBooleanColor(v) {
+    // For boolean metrics: green for "Yes", black for "No", gray for null/0
+    if (v === null || v === undefined || v === "" || v === -1) {
+      return "#808080"; // Gray for null/empty
+    }
+    
+    // Handle string values
+    const strVal = String(v).toLowerCase().trim();
+    if (strVal === "yes" || strVal === "true" || strVal === "1") {
+      return "#00FF00"; // Bright Green for Yes
+    }
+    if (strVal === "no" || strVal === "false") {
+      return "#000000"; // Black for No
+    }
+    if (strVal === "0") {
+      return "#808080"; // Gray for "0" string
+    }
+    
+    // Handle boolean values
+    if (typeof v === "boolean") {
+      return v ? "#00FF00" : "#000000"; // Green for true, Black for false
+    }
+    
+    // Handle numeric values
+    if (isNumeric(v)) {
+      const num = Number(v);
+      if (num === 0) return "#808080"; // Gray for 0
+      return num > 0 ? "#00FF00" : "#000000"; // Green for positive, Black for negative
+    }
+    
+    return "#808080"; // Default to gray
+  }
+
+  function getClimbStateColor(climbStateValue, attemptClimbValue) {
+    // Handle ClimbState (EndState) coloring based on value and AttemptClimb
+    if (climbStateValue === null || climbStateValue === undefined || climbStateValue === "" || climbStateValue === -1) {
+      return "#808080"; // Gray for null/empty
+    }
+    
+    const stateStr = String(climbStateValue).toLowerCase().trim();
+    
+    // Handle no_climb case - depends on AttemptClimb
+    if (stateStr === "no_climb" || stateStr === "no climb" || stateStr === "noclimb") {
+      // Check AttemptClimb value
+      if (attemptClimbValue === null || attemptClimbValue === undefined || attemptClimbValue === "") {
+        return "#000000"; // Black if AttemptClimb is null
+      }
+      
+      const attemptStr = String(attemptClimbValue).toLowerCase().trim();
+      if (attemptStr === "no" || attemptStr === "false" || attemptStr === "0" || attemptClimbValue === false || attemptClimbValue === 0) {
+        return "#000000"; // Black if AttemptClimb is No
+      } else if (attemptStr === "yes" || attemptStr === "true" || attemptStr === "1" || attemptClimbValue === true || attemptClimbValue === 1) {
+        return "#FF0000"; // Red if AttemptClimb is Yes (failed attempt)
+      }
+      return "#000000"; // Default to black for no_climb
+    }
+    
+    // Handle L1, L2, L3 cases
+    if (stateStr === "l1") {
+      return "#FFFF00"; // Yellow for L1
+    }
+    if (stateStr === "l2") {
+      return "#00FF00"; // Green for L2
+    }
+    if (stateStr === "l3") {
+      return "#0000FF"; // Blue for L3
+    }
+    
+    // Default for any other value
+    return "#808080"; // Gray
+  }
+
+  function colorFromStats(v, stats, inverted = false, isBooleanMetric = false, isClimbStateMetric = false, attemptClimbValue = null) {
+    // For ClimbState metrics, use special coloring
+    if (isClimbStateMetric) {
+      return getClimbStateColor(v, attemptClimbValue);
+    }
+    
+    // For boolean metrics, use special coloring
+    if (isBooleanMetric) {
+      return getBooleanColor(v);
+    }
+    
     // For non-numeric data, return neutral color
     if (!isNumeric(v)) {
       return "#333";
@@ -1101,47 +1196,62 @@
     // Choose rows to compute global stats from (fall back to matches if needed)
     const allRows = allTeamsAggregatedData.length > 0 ? allTeamsAggregatedData : matches;
 
-    // Calculate global stats for each metric across all teams/matches (only for numeric)
+    // Calculate global stats for each metric across all teams/matches
     const globalStats = {};
     displayMetrics.forEach((metric) => {
       const allValues = []; // Reset for each metric!
       let isNumericMetric = true;
       let hasData = false;
+      
+      // Check if this is a boolean metric
+      const isBooleanMetric = BOOLEAN_METRICS.includes(metric);
+      
+      // Check if this is the ClimbState metric
+      const isClimbStateMetric = metric === CLIMBSTATE_METRIC;
 
-      // Check ALL values to determine type
-      for (const r of allRows) {
-        const v = r[metric];
-        if (v !== undefined && v !== null && v !== "") {
-          hasData = true;
-          if (!isNumeric(v)) {
-            isNumericMetric = false;
-            break;
+      // Check ALL values to determine type (skip for boolean and ClimbState metrics)
+      if (!isBooleanMetric && !isClimbStateMetric) {
+        for (const r of allRows) {
+          const v = r[metric];
+          if (v !== undefined && v !== null && v !== "") {
+            hasData = true;
+            if (!isNumeric(v)) {
+              isNumericMetric = false;
+              break;
+            }
           }
         }
-      }
-      // If no data found, assume not numeric (string is safer default)
-      if (!hasData) isNumericMetric = false;
+        // If no data found, assume not numeric (string is safer default)
+        if (!hasData) isNumericMetric = false;
 
-      if (isNumericMetric) {
-        allRows.forEach((row) => {
-          const val = row[metric];
-          if (isNumeric(val)) {
-            allValues.push(Number(val));
-          }
-        });
+        if (isNumericMetric) {
+          allRows.forEach((row) => {
+            const val = row[metric];
+            if (isNumeric(val)) {
+              allValues.push(Number(val));
+            }
+          });
 
-        const filteredValues = allValues.filter((v) => v !== null && v !== undefined && !isNaN(v));
+          const filteredValues = allValues.filter((v) => v !== null && v !== undefined && !isNaN(v));
 
-        globalStats[metric] = {
-          mean: filteredValues.length > 0 ? mean(filteredValues) : 0,
-          sd: filteredValues.length > 0 ? sd(filteredValues, mean(filteredValues)) : 0,
-          isNumeric: true,
-          p25: allValues.length > 0 ? percentile(allValues, 25) : 0,
-          p50: allValues.length > 0 ? percentile(allValues, 50) : 0,
-          p75: allValues.length > 0 ? percentile(allValues, 75) : 0,
-        };
+          globalStats[metric] = {
+            mean: filteredValues.length > 0 ? mean(filteredValues) : 0,
+            sd: filteredValues.length > 0 ? sd(filteredValues, mean(filteredValues)) : 0,
+            isNumeric: true,
+            isBoolean: false,
+            p25: allValues.length > 0 ? percentile(allValues, 25) : 0,
+            p50: allValues.length > 0 ? percentile(allValues, 50) : 0,
+            p75: allValues.length > 0 ? percentile(allValues, 75) : 0,
+          };
+        } else {
+          globalStats[metric] = { mean: 0, sd: 0, isNumeric: false, isBoolean: false };
+        }
+      } else if (isClimbStateMetric) {
+        // For ClimbState metric, we don't need stats
+        globalStats[metric] = { mean: 0, sd: 0, isNumeric: false, isBoolean: false, isClimbState: true };
       } else {
-        globalStats[metric] = { mean: 0, sd: 0, isNumeric: false };
+        // For boolean metrics, we don't need stats
+        globalStats[metric] = { mean: 0, sd: 0, isNumeric: false, isBoolean: true };
       }
     });
 
@@ -1151,13 +1261,18 @@
     displayMetrics.forEach((metric) => {
       const row: any = { metric };
       const values = [];
+      const isBooleanMetric = BOOLEAN_METRICS.includes(metric);
+      const isClimbStateMetric = metric === CLIMBSTATE_METRIC;
       const isNumericMetric = globalStats[metric]?.isNumeric ?? false;
 
       qLabels.forEach((q, i) => {
         const match = matches[i];
         let val = match?.[metric];
 
-        if (isNumericMetric) {
+        if (isBooleanMetric || isClimbStateMetric) {
+          // For boolean and ClimbState metrics, store the raw value
+          row[q] = val;
+        } else if (isNumericMetric) {
           const numVal = isNumeric(val) ? Number(val) : 0;
           row[q] = numVal;
           values.push(numVal);
@@ -1166,7 +1281,7 @@
         }
       });
 
-      if (isNumericMetric) {
+      if (isNumericMetric && !isBooleanMetric && !isClimbStateMetric) {
         const nonZero = values.filter((v) => v !== 0 && v !== -1);
         if (nonZero.length > 0) {
           row.mean = Number(mean(nonZero).toFixed(2));
@@ -1184,12 +1299,21 @@
 
     // Assign percentile buckets to each row based on where its mean falls in the global distribution
     rowData.forEach((row) => {
+      const metricName = row.metric;
+      const isBooleanMetric = BOOLEAN_METRICS.includes(metricName);
+      const isClimbStateMetric = metricName === CLIMBSTATE_METRIC;
+      
+      // Boolean and ClimbState metrics don't get percentiles
+      if (isBooleanMetric || isClimbStateMetric) {
+        row.percentile = null;
+        return;
+      }
+      
       if (row.mean === null || row.mean === undefined) {
         row.percentile = null;
         return;
       }
 
-      const metricName = row.metric;
       const stats = globalStats[metricName];
 
       if (
@@ -1266,8 +1390,10 @@
         cellStyle: (params) => {
           const metricName = params.data.metric;
           const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+          const isBooleanMetric = BOOLEAN_METRICS.includes(metricName);
+          const isClimbStateMetric = metricName === CLIMBSTATE_METRIC;
 
-          if (!stats.isNumeric) {
+          if (!stats.isNumeric && !isBooleanMetric && !isClimbStateMetric) {
             return {
               background: "#333",
               color: "white",
@@ -1287,6 +1413,34 @@
               fontWeight: 600,
               textAlign: "center",
               border: "1px solid #555",
+            };
+          }
+
+          // Handle ClimbState metric - need to get AttemptClimb value from same match
+          if (isClimbStateMetric) {
+            // Find the AttemptClimb row to get the value for this match
+            const attemptClimbRow = rowData.find(r => r.metric === "AttemptClimb");
+            const attemptClimbValue = attemptClimbRow ? attemptClimbRow[q] : null;
+            
+            const bg = getClimbStateColor(val, attemptClimbValue);
+            return {
+              background: bg,
+              color: textColorForBgStrict(bg),
+              fontSize: "18px",
+              fontWeight: 600,
+              textAlign: "center",
+            };
+          }
+
+          // Handle boolean metrics
+          if (isBooleanMetric) {
+            const bg = getBooleanColor(val);
+            return {
+              background: bg,
+              color: textColorForBgStrict(bg),
+              fontSize: "18px",
+              fontWeight: 600,
+              textAlign: "center",
             };
           }
 
@@ -1324,7 +1478,7 @@
             };
           }
 
-          const bg = colorFromStats(numValue, stats, inverted);
+          const bg = colorFromStats(numValue, stats, inverted, isBooleanMetric, isClimbStateMetric);
           return {
             background: bg,
             color: textColorForBgStrict(bg),
@@ -1336,6 +1490,12 @@
         valueFormatter: (params) => {
           const metricName = params.data.metric;
           const stats = globalStats[metricName] || { isNumeric: false };
+          const isBooleanMetric = BOOLEAN_METRICS.includes(metricName);
+          const isClimbStateMetric = metricName === CLIMBSTATE_METRIC;
+
+          if (isBooleanMetric || isClimbStateMetric) {
+            return normalizeValue(params.value);
+          }
 
           if (!stats.isNumeric) {
             return normalizeValue(params.value);
@@ -1357,8 +1517,10 @@
           const stats = globalStats[metricName] || { mean: 0, sd: 0 };
           const v = params.value;
           const inverted = INVERTED_METRICS.includes(metricName);
+          const isBooleanMetric = BOOLEAN_METRICS.includes(metricName);
+          const isClimbStateMetric = metricName === CLIMBSTATE_METRIC;
 
-          if (v === undefined || v === null || v === "") {
+          if (v === undefined || v === null || v === "" || isBooleanMetric || isClimbStateMetric) {
             return {
               background: "#4D4D4D",
               color: "white",
@@ -1404,7 +1566,7 @@
             };
           }
 
-          const bg = colorFromStats(numValue, stats, inverted);
+          const bg = colorFromStats(numValue, stats, inverted, isBooleanMetric, isClimbStateMetric);
           return {
             background: bg,
             color: textColorForBgStrict(bg),
@@ -1430,11 +1592,12 @@
         cellStyle: (params) => {
           const metricName = params.data.metric;
           const stats = globalStats[metricName] || { mean: 0, sd: 0 };
-
           const v = params.value;
           const inverted = INVERTED_METRICS.includes(metricName);
+          const isBooleanMetric = BOOLEAN_METRICS.includes(metricName);
+          const isClimbStateMetric = metricName === CLIMBSTATE_METRIC;
 
-          if (v === undefined || v === null || v === "") {
+          if (v === undefined || v === null || v === "" || isBooleanMetric || isClimbStateMetric) {
             return {
               background: "#4D4D4D",
               color: "white",
@@ -1480,7 +1643,7 @@
             };
           }
 
-          const bg = colorFromStats(numValue, stats, inverted);
+          const bg = colorFromStats(numValue, stats, inverted, isBooleanMetric, isClimbStateMetric);
           return {
             background: bg,
             color: textColorForBgStrict(bg),
