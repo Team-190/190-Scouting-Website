@@ -63,7 +63,7 @@
     "Time",
     "Mode",
     "DriveStation",
-  ];
+  ];s
 
   // Metrics where lower values are better (e.g., time-based metrics)
   const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime"];
