@@ -68,6 +68,12 @@
   metricNames.set("OPR", "OPR (Offensive Power Rating)");
 
   const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime"];
+  
+  // Boolean metrics that should be colored green (Yes) or black (No)
+  const BOOLEAN_METRICS = ["AutoClimb", "AttemptClimb"];
+  
+  // ClimbState metric needs special handling
+  const CLIMBSTATE_METRIC = "EndState";
 
   const excludedFields = [
     "Match",
@@ -121,6 +127,78 @@
   // Helper function to check if a metric should be inverted
   function isInvertedMetric(metric) {
     return INVERTED_METRICS.includes(metric);
+  }
+
+  function getBooleanColor(v) {
+    // For boolean metrics: green for "Yes", black for "No", gray for null/0
+    if (v === null || v === undefined || v === "" || v === -1) {
+      return "#808080"; // Gray for null/empty
+    }
+    
+    // Handle string values
+    const strVal = String(v).toLowerCase().trim();
+    if (strVal === "yes" || strVal === "true" || strVal === "1") {
+      return "#00FF00"; // Bright Green for Yes
+    }
+    if (strVal === "no" || strVal === "false") {
+      return "#000000"; // Black for No
+    }
+    if (strVal === "0") {
+      return "#808080"; // Gray for "0" string
+    }
+    
+    // Handle boolean values
+    if (typeof v === "boolean") {
+      return v ? "#00FF00" : "#000000"; // Green for true, Black for false
+    }
+    
+    // Handle numeric values
+    if (isNumeric(v)) {
+      const num = Number(v);
+      if (num === 0) return "#808080"; // Gray for 0
+      return num > 0 ? "#00FF00" : "#000000"; // Green for positive, Black for negative
+    }
+    
+    return "#808080"; // Default to gray
+  }
+
+  function getClimbStateColor(climbStateValue, attemptClimbValue) {
+    // Handle ClimbState (EndState) coloring based on value and AttemptClimb
+    if (climbStateValue === null || climbStateValue === undefined || climbStateValue === "" || climbStateValue === -1) {
+      return "#808080"; // Gray for null/empty
+    }
+    
+    const stateStr = String(climbStateValue).toLowerCase().trim();
+    
+    // Handle no_climb case - depends on AttemptClimb
+    if (stateStr === "no_climb" || stateStr === "no climb" || stateStr === "noclimb") {
+      // Check AttemptClimb value
+      if (attemptClimbValue === null || attemptClimbValue === undefined || attemptClimbValue === "") {
+        return "#000000"; // Black if AttemptClimb is null
+      }
+      
+      const attemptStr = String(attemptClimbValue).toLowerCase().trim();
+      if (attemptStr === "no" || attemptStr === "false" || attemptStr === "0" || attemptClimbValue === false || attemptClimbValue === 0) {
+        return "#000000"; // Black if AttemptClimb is No
+      } else if (attemptStr === "yes" || attemptStr === "true" || attemptStr === "1" || attemptClimbValue === true || attemptClimbValue === 1) {
+        return "#FF0000"; // Red if AttemptClimb is Yes (failed attempt)
+      }
+      return "#000000"; // Default to black for no_climb
+    }
+    
+    // Handle L1, L2, L3 cases
+    if (stateStr === "l1") {
+      return "#FFFF00"; // Yellow for L1
+    }
+    if (stateStr === "l2") {
+      return "#00FF00"; // Green for L2
+    }
+    if (stateStr === "l3") {
+      return "#0000FF"; // Blue for L3
+    }
+    
+    // Default for any other value
+    return "#808080"; // Gray
   }
 
   // Returns background color for percentile column
@@ -266,6 +344,11 @@
     ) {
       return "white";
     }
+    
+    // Check for medium gray (for null/0 in boolean fields)
+    if (s === "#808080" || s === "rgb(128,128,128)" || s === "rgb(128, 128, 128)") {
+      return "white";
+    }
 
     return "black";
   }
@@ -349,24 +432,22 @@
 
   // Main color calculation function for gradient modes
   function colorFromStats(v, stats, inverted = false, metricName = null, attemptClimbValue = null) {
+    // Check if this is a boolean metric
+    const isBooleanMetric = BOOLEAN_METRICS.includes(metricName);
+    const isClimbStateMetric = metricName === CLIMBSTATE_METRIC;
+    
+    // For ClimbState metrics, use special coloring
+    if (isClimbStateMetric) {
+      return getClimbStateColor(v, attemptClimbValue);
+    }
+    
+    // For boolean metrics, use special coloring
+    if (isBooleanMetric) {
+      return getBooleanColor(v);
+    }
+    
     // For non-numeric data, return neutral color
     if (!isNumeric(v)) {
-      // Special handling for EndState (Climb State)
-      if (metricName === "EndState") {
-        const val = String(v).toLowerCase();
-        
-        // Check if no climb
-        if (val === "no attempt" || val === "no_climb" || val === "0" || v === 0 || val === "" || val === "null") {
-          return "#FF0000"; // Red (Failed - no climb)
-        }
-        
-        if (val === "fail" || val === "failed" || val === "f") return "#FF0000"; // Red
-        if (val === "l1") return "#FFFF00"; // Yellow
-        if (val === "l2" || val === "level 2" || val === "2") return "#00FF00"; // Green
-        if (val === "l3" || val === "level 3" || val === "3") return "#0000FF"; // Blue
-        return "#333"; // Default for unknown values
-      }
-      
       return "#4D4D4D";
     }
 
@@ -668,7 +749,7 @@
                     };
                 }
 
-                const bg = colorFromStats(v, globalStats, false); // OPR is NOT inverted
+                const bg = colorFromStats(v, globalStats, false, "OPR"); // OPR is NOT inverted
                 return {
                     background: bg,
                     color: textColorForBgStrict(bg),
@@ -793,14 +874,16 @@
       (_, i) => `Q${i + 1}`,
     );
 
-    // Check if metric is numeric
-    const isNumericMetric = checkIsNumericMetric(dataMetric);
+    // Check if metric is numeric (skip for boolean and ClimbState metrics)
+    const isBooleanMetric = BOOLEAN_METRICS.includes(dataMetric);
+    const isClimbStateMetric = dataMetric === CLIMBSTATE_METRIC;
+    const isNumericMetric = isBooleanMetric || isClimbStateMetric ? false : checkIsNumericMetric(dataMetric);
     console.log("Is Numeric Metric: ", isNumericMetric);
 
     const inverted = isInvertedMetric(dataMetric);
 
-    // Global stats (only for numeric metrics)
-    if (isNumericMetric) {
+    // Global stats (only for numeric metrics, not for boolean or ClimbState)
+    if (isNumericMetric && !isBooleanMetric && !isClimbStateMetric) {
       const allValues = [];
       availableTeams.forEach((team) => {
         const rows = teamData[team] || [];
@@ -877,7 +960,10 @@
           const label = qLabels[i];
           let v = r[dataMetric];
 
-          if (isNumericMetric) {
+          if (isBooleanMetric || isClimbStateMetric) {
+            // For boolean and ClimbState metrics, store raw value
+            row[label] = v;
+          } else if (isNumericMetric) {
             if (v === undefined || v === null || v === "") {
               row[label] = null;
             } else if (isNumeric(v)) {
@@ -897,7 +983,7 @@
           }
         });
 
-        if (isNumericMetric) {
+        if (isNumericMetric && !isBooleanMetric && !isClimbStateMetric) {
           // Calculate mean/median only from valid positive values (excluding 0 and -1)
           if (values.length > 0) {
             row.mean = Number(mean(values).toFixed(2));
@@ -914,7 +1000,7 @@
         return row;
       })
       .sort((a, b) => {
-        if (!isNumericMetric) return a.team.localeCompare(b.team);
+        if (!isNumericMetric || isBooleanMetric || isClimbStateMetric) return a.team.localeCompare(b.team);
 
         // Handle null means
         if (a.mean === null && b.mean !== null) return 1;
@@ -929,7 +1015,7 @@
       })
       .map((row, index, array) => {
         // Calculate percentile based on position in sorted list
-        if (isNumericMetric && row.mean !== null) {
+        if (isNumericMetric && !isBooleanMetric && !isClimbStateMetric && row.mean !== null) {
           const validRows = array.filter((r) => r.mean !== null);
           const totalTeams = validRows.length;
           const position = validRows.indexOf(row);
@@ -991,6 +1077,31 @@
             };
           }
 
+          // Handle ClimbState metric - need to get AttemptClimb value from same team
+          if (isClimbStateMetric) {
+            const attemptClimbValue = params.data?.AttemptClimb;
+            const bg = getClimbStateColor(v, attemptClimbValue);
+            return {
+              background: bg,
+              color: textColorForBgStrict(bg),
+              fontWeight: 600,
+              fontSize: "18px",
+              textAlign: "center",
+            };
+          }
+
+          // Handle boolean metrics
+          if (isBooleanMetric) {
+            const bg = getBooleanColor(v);
+            return {
+              background: bg,
+              color: textColorForBgStrict(bg),
+              fontWeight: 600,
+              fontSize: "18px",
+              textAlign: "center",
+            };
+          }
+
           if (!isNumericMetric) {
             return {
               background: "#333",
@@ -1026,33 +1137,6 @@
             };
           }
 
-          // Use appropriate coloring
-          if (dataMetric === "EndState") {
-            const attempt = params.data?.AttemptClimb;
-
-            // No attempt → Black N/A
-            if (!attempt || attempt === 0 || attempt === "0") {
-                return {
-                background: "black",
-                color: "white",
-                fontWeight: 600,
-                fontSize: "18px",
-                textAlign: "center",
-                };
-            }
-
-            // Attempted but no successful climb → Red Failed
-            if (attempt && (val === 0 || val === -1 || !val)) {
-                return {
-                background: "#FF0000",
-                color: "white",
-                fontWeight: 600,
-                fontSize: "18px",
-                textAlign: "center",
-                };
-            }
-          }
-
           const bg = colorFromStats(val, globalStats, inverted, dataMetric);
           return {
             background: bg,
@@ -1063,25 +1147,12 @@
           };
         },
         valueFormatter: (params) => {
-          if (dataMetric === "EndState") {
-            const attempt = params.data?.AttemptClimb;
-            const val = params.value;
-
-            // No attempt → N/A
-            if (!attempt || attempt === 0 || attempt === "0") {
-                return "N/A";
-            }
-
-            // Attempted but no climb
-            if (attempt && (val === 0 || val === -1 || !val)) {
-                return "Failed";
-            }
-
-            return normalizeValue(val);
-          }
-
           const hasData = params.data?.hasData;
           if (!hasData) return "";
+
+          if (isBooleanMetric || isClimbStateMetric) {
+            return normalizeValue(params.value);
+          }
 
           if (params.value === undefined || params.value === null) return "";
 
@@ -1100,7 +1171,7 @@
         minWidth: 80,
         headerClass: "header-center",
         cellClass: "cell-center",
-        hide: !isNumericMetric,
+        hide: !isNumericMetric || isBooleanMetric || isClimbStateMetric,
         cellStyle: (params) => {
           const v = params.value;
 
@@ -1115,8 +1186,7 @@
             };
           }
 
-          const attemptVal = dataMetric === "EndState" ? params.data?.AttemptClimb : null;
-          const bg = colorFromStats(v, globalStats, inverted, dataMetric, attemptVal);
+          const bg = colorFromStats(v, globalStats, inverted, dataMetric);
           return {
             background: bg,
             color: textColorForBgStrict(bg),
@@ -1141,7 +1211,7 @@
         minWidth: 80,
         headerClass: "header-center",
         cellClass: "cell-center",
-        hide: !isNumericMetric,
+        hide: !isNumericMetric || isBooleanMetric || isClimbStateMetric,
         cellStyle: (params) => {
           const v = params.value;
 
@@ -1156,8 +1226,7 @@
             };
           }
 
-          const attemptVal = dataMetric === "EndState" ? params.data?.AttemptClimb : null;
-          const bg = colorFromStats(v, globalStats, inverted, dataMetric, attemptVal);
+          const bg = colorFromStats(v, globalStats, inverted, dataMetric);
           return {
             background: bg,
             color: textColorForBgStrict(bg),
@@ -1182,7 +1251,7 @@
         minWidth: 100,
         headerClass: "header-center",
         cellClass: "cell-center",
-        hide: !isNumericMetric,
+        hide: !isNumericMetric || isBooleanMetric || isClimbStateMetric,
         cellStyle: (params) => {
           const p = params.value;
           let background;
