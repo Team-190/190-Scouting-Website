@@ -14,7 +14,7 @@
   import "ag-grid-community/styles/ag-grid.css";
   import "ag-grid-community/styles/ag-theme-quartz.css";
   import Team from "../../components/Team.svelte";
-  import type { ColDef } from 'ag-grid-community';
+  import type { ColDef } from "ag-grid-community";
 
   // Graph imports
   import * as barGraph from "../../pages/graphcode/bar.js";
@@ -22,6 +22,8 @@
   import * as pieGraph from "../../pages/graphcode/pie.js";
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
+
+  import { fetchGracePage } from "../../utils/api";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -31,7 +33,7 @@
   let domNode3;
   let domNode4;
   let domNode5;
-  
+
   let colorblindMode = "normal";
   let populatecache;
   let gridHeight = 400; // Default height, will be calculated dynamically
@@ -59,9 +61,45 @@
   metricNames.set("EndState", "Climb State");
   metricNames.set("LadderLocation", "Ladder Location");
   metricNames.set("Strategy", "Strategy");
-  
-  const excludedFields = ["Match", "Team", "Id", "RecordType", "ScouterName", "ScouterError", "Time", "Mode", "DriveStation", "match", "team", "id", "created_at", "record_type", "scouter_name", "scouter_error"];
+
+  const excludedFields = [
+    "Match",
+    "Team",
+    "Id",
+    "RecordType",
+    "ScouterName",
+    "ScouterError",
+    "Time",
+    "Mode",
+    "DriveStation",
+    "match",
+    "team",
+    "id",
+    "created_at",
+    "record_type",
+    "scouter_name",
+    "scouter_error",
+  ];
   // ===== ADDED FROM teamView.svelte - END =====
+
+  //garce stuff
+  let garceData;
+  fetchGracePage(eventKey)
+    .then((res) => {
+      return res.json();
+    })
+    .then((data) => {
+      garceData = data;
+    });
+  const rating = [
+    new URL("../../images/DNP.png", import.meta.url).href,
+    new URL("../../images/ProbNo.png", import.meta.url).href,
+    new URL("../../images/NeutralBad.jpg", import.meta.url).href,
+    new URL("../../images/NeutralGood.png", import.meta.url).href,
+    new URL("../../images/PrettyGood.gif", import.meta.url).href,
+    new URL("../../images/AHHHHH.png", import.meta.url).href,
+    new URL("../../images/FIRSTpick.gif", import.meta.url).href,
+  ];
 
   const colorModes = {
     normal: {
@@ -89,7 +127,13 @@
       mid: [110, 74, 30],
     },
   };
-
+  function fetchGraceRating(team) {
+    if (!garceData || garceData === "" || garceData[team] === undefined) {
+      return 0;
+    } else{
+       return garceData[team][Object.keys(garceData[team])[Object.keys(garceData[team]).length - 1]];
+    }
+  }
   let cache = {};
 
   function isNumeric(n) {
@@ -188,7 +232,7 @@
   let allTeams = [];
   let allMatches = [];
   let eventKey = ""; // Will be loaded from localStorage
-  
+
   // Blue Alliance API configuration
   const TBA_API_KEY = import.meta.env.VITE_BA_AUTH_KEY;
   const TBA_BASE_URL = "https://www.thebluealliance.com/api/v3";
@@ -199,102 +243,101 @@
   let blueAlliance = ["", "", ""];
 
   // OPR data
-let teamOPRs = {}; // Cache for OPR values { teamNumber: oprValue }
-let oprLoading = false;
+  let teamOPRs = {}; // Cache for OPR values { teamNumber: oprValue }
+  let oprLoading = false;
 
-async function fetchEventOPRs(eventKey) {
-  if (!eventKey) {
-    console.warn("No event key provided for OPR fetch");
-    return {};
-  }
+  async function fetchEventOPRs(eventKey) {
+    if (!eventKey) {
+      console.warn("No event key provided for OPR fetch");
+      return {};
+    }
 
-  oprLoading = true;
-  try {
-    const response = await fetch(
-      `${TBA_BASE_URL}/event/${eventKey}/oprs`,
-      {
+    oprLoading = true;
+    try {
+      const response = await fetch(`${TBA_BASE_URL}/event/${eventKey}/oprs`, {
         headers: {
-          "X-TBA-Auth-Key": TBA_API_KEY
-        }
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    
-    // Convert from { "frc190": 45.2, "frc191": 38.5 } to { "190": 45.2, "191": 38.5 }
-    const oprCache = {};
-    if (data.oprs) {
-      Object.entries(data.oprs).forEach(([teamKey, oprValue]) => {
-        const teamNum = teamKey.replace("frc", "");
-        oprCache[teamNum] = oprValue;
+          "X-TBA-Auth-Key": TBA_API_KEY,
+        },
       });
-    }
-    
-    console.log("Fetched OPR data:", oprCache);
-    return oprCache;
-  } catch (error) {
-    console.error("Error fetching OPR:", error);
-    return {};
-  } finally {
-    oprLoading = false;
-  }
-}
 
-async function fetchEventMatches(eventKey) {
-  try {
-    const response = await fetch(`${TBA_BASE_URL}/event/${eventKey}/matches`, {
-      headers: {
-        "X-TBA-Auth-Key": TBA_API_KEY
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+
+      const data = await response.json();
+
+      // Convert from { "frc190": 45.2, "frc191": 38.5 } to { "190": 45.2, "191": 38.5 }
+      const oprCache = {};
+      if (data.oprs) {
+        Object.entries(data.oprs).forEach(([teamKey, oprValue]) => {
+          const teamNum = teamKey.replace("frc", "");
+          oprCache[teamNum] = oprValue;
+        });
+      }
+
+      console.log("Fetched OPR data:", oprCache);
+      return oprCache;
+    } catch (error) {
+      console.error("Error fetching OPR:", error);
+      return {};
+    } finally {
+      oprLoading = false;
     }
-    
-    const matches = await response.json();
-    
-    // Filter and sort matches by their actual play order
-    const sortedMatches = matches
-      .filter(m => ["qm", "ef", "qf", "sf", "f"].includes(m.comp_level))
-      .sort((a, b) => {
-        // Sort by comp level first
-        const levelOrder = { qm: 0, ef: 1, qf: 2, sf: 3, f: 4 };
-        const aLevel = levelOrder[a.comp_level];
-        const bLevel = levelOrder[b.comp_level];
-        
-        if (aLevel !== bLevel) {
-          return aLevel - bLevel;
-        }
-        
-        // For elimination matches, sort by set_number then match_number
-        if (a.comp_level !== "qm") {
-          const aSet = Number(a.set_number) || 0;
-          const bSet = Number(b.set_number) || 0;
-          
-          if (aSet !== bSet) {
-            return aSet - bSet;
+  }
+
+  async function fetchEventMatches(eventKey) {
+    try {
+      const response = await fetch(
+        `${TBA_BASE_URL}/event/${eventKey}/matches`,
+        {
+          headers: {
+            "X-TBA-Auth-Key": TBA_API_KEY,
+          },
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const matches = await response.json();
+
+      // Filter and sort matches by their actual play order
+      const sortedMatches = matches
+        .filter((m) => ["qm", "ef", "qf", "sf", "f"].includes(m.comp_level))
+        .sort((a, b) => {
+          // Sort by comp level first
+          const levelOrder = { qm: 0, ef: 1, qf: 2, sf: 3, f: 4 };
+          const aLevel = levelOrder[a.comp_level];
+          const bLevel = levelOrder[b.comp_level];
+
+          if (aLevel !== bLevel) {
+            return aLevel - bLevel;
           }
-        }
-        
-        // Then by match number (ensure numeric comparison)
-        const aMatch = Number(a.match_number) || 0;
-        const bMatch = Number(b.match_number) || 0;
-        
-        return aMatch - bMatch;
-      });
 
-    return sortedMatches;
+          // For elimination matches, sort by set_number then match_number
+          if (a.comp_level !== "qm") {
+            const aSet = Number(a.set_number) || 0;
+            const bSet = Number(b.set_number) || 0;
 
-  } catch (error) {
-    console.error("Error fetching matches from Blue Alliance:", error);
-    return [];
+            if (aSet !== bSet) {
+              return aSet - bSet;
+            }
+          }
+
+          // Then by match number (ensure numeric comparison)
+          const aMatch = Number(a.match_number) || 0;
+          const bMatch = Number(b.match_number) || 0;
+
+          return aMatch - bMatch;
+        });
+
+      return sortedMatches;
+    } catch (error) {
+      console.error("Error fetching matches from Blue Alliance:", error);
+      return [];
+    }
   }
-}
 
   function extractTeamNumber(teamKey) {
     // teamKey format is "frcXXXX", extract just the number
@@ -305,211 +348,244 @@ async function fetchEventMatches(eventKey) {
   function aggregateMatches(rawData) {
     const matches = {};
     const seenString = {};
-    
+
     // We process grouping by match first
     const grouped = {};
-    rawData.forEach(row => {
-        const m = row["Match"] || row["match"];
-        if (!m) return;
-        if (!grouped[m]) grouped[m] = [];
-        grouped[m].push(row);
+    rawData.forEach((row) => {
+      const m = row["Match"] || row["match"];
+      if (!m) return;
+      if (!grouped[m]) grouped[m] = [];
+      grouped[m].push(row);
     });
 
     const result = [];
-    
-    Object.keys(grouped).forEach(matchNum => {
-        const rows = grouped[matchNum];
-        // Sort rows by Id if possible to ensure time order (lower ID first)
-        rows.sort((a,b) => (Number(a.Id || a.id)||0) - (Number(b.Id || b.id)||0));
-        
-        const aggregated = { ...rows[0] }; // Start with metadata from first row
-        // Reset counters for summation
-        // We will rebuild the metric values from scratch to be safe
-        
-        // Identify all keys present in any row
-        const allKeys = new Set();
-        rows.forEach(r => Object.keys(r).forEach(k => allKeys.add(k)));
-        
-        const fieldState = {}; // key -> { type: 'numeric'|'string', val: ... }
 
-        allKeys.forEach(key => {
-            // Skip metadata fields from aggregation logic (retain from first row or overwrite)
-            if (["Match", "Team", "team", "Id", "Time", "RecordType", "Mode", "DriveStation", "ScouterName", "ScouterError", "match", "id", "created_at", "record_type", "scouter_name", "scouter_error"].includes(key)) {
-                return;
+    Object.keys(grouped).forEach((matchNum) => {
+      const rows = grouped[matchNum];
+      // Sort rows by Id if possible to ensure time order (lower ID first)
+      rows.sort(
+        (a, b) => (Number(a.Id || a.id) || 0) - (Number(b.Id || b.id) || 0),
+      );
+
+      const aggregated = { ...rows[0] }; // Start with metadata from first row
+      // Reset counters for summation
+      // We will rebuild the metric values from scratch to be safe
+
+      // Identify all keys present in any row
+      const allKeys = new Set();
+      rows.forEach((r) => Object.keys(r).forEach((k) => allKeys.add(k)));
+
+      const fieldState = {}; // key -> { type: 'numeric'|'string', val: ... }
+
+      allKeys.forEach((key) => {
+        // Skip metadata fields from aggregation logic (retain from first row or overwrite)
+        if (
+          [
+            "Match",
+            "Team",
+            "team",
+            "Id",
+            "Time",
+            "RecordType",
+            "Mode",
+            "DriveStation",
+            "ScouterName",
+            "ScouterError",
+            "match",
+            "id",
+            "created_at",
+            "record_type",
+            "scouter_name",
+            "scouter_error",
+          ].includes(key)
+        ) {
+          return;
+        }
+
+        // For metrics:
+        fieldState[key] = { type: "none", val: 0 };
+      });
+
+      rows.forEach((row) => {
+        Object.keys(row).forEach((key) => {
+          if (!fieldState[key]) return; // Skip metadata
+
+          const val = row[key];
+          // Ignore invalid values
+          if (
+            val === -1 ||
+            val === "-1" ||
+            val === "-" ||
+            val === null ||
+            val === undefined ||
+            val === ""
+          )
+            return;
+
+          const isNum = isNumeric(val);
+
+          if (fieldState[key].type === "string") {
+            // If we already decided it's a string field
+            if (!isNum) {
+              fieldState[key].val = val; // Overwrite with latest string
             }
-
-            // For metrics:
-            fieldState[key] = { type: 'none', val: 0 };
+            // If isNum (e.g. 0), ignore it as noise if we have string mode
+          } else if (fieldState[key].type === "numeric") {
+            if (isNum) {
+              fieldState[key].val += Number(val);
+            } else {
+              // Switch to string mode!
+              fieldState[key].type = "string";
+              fieldState[key].val = val;
+            }
+          } else {
+            // type is 'none'
+            if (isNum) {
+              fieldState[key].type = "numeric";
+              fieldState[key].val = Number(val);
+            } else {
+              fieldState[key].type = "string";
+              fieldState[key].val = val;
+            }
+          }
         });
+      });
 
-        rows.forEach(row => {
-            Object.keys(row).forEach(key => {
-                if (!fieldState[key]) return; // Skip metadata
-                
-                const val = row[key];
-                // Ignore invalid values
-                if (val === -1 || val === "-1" || val === "-" || val === null || val === undefined || val === "") return;
+      // Apply back to aggregated object
+      Object.keys(fieldState).forEach((key) => {
+        aggregated[key] = fieldState[key].val;
+      });
 
-                const isNum = isNumeric(val);
-                
-                if (fieldState[key].type === 'string') {
-                   // If we already decided it's a string field
-                   if (!isNum) {
-                       fieldState[key].val = val; // Overwrite with latest string
-                   }
-                   // If isNum (e.g. 0), ignore it as noise if we have string mode
-                } else if (fieldState[key].type === 'numeric') {
-                   if (isNum) {
-                       fieldState[key].val += Number(val);
-                   } else {
-                       // Switch to string mode!
-                       fieldState[key].type = 'string';
-                       fieldState[key].val = val;
-                   }
-                } else { // type is 'none'
-                   if (isNum) {
-                       fieldState[key].type = 'numeric';
-                       fieldState[key].val = Number(val);
-                   } else {
-                       fieldState[key].type = 'string';
-                       fieldState[key].val = val;
-                   }
-                }
-            });
-        });
-
-        // Apply back to aggregated object
-        Object.keys(fieldState).forEach(key => {
-            aggregated[key] = fieldState[key].val;
-        });
-        
-        result.push(aggregated);
+      result.push(aggregated);
     });
 
-    return result.sort((a,b) => (a.Match || a.match) - (b.Match || b.match));
+    return result.sort((a, b) => (a.Match || a.match) - (b.Match || b.match));
   }
   // ===== ADDED FROM teamView.svelte - END =====
   async function loadMatchData(matchKey: string) {
-  if (!allMatches || allMatches.length === 0) return;
+    if (!allMatches || allMatches.length === 0) return;
 
-  const parts = matchKey.split("_");
-  if (parts.length < 2) return;
+    const parts = matchKey.split("_");
+    if (parts.length < 2) return;
 
-  const matchPart = parts[1];
-  
-  let compLevel: string;
-  let remainder: string;
-  
-  if (matchPart.startsWith("qm")) {
-    compLevel = "qm";
-    remainder = matchPart.slice(2);
-  } else if (matchPart.startsWith("ef")) {
-    compLevel = "ef";
-    remainder = matchPart.slice(2);
-  } else if (matchPart.startsWith("qf")) {
-    compLevel = "qf";
-    remainder = matchPart.slice(2);
-  } else if (matchPart.startsWith("sf")) {
-    compLevel = "sf";
-    remainder = matchPart.slice(2);
-  } else if (matchPart.startsWith("f")) {
-    compLevel = "f";
-    remainder = matchPart.slice(1);
-  } else {
-    console.error("Unknown competition level in match key:", matchKey);
-    return;
-  }
+    const matchPart = parts[1];
 
-  let setNumber = 1;
-  let matchNumber = 1;
+    let compLevel: string;
+    let remainder: string;
 
-  if (compLevel === "qm") {
-    matchNumber = parseInt(remainder);
-  } else {
-    if (remainder.includes("m")) {
-      const [setStr, matchStr] = remainder.split("m");
-      setNumber = parseInt(setStr);
-      matchNumber = parseInt(matchStr);
+    if (matchPart.startsWith("qm")) {
+      compLevel = "qm";
+      remainder = matchPart.slice(2);
+    } else if (matchPart.startsWith("ef")) {
+      compLevel = "ef";
+      remainder = matchPart.slice(2);
+    } else if (matchPart.startsWith("qf")) {
+      compLevel = "qf";
+      remainder = matchPart.slice(2);
+    } else if (matchPart.startsWith("sf")) {
+      compLevel = "sf";
+      remainder = matchPart.slice(2);
+    } else if (matchPart.startsWith("f")) {
+      compLevel = "f";
+      remainder = matchPart.slice(1);
     } else {
-      matchNumber = parseInt(remainder);
+      console.error("Unknown competition level in match key:", matchKey);
+      return;
     }
-  }
 
-  if (isNaN(matchNumber)) {
-    console.error("Could not parse match number from:", matchKey);
-    return;
-  }
+    let setNumber = 1;
+    let matchNumber = 1;
 
-  let match;
-  if (compLevel === "qm") {
-    match = allMatches.find(
-      (m) => m.comp_level === compLevel && m.match_number === matchNumber
+    if (compLevel === "qm") {
+      matchNumber = parseInt(remainder);
+    } else {
+      if (remainder.includes("m")) {
+        const [setStr, matchStr] = remainder.split("m");
+        setNumber = parseInt(setStr);
+        matchNumber = parseInt(matchStr);
+      } else {
+        matchNumber = parseInt(remainder);
+      }
+    }
+
+    if (isNaN(matchNumber)) {
+      console.error("Could not parse match number from:", matchKey);
+      return;
+    }
+
+    let match;
+    if (compLevel === "qm") {
+      match = allMatches.find(
+        (m) => m.comp_level === compLevel && m.match_number === matchNumber,
+      );
+    } else {
+      match = allMatches.find(
+        (m) =>
+          m.comp_level === compLevel &&
+          m.match_number === matchNumber &&
+          m.set_number === setNumber,
+      );
+    }
+
+    if (!match) {
+      console.warn("Match not found for key:", matchKey);
+      return;
+    }
+
+    redAlliance = match.alliances.red.team_keys.map((k) =>
+      k.replace("frc", ""),
     );
-  } else {
-    match = allMatches.find(
-      (m) => 
-        m.comp_level === compLevel && 
-        m.match_number === matchNumber &&
-        m.set_number === setNumber
+    blueAlliance = match.alliances.blue.team_keys.map((k) =>
+      k.replace("frc", ""),
     );
-  }
 
-  if (!match) {
-    console.warn("Match not found for key:", matchKey);
-    return;
-  }
+    console.log("Red Alliance:", redAlliance, "Blue Alliance:", blueAlliance);
 
-  redAlliance = match.alliances.red.team_keys.map((k) => k.replace("frc", ""));
-  blueAlliance = match.alliances.blue.team_keys.map((k) => k.replace("frc", ""));
+    // Fetch OPR data if we don't have it yet
+    if (Object.keys(teamOPRs).length === 0 && eventKey) {
+      teamOPRs = await fetchEventOPRs(eventKey);
+    }
 
-  console.log("Red Alliance:", redAlliance, "Blue Alliance:", blueAlliance);
-
-  // Fetch OPR data if we don't have it yet
-  if (Object.keys(teamOPRs).length === 0 && eventKey) {
-    teamOPRs = await fetchEventOPRs(eventKey);
-  }
-
-  await tick();
-  loadAllAllianceTeams();
-}
-onMount(async () => {
-  const storedData = localStorage.getItem("data");
-  teamViewData = storedData ? JSON.parse(storedData) : [];
-
-  console.log("Loaded teamViewData:", teamViewData);
-
-  eventKey = localStorage.getItem("eventCode") || "";
-  console.log("Event Key:", eventKey);
-
-  // Fetch OPR data early
-  if (eventKey) {
-    teamOPRs = await fetchEventOPRs(eventKey);
-    console.log("OPR cache populated:", teamOPRs);
-  }
-
-  // Fetch matches
-  if (eventKey) {
-    allMatches = await fetchEventMatches(eventKey);
-    console.log("Fetched matches:", allMatches);
-  }
-
-  if (allMatches && allMatches.length > 0) {
-    selectedMatch = allMatches[0].key;
-    console.log("Selected match:", selectedMatch);
-    
     await tick();
-    await loadMatchData(selectedMatch);
-  } else {
-    console.warn("No matches found or event key missing");
+    loadAllAllianceTeams();
   }
-});
+  onMount(async () => {
+    const storedData = localStorage.getItem("data");
+    teamViewData = storedData ? JSON.parse(storedData) : [];
 
+    console.log("Loaded teamViewData:", teamViewData);
+
+    //eventKey = localStorage.getItem("eventCode") || "";
+    console.log("Event Key:", eventKey);
+
+    // Fetch OPR data early
+    if (eventKey) {
+      teamOPRs = await fetchEventOPRs(eventKey);
+      console.log("OPR cache populated:", teamOPRs);
+    }
+
+    // Fetch matches
+    if (eventKey) {
+      allMatches = await fetchEventMatches(eventKey);
+      console.log("Fetched matches:", allMatches);
+    }
+
+    if (allMatches && allMatches.length > 0) {
+      selectedMatch = allMatches[0].key;
+      console.log("Selected match:", selectedMatch);
+
+      await tick();
+      await loadMatchData(selectedMatch);
+    } else {
+      console.warn("No matches found or event key missing");
+    }
+  });
 
   function onMatchChange(e: Event) {
-  const target = e.target as HTMLSelectElement;
-  selectedMatch = target.value;
-  loadMatchData(target.value); // This should now be the match key, not just the number
-}
+    const target = e.target as HTMLSelectElement;
+    selectedMatch = target.value;
+    loadMatchData(target.value); // This should now be the match key, not just the number
+  }
 
   async function loadTeamNumbers(eventCode) {
     let data = [];
@@ -1201,35 +1277,37 @@ onMount(async () => {
   // New function to build grid for a specific team
   function buildGridForTeam(teamNumber, domElement) {
     console.log(`buildGridForTeam called for team ${teamNumber}`);
-    
+
     if (!teamViewData) {
       console.error("No teamViewData available in buildGridForTeam");
       return;
     }
-    
+
     if (!domElement) {
       console.error(`No DOM element provided for team ${teamNumber}`);
       return;
     }
-    
+
     let data = [];
-    console.log(`Searching for team ${teamNumber} in ${teamViewData.length} records`);
-    
+    console.log(
+      `Searching for team ${teamNumber} in ${teamViewData.length} records`,
+    );
+
     for (let element of teamViewData) {
       const rawTeam = element["Team"] || element["team"];
       if (!rawTeam) continue;
 
       // Extract numeric part for comparison (handles "frc190", "frc 190", "190")
-      const elementTeamNum = String(rawTeam).replace(/\D/g, ""); 
+      const elementTeamNum = String(rawTeam).replace(/\D/g, "");
       const targetTeamNum = String(teamNumber).replace(/\D/g, "");
 
       if (elementTeamNum === targetTeamNum) {
         data.push(element);
       }
     }
-    
+
     console.log(`Found ${data.length} records for team ${teamNumber}`);
-    
+
     if (data.length === 0) {
       console.warn(`No data found for team ${teamNumber}`);
       return;
@@ -1238,7 +1316,9 @@ onMount(async () => {
     // Aggregate matches
     if (data.length > 0) {
       data = aggregateMatches(data);
-      console.log(`After aggregation: ${data.length} matches for team ${teamNumber}`);
+      console.log(
+        `After aggregation: ${data.length} matches for team ${teamNumber}`,
+      );
     }
 
     const matches = data;
@@ -1247,7 +1327,7 @@ onMount(async () => {
 
     const sample = matches[0];
     const displayMetrics = Object.keys(sample).filter(
-      (k) => !excludedFields.includes(k)
+      (k) => !excludedFields.includes(k),
     );
 
     const globalStats = {};
@@ -1267,7 +1347,7 @@ onMount(async () => {
           }
         }
       }
-      
+
       if (!hasData) isNumericMetric = false;
 
       if (isNumericMetric) {
@@ -1321,146 +1401,146 @@ onMount(async () => {
       rowData.push(row);
     });
 
-  const columnDefs = [
-    {
-      headerName: "Metric",
-      field: "metric",
-      pinned: "left",
-      flex: 1,
-      minWidth: 100,
-      headerClass: "header-center",
-      cellClass: "cell-center",
-      cellStyle: {
-        background: "#C81B00",
-        color: "white",
-        fontSize: "14px",
-        fontWeight: "bold",
-        textAlign: "center",
-      },
-      valueFormatter: (params) => metricNames.get(params.value) || params.value
-    },
-  ...qLabels.map((q, i) => ({
-    headerName: matchNums[i],
-    field: q,
-    flex: 1,
-    minWidth: 60,
-    headerClass: "header-center",
-    cellClass: "cell-center",
-    cellStyle: (params) => {
-      const metricName = params.data.metric;
-      const stats = globalStats[metricName] || { mean: 0, sd: 0 };
-
-      if (!stats.isNumeric) {
-        return {
-          background: "#333",
+    const columnDefs = [
+      {
+        headerName: "Metric",
+        field: "metric",
+        pinned: "left",
+        flex: 1,
+        minWidth: 100,
+        headerClass: "header-center",
+        cellClass: "cell-center",
+        cellStyle: {
+          background: "#C81B00",
           color: "white",
-          fontSize: "12px",
-          fontWeight: 600,
+          fontSize: "14px",
+          fontWeight: "bold",
           textAlign: "center",
-          border: "1px solid #555",
-        };
-      }
+        },
+        valueFormatter: (params) =>
+          metricNames.get(params.value) || params.value,
+      },
+      ...qLabels.map((q, i) => ({
+        headerName: matchNums[i],
+        field: q,
+        flex: 1,
+        minWidth: 60,
+        headerClass: "header-center",
+        cellClass: "cell-center",
+        cellStyle: (params) => {
+          const metricName = params.data.metric;
+          const stats = globalStats[metricName] || { mean: 0, sd: 0 };
 
-      const val = params.value;
-      const numValue = isNumeric(val) ? Number(val) : 0;
+          if (!stats.isNumeric) {
+            return {
+              background: "#333",
+              color: "white",
+              fontSize: "12px",
+              fontWeight: 600,
+              textAlign: "center",
+              border: "1px solid #555",
+            };
+          }
 
-      return {
-        background: colorFromStats(numValue, stats.mean, stats.sd),
-        color: numValue === 0 ? "white" : "black",
-        fontSize: "14px",
-        fontWeight: 600,
-        textAlign: "center",
-      };
-    },
-    valueFormatter: (params) => {
-      const metricName = params.data.metric;
-      const stats = globalStats[metricName] || { isNumeric: false };
+          const val = params.value;
+          const numValue = isNumeric(val) ? Number(val) : 0;
 
-      if (!stats.isNumeric) {
-        return String(normalizeValue(params.value));
-      }
+          return {
+            background: colorFromStats(numValue, stats.mean, stats.sd),
+            color: numValue === 0 ? "white" : "black",
+            fontSize: "14px",
+            fontWeight: 600,
+            textAlign: "center",
+          };
+        },
+        valueFormatter: (params) => {
+          const metricName = params.data.metric;
+          const stats = globalStats[metricName] || { isNumeric: false };
 
-      const num = isNumeric(params.value) ? Number(params.value) : 0;
-      return num === 0 ? "0" : num.toFixed(2);
-    },
-  })),
-  {
-    headerName: "Mean",
-    field: "mean",
-    flex: 1,
-    minWidth: 60,
-    headerClass: "header-center",
-    cellClass: "cell-center",
-    cellStyle: (params) => {
-      const metricName = params.data.metric;
-      const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+          if (!stats.isNumeric) {
+            return String(normalizeValue(params.value));
+          }
 
-      return {
-        background:
-          params.value === 0 || params.value === null
-            ? "#4D4D4D"
-            : colorFromStats(params.value, stats.mean, stats.sd),
-        color:
-          params.value === 0 || params.value === null ? "white" : "black",
-        fontSize: "14px",
-        fontWeight: "bold",
-        textAlign: "center",
-      };
-    },
-    valueFormatter: (params) => {
-      if (params.value === null || params.value === undefined) return "";
-      const num = Number(params.value);
-      return num === 0 ? "0" : num.toFixed(2);
-    },
-  },
-  {
-    headerName: "Median",
-    field: "median",
-    flex: 1,
-    minWidth: 60,
-    headerClass: "header-center",
-    cellClass: "cell-center",
-    cellStyle: (params) => {
-      const metricName = params.data.metric;
-      const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+          const num = isNumeric(params.value) ? Number(params.value) : 0;
+          return num === 0 ? "0" : num.toFixed(2);
+        },
+      })),
+      {
+        headerName: "Mean",
+        field: "mean",
+        flex: 1,
+        minWidth: 60,
+        headerClass: "header-center",
+        cellClass: "cell-center",
+        cellStyle: (params) => {
+          const metricName = params.data.metric;
+          const stats = globalStats[metricName] || { mean: 0, sd: 0 };
 
-      return {
-        background:
-          params.value === 0 || params.value === null
-            ? "#4D4D4D"
-            : colorFromStats(params.value, stats.mean, stats.sd),
-        color:
-          params.value === 0 || params.value === null ? "white" : "black",
-        fontSize: "14px",
-        fontWeight: "bold",
-        textAlign: "center",
-      };
-    },
-    valueFormatter: (params) => {
-      if (params.value === null || params.value === undefined) return "";
-      const num = Number(params.value);
-      return num === 0 ? "0" : num.toFixed(2);
-    },
-  },
-];
+          return {
+            background:
+              params.value === 0 || params.value === null
+                ? "#4D4D4D"
+                : colorFromStats(params.value, stats.mean, stats.sd),
+            color:
+              params.value === 0 || params.value === null ? "white" : "black",
+            fontSize: "14px",
+            fontWeight: "bold",
+            textAlign: "center",
+          };
+        },
+        valueFormatter: (params) => {
+          if (params.value === null || params.value === undefined) return "";
+          const num = Number(params.value);
+          return num === 0 ? "0" : num.toFixed(2);
+        },
+      },
+      {
+        headerName: "Median",
+        field: "median",
+        flex: 1,
+        minWidth: 60,
+        headerClass: "header-center",
+        cellClass: "cell-center",
+        cellStyle: (params) => {
+          const metricName = params.data.metric;
+          const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+
+          return {
+            background:
+              params.value === 0 || params.value === null
+                ? "#4D4D4D"
+                : colorFromStats(params.value, stats.mean, stats.sd),
+            color:
+              params.value === 0 || params.value === null ? "white" : "black",
+            fontSize: "14px",
+            fontWeight: "bold",
+            textAlign: "center",
+          };
+        },
+        valueFormatter: (params) => {
+          if (params.value === null || params.value === undefined) return "";
+          const num = Number(params.value);
+          return num === 0 ? "0" : num.toFixed(2);
+        },
+      },
+    ];
 
     gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT;
 
     return createGrid(domElement, {
-    rowData,
-    columnDefs,
-    defaultColDef: {
-      resizable: false,
-      sortable: false,
-      suppressMovable: true,
-      cellStyle: (params) => ({
-        fontSize: "14px",
-      }),
-  },
-  suppressColumnVirtualisation: true,
-  suppressHorizontalScroll: true,
-});
-
+      rowData,
+      columnDefs,
+      defaultColDef: {
+        resizable: false,
+        sortable: false,
+        suppressMovable: true,
+        cellStyle: (params) => ({
+          fontSize: "14px",
+        }),
+      },
+      suppressColumnVirtualisation: true,
+      suppressHorizontalScroll: true,
+    });
   }
 
   // Function to load all alliance teams
@@ -1469,13 +1549,20 @@ onMount(async () => {
     console.log("teamViewData:", teamViewData);
     console.log("Red Alliance:", redAlliance);
     console.log("Blue Alliance:", blueAlliance);
-    console.log("DOM nodes:", { domNode, domNodeRight, domNode2, domNode3, domNode4, domNode5 });
-    
+    console.log("DOM nodes:", {
+      domNode,
+      domNodeRight,
+      domNode2,
+      domNode3,
+      domNode4,
+      domNode5,
+    });
+
     if (!teamViewData) {
       console.error("No teamViewData available");
       return;
     }
-    
+
     if (!domNode || !domNodeRight) {
       console.error("DOM nodes not ready");
       return;
@@ -1517,7 +1604,6 @@ onMount(async () => {
     }
   }
   // ===== ADDED FROM teamView.svelte - END =====
-
 </script>
 
 <div class="page-wrapper">
@@ -1537,7 +1623,11 @@ onMount(async () => {
         on:change={onMatchChange}
       >
         {#each allMatches as match, index}
-          {@const elimIndex = allMatches.slice(0, index).filter(m => m.comp_level !== "qm" && m.comp_level !== "f").length + 1}
+          {@const elimIndex =
+            allMatches
+              .slice(0, index)
+              .filter((m) => m.comp_level !== "qm" && m.comp_level !== "f")
+              .length + 1}
           <option value={match.key}>
             {#if match.comp_level === "qm"}
               Q{match.match_number}
@@ -1566,90 +1656,126 @@ onMount(async () => {
 
   <!-- Grid containers with dropdown in middle -->
   <div class="grid-wrapper">
-  <div class="grid-column">
+    <div class="grid-column">
       <div class="team-box">
         <h3 class="team-label red-label">
           Red 1 - Team {redAlliance[0]}
           {#if teamOPRs[redAlliance[0]]}
-            <span class="opr-badge">OPR: {teamOPRs[redAlliance[0]].toFixed(2)}</span>
+            <span class="opr-badge"
+              >OPR: {teamOPRs[redAlliance[0]].toFixed(2)}</span
+            >
           {/if}
+          <img
+          src={rating[fetchGraceRating(redAlliance[0])]}
+          alt="Grace Rating" style="width: 60px;"
+        />
         </h3>
         <div
           class="grid-container ag-theme-quartz"
           bind:this={domNode}
           style="height: {gridHeight}px;"
         ></div>
+      </div>
+      <div class="team-box">
+        <h3 class="team-label red-label">
+          Red 2 - Team {redAlliance[1]}
+          {#if teamOPRs[redAlliance[1]]}
+            <span class="opr-badge"
+              >OPR: {teamOPRs[redAlliance[1]].toFixed(2)}</span
+            >
+          {/if}
+           <img
+          src={rating[fetchGraceRating(redAlliance[1])]}
+          alt="Grace Rating" style="width: 60px;"
+        />
+        </h3>
+        <div
+          class="grid-container ag-theme-quartz"
+          bind:this={domNode2}
+          style="height: {gridHeight}px;"
+        ></div>
+      </div>
+      <div class="team-box">
+        <h3 class="team-label red-label">
+          Red 3 - Team {redAlliance[2]}
+          {#if teamOPRs[redAlliance[2]]}
+            <span class="opr-badge"
+              >OPR: {teamOPRs[redAlliance[2]].toFixed(2)}</span
+            >
+          {/if}
+        <img
+          src={rating[fetchGraceRating(redAlliance[2])]}
+          alt="Grace Rating" style="width: 60px;"
+        />
+        </h3>
+        <div
+          class="grid-container ag-theme-quartz"
+          bind:this={domNode3}
+          style="height: {gridHeight}px;"
+        ></div>
+      </div>
     </div>
-    <div class="team-box">
-      <h3 class="team-label red-label">
-        Red 2 - Team {redAlliance[1]}
-        {#if teamOPRs[redAlliance[1]]}
-          <span class="opr-badge">OPR: {teamOPRs[redAlliance[1]].toFixed(2)}</span>
-        {/if}
-      </h3>
-      <div
-        class="grid-container ag-theme-quartz"
-        bind:this={domNode2}
-        style="height: {gridHeight}px;"
-      ></div>
-    </div>
-    <div class="team-box">
-      <h3 class="team-label red-label">
-        Red 3 - Team {redAlliance[2]}
-        {#if teamOPRs[redAlliance[2]]}
-          <span class="opr-badge">OPR: {teamOPRs[redAlliance[2]].toFixed(2)}</span>
-        {/if}
-      </h3>
-      <div
-        class="grid-container ag-theme-quartz"
-        bind:this={domNode3}
-        style="height: {gridHeight}px;"
-      ></div>
+
+    <div class="grid-column">
+      <div class="team-box">
+        <h3 class="team-label blue-label">
+          Blue 1 - Team {blueAlliance[0]}
+          {#if teamOPRs[blueAlliance[0]]}
+            <span class="opr-badge"
+              >OPR: {teamOPRs[blueAlliance[0]].toFixed(2)}</span
+            >
+          {/if}
+          <img
+          src={rating[fetchGraceRating(blueAlliance[0])]}
+          alt="Grace Rating" style="width: 60px;"
+        />
+        </h3>
+        <div
+          class="grid-container ag-theme-quartz"
+          bind:this={domNodeRight}
+          style="height: {gridHeight}px;"
+        ></div>
+      </div>
+      <div class="team-box">
+        <h3 class="team-label blue-label">
+          Blue 2 - Team {blueAlliance[1]}
+          {#if teamOPRs[blueAlliance[1]]}
+            <span class="opr-badge"
+              >OPR: {teamOPRs[blueAlliance[1]].toFixed(2)}</span
+            >
+          {/if}
+           <img
+          src={rating[fetchGraceRating(blueAlliance[1])]}
+          alt="Grace Rating" style="width: 60px;"
+        />
+        </h3>
+        <div
+          class="grid-container ag-theme-quartz"
+          bind:this={domNode4}
+          style="height: {gridHeight}px;"
+        ></div>
+      </div>
+      <div class="team-box">
+        <h3 class="team-label blue-label">
+          Blue 3 - Team {blueAlliance[2]}
+          {#if teamOPRs[blueAlliance[2]]}
+            <span class="opr-badge"
+              >OPR: {teamOPRs[blueAlliance[2]].toFixed(2)}</span
+            >
+          {/if}
+        <img
+          src={rating[fetchGraceRating(blueAlliance[2])]}
+          alt="Grace Rating" style="width: 60px;"
+        />
+        </h3>
+        <div
+          class="grid-container ag-theme-quartz"
+          bind:this={domNode5}
+          style="height: {gridHeight}px;"
+        ></div>
+      </div>
     </div>
   </div>
-  
-  <div class="grid-column">
-    <div class="team-box">
-      <h3 class="team-label blue-label">
-        Blue 1 - Team {blueAlliance[0]}
-        {#if teamOPRs[blueAlliance[0]]}
-          <span class="opr-badge">OPR: {teamOPRs[blueAlliance[0]].toFixed(2)}</span>
-        {/if}
-      </h3>
-      <div
-        class="grid-container ag-theme-quartz"
-        bind:this={domNodeRight}
-        style="height: {gridHeight}px;"
-      ></div>
-    </div>
-    <div class="team-box">
-      <h3 class="team-label blue-label">
-        Blue 2 - Team {blueAlliance[1]}
-        {#if teamOPRs[blueAlliance[1]]}
-          <span class="opr-badge">OPR: {teamOPRs[blueAlliance[1]].toFixed(2)}</span>
-        {/if}
-      </h3>
-      <div
-        class="grid-container ag-theme-quartz"
-        bind:this={domNode4}
-        style="height: {gridHeight}px;"
-      ></div>
-    </div>
-    <div class="team-box">
-      <h3 class="team-label blue-label">
-        Blue 3 - Team {blueAlliance[2]}
-        {#if teamOPRs[blueAlliance[2]]}
-          <span class="opr-badge">OPR: {teamOPRs[blueAlliance[2]].toFixed(2)}</span>
-        {/if}
-      </h3>
-      <div
-        class="grid-container ag-theme-quartz"
-        bind:this={domNode5}
-        style="height: {gridHeight}px;"
-      ></div>
-    </div>
-  </div>
-</div>
 </div>
 
 <style>
@@ -1857,6 +1983,10 @@ onMount(async () => {
     text-align: center;
     border-radius: 6px 6px 0 0;
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+    height: 70px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .red-label {
@@ -1889,13 +2019,13 @@ onMount(async () => {
   }
 
   .opr-badge {
-  margin-left: 10px;
-  padding: 4px 10px;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 4px;
-  font-size: 0.9rem;
-  font-weight: 600;
-}
+    margin-left: 10px;
+    padding: 4px 10px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
 
   /* ===== Graph Section Styles ===== */
   .graph-section {
