@@ -380,58 +380,63 @@
 
     const mode = colorModes[colorblindMode];
 
-    // For Alex mode: use percentile-based buckets
+    // For Alex mode: use percentile-based buckets (discrete colors)
     if (colorblindMode === "alex") {
-      const percentileBucket = getAlexValuePercentile(
-        numValue,
-        stats,
-        inverted,
-      );
-      return getAlexBgColor(percentileBucket, true); // isAlexMode = true
+      const percentileBucket = getAlexValuePercentile(numValue, stats, inverted);
+      if (percentileBucket !== null) {
+        return getAlexBgColor(percentileBucket, true);
+      }
+      return "#333";
     }
 
-    // For non-Alex modes: use mean ± standard deviations gradient
-    if (
-      stats &&
-      typeof stats.mean === "number" &&
-      typeof stats.sd === "number" &&
-      stats.sd > 0
-    ) {
-      const mean = stats.mean;
-      const sd = stats.sd;
+    // For non-Alex modes: use percentile-based smooth gradient (uses p25/p50/p75)
+    if (stats && stats.p25 != null && stats.p50 != null && stats.p75 != null) {
+      const p25 = stats.p25;
+      const p50 = stats.p50;
+      const p75 = stats.p75;
 
-      // Calculate how many standard deviations away from mean
-      // We'll map: mean-2sd to mean+2sd → 0 to 1
-      const minBound = mean - 2 * sd;
-      const maxBound = mean + 2 * sd;
-
-      // Avoid division by zero
-      if (maxBound === minBound) return lerpColor(mode.below, mode.above, 0.5);
-
-      // Calculate position in range (0 to 1)
-      // For NORMAL metrics: low value = 0 (red), high value = 1 (green)
-      // For INVERTED metrics: low value = 1 (green), high value = 0 (red)
-      let t = (numValue - minBound) / (maxBound - minBound);
-
-      // For inverted metrics, flip it
-      if (inverted) {
-        t = 1 - t;
+      // Avoid degenerate case
+      if (p25 === p50 && p50 === p75) {
+        return lerpColor(mode.below, mode.above, 0.5);
       }
 
-      // Clamp to 0-1 range
+      let t;
+      if (inverted) {
+        if (numValue <= p25) {
+          const below = (p25 - numValue) / Math.max(p50 - p25, 0.001);
+          t = Math.min(1, 0.75 + below * 0.25);
+        } else if (numValue <= p50) {
+          t = 0.5 + 0.25 * (1 - (numValue - p25) / Math.max(p50 - p25, 0.001));
+        } else if (numValue <= p75) {
+          t = 0.25 + 0.25 * (1 - (numValue - p50) / Math.max(p75 - p50, 0.001));
+        } else {
+          const beyond = (numValue - p75) / Math.max(p75 - p50, 0.001);
+          t = Math.max(0, 0.25 * (1 - beyond));
+        }
+      } else {
+        if (numValue >= p75) {
+          const beyond = (numValue - p75) / Math.max(p75 - p50, 0.001);
+          t = Math.min(1, 0.75 + beyond * 0.25);
+        } else if (numValue >= p50) {
+          t = 0.5 + 0.25 * ((numValue - p50) / Math.max(p75 - p50, 0.001));
+        } else if (numValue >= p25) {
+          t = 0.25 + 0.25 * ((numValue - p25) / Math.max(p50 - p25, 0.001));
+        } else {
+          const below = (p25 - numValue) / Math.max(p50 - p25, 0.001);
+          t = Math.max(0, 0.25 * (1 - below));
+        }
+      }
+
       t = Math.max(0, Math.min(1, t));
 
-      // Create smooth gradient: Red (0) → Yellow (0.5) → Green (1)
       if (t < 0.5) {
-        // Red to Yellow (first half)
         return lerpColor(mode.below, mode.mid, t * 2);
       } else {
-        // Yellow to Green (second half)
         return lerpColor(mode.mid, mode.above, (t - 0.5) * 2);
       }
     }
 
-    return "#4D4D4D"; // Fallback for insufficient stats
+    return "rgb(180,180,180)";
   }
 
   async function fetchAllMetricData() {
