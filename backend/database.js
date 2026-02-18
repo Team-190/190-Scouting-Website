@@ -1,7 +1,5 @@
 const fs = require("fs");
-// const supabaseUtil = require("./supabaseUtil");
 // const storage = require("./storage");
-// const sql = require('mssql/msnodesqlv8');
 const sql = require('mssql');
 require("dotenv").config();
 
@@ -51,15 +49,90 @@ async function getAvailableTeams() {
     }
 }
 
-// Gets the data of all the teams in an event
+// Gets the data of all the teams in an event, summing up numeric fields
 async function getAllData(eventCode) {
     try {
         await sql.connect(config);
         const query = `SELECT * FROM [${eventCode}].[dbo].[Activities]`;
         const result = await sql.query(query);
-        return { data: result.recordset, error: null };
+
+        const rows = result.recordset;
+        // grouped will hold the "base" row for each team+match key (preferring EndMatch)
+        const grouped = {};
+        // sums will hold the accumulated numeric values
+        const sums = {};
+        // endAutoOverrides will hold specific fields from EndAuto rows
+        const endAutoOverrides = {};
+
+        for (const row of rows) {
+            const team = row.Team || row.team;
+            const match = row.Match || row.match;
+
+            if (!team || !match) continue;
+
+            const uniqueKey = `${team}_${match}`;
+
+            if (!sums[uniqueKey]) {
+                sums[uniqueKey] = {};
+            }
+
+            // Determine base row: prioritize RecordType = 'EndMatch'
+            const currentBase = grouped[uniqueKey];
+            const isEndMatch = row.RecordType === 'EndMatch';
+
+            // If no base yet, or we found an EndMatch and the current base isn't one (or we want to update the EndMatch)
+            if (!currentBase || isEndMatch || (currentBase.RecordType !== 'EndMatch')) {
+                 grouped[uniqueKey] = row;
+            }
+
+            // Capture EndAuto specific fields
+            if (row.RecordType === 'EndAuto') {
+                if (!endAutoOverrides[uniqueKey]) endAutoOverrides[uniqueKey] = {};
+                // Ignore -1 and nulls for overrides
+                if (row['AutoClimb'] !== -1 && row['AutoClimb'] != null) {
+                    endAutoOverrides[uniqueKey]['AutoClimb'] = row['AutoClimb'];
+                }
+                if (row['StartingLocation'] !== -1 && row['StartingLocation'] != null) {
+                    endAutoOverrides[uniqueKey]['StartingLocation'] = row['StartingLocation'];
+                }
+            }
+
+            for (const key in row) {
+                // Skip identifiers and non-summable fields
+                if (['id', 'Id', 'ID', 'Team', 'team', 'Match', 'match', 'RecordType', 'ScouterName', 'ScouterError', 'Time', 'time', 'Mode', 'DriveStation'].includes(key)) {
+                    continue;
+                }
+                
+                // Exclude AutoClimb and StartingLocation from sums as they are taken from EndAuto specifically
+                if (['AutoClimb', 'StartingLocation'].includes(key)) continue;
+
+                const val = row[key];
+                 // Ignore -1 and nulls for sums
+                if (typeof val === 'number' && val !== -1) {
+                    sums[uniqueKey][key] = (sums[uniqueKey][key] || 0) + val;
+                }
+            }
+        }
+
+        const finalData = Object.keys(grouped).map(key => {
+            const baseObj = { ...grouped[key] };
+            const keySums = sums[key];
+            for (const field in keySums) {
+                baseObj[field] = keySums[field];
+            }
+            
+            // Apply EndAuto overrides
+            if (endAutoOverrides[key]) {
+                 if (endAutoOverrides[key]['AutoClimb'] !== undefined) baseObj['AutoClimb'] = endAutoOverrides[key]['AutoClimb'];
+                 if (endAutoOverrides[key]['StartingLocation'] !== undefined) baseObj['StartingLocation'] = endAutoOverrides[key]['StartingLocation'];
+            }
+            
+            return baseObj;
+        });
+
+        return { data: finalData, error: null };
     } catch (err) {
-        console.error("getAllData error:", err);
+        console.error("allMetricData error:", err);
         return { data: null, error: err };
     }
 }
@@ -117,5 +190,5 @@ module.exports = {
     getAvailableTeams,
     getAllTeamsView,
     readJSONFile,
-    writeJSONFile,
+    writeJSONFile
 }

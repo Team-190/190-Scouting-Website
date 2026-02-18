@@ -1,8 +1,8 @@
 <script>
     import baseX from 'base-x';
     import pako from 'pako';
-    import Team from '../../components/Team.svelte';
     import { writable } from 'svelte/store';
+    import Team from '../../components/Team.svelte';
     import { fetchOPR } from '../../utils/blueAllianceApi';
 
     const BASE85_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~';
@@ -249,6 +249,11 @@
             }).then(res => res.ok ? res.json() : null);
 
             const [teamList, statuses] = await Promise.all([teamPromise, statusesPromise]);
+
+            if (!Array.isArray(teamList)) {
+                console.error("Invalid team list received:", teamList);
+                throw new Error("Failed to load teams: Invalid data format");
+            }
 
             if (statuses) {
                 const teamRanks = Object.fromEntries(
