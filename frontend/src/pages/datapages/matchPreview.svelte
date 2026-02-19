@@ -2136,22 +2136,6 @@
     box-shadow: 0 0 0 3px rgba(200, 27, 0, 0.4);
   }
 
-  button {
-    padding: 8px 15px;
-    background: linear-gradient(135deg, #333 0%, #444 100%);
-    color: white;
-    font-size: 16px;
-    border: 2px solid var(--frc-190-red);
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-  }
-
-  button:hover {
-    background: linear-gradient(135deg, #444 0%, #555 100%);
-    border-color: #e02200;
-  }
-
   .grid-wrapper {
     width: 80vw;
     display: flex;
@@ -2204,17 +2188,6 @@
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
   }
 
-  .center-dropdown {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .center-dropdown select {
-    margin: 0;
-    padding: 10px 15px;
-  }
-
   .opr-badge {
     margin-left: 10px;
     padding: 4px 10px;
@@ -2222,155 +2195,5 @@
     border-radius: 4px;
     font-size: 0.9rem;
     font-weight: 600;
-  }
-
-  /* ===== Graph Section Styles ===== */
-  .graph-section {
-    width: 80vw;
-    margin-top: 30px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .section-title {
-    color: var(--frc-190-red);
-    font-size: 1.8rem;
-    font-weight: 700;
-    margin-bottom: 20px;
-    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
-  }
-
-  .dropdown-container {
-    position: relative;
-    margin-bottom: 20px;
-  }
-
-  .plus-btn {
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 2rem;
-    font-weight: 600;
-    border: 2px solid var(--frc-190-red);
-    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-    color: white;
-    cursor: pointer;
-    padding: 0;
-    box-sizing: border-box;
-    transition: all 0.3s ease;
-  }
-
-  .plus-btn:hover {
-    background: linear-gradient(135deg, var(--frc-190-red) 0%, #e02200 100%);
-    transform: scale(1.05);
-  }
-
-  .dropdown {
-    position: absolute;
-    top: 60px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-    border: 2px solid var(--frc-190-red);
-    border-radius: 8px;
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    width: 150px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
-    z-index: 10;
-    overflow: hidden;
-  }
-
-  .dropdown li {
-    padding: 12px 15px;
-    cursor: pointer;
-    text-align: center;
-    color: white;
-    font-weight: 500;
-    text-transform: capitalize;
-    transition: background 0.2s ease;
-  }
-
-  .dropdown li:hover {
-    background: var(--frc-190-red);
-  }
-
-  .charts-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
-    width: 100%;
-  }
-
-  .chart-wrapper {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    width: 100%;
-    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-    border: 2px solid var(--frc-190-red);
-    border-radius: 8px;
-    padding: 15px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-  }
-
-  .chart-container {
-    width: 100%;
-    height: 300px;
-    flex-grow: 1;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 6px;
-  }
-
-  .chart-label {
-    margin-top: 10px;
-    font-weight: bold;
-    text-transform: capitalize;
-    text-align: center;
-    color: white;
-    font-size: 1rem;
-  }
-
-  .remove-btn {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    border: none;
-    background: var(--frc-190-red);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    z-index: 10;
-    transition: background 0.2s ease;
-  }
-
-  .remove-btn:hover {
-    background: #e02200;
-  }
-
-  .metric-select {
-    margin-top: 10px;
-  }
-
-  @media (max-width: 1024px) {
-    .charts-grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
-  }
-
-  @media (max-width: 700px) {
-    .charts-grid {
-      grid-template-columns: 1fr;
-    }
   }
 </style>
