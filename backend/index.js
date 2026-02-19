@@ -10,7 +10,6 @@ const express = require("express");
 const path = require("path");
 const test = require("./test/test.js")
 const database = require("./database.js");
-const fs = require('fs');
 const session = require("express-session");
 const cors = require("cors");
 const e = require("express");
