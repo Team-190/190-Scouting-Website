@@ -26,7 +26,7 @@
   import { fetchGracePage } from "../../utils/api";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
-
+  let eventKey = ""; // Will be loaded from localStorage
   let domNode;
   let domNodeRight;
   let domNode2;
@@ -99,6 +99,7 @@
     new URL("../../images/PrettyGood.gif", import.meta.url).href,
     new URL("../../images/AHHHHH.png", import.meta.url).href,
     new URL("../../images/FIRSTpick.gif", import.meta.url).href,
+    new URL("../../images/horse.png", import.meta.url).href,
   ];
 
   const colorModes = {
@@ -129,9 +130,11 @@
   };
   function fetchGraceRating(team) {
     if (!garceData || garceData === "" || garceData[team] === undefined) {
-      return 0;
-    } else{
-       return garceData[team][Object.keys(garceData[team])[Object.keys(garceData[team]).length - 1]];
+      return 7;
+    } else {
+      return garceData[team][
+        Object.keys(garceData[team])[Object.keys(garceData[team]).length - 1]
+      ];
     }
   }
   let cache = {};
@@ -231,7 +234,6 @@
 
   let allTeams = [];
   let allMatches = [];
-  let eventKey = ""; // Will be loaded from localStorage
 
   // Blue Alliance API configuration
   const TBA_API_KEY = import.meta.env.VITE_BA_AUTH_KEY;
@@ -1666,9 +1668,10 @@
             >
           {/if}
           <img
-          src={rating[fetchGraceRating(redAlliance[0])]}
-          alt="Grace Rating" style="width: 60px;"
-        />
+            src={rating[fetchGraceRating(redAlliance[0])]}
+            alt="Grace Rating"
+            style="width: 60px;"
+          />
         </h3>
         <div
           class="grid-container ag-theme-quartz"
@@ -1684,10 +1687,11 @@
               >OPR: {teamOPRs[redAlliance[1]].toFixed(2)}</span
             >
           {/if}
-           <img
-          src={rating[fetchGraceRating(redAlliance[1])]}
-          alt="Grace Rating" style="width: 60px;"
-        />
+          <img
+            src={rating[fetchGraceRating(redAlliance[1])]}
+            alt="Grace Rating"
+            style="width: 60px;"
+          />
         </h3>
         <div
           class="grid-container ag-theme-quartz"
@@ -1703,10 +1707,11 @@
               >OPR: {teamOPRs[redAlliance[2]].toFixed(2)}</span
             >
           {/if}
-        <img
-          src={rating[fetchGraceRating(redAlliance[2])]}
-          alt="Grace Rating" style="width: 60px;"
-        />
+          <img
+            src={rating[fetchGraceRating(redAlliance[2])]}
+            alt="Grace Rating"
+            style="width: 60px;"
+          />
         </h3>
         <div
           class="grid-container ag-theme-quartz"
@@ -1726,9 +1731,10 @@
             >
           {/if}
           <img
-          src={rating[fetchGraceRating(blueAlliance[0])]}
-          alt="Grace Rating" style="width: 60px;"
-        />
+            src={rating[fetchGraceRating(blueAlliance[0])]}
+            alt="Grace Rating"
+            style="width: 60px;"
+          />
         </h3>
         <div
           class="grid-container ag-theme-quartz"
@@ -1744,10 +1750,11 @@
               >OPR: {teamOPRs[blueAlliance[1]].toFixed(2)}</span
             >
           {/if}
-           <img
-          src={rating[fetchGraceRating(blueAlliance[1])]}
-          alt="Grace Rating" style="width: 60px;"
-        />
+          <img
+            src={rating[fetchGraceRating(blueAlliance[1])]}
+            alt="Grace Rating"
+            style="width: 60px;"
+          />
         </h3>
         <div
           class="grid-container ag-theme-quartz"
@@ -1763,10 +1770,11 @@
               >OPR: {teamOPRs[blueAlliance[2]].toFixed(2)}</span
             >
           {/if}
-        <img
-          src={rating[fetchGraceRating(blueAlliance[2])]}
-          alt="Grace Rating" style="width: 60px;"
-        />
+          <img
+            src={rating[fetchGraceRating(blueAlliance[2])]}
+            alt="Grace Rating"
+            style="width: 60px;"
+          />
         </h3>
         <div
           class="grid-container ag-theme-quartz"

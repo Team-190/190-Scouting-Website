@@ -14,10 +14,10 @@
     new URL("../../images/NeutralGood.png", import.meta.url).href,
     new URL("../../images/PrettyGood.gif", import.meta.url).href,
     new URL("../../images/AHHHHH.png", import.meta.url).href,
-    new URL("../../images/FIRSTpick.gif", import.meta.url).href,
+    new URL("../../images/FIRSTpick.gif", import.meta.url).href, new URL("../../images/horse.png", import.meta.url).href
   ];
-  const eventCode = localStorage.getItem("eventCode");
-  // const eventCode = "2026mabos";
+  let eventCode = localStorage.getItem("eventCode");
+  //let eventCode = "2025mawor";
 
   let originalTitle = "";
   let teams = new Map();
@@ -42,6 +42,12 @@
   });
 
   function addPastData() {
+    try{
+      tableData = allTeams.map((teamNumber) => ({
+      team: teamNumber,
+      name: teams.get(teamNumber),
+      rating: rating[7],
+    }));
     fetchGracePage(eventCode)
       .then((res) => {
         if (!res.ok) throw new Error("Network response was not ok");
@@ -49,14 +55,21 @@
       })
       .then((data) => {
         for (let team of Object.keys(data)) {
-          tableData = [
-            ...tableData,
-            {
-              team: team,
-              name: teams.get(parseInt(team)),
-              rating: rating[data[team][Object.keys(data[team]).length - 1]],
-            },
-          ];
+          let savedRatings = data[team];
+          let lastIndex = Object.keys(savedRatings).length - 1;
+          let savedRatingIndex = savedRatings[lastIndex];
+          let rowIndex = tableData.findIndex((row) => row.team == team);
+          if (rowIndex !== -1) {
+            tableData[rowIndex].rating = rating[savedRatingIndex];
+           }
+          // tableData = [
+          //   ...tableData,
+          //   {
+          //     team: team,
+          //     name: teams.get(parseInt(team)),
+          //     rating: rating[data[team][Object.keys(data[team]).length - 1]],
+          //   },
+          // ];
         }
       })
       .catch((err) => {
@@ -70,6 +83,9 @@
       .then((data) => {
         console.log(data);
       });
+      } catch (err) {
+      console.error("Failed to initialize table data:", err);
+    }
   }
 
   async function handleRatingClick(ratingEmoji: string, i) {
@@ -85,7 +101,7 @@
     await postGracePage(eventCode, selectedTeam, i);
 
     const existingIndex = tableData.findIndex(
-      (row) => row.team === selectedTeam,
+      (row) => row.team == selectedTeam,
     );
 
     if (existingIndex !== -1) {
@@ -96,7 +112,7 @@
         ...tableData,
         {
           team: selectedTeam,
-          name: teams.get(selectedTeam),
+          name: teams.get(parseInt(selectedTeam)),
           rating: ratingEmoji,
         },
       ];

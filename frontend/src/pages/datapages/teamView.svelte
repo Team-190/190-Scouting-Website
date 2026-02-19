@@ -67,10 +67,10 @@
 
   // Metrics where lower values are better (e.g., time-based metrics)
   const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime"];
-  
+
   // Boolean metrics that should be colored green (Yes) or red (No)
   const BOOLEAN_METRICS = ["AutoClimb"];
-  
+
   // ClimbState metric needs special handling
   const CLIMBSTATE_METRIC = "EndState";
 
@@ -122,6 +122,7 @@
   };
   let garceData;
   let eventCode = localStorage.getItem("eventCode");
+  //let eventCode = "2025mawor";
   fetchGracePage(eventCode)
     .then((res) => {
       return res.json();
@@ -137,6 +138,7 @@
     new URL("../../images/PrettyGood.gif", import.meta.url).href,
     new URL("../../images/AHHHHH.png", import.meta.url).href,
     new URL("../../images/FIRSTpick.gif", import.meta.url).href,
+    new URL("../../images/horse.png", import.meta.url).href,
   ];
 
   // fetchGracePage("2026mabos")
@@ -252,9 +254,14 @@
 
     // Dark gray
     if (s === "#4d4d4d" || s === "rgb(77,77,77)") return "white";
-    
+
     // Medium gray (for null/0 in boolean fields)
-    if (s === "#808080" || s === "rgb(128,128,128)" || s === "rgb(128, 128, 128)") return "white";
+    if (
+      s === "#808080" ||
+      s === "rgb(128,128,128)" ||
+      s === "rgb(128, 128, 128)"
+    )
+      return "white";
 
     // Bright primary colors (need white text)
     if (s === "#0000ff" || s === "#00f" || s === "rgb(0,0,255)") return "white"; // Bright Blue
@@ -269,7 +276,7 @@
       return "white"; // Google Red
     if (s === "#fbbc04" || s === "rgb(251,188,4)" || s === "rgb(251, 188, 4)")
       return "black"; // Google Yellow (bright)
-    
+
     // Green color for boolean "Yes"
     if (s === "#00ff00" || s === "rgb(0,255,0)" || s === "rgb(0, 255, 0)")
       return "black"; // Bright Green
@@ -355,7 +362,7 @@
     if (v === null || v === undefined || v === "" || v === -1) {
       return "#808080"; // Gray for null/empty
     }
-    
+
     // Handle string values
     const strVal = String(v).toLowerCase().trim();
     if (strVal === "yes" || strVal === "true" || strVal === "1") {
@@ -367,46 +374,71 @@
     if (strVal === "0") {
       return "#808080"; // Gray for "0" string
     }
-    
+
     // Handle boolean values
     if (typeof v === "boolean") {
       return v ? "#00FF00" : "#000000"; // Green for true, Black for false
     }
-    
+
     // Handle numeric values
     if (isNumeric(v)) {
       const num = Number(v);
       if (num === 0) return "#808080"; // Gray for 0
       return num > 0 ? "#00FF00" : "#000000"; // Green for positive, Black for negative
     }
-    
+
     return "#808080"; // Default to gray
   }
 
   function getClimbStateColor(climbStateValue, attemptClimbValue) {
     // Handle ClimbState (EndState) coloring based on value and AttemptClimb
-    if (climbStateValue === null || climbStateValue === undefined || climbStateValue === "" || climbStateValue === -1) {
+    if (
+      climbStateValue === null ||
+      climbStateValue === undefined ||
+      climbStateValue === "" ||
+      climbStateValue === -1
+    ) {
       return "#808080"; // Gray for null/empty
     }
-    
+
     const stateStr = String(climbStateValue).toLowerCase().trim();
-    
+
     // Handle no_climb case - depends on AttemptClimb
-    if (stateStr === "no_climb" || stateStr === "no climb" || stateStr === "noclimb") {
+    if (
+      stateStr === "no_climb" ||
+      stateStr === "no climb" ||
+      stateStr === "noclimb"
+    ) {
       // Check AttemptClimb value
-      if (attemptClimbValue === null || attemptClimbValue === undefined || attemptClimbValue === "") {
+      if (
+        attemptClimbValue === null ||
+        attemptClimbValue === undefined ||
+        attemptClimbValue === ""
+      ) {
         return "#000000"; // Black if AttemptClimb is null
       }
-      
+
       const attemptStr = String(attemptClimbValue).toLowerCase().trim();
-      if (attemptStr === "no" || attemptStr === "false" || attemptStr === "0" || attemptClimbValue === false || attemptClimbValue === 0) {
+      if (
+        attemptStr === "no" ||
+        attemptStr === "false" ||
+        attemptStr === "0" ||
+        attemptClimbValue === false ||
+        attemptClimbValue === 0
+      ) {
         return "#000000"; // Black if AttemptClimb is No
-      } else if (attemptStr === "yes" || attemptStr === "true" || attemptStr === "1" || attemptClimbValue === true || attemptClimbValue === 1) {
+      } else if (
+        attemptStr === "yes" ||
+        attemptStr === "true" ||
+        attemptStr === "1" ||
+        attemptClimbValue === true ||
+        attemptClimbValue === 1
+      ) {
         return "#FF0000"; // Red if AttemptClimb is Yes (failed attempt)
       }
       return "#000000"; // Default to black for no_climb
     }
-    
+
     // Handle L1, L2, L3 cases
     if (stateStr === "l1") {
       return "#FFFF00"; // Yellow for L1
@@ -417,22 +449,29 @@
     if (stateStr === "l3") {
       return "#0000FF"; // Blue for L3
     }
-    
+
     // Default for any other value
     return "#808080"; // Gray
   }
 
-  function colorFromStats(v, stats, inverted = false, isBooleanMetric = false, isClimbStateMetric = false, attemptClimbValue = null) {
+  function colorFromStats(
+    v,
+    stats,
+    inverted = false,
+    isBooleanMetric = false,
+    isClimbStateMetric = false,
+    attemptClimbValue = null,
+  ) {
     // For ClimbState metrics, use special coloring
     if (isClimbStateMetric) {
       return getClimbStateColor(v, attemptClimbValue);
     }
-    
+
     // For boolean metrics, use special coloring
     if (isBooleanMetric) {
       return getBooleanColor(v);
     }
-    
+
     // For non-numeric data, return neutral color
     if (!isNumeric(v)) {
       return "#333";
@@ -534,7 +573,7 @@
 
   function fetchGraceRating(team) {
     if (garceData[team] === undefined) {
-      return;
+      return rating[rating.length - 1];
     } else {
       return rating[garceData[team][Object.keys(garceData[team]).length - 1]];
     }
@@ -551,8 +590,9 @@
         ": " +
         fetchGraceRating(selectedTeam),
     );
-    document.getElementById("grace-rating").src =
-      fetchGraceRating(selectedTeam);
+    let graceRatingElement = document.getElementById("grace-rating");
+      graceRatingElement.src =
+        fetchGraceRating(selectedTeam);
   }
 
   let allTeams = [];
@@ -1194,7 +1234,8 @@
     }
 
     // Choose rows to compute global stats from (fall back to matches if needed)
-    const allRows = allTeamsAggregatedData.length > 0 ? allTeamsAggregatedData : matches;
+    const allRows =
+      allTeamsAggregatedData.length > 0 ? allTeamsAggregatedData : matches;
 
     // Calculate global stats for each metric across all teams/matches
     const globalStats = {};
@@ -1202,10 +1243,10 @@
       const allValues = []; // Reset for each metric!
       let isNumericMetric = true;
       let hasData = false;
-      
+
       // Check if this is a boolean metric
       const isBooleanMetric = BOOLEAN_METRICS.includes(metric);
-      
+
       // Check if this is the ClimbState metric
       const isClimbStateMetric = metric === CLIMBSTATE_METRIC;
 
@@ -1232,11 +1273,16 @@
             }
           });
 
-          const filteredValues = allValues.filter((v) => v !== null && v !== undefined && !isNaN(v));
+          const filteredValues = allValues.filter(
+            (v) => v !== null && v !== undefined && !isNaN(v),
+          );
 
           globalStats[metric] = {
             mean: filteredValues.length > 0 ? mean(filteredValues) : 0,
-            sd: filteredValues.length > 0 ? sd(filteredValues, mean(filteredValues)) : 0,
+            sd:
+              filteredValues.length > 0
+                ? sd(filteredValues, mean(filteredValues))
+                : 0,
             isNumeric: true,
             isBoolean: false,
             p25: allValues.length > 0 ? percentile(allValues, 25) : 0,
@@ -1244,14 +1290,30 @@
             p75: allValues.length > 0 ? percentile(allValues, 75) : 0,
           };
         } else {
-          globalStats[metric] = { mean: 0, sd: 0, isNumeric: false, isBoolean: false };
+          globalStats[metric] = {
+            mean: 0,
+            sd: 0,
+            isNumeric: false,
+            isBoolean: false,
+          };
         }
       } else if (isClimbStateMetric) {
         // For ClimbState metric, we don't need stats
-        globalStats[metric] = { mean: 0, sd: 0, isNumeric: false, isBoolean: false, isClimbState: true };
+        globalStats[metric] = {
+          mean: 0,
+          sd: 0,
+          isNumeric: false,
+          isBoolean: false,
+          isClimbState: true,
+        };
       } else {
         // For boolean metrics, we don't need stats
-        globalStats[metric] = { mean: 0, sd: 0, isNumeric: false, isBoolean: true };
+        globalStats[metric] = {
+          mean: 0,
+          sd: 0,
+          isNumeric: false,
+          isBoolean: true,
+        };
       }
     });
 
@@ -1302,13 +1364,13 @@
       const metricName = row.metric;
       const isBooleanMetric = BOOLEAN_METRICS.includes(metricName);
       const isClimbStateMetric = metricName === CLIMBSTATE_METRIC;
-      
+
       // Boolean and ClimbState metrics don't get percentiles
       if (isBooleanMetric || isClimbStateMetric) {
         row.percentile = null;
         return;
       }
-      
+
       if (row.mean === null || row.mean === undefined) {
         row.percentile = null;
         return;
@@ -1419,9 +1481,13 @@
           // Handle ClimbState metric - need to get AttemptClimb value from same match
           if (isClimbStateMetric) {
             // Find the AttemptClimb row to get the value for this match
-            const attemptClimbRow = rowData.find(r => r.metric === "AttemptClimb");
-            const attemptClimbValue = attemptClimbRow ? attemptClimbRow[q] : null;
-            
+            const attemptClimbRow = rowData.find(
+              (r) => r.metric === "AttemptClimb",
+            );
+            const attemptClimbValue = attemptClimbRow
+              ? attemptClimbRow[q]
+              : null;
+
             const bg = getClimbStateColor(val, attemptClimbValue);
             return {
               background: bg,
@@ -1478,7 +1544,13 @@
             };
           }
 
-          const bg = colorFromStats(numValue, stats, inverted, isBooleanMetric, isClimbStateMetric);
+          const bg = colorFromStats(
+            numValue,
+            stats,
+            inverted,
+            isBooleanMetric,
+            isClimbStateMetric,
+          );
           return {
             background: bg,
             color: textColorForBgStrict(bg),
@@ -1520,7 +1592,13 @@
           const isBooleanMetric = BOOLEAN_METRICS.includes(metricName);
           const isClimbStateMetric = metricName === CLIMBSTATE_METRIC;
 
-          if (v === undefined || v === null || v === "" || isBooleanMetric || isClimbStateMetric) {
+          if (
+            v === undefined ||
+            v === null ||
+            v === "" ||
+            isBooleanMetric ||
+            isClimbStateMetric
+          ) {
             return {
               background: "#4D4D4D",
               color: "white",
@@ -1566,7 +1644,13 @@
             };
           }
 
-          const bg = colorFromStats(numValue, stats, inverted, isBooleanMetric, isClimbStateMetric);
+          const bg = colorFromStats(
+            numValue,
+            stats,
+            inverted,
+            isBooleanMetric,
+            isClimbStateMetric,
+          );
           return {
             background: bg,
             color: textColorForBgStrict(bg),
@@ -1597,7 +1681,13 @@
           const isBooleanMetric = BOOLEAN_METRICS.includes(metricName);
           const isClimbStateMetric = metricName === CLIMBSTATE_METRIC;
 
-          if (v === undefined || v === null || v === "" || isBooleanMetric || isClimbStateMetric) {
+          if (
+            v === undefined ||
+            v === null ||
+            v === "" ||
+            isBooleanMetric ||
+            isClimbStateMetric
+          ) {
             return {
               background: "#4D4D4D",
               color: "white",
@@ -1643,7 +1733,13 @@
             };
           }
 
-          const bg = colorFromStats(numValue, stats, inverted, isBooleanMetric, isClimbStateMetric);
+          const bg = colorFromStats(
+            numValue,
+            stats,
+            inverted,
+            isBooleanMetric,
+            isClimbStateMetric,
+          );
           return {
             background: bg,
             color: textColorForBgStrict(bg),
@@ -1749,25 +1845,25 @@
     const storedData = localStorage.getItem("data");
     let allDataResponse = [];
 
-  if (storedData) {
-    try {
-      allDataResponse = JSON.parse(storedData);
-    } catch (e) {
-      console.error("Failed to parse data:", e);
+    if (storedData) {
+      try {
+        allDataResponse = JSON.parse(storedData);
+      } catch (e) {
+        console.error("Failed to parse data:", e);
+      }
     }
-  }
 
-  teamViewData = allDataResponse;
-  console.log("All data loaded for global stats:", teamViewData);
+    teamViewData = allDataResponse;
+    console.log("All data loaded for global stats:", teamViewData);
 
-  // Load event key from localStorage
-  eventKey = localStorage.getItem("eventCode") || "";
-  console.log("Event Key:", eventKey);
+    // Load event key from localStorage
+    eventKey = localStorage.getItem("eventCode") || "";
+    console.log("Event Key:", eventKey);
 
     // Load team numbers from backend
     allTeams = await loadTeamNumbers(eventKey);
 
-  console.log("Populated team list:", allTeams);
+    console.log("Populated team list:", allTeams);
 
     // Set initial selected team (first available team, or 190 if available)
     if (allTeams.length > 0) {
@@ -2251,8 +2347,8 @@
   }
 
   .opr-display {
-  display: flex;
-  align-items: center;
+    display: flex;
+    align-items: center;
   }
 
   .opr-label {
@@ -2264,5 +2360,4 @@
     border: 2px solid var(--frc-190-red);
     border-radius: 6px;
   }
-
 </style>
