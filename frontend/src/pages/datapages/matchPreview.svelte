@@ -80,7 +80,15 @@
     "scouter_name",
     "scouter_error",
   ];
-  // ===== ADDED FROM teamView.svelte - END =====
+
+  // Metrics where lower values are better (e.g., time-based metrics)
+  const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime"];
+
+  // Boolean metrics that should be colored green (Yes) or red (No)
+  const BOOLEAN_METRICS = ["AutoClimb", "AttemptClimb"];
+
+  // ClimbState metric needs special handling
+  const CLIMBSTATE_METRIC = "EndState";
 
   //garce stuff
   let garceData;
@@ -196,7 +204,89 @@
     ].join(",")})`;
   }
 
-  function colorFromStats(v, mu, sigma) {
+  function getBooleanColor(v) {
+    if (v === null || v === undefined || v === "" || v === -1) {
+      return "#808080";
+    }
+    const strVal = String(v).toLowerCase().trim();
+    if (strVal === "yes" || strVal === "true" || strVal === "1")
+      return "#00FF00";
+    if (strVal === "no" || strVal === "false") return "#000000";
+    if (strVal === "0") return "#808080";
+    if (typeof v === "boolean") return v ? "#00FF00" : "#000000";
+    if (isNumeric(v)) {
+      const num = Number(v);
+      if (num === 0) return "#808080";
+      return num > 0 ? "#00FF00" : "#000000";
+    }
+    return "#808080";
+  }
+
+  function getClimbStateColor(climbStateValue, attemptClimbValue) {
+    if (
+      climbStateValue === null ||
+      climbStateValue === undefined ||
+      climbStateValue === "" ||
+      climbStateValue === -1
+    ) {
+      return "#808080";
+    }
+    const stateStr = String(climbStateValue).toLowerCase().trim();
+    if (
+      stateStr === "no_climb" ||
+      stateStr === "no climb" ||
+      stateStr === "noclimb"
+    ) {
+      if (
+        attemptClimbValue === null ||
+        attemptClimbValue === undefined ||
+        attemptClimbValue === ""
+      ) {
+        return "#000000";
+      }
+      const attemptStr = String(attemptClimbValue).toLowerCase().trim();
+      if (
+        attemptStr === "no" ||
+        attemptStr === "false" ||
+        attemptStr === "0" ||
+        attemptClimbValue === false ||
+        attemptClimbValue === 0
+      ) {
+        return "#000000";
+      } else if (
+        attemptStr === "yes" ||
+        attemptStr === "true" ||
+        attemptStr === "1" ||
+        attemptClimbValue === true ||
+        attemptClimbValue === 1
+      ) {
+        return "#FF0000";
+      }
+      return "#000000";
+    }
+    if (stateStr === "l1") return "#FFFF00";
+    if (stateStr === "l2") return "#00FF00";
+    if (stateStr === "l3") return "#0000FF";
+    return "#808080";
+  }
+
+  function colorFromStats(
+    v,
+    mu,
+    sigma,
+    {
+      inverted = false,
+      isBooleanMetric = false,
+      isClimbStateMetric = false,
+      attemptClimbValue = null,
+    } = {},
+  ) {
+    if (isClimbStateMetric) {
+      return getClimbStateColor(v, attemptClimbValue);
+    }
+    if (isBooleanMetric) {
+      return getBooleanColor(v);
+    }
     // For non-numeric data, return neutral color
     if (!isNumeric(v)) {
       return "#333";
@@ -208,7 +298,7 @@
     if (sigma === 0) return "rgb(180,180,180)";
 
     const mode = colorModes[colorblindMode];
-    const z = (numValue - mu) / sigma;
+    const z = inverted ? (mu - numValue) / sigma : (numValue - mu) / sigma;
     const t = Math.min(1, Math.abs(z));
 
     return z < 0
@@ -236,7 +326,7 @@
   let allMatches = [];
 
   // Blue Alliance API configuration
-  const TBA_API_KEY = import.meta.env.VITE_BA_AUTH_KEY;
+  const TBA_API_KEY = import.meta.env.VITE_AUTH_KEY;
   const TBA_BASE_URL = "https://www.thebluealliance.com/api/v3";
 
   // Alliance team selections (will be populated from API based on selected match)
@@ -1027,6 +1117,9 @@
     // Calculate global stats for each metric across all teams/matches (only for numeric)
     const globalStats = {};
     displayMetrics.forEach((metric) => {
+      const isBoolMetric = BOOLEAN_METRICS.includes(metric);
+      const isClimbMetric = metric === CLIMBSTATE_METRIC;
+
       // Check if metric is numeric based on global data sample
       const allRows = Array.isArray(teamViewData?.data)
         ? teamViewData.data
@@ -1035,19 +1128,23 @@
       let isNumericMetric = true;
       let hasData = false;
 
-      // Check ALL values to determine type
-      for (const r of allRows) {
-        const v = r[metric];
-        if (v !== undefined && v !== null && v !== "") {
-          hasData = true;
-          if (!isNumeric(v)) {
-            isNumericMetric = false;
-            break;
+      if (!isBoolMetric && !isClimbMetric) {
+        // Check ALL values to determine type
+        for (const r of allRows) {
+          const v = r[metric];
+          if (v !== undefined && v !== null && v !== "") {
+            hasData = true;
+            if (!isNumeric(v)) {
+              isNumericMetric = false;
+              break;
+            }
           }
         }
+        // If no data found, assume not numeric (string is safer default)
+        if (!hasData) isNumericMetric = false;
+      } else {
+        isNumericMetric = false;
       }
-      // If no data found, assume not numeric (string is safer default)
-      if (!hasData) isNumericMetric = false;
 
       if (isNumericMetric) {
         allRows.forEach((row) => {
@@ -1064,9 +1161,17 @@
               ? sd(filteredValues, mean(filteredValues))
               : 0,
           isNumeric: true,
+          isBoolean: false,
+          isClimbState: false,
         };
       } else {
-        globalStats[metric] = { mean: 0, sd: 0, isNumeric: false };
+        globalStats[metric] = {
+          mean: 0,
+          sd: 0,
+          isNumeric: false,
+          isBoolean: isBoolMetric,
+          isClimbState: isClimbMetric,
+        };
       }
     });
 
@@ -1084,12 +1189,16 @@
       const row: any = { metric };
       const values = [];
       const isNumericMetric = globalStats[metric]?.isNumeric ?? false;
+      const isBoolMetric = globalStats[metric]?.isBoolean ?? false;
+      const isClimbMetric = globalStats[metric]?.isClimbState ?? false;
 
       qLabels.forEach((q, i) => {
         const match = matches[i];
         let val = match?.[metric];
 
-        if (isNumericMetric) {
+        if (isBoolMetric || isClimbMetric) {
+          row[q] = val;
+        } else if (isNumericMetric) {
           const numVal = isNumeric(val) ? Number(val) : 0;
           row[q] = numVal;
           values.push(numVal);
@@ -1145,6 +1254,35 @@
 
           const metricName = params.data.metric;
           const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+          const isBoolMetric = stats.isBoolean || false;
+          const isClimbMetric = stats.isClimbState || false;
+          const isInverted = INVERTED_METRICS.includes(metricName);
+
+          if (isBoolMetric || isClimbMetric) {
+            let attemptVal = null;
+            if (isClimbMetric) {
+              const qIdx = qLabels.indexOf(params.colDef.field);
+              if (qIdx >= 0 && matches[qIdx]) {
+                attemptVal = matches[qIdx]["AttemptClimb"];
+              }
+            }
+            const bg = colorFromStats(params.value, 0, 0, {
+              isBooleanMetric: isBoolMetric,
+              isClimbStateMetric: isClimbMetric,
+              attemptClimbValue: attemptVal,
+            });
+            const textColor =
+              bg === "#000000" || bg === "#000" || bg === "#0000FF"
+                ? "white"
+                : "black";
+            return {
+              background: bg,
+              color: textColor,
+              fontSize: "18px",
+              fontWeight: 600,
+              textAlign: "center",
+            };
+          }
 
           if (!stats.isNumeric) {
             return {
@@ -1161,7 +1299,9 @@
           const numValue = isNumeric(val) ? Number(val) : 0;
 
           return {
-            background: colorFromStats(numValue, stats.mean, stats.sd),
+            background: colorFromStats(numValue, stats.mean, stats.sd, {
+              inverted: isInverted,
+            }),
             color: numValue === 0 ? "white" : "black",
             fontSize: "18px",
             fontWeight: 600,
@@ -1334,23 +1474,29 @@
 
     const globalStats = {};
     displayMetrics.forEach((metric) => {
+      const isBoolMetric = BOOLEAN_METRICS.includes(metric);
+      const isClimbMetric = metric === CLIMBSTATE_METRIC;
+
       const allRows = Array.isArray(teamViewData) ? teamViewData : [];
       const allValues = [];
       let isNumericMetric = true;
       let hasData = false;
 
-      for (const r of allRows) {
-        const v = r[metric];
-        if (v !== undefined && v !== null && v !== "") {
-          hasData = true;
-          if (!isNumeric(v)) {
-            isNumericMetric = false;
-            break;
+      if (!isBoolMetric && !isClimbMetric) {
+        for (const r of allRows) {
+          const v = r[metric];
+          if (v !== undefined && v !== null && v !== "") {
+            hasData = true;
+            if (!isNumeric(v)) {
+              isNumericMetric = false;
+              break;
+            }
           }
         }
+        if (!hasData) isNumericMetric = false;
+      } else {
+        isNumericMetric = false;
       }
-
-      if (!hasData) isNumericMetric = false;
 
       if (isNumericMetric) {
         allRows.forEach((row) => {
@@ -1367,9 +1513,17 @@
               ? sd(filteredValues, mean(filteredValues))
               : 0,
           isNumeric: true,
+          isBoolean: false,
+          isClimbState: false,
         };
       } else {
-        globalStats[metric] = { mean: 0, sd: 0, isNumeric: false };
+        globalStats[metric] = {
+          mean: 0,
+          sd: 0,
+          isNumeric: false,
+          isBoolean: isBoolMetric,
+          isClimbState: isClimbMetric,
+        };
       }
     });
 
@@ -1379,12 +1533,16 @@
       const row: any = { metric };
       const values = [];
       const isNumericMetric = globalStats[metric]?.isNumeric ?? false;
+      const isBoolMetric = globalStats[metric]?.isBoolean ?? false;
+      const isClimbMetric = globalStats[metric]?.isClimbState ?? false;
 
       qLabels.forEach((q, i) => {
         const match = matches[i];
         let val = match?.[metric];
 
-        if (isNumericMetric) {
+        if (isBoolMetric || isClimbMetric) {
+          row[q] = val;
+        } else if (isNumericMetric) {
           const numVal = isNumeric(val) ? Number(val) : 0;
           row[q] = numVal;
           values.push(numVal);
@@ -1432,6 +1590,35 @@
         cellStyle: (params) => {
           const metricName = params.data.metric;
           const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+          const isBoolMetric = stats.isBoolean || false;
+          const isClimbMetric = stats.isClimbState || false;
+          const isInverted = INVERTED_METRICS.includes(metricName);
+
+          if (isBoolMetric || isClimbMetric) {
+            let attemptVal = null;
+            if (isClimbMetric) {
+              const qIdx = qLabels.indexOf(params.colDef.field);
+              if (qIdx >= 0 && matches[qIdx]) {
+                attemptVal = matches[qIdx]["AttemptClimb"];
+              }
+            }
+            const bg = colorFromStats(params.value, 0, 0, {
+              isBooleanMetric: isBoolMetric,
+              isClimbStateMetric: isClimbMetric,
+              attemptClimbValue: attemptVal,
+            });
+            const textColor =
+              bg === "#000000" || bg === "#000" || bg === "#0000FF"
+                ? "white"
+                : "black";
+            return {
+              background: bg,
+              color: textColor,
+              fontSize: "14px",
+              fontWeight: 600,
+              textAlign: "center",
+            };
+          }
 
           if (!stats.isNumeric) {
             return {
@@ -1448,7 +1635,9 @@
           const numValue = isNumeric(val) ? Number(val) : 0;
 
           return {
-            background: colorFromStats(numValue, stats.mean, stats.sd),
+            background: colorFromStats(numValue, stats.mean, stats.sd, {
+              inverted: isInverted,
+            }),
             color: numValue === 0 ? "white" : "black",
             fontSize: "14px",
             fontWeight: 600,
