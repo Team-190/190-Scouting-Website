@@ -24,6 +24,7 @@
     "dotenv": "^17.2.3",
     "echarts": "^6.0.0",
     "pako": "^2.1.0",
-    "svelte-routing": "^2.13.0"
+    "svelte-routing": "^2.13.0",
+    "uuid": "^13.0.0"
   }
 }
