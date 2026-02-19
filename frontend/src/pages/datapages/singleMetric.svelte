@@ -15,6 +15,9 @@
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
   import * as radarGraph from "../../pages/graphcode/radar.js";
 
+  import { v4 as uuidv4 } from "uuid";
+  let uuid = uuidv4();
+
   ModuleRegistry.registerModules([AllCommunityModule]);
 
   // Graph state
@@ -23,29 +26,36 @@
   let chartTypes = ["bar", "line", "pie", "scatter", "radar"];
   let showDropdown = false;
 
-    let domNode;
-    let availableTeams = [];
-    let teamData = {};
-    let allDataResponse = null;
-    let metrics = [];
-    let selectedMetric = "";
-    let colorblindMode = "normal";
-    let gridApi = null;
-    let loading = true;
-    let error = "";
-    let gridHeight = 400; // Default height, will be calculated dynamically
-    let globalStats = { mean: 0, sd: 0, p25: 0, p50: 0, p75: 0, isNumeric: false };
+  let domNode;
+  let availableTeams = [];
+  let teamData = {};
+  let allDataResponse = null;
+  let metrics = [];
+  let selectedMetric = "";
+  let colorblindMode = "normal";
+  let gridApi = null;
+  let loading = true;
+  let error = "";
+  let gridHeight = 400; // Default height, will be calculated dynamically
+  let globalStats = {
+    mean: 0,
+    sd: 0,
+    p25: 0,
+    p50: 0,
+    p75: 0,
+    isNumeric: false,
+  };
 
-    // Blue Alliance API configuration
-    const TBA_API_KEY = import.meta.env.VITE_BA_AUTH_KEY;
-    const TBA_BASE_URL = "https://www.thebluealliance.com/api/v3";
+  // Blue Alliance API configuration
+  const TBA_API_KEY = import.meta.env.VITE_BA_AUTH_KEY;
+  const TBA_BASE_URL = "https://www.thebluealliance.com/api/v3";
 
-    let eventKey = "2025mawor"; // Will be loaded from localStorage
-    let teamOPRs = {}; // Cache for OPR values { teamNumber: oprValue }
-    let oprLoading = false;
-        
-    const ROW_HEIGHT = 25; // Height of each row in pixels
-    const HEADER_HEIGHT = 32; // Height of the header row
+  let eventKey = "2025mawor"; // Will be loaded from localStorage
+  let teamOPRs = {}; // Cache for OPR values { teamNumber: oprValue }
+  let oprLoading = false;
+
+  const ROW_HEIGHT = 25; // Height of each row in pixels
+  const HEADER_HEIGHT = 32; // Height of the header row
 
   //Human readable metric names for the dropdown - key is the actual data field, value is the display name
   const metricNames = new Map();
@@ -68,10 +78,10 @@
   metricNames.set("OPR", "OPR (Offensive Power Rating)");
 
   const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime"];
-  
+
   // Boolean metrics that should be colored green (Yes) or black (No)
   const BOOLEAN_METRICS = ["AutoClimb", "AttemptClimb"];
-  
+
   // ClimbState metric needs special handling
   const CLIMBSTATE_METRIC = "EndState";
 
@@ -134,7 +144,7 @@
     if (v === null || v === undefined || v === "" || v === -1) {
       return "#808080"; // Gray for null/empty
     }
-    
+
     // Handle string values
     const strVal = String(v).toLowerCase().trim();
     if (strVal === "yes" || strVal === "true" || strVal === "1") {
@@ -146,46 +156,71 @@
     if (strVal === "0") {
       return "#808080"; // Gray for "0" string
     }
-    
+
     // Handle boolean values
     if (typeof v === "boolean") {
       return v ? "#00FF00" : "#000000"; // Green for true, Black for false
     }
-    
+
     // Handle numeric values
     if (isNumeric(v)) {
       const num = Number(v);
       if (num === 0) return "#808080"; // Gray for 0
       return num > 0 ? "#00FF00" : "#000000"; // Green for positive, Black for negative
     }
-    
+
     return "#808080"; // Default to gray
   }
 
   function getClimbStateColor(climbStateValue, attemptClimbValue) {
     // Handle ClimbState (EndState) coloring based on value and AttemptClimb
-    if (climbStateValue === null || climbStateValue === undefined || climbStateValue === "" || climbStateValue === -1) {
+    if (
+      climbStateValue === null ||
+      climbStateValue === undefined ||
+      climbStateValue === "" ||
+      climbStateValue === -1
+    ) {
       return "#808080"; // Gray for null/empty
     }
-    
+
     const stateStr = String(climbStateValue).toLowerCase().trim();
-    
+
     // Handle no_climb case - depends on AttemptClimb
-    if (stateStr === "no_climb" || stateStr === "no climb" || stateStr === "noclimb") {
+    if (
+      stateStr === "no_climb" ||
+      stateStr === "no climb" ||
+      stateStr === "noclimb"
+    ) {
       // Check AttemptClimb value
-      if (attemptClimbValue === null || attemptClimbValue === undefined || attemptClimbValue === "") {
+      if (
+        attemptClimbValue === null ||
+        attemptClimbValue === undefined ||
+        attemptClimbValue === ""
+      ) {
         return "#000000"; // Black if AttemptClimb is null
       }
-      
+
       const attemptStr = String(attemptClimbValue).toLowerCase().trim();
-      if (attemptStr === "no" || attemptStr === "false" || attemptStr === "0" || attemptClimbValue === false || attemptClimbValue === 0) {
+      if (
+        attemptStr === "no" ||
+        attemptStr === "false" ||
+        attemptStr === "0" ||
+        attemptClimbValue === false ||
+        attemptClimbValue === 0
+      ) {
         return "#000000"; // Black if AttemptClimb is No
-      } else if (attemptStr === "yes" || attemptStr === "true" || attemptStr === "1" || attemptClimbValue === true || attemptClimbValue === 1) {
+      } else if (
+        attemptStr === "yes" ||
+        attemptStr === "true" ||
+        attemptStr === "1" ||
+        attemptClimbValue === true ||
+        attemptClimbValue === 1
+      ) {
         return "#FF0000"; // Red if AttemptClimb is Yes (failed attempt)
       }
       return "#000000"; // Default to black for no_climb
     }
-    
+
     // Handle L1, L2, L3 cases
     if (stateStr === "l1") {
       return "#FFFF00"; // Yellow for L1
@@ -196,7 +231,7 @@
     if (stateStr === "l3") {
       return "#0000FF"; // Blue for L3
     }
-    
+
     // Default for any other value
     return "#808080"; // Gray
   }
@@ -344,33 +379,37 @@
     ) {
       return "white";
     }
-    
+
     // Check for medium gray (for null/0 in boolean fields)
-    if (s === "#808080" || s === "rgb(128,128,128)" || s === "rgb(128, 128, 128)") {
+    if (
+      s === "#808080" ||
+      s === "rgb(128,128,128)" ||
+      s === "rgb(128, 128, 128)"
+    ) {
       return "white";
     }
 
     return "black";
   }
 
-    function getDataMetricName(){
+  function getDataMetricName() {
     dataMetric = "";
-    
+
     // Special case for OPR
     if (selectedMetric === "OPR (Offensive Power Rating)") {
-        dataMetric = "OPR";
-        return;
+      dataMetric = "OPR";
+      return;
     }
-    
+
     for (const [key, value] of metricNames.entries()) {
-        if (value === selectedMetric) {
-            dataMetric = key;
-            break;
-        }
+      if (value === selectedMetric) {
+        dataMetric = key;
+        break;
+      }
     }
     // If not found in map, assume the selectedMetric is the actual data key
     if (!dataMetric) dataMetric = selectedMetric;
-}
+  }
 
   function isNumeric(n) {
     if (n === null || n === undefined || n === "") return false;
@@ -392,24 +431,24 @@
   function checkIsNumericMetric(metric) {
     // Special case for OPR
     if (metric === "OPR" || metric === "OPR (Offensive Power Rating)") {
-        return Object.keys(teamOPRs).length > 0;
+      return Object.keys(teamOPRs).length > 0;
     }
-    
+
     let hasData = false;
     for (const team of availableTeams) {
-        const rows = teamData[team] || [];
-        for (const r of rows) {
-            const v = r[metric];
-            if (v !== undefined && v !== null && v !== "") {
-                hasData = true;
-                if (!isNumeric(v)) {
-                    return false; // Found a non-numeric value
-                }
-            }
+      const rows = teamData[team] || [];
+      for (const r of rows) {
+        const v = r[metric];
+        if (v !== undefined && v !== null && v !== "") {
+          hasData = true;
+          if (!isNumeric(v)) {
+            return false; // Found a non-numeric value
+          }
         }
+      }
     }
     return hasData; // If we have data and all values are numeric
-}
+  }
 
   // Generate a random hex color
   //the credit for this function bc i didn't make it - Adel
@@ -431,21 +470,27 @@
   }
 
   // Main color calculation function for gradient modes
-  function colorFromStats(v, stats, inverted = false, metricName = null, attemptClimbValue = null) {
+  function colorFromStats(
+    v,
+    stats,
+    inverted = false,
+    metricName = null,
+    attemptClimbValue = null,
+  ) {
     // Check if this is a boolean metric
     const isBooleanMetric = BOOLEAN_METRICS.includes(metricName);
     const isClimbStateMetric = metricName === CLIMBSTATE_METRIC;
-    
+
     // For ClimbState metrics, use special coloring
     if (isClimbStateMetric) {
       return getClimbStateColor(v, attemptClimbValue);
     }
-    
+
     // For boolean metrics, use special coloring
     if (isBooleanMetric) {
       return getBooleanColor(v);
     }
-    
+
     // For non-numeric data, return neutral color
     if (!isNumeric(v)) {
       return "#4D4D4D";
@@ -463,7 +508,11 @@
 
     // For Alex mode: use percentile-based buckets (discrete colors)
     if (colorblindMode === "alex") {
-      const percentileBucket = getAlexValuePercentile(numValue, stats, inverted);
+      const percentileBucket = getAlexValuePercentile(
+        numValue,
+        stats,
+        inverted,
+      );
       if (percentileBucket !== null) {
         return getAlexBgColor(percentileBucket, true);
       }
@@ -524,52 +573,51 @@
     const eventCode = localStorage.getItem("eventCode");
     console.log("eventCode: ", eventCode);
 
-        const response = await fetch("http://localhost:8000/getAllData?eventCode="+eventCode);
-        const result = await response.json();
-        return result;
-    }
-
-    async function fetchEventOPRs(eventKey) {
-  if (!eventKey) {
-    console.warn("No event key provided for OPR fetch");
-    return {};
-  }
-
-  oprLoading = true;
-  try {
     const response = await fetch(
-      `${TBA_BASE_URL}/event/${eventKey}/oprs`,
-      {
-        headers: {
-          "X-TBA-Auth-Key": TBA_API_KEY
-        }
-      }
+      "http://localhost:8000/getAllData?eventCode=" + eventCode,
     );
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    
-    // Convert from { "frc190": 45.2, "frc191": 38.5 } to { "190": 45.2, "191": 38.5 }
-    const oprCache = {};
-    if (data.oprs) {
-      Object.entries(data.oprs).forEach(([teamKey, oprValue]) => {
-        const teamNum = teamKey.replace("frc", "");
-        oprCache[teamNum] = oprValue;
-      });
-    }
-    
-    console.log("Fetched OPR data:", oprCache);
-    return oprCache;
-  } catch (error) {
-    console.error("Error fetching OPR:", error);
-    return {};
-  } finally {
-    oprLoading = false;
+    const result = await response.json();
+    return result;
   }
-}
+
+  async function fetchEventOPRs(eventKey) {
+    if (!eventKey) {
+      console.warn("No event key provided for OPR fetch");
+      return {};
+    }
+
+    oprLoading = true;
+    try {
+      const response = await fetch(`${TBA_BASE_URL}/event/${eventKey}/oprs`, {
+        headers: {
+          "X-TBA-Auth-Key": TBA_API_KEY,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Convert from { "frc190": 45.2, "frc191": 38.5 } to { "190": 45.2, "191": 38.5 }
+      const oprCache = {};
+      if (data.oprs) {
+        Object.entries(data.oprs).forEach(([teamKey, oprValue]) => {
+          const teamNum = teamKey.replace("frc", "");
+          oprCache[teamNum] = oprValue;
+        });
+      }
+
+      console.log("Fetched OPR data:", oprCache);
+      return oprCache;
+    } catch (error) {
+      console.error("Error fetching OPR:", error);
+      return {};
+    } finally {
+      oprLoading = false;
+    }
+  }
 
   function processTeamData(dataResponse) {
     const allRows = Array.isArray(dataResponse?.data) ? dataResponse.data : [];
@@ -603,7 +651,7 @@
     availableTeams = availableTeams.sort();
   }
 
-    function computeMetrics() {
+  function computeMetrics() {
     if (availableTeams.length === 0) return [];
 
     const metricSet = new Set();
@@ -611,251 +659,270 @@
     // Add OPR if we have OPR data OR an event key is set (so the user can select it)
     // This ensures the Metric dropdown shows OPR even if the fetch failed or returned empty.
     if (eventKey || Object.keys(teamOPRs).length > 0) {
-        metricSet.add("OPR (Offensive Power Rating)");
+      metricSet.add("OPR (Offensive Power Rating)");
     }
 
     for (const team of availableTeams) {
-        const rows = teamData[team] || [];
-        for (const row of rows) {
-            Object.keys(row).forEach((k) => {
-                // Skip only the system/meta fields
-                if (excludedFields.includes(k)) return;
-                const metricName = metricNames.get(k) || k;
-                metricSet.add(metricName);
-            });
-        }
+      const rows = teamData[team] || [];
+      for (const row of rows) {
+        Object.keys(row).forEach((k) => {
+          // Skip only the system/meta fields
+          if (excludedFields.includes(k)) return;
+          const metricName = metricNames.get(k) || k;
+          metricSet.add(metricName);
+        });
+      }
     }
 
     return Array.from(metricSet).sort();
-}
+  }
 
-    function buildOPRGrid() {
+  function buildOPRGrid() {
     console.log("=== INSIDE buildOPRGrid ===");
     console.log("teamOPRs:", teamOPRs);
     console.log("domNode:", domNode);
     console.log("gridApi:", gridApi);
-    
+
     // Check if we have OPR data
     if (Object.keys(teamOPRs).length === 0) {
-        console.warn("No OPR data available");
-        // Show message in grid
-        rowData = [];
-        const columnDefs = [{
-            headerName: "Message",
-            field: "message",
-            flex: 1,
-            cellStyle: { textAlign: 'center', padding: '20px', color: 'white' }
-        }];
-        
-        gridHeight = 100;
-        
-        if (gridApi) {
-            gridApi.setGridOption("columnDefs", columnDefs);
-            gridApi.setGridOption("rowData", [{ message: oprLoading ? "Loading OPR data..." : "No OPR data available for this event" }]);
-        }
-        return;
+      console.warn("No OPR data available");
+      // Show message in grid
+      rowData = [];
+      const columnDefs = [
+        {
+          headerName: "Message",
+          field: "message",
+          flex: 1,
+          cellStyle: { textAlign: "center", padding: "20px", color: "white" },
+        },
+      ];
+
+      gridHeight = 100;
+
+      if (gridApi) {
+        gridApi.setGridOption("columnDefs", columnDefs);
+        gridApi.setGridOption("rowData", [
+          {
+            message: oprLoading
+              ? "Loading OPR data..."
+              : "No OPR data available for this event",
+          },
+        ]);
+      }
+      return;
     }
 
     const isNumericMetric = true; // OPR is always numeric
-    
+
     // Build availableTeams from OPR data (in case it's not populated from backend)
-    const oprTeams = Object.keys(teamOPRs).sort((a, b) => parseInt(a) - parseInt(b));
+    const oprTeams = Object.keys(teamOPRs).sort(
+      (a, b) => parseInt(a) - parseInt(b),
+    );
     console.log("Teams from OPR:", oprTeams);
-    
+
     // Build rowData with OPR values
     console.log("About to build rowData...");
-    rowData = oprTeams.map(team => {
+    rowData = oprTeams
+      .map((team) => {
         const row = { team };
         const oprValue = teamOPRs[team] || null;
-        
+
         row.hasData = oprValue !== null;
         row.mean = oprValue;
         row.median = oprValue;
         row.alexPercentile = null; // We'll calculate this below
-        
+
         return row;
-    }).filter(row => row.mean !== null) // Only show teams with OPR data
+      })
+      .filter((row) => row.mean !== null) // Only show teams with OPR data
       .sort((a, b) => b.mean - a.mean) // Sort by OPR descending (higher is better)
       .map((row, index, array) => {
         // Calculate percentile based on position
         const totalTeams = array.length;
         const position = index;
         const percentRank = (totalTeams - position - 1) / totalTeams;
-        
+
         if (percentRank < 0.2) {
-            row.alexPercentile = 0;
+          row.alexPercentile = 0;
         } else if (percentRank < 0.4) {
-            row.alexPercentile = 20;
+          row.alexPercentile = 20;
         } else if (percentRank < 0.6) {
-            row.alexPercentile = 40;
+          row.alexPercentile = 40;
         } else if (percentRank < 0.8) {
-            row.alexPercentile = 60;
+          row.alexPercentile = 60;
         } else {
-            row.alexPercentile = 80;
+          row.alexPercentile = 80;
         }
         return row;
-    });
+      });
 
     console.log("rowData built:", rowData);
     console.log("rowData length:", rowData.length);
 
     // Calculate global stats for OPR
-    const allOPRValues = rowData.map(r => r.mean).filter(v => v !== null);
+    const allOPRValues = rowData.map((r) => r.mean).filter((v) => v !== null);
     if (allOPRValues.length > 0) {
-        const mu = mean(allOPRValues);
-        globalStats = {
-            mean: mu,
-            sd: sd(allOPRValues, mu),
-            p25: percentile(allOPRValues, 25),
-            p50: percentile(allOPRValues, 50),
-            p75: percentile(allOPRValues, 75),
-            isNumeric: true
-        };
-        console.log("Global OPR stats:", globalStats);
+      const mu = mean(allOPRValues);
+      globalStats = {
+        mean: mu,
+        sd: sd(allOPRValues, mu),
+        p25: percentile(allOPRValues, 25),
+        p50: percentile(allOPRValues, 50),
+        p75: percentile(allOPRValues, 75),
+        isNumeric: true,
+      };
+      console.log("Global OPR stats:", globalStats);
     }
 
     const columnDefs = [
-        {
-            headerName: "Team",
-            field: "team",
-            pinned: "left",
-            width: 100,
-            headerClass: "header-center",
-            cellClass: "cell-center",
-            cellStyle: {
-                background: "#C81B00",
-                color: "white",
-                fontWeight: "bold",
-                fontSize: "18px",
-                textAlign: "center"
-            }
+      {
+        headerName: "Team",
+        field: "team",
+        pinned: "left",
+        width: 100,
+        headerClass: "header-center",
+        cellClass: "cell-center",
+        cellStyle: {
+          background: "#C81B00",
+          color: "white",
+          fontWeight: "bold",
+          fontSize: "18px",
+          textAlign: "center",
         },
-        {
-            headerName: "OPR",
-            field: "mean",
-            flex: 1,
-            minWidth: 150,
-            headerClass: "header-center",
-            cellClass: "cell-center",
-            cellStyle: params => {
-                const v = params.value;
-                if (v === null || v === undefined) {
-                    return {
-                        background: "#4D4D4D",
-                        color: "white",
-                        fontWeight: "bold",
-                        fontSize: "18px",
-                        textAlign: "center"
-                    };
-                }
+      },
+      {
+        headerName: "OPR",
+        field: "mean",
+        flex: 1,
+        minWidth: 150,
+        headerClass: "header-center",
+        cellClass: "cell-center",
+        cellStyle: (params) => {
+          const v = params.value;
+          if (v === null || v === undefined) {
+            return {
+              background: "#4D4D4D",
+              color: "white",
+              fontWeight: "bold",
+              fontSize: "18px",
+              textAlign: "center",
+            };
+          }
 
-                const bg = colorFromStats(v, globalStats, false, "OPR"); // OPR is NOT inverted
-                return {
-                    background: bg,
-                    color: textColorForBgStrict(bg),
-                    fontWeight: "bold",
-                    fontSize: "18px",
-                    textAlign: "center"
-                };
-            },
-            valueFormatter: params => {
-                if (params.value === null || params.value === undefined) return "N/A";
-                return Number(params.value).toFixed(2);
-            }
+          const bg = colorFromStats(v, globalStats, false, "OPR"); // OPR is NOT inverted
+          return {
+            background: bg,
+            color: textColorForBgStrict(bg),
+            fontWeight: "bold",
+            fontSize: "18px",
+            textAlign: "center",
+          };
         },
-        {
-            headerName: "Per.",
-            field: "alexPercentile",
-            flex: 1,
-            minWidth: 100,
-            headerClass: "header-center",
-            cellClass: "cell-center",
-            cellStyle: params => {
-                const p = params.value;
-                let background;
-                
-                if (p === null || p === undefined) {
-                    background = "#4D4D4D";
-                } else {
-                    background = getAlexBgColor(p, false);
-                }
+        valueFormatter: (params) => {
+          if (params.value === null || params.value === undefined) return "N/A";
+          return Number(params.value).toFixed(2);
+        },
+      },
+      {
+        headerName: "Per.",
+        field: "alexPercentile",
+        flex: 1,
+        minWidth: 100,
+        headerClass: "header-center",
+        cellClass: "cell-center",
+        cellStyle: (params) => {
+          const p = params.value;
+          let background;
 
-                const color = textColorForBgStrict(background);
+          if (p === null || p === undefined) {
+            background = "#4D4D4D";
+          } else {
+            background = getAlexBgColor(p, false);
+          }
 
-                return {
-                    background,
-                    color,
-                    fontWeight: "bold",
-                    fontSize: "18px",
-                    textAlign: "center",
-                    borderLeft: "2px solid #555"
-                };
-            },
-            valueFormatter: params => {
-                return params.value !== null && params.value !== undefined ? params.value.toString() : "";
-            }
-        }
+          const color = textColorForBgStrict(background);
+
+          return {
+            background,
+            color,
+            fontWeight: "bold",
+            fontSize: "18px",
+            textAlign: "center",
+            borderLeft: "2px solid #555",
+          };
+        },
+        valueFormatter: (params) => {
+          return params.value !== null && params.value !== undefined
+            ? params.value.toString()
+            : "";
+        },
+      },
     ];
 
     console.log("columnDefs created:", columnDefs);
 
-    gridHeight = (rowData.length * ROW_HEIGHT) + HEADER_HEIGHT;
+    gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT;
     console.log("Grid height set to:", gridHeight);
 
     // Destroy existing grid and create fresh one for OPR
     if (gridApi) {
-        console.log("Destroying existing grid");
-        gridApi.destroy();
-        gridApi = null;
+      console.log("Destroying existing grid");
+      gridApi.destroy();
+      gridApi = null;
     }
 
     console.log("Creating new OPR grid");
     gridApi = createGrid(domNode, {
-        rowData,
-        columnDefs,
-        defaultColDef: {
-            resizable: false,
-            sortable: false,
-            suppressMovable: true,
-            cellStyle: {
-                fontSize: "18px"
-            }
+      rowData,
+      columnDefs,
+      defaultColDef: {
+        resizable: false,
+        sortable: false,
+        suppressMovable: true,
+        cellStyle: {
+          fontSize: "18px",
         },
-        suppressColumnVirtualisation: true,
-        suppressHorizontalScroll: true
+      },
+      suppressColumnVirtualisation: true,
+      suppressHorizontalScroll: true,
     });
     console.log("Grid created:", gridApi);
-}
+  }
 
   function buildGrid() {
     if (!domNode || !selectedMetric || availableTeams.length === 0) return;
 
     console.log("=== buildGrid called ===");
-    console.log("Selected Metric: ", selectedMetric, "Data Metric: ", dataMetric);
+    console.log(
+      "Selected Metric: ",
+      selectedMetric,
+      "Data Metric: ",
+      dataMetric,
+    );
     console.log("domNode exists:", !!domNode);
     console.log("availableTeams:", availableTeams);
 
     // Special handling for OPR
     const isOPRMetric = selectedMetric === "OPR (Offensive Power Rating)";
     console.log("Is OPR Metric:", isOPRMetric);
-    
+
     if (isOPRMetric) {
-        console.log("Building OPR grid, OPR data:", teamOPRs);
-        console.log("Number of OPR entries:", Object.keys(teamOPRs).length);
-        
-        // If OPR data hasn't been fetched yet, fetch it
-        if (Object.keys(teamOPRs).length === 0 && eventKey) {
-            console.log("Fetching OPR data...");
-            fetchEventOPRs(eventKey).then(oprs => {
-                teamOPRs = oprs;
-                buildOPRGrid();
-            });
-            return;
-        }
-        // Build OPR-specific grid
-        console.log("Calling buildOPRGrid()");
-        buildOPRGrid();
+      console.log("Building OPR grid, OPR data:", teamOPRs);
+      console.log("Number of OPR entries:", Object.keys(teamOPRs).length);
+
+      // If OPR data hasn't been fetched yet, fetch it
+      if (Object.keys(teamOPRs).length === 0 && eventKey) {
+        console.log("Fetching OPR data...");
+        fetchEventOPRs(eventKey).then((oprs) => {
+          teamOPRs = oprs;
+          buildOPRGrid();
+        });
         return;
+      }
+      // Build OPR-specific grid
+      console.log("Calling buildOPRGrid()");
+      buildOPRGrid();
+      return;
     }
 
     // Find the maximum number of matches any team has played
@@ -877,7 +944,10 @@
     // Check if metric is numeric (skip for boolean and ClimbState metrics)
     const isBooleanMetric = BOOLEAN_METRICS.includes(dataMetric);
     const isClimbStateMetric = dataMetric === CLIMBSTATE_METRIC;
-    const isNumericMetric = isBooleanMetric || isClimbStateMetric ? false : checkIsNumericMetric(dataMetric);
+    const isNumericMetric =
+      isBooleanMetric || isClimbStateMetric
+        ? false
+        : checkIsNumericMetric(dataMetric);
     console.log("Is Numeric Metric: ", isNumericMetric);
 
     const inverted = isInvertedMetric(dataMetric);
@@ -1000,7 +1070,8 @@
         return row;
       })
       .sort((a, b) => {
-        if (!isNumericMetric || isBooleanMetric || isClimbStateMetric) return a.team.localeCompare(b.team);
+        if (!isNumericMetric || isBooleanMetric || isClimbStateMetric)
+          return a.team.localeCompare(b.team);
 
         // Handle null means
         if (a.mean === null && b.mean !== null) return 1;
@@ -1015,7 +1086,12 @@
       })
       .map((row, index, array) => {
         // Calculate percentile based on position in sorted list
-        if (isNumericMetric && !isBooleanMetric && !isClimbStateMetric && row.mean !== null) {
+        if (
+          isNumericMetric &&
+          !isBooleanMetric &&
+          !isClimbStateMetric &&
+          row.mean !== null
+        ) {
           const validRows = array.filter((r) => r.mean !== null);
           const totalTeams = validRows.length;
           const position = validRows.indexOf(row);
@@ -1233,7 +1309,7 @@
             fontWeight: "bold",
             fontSize: "18px",
             textAlign: "center",
-            borderLeft: "2px solid #555"
+            borderLeft: "2px solid #555",
           };
         },
         valueFormatter: (params) => {
@@ -1372,7 +1448,7 @@
 
   function addChart(type) {
     const newChart = {
-      id: crypto.randomUUID(),
+      id: uuid,
       type,
       el: null,
       instance: null,
@@ -1431,13 +1507,13 @@
     charts.forEach((c) => updateChartDataset(c));
   }
 
-    function updateChartDataset(chart) {
+  function updateChartDataset(chart) {
     if (!chart.instance) return;
 
     chart.yAxisMetric = dataMetric;
 
     if (!chart.selectedTeams) {
-        chart.selectedTeams = new Set(availableTeams);
+      chart.selectedTeams = new Set(availableTeams);
     }
 
     // Special handling for OPR metric
@@ -1445,41 +1521,41 @@
     const isNumeric = isOPRMetric ? true : checkIsNumericMetric(dataMetric);
 
     let option = {};
-    
-    if (!isNumeric && chart.type !== 'pie') {
-        // Show "Not Supported" for numeric charts on string data
-        option = {
-            title: { 
-                text: 'This chart requires numeric data.',
-                left: 'center',
-                top: 'center',
-                textStyle: { color: '#fff', fontSize: 16 }
-            },
-            xAxis: { show: false },
-            yAxis: { show: false },
-            series: []
-        };
+
+    if (!isNumeric && chart.type !== "pie") {
+      // Show "Not Supported" for numeric charts on string data
+      option = {
+        title: {
+          text: "This chart requires numeric data.",
+          left: "center",
+          top: "center",
+          textStyle: { color: "#fff", fontSize: 16 },
+        },
+        xAxis: { show: false },
+        yAxis: { show: false },
+        series: [],
+      };
     } else {
-        switch (chart.type) {
-            case "bar":
-                option = getBarOption(chart.selectedTeams);
-                break;
-            case "line":
-                option = getLineOption(chart.selectedTeams);
-                break;
-            case "pie":
-                option = getPieOption(chart.selectedTeams, isNumeric);
-                break;
-            case "scatter":
-                option = getScatterOption(chart.selectedTeams);
-                break;
-            case "radar":
-                option = getRadarOption(chart);
-                break;
-        }
+      switch (chart.type) {
+        case "bar":
+          option = getBarOption(chart.selectedTeams);
+          break;
+        case "line":
+          option = getLineOption(chart.selectedTeams);
+          break;
+        case "pie":
+          option = getPieOption(chart.selectedTeams, isNumeric);
+          break;
+        case "scatter":
+          option = getScatterOption(chart.selectedTeams);
+          break;
+        case "radar":
+          option = getRadarOption(chart);
+          break;
+      }
     }
     chart.instance.setOption(option, true);
-}
+  }
 
   function getBarOption(filterSet) {
     const filteredData = rowData.filter((r) => filterSet.has(r.team));
@@ -1661,7 +1737,7 @@
       ],
     };
   }
-  
+
   let numericMetrics;
   function getRadarOption(chart) {
     numericMetrics = [];
@@ -1782,9 +1858,9 @@
       },
       series: [{ type: "radar", data: seriesData }],
     };
-}
+  }
 
-onMount(async () => {
+  onMount(async () => {
     try {
       allDataResponse = await fetchAllMetricData();
       console.log("Fetched data from backend:", allDataResponse);
@@ -1792,18 +1868,18 @@ onMount(async () => {
       processTeamData(allDataResponse);
 
       if (availableTeams.length === 0) {
-          error = "No team data found from backend.";
-          loading = false;
-          return;
+        error = "No team data found from backend.";
+        loading = false;
+        return;
       }
 
       // IMPORTANT: Fetch OPR data BEFORE computing metrics
       eventKey = localStorage.getItem("eventCode") || "";
       console.log("Event Key:", eventKey);
-      
+
       if (eventKey) {
-          teamOPRs = await fetchEventOPRs(eventKey);
-          console.log("OPR cache populated:", teamOPRs);
+        teamOPRs = await fetchEventOPRs(eventKey);
+        console.log("OPR cache populated:", teamOPRs);
       }
 
       // Compute metrics AFTER OPR data is loaded
@@ -1811,9 +1887,9 @@ onMount(async () => {
       console.log("Computed metrics:", metrics);
 
       if (metrics.length === 0) {
-          error = "Team data loaded, but no metrics were found.";
-          loading = false;
-          return;
+        error = "Team data loaded, but no metrics were found.";
+        loading = false;
+        return;
       }
 
       selectedMetric = metrics[0];
@@ -1822,15 +1898,19 @@ onMount(async () => {
 
       buildGrid();
     } catch (e) {
-        error = e.message;
-        loading = false;
-        console.error("Error loading data:", e);
+      error = e.message;
+      loading = false;
+      console.error("Error loading data:", e);
     }
-});
+  });
 
-$: if (selectedMetric === "OPR (Offensive Power Rating)" && Object.keys(teamOPRs).length > 0 && !loading) {
+  $: if (
+    selectedMetric === "OPR (Offensive Power Rating)" &&
+    Object.keys(teamOPRs).length > 0 &&
+    !loading
+  ) {
     buildGrid();
-}
+  }
 </script>
 
 <div class="page-wrapper">
