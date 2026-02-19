@@ -12,7 +12,6 @@ const test = require("./test/test.js")
 const database = require("./database.js");
 const session = require("express-session");
 const cors = require("cors");
-const e = require("express");
 require("dotenv").config();
 
 const app = express();
@@ -93,6 +92,40 @@ app.get("/getAllData", async (req, res) => {
     let result = await database.getAllData(eventCode);
     console.log(result);
     res.send(result);
+});
+
+app.get("/singleMetric", async (req, res) => {
+    const eventCode = req.query.eventCode;
+    if (!eventCode) return res.sendStatus(403);
+
+    console.log("single metric data requested, eventCode: " + eventCode);
+    let result = await database.getAllData(eventCode);
+    result = result.data
+    let teams = {};
+
+    for (let datapoint of result) {
+        let strippedTeam = datapoint.Team.replace(/\s+/g, ""); // Removes all whitespace
+        let match = datapoint.Match;
+
+        if (!teams[strippedTeam]) {
+            teams[strippedTeam] = {};
+        }
+
+        if (!teams[strippedTeam][match]) {
+            teams[strippedTeam][match] = [];
+        }
+
+        teams[strippedTeam][match].push(datapoint);
+    }
+
+
+    await fs.writeFile('teams.json', JSON.stringify(teams, null, 2));
+    console.log(Object.keys(teams))
+    for (let thinger of Object.keys(teams)) {
+        console.log(teams[thinger])
+    }
+
+    
 });
 
 app.get("/getRatings", async (req, res) => {
