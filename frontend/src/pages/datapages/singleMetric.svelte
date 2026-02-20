@@ -245,13 +245,13 @@
       // Alex mode: quartiles with blue/green/yellow/red
       switch (p) {
         case 75:
-          return "#0000FF"; // Blue (Top 25%)
+          return "#4285F4"; // Blue (Top 25%)
         case 50:
-          return "#00FF00"; // Green (Next 25%)
+          return "#34A853"; // Green (Next 25%)
         case 25:
-          return "#FFFF00"; // Yellow (Next 25%)
+          return "#FBBC04"; // Yellow (Next 25%)
         case 0:
-          return "#FF0000"; // Red (Bottom 25%)
+          return "#EA4335"; // Red (Bottom 25%)
         default:
           return "#4D4D4D";
       }
