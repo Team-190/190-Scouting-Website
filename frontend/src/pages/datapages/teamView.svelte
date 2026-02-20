@@ -19,7 +19,7 @@
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
   import { fetchGracePage } from "../../utils/api";
-  import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 let uuid = uuidv4();
   ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -123,7 +123,6 @@ let uuid = uuidv4();
   };
   let garceData;
   let eventCode = localStorage.getItem("eventCode");
-  //let eventCode = "2025mawor";
   fetchGracePage(eventCode)
     .then((res) => {
       return res.json();
@@ -597,7 +596,7 @@ let uuid = uuidv4();
   }
 
   let allTeams = [];
-  let selectedTeam: string | number = ""; // Allow both types
+  let selectedTeam: number | null = null;
 
   async function loadTeamNumbers(eventCode) {
     let data = [];
@@ -1869,7 +1868,7 @@ let uuid = uuidv4();
     // Set initial selected team (first available team, or 190 if available)
     if (allTeams.length > 0) {
       const team190 = allTeams.find((t) => t.toString() === "190");
-      selectedTeam = team190 ? team190.toString() : allTeams[0].toString();
+      selectedTeam = team190 ? team190 : allTeams[0];
       loadTeamData(selectedTeam);
       console.log("Loading data from team", selectedTeam);
     }
