@@ -1270,6 +1270,11 @@
 
           if (params.value === undefined || params.value === null) return "";
 
+          // For non-numeric metrics, just display the string value
+          if (!isNumericMetric) {
+            return normalizeValue(params.value);
+          }
+
           const num = Number(params.value ?? 0);
 
           // Format -1 as "False" for display
