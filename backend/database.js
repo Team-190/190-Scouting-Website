@@ -67,6 +67,7 @@ async function getAllData(eventCode) {
         for (const row of rows) {
             const team = row.Team || row.team;
             const match = row.Match || row.match;
+            const scouter = row.ScouterName || row.scouterName
 
             if (!team || !match) continue;
 
@@ -76,13 +77,17 @@ async function getAllData(eventCode) {
                 sums[uniqueKey] = {};
             }
 
+            if (!sums[uniqueKey][scouter]) {
+                sums[uniqueKey][scouter] = {};
+            }
+
             // Determine base row: prioritize RecordType = 'EndMatch'
             const currentBase = grouped[uniqueKey];
             const isEndMatch = row.RecordType === 'EndMatch';
 
             // If no base yet, or we found an EndMatch and the current base isn't one (or we want to update the EndMatch)
             if (!currentBase || isEndMatch || (currentBase.RecordType !== 'EndMatch')) {
-                 grouped[uniqueKey] = row;
+                grouped[uniqueKey] = row;
             }
 
             // Capture EndAuto specific fields
@@ -109,22 +114,43 @@ async function getAllData(eventCode) {
                 const val = row[key];
                  // Ignore -1 and nulls for sums
                 if (typeof val === 'number' && val !== -1) {
-                    sums[uniqueKey][key] = (sums[uniqueKey][key] || 0) + val;
+                    sums[uniqueKey][scouter][key] = (sums[uniqueKey][scouter][key] || 0) + val;
                 }
             }
         }
 
         const finalData = Object.keys(grouped).map(key => {
             const baseObj = { ...grouped[key] };
-            const keySums = sums[key];
+
+            let keySums = {}
+
+            // for each scouter who reported on the event match
+            let scouterCount = 0;
+            for (scouter in sums[key].keys()) {
+                // for each metric the scouter reported
+                for (metric in sums[key][scouter]) {
+                    if (!keySums[metric]) {
+                        keySums[metric] = 0;
+                    }
+
+                    keySums[metric] += sums[key][scouter][metric];
+                }
+                scouterCount++;
+            }
+
+            for (item in keySums.keys()) {
+                keySums[item] /= scouterCount;
+            }
+
+            // const keySums = sums[key];
             for (const field in keySums) {
                 baseObj[field] = keySums[field];
             }
             
             // Apply EndAuto overrides
             if (endAutoOverrides[key]) {
-                 if (endAutoOverrides[key]['AutoClimb'] !== undefined) baseObj['AutoClimb'] = endAutoOverrides[key]['AutoClimb'];
-                 if (endAutoOverrides[key]['StartingLocation'] !== undefined) baseObj['StartingLocation'] = endAutoOverrides[key]['StartingLocation'];
+                if (endAutoOverrides[key]['AutoClimb'] !== undefined) baseObj['AutoClimb'] = endAutoOverrides[key]['AutoClimb'];
+                if (endAutoOverrides[key]['StartingLocation'] !== undefined) baseObj['StartingLocation'] = endAutoOverrides[key]['StartingLocation'];
             }
             
             return baseObj;
@@ -138,29 +164,29 @@ async function getAllData(eventCode) {
 }
 
 // Legacy code for getting team view. may be implemented again
-async function getAllTeamsView(eventCode) {
-    let jsonConfig;
-    try {
-        const raw = fs.readFileSync(`test/${eventCode}-config.json`, 'utf8');
-        jsonConfig = JSON.parse(raw);
-    } catch (error) {
-        console.error(`Failed to load config for ${eventCode}:`, error);
-        return { data: null, error };
-    }
+// async function getAllTeamsView(eventCode) {
+//     let jsonConfig;
+//     try {
+//         const raw = fs.readFileSync(`test/${eventCode}-config.json`, 'utf8');
+//         jsonConfig = JSON.parse(raw);
+//     } catch (error) {
+//         console.error(`Failed to load config for ${eventCode}:`, error);
+//         return { data: null, error };
+//     }
 
-    console.log(["Team"].concat(jsonConfig.teamView[0].columns));
-    const columns = ["Team"].concat(jsonConfig.teamView[0].columns).map(c => `[${c}]`).join(", ");
+//     console.log(["Team"].concat(jsonConfig.teamView[0].columns));
+//     const columns = ["Team"].concat(jsonConfig.teamView[0].columns).map(c => `[${c}]`).join(", ");
 
-    try {
-        await sql.connect(config);
-        const query = `SELECT ${columns} FROM [${eventCode}].[dbo].[Activities] WHERE RecordType = 'EndMatch'`;
-        const result = await sql.query(query);
-        return { data: result.recordset, error: null }; 
-    } catch (err) {
-        console.error("getAllTeamsView error:", err);
-        return { data: null, error: err };
-    }
-}
+//     try {
+//         await sql.connect(config);
+//         const query = `SELECT ${columns} FROM [${eventCode}].[dbo].[Activities] WHERE RecordType = 'EndMatch'`;
+//         const result = await sql.query(query);
+//         return { data: result.recordset, error: null }; 
+//     } catch (err) {
+//         console.error("getAllTeamsView error:", err);
+//         return { data: null, error: err };
+//     }
+// }
 
 async function readJSONFile(filename) {
     try {
@@ -188,7 +214,7 @@ module.exports = {
     getEvents,
     getAllData,
     getAvailableTeams,
-    getAllTeamsView,
+    // getAllTeamsView,
     readJSONFile,
     writeJSONFile
 }
