@@ -7,7 +7,7 @@
     async function cacheAllData() {
         localStorage.clear();
         console.log("Getting all data from storage for event "+eventCode);
-        const data = JSON.stringify((await(await fetch("http://localhost:8000/getA`llData?eventCode="+eventCode)).json()).data);
+        const data = JSON.stringify((await(await fetch("http://localhost:8000/getAllData?eventCode="+eventCode)).json()).data);
         
         console.log(data)
         localStorage.setItem("data", data);
