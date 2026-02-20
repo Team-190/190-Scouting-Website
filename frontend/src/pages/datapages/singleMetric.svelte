@@ -50,7 +50,7 @@
   const TBA_API_KEY = import.meta.env.VITE_AUTH_KEY;
   const TBA_BASE_URL = "https://www.thebluealliance.com/api/v3";
 
-  let eventKey = ""; // Will be loaded from localStorage
+  let eventKey = "2025mawor"; // Will be loaded from localStorage
   let teamOPRs = {}; // Cache for OPR values { teamNumber: oprValue }
   let oprLoading = false;
 
@@ -428,6 +428,27 @@
     return String(value);
   }
 
+  // helper that interprets various representations of truth for boolean metrics
+  function booleanTrue(v) {
+    if (v === true) return true;
+    if (v === false) return false;
+    if (v === null || v === undefined || v === "") return false;
+    const s = String(v).toLowerCase().trim();
+    return s === "yes" || s === "true" || s === "1";
+  }
+
+  // check whether any of the Q* columns on a row are truthy
+  function rowHasBooleanTrue(row) {
+    for (const key in row) {
+      if (key.startsWith("Q")) {
+        if (booleanTrue(row[key])) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   function checkIsNumericMetric(metric) {
     // Special case for OPR
     if (metric === "OPR" || metric === "OPR (Offensive Power Rating)") {
@@ -570,6 +591,8 @@
   }
 
   async function fetchAllMetricData() {
+    console.log("Getting data from local storage");
+    return localStorage.getItem("data");
     const eventCode = localStorage.getItem("eventCode");
     console.log("eventCode: ", eventCode);
 
@@ -588,7 +611,7 @@
 
     oprLoading = true;
     try {
-      const response = await fetch(`${TBA_BASE_URL}/event/${eventKey}/oprs`, {
+      const response = await fetch(`${TBA_BASE_URL}/event/2025mawor/oprs`, {
         headers: {
           "X-TBA-Auth-Key": TBA_API_KEY,
         },
@@ -620,7 +643,8 @@
   }
 
   function processTeamData(dataResponse) {
-    const allRows = Array.isArray(dataResponse?.data) ? dataResponse.data : [];
+
+    const allRows = dataResponse; // Array.isArray(dataResponse?.data) ? dataResponse.data : [];
 
     if (allRows.length === 0) {
       throw new Error("No data found from backend");
@@ -1070,8 +1094,17 @@
         return row;
       })
       .sort((a, b) => {
-        if (!isNumericMetric || isBooleanMetric || isClimbStateMetric)
+        if (isBooleanMetric) {
+          // sort rows with any true/yes value first, then by team
+          const aTrue = rowHasBooleanTrue(a);
+          const bTrue = rowHasBooleanTrue(b);
+          if (aTrue && !bTrue) return -1;
+          if (!aTrue && bTrue) return 1;
           return a.team.localeCompare(b.team);
+        }
+        if (!isNumericMetric || isClimbStateMetric) {
+          return a.team.localeCompare(b.team);
+        }
 
         // Handle null means
         if (a.mean === null && b.mean !== null) return 1;
