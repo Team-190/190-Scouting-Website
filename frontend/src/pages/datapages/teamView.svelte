@@ -1993,15 +1993,7 @@
             on:click={() => removeChart(chart.id)}
             aria-label="Remove chart"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              width="16"
-              height="16"
-              fill="white"
-            >
-              <path d="M3 6h18v2H3V6zm2 3h14l-1.5 12H6.5L5 9zm3-7h4v2H8V2z" />
-            </svg>
+            X
           </button>
 
           <div class="chart-container" bind:this={chart.el}></div>
