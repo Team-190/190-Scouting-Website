@@ -1094,12 +1094,18 @@
       })
       .sort((a, b) => {
         if (isBooleanMetric) {
-          // sort rows with any true/yes value first, then by team
-          const aTrue = rowHasBooleanTrue(a);
-          const bTrue = rowHasBooleanTrue(b);
-          if (aTrue && !bTrue) return -1;
-          if (!aTrue && bTrue) return 1;
-          return a.team.localeCompare(b.team);
+          // Count how many Q columns are true for each row
+          const countTrue = (row) => {
+            let count = 0;
+            for (const key in row) {
+              if (key.startsWith("Q") && booleanTrue(row[key])) count++;
+            }
+            return count;
+          };
+          const aCount = countTrue(a);
+          const bCount = countTrue(b);
+          if (aCount !== bCount) return bCount - aCount; // More yes = higher
+          return a.team.localeCompare(b.team); // Tiebreak by team number
         }
         if (!isNumericMetric || isClimbStateMetric) {
           return a.team.localeCompare(b.team);
