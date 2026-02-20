@@ -119,7 +119,7 @@ app.get("/singleMetric", async (req, res) => {
     }
 
 
-    await fs.writeFile('teams.json', JSON.stringify(teams, null, 2));
+    // await fs.writeFile('teams.json', JSON.stringify(teams, null, 2));
     console.log(Object.keys(teams))
     for (let thinger of Object.keys(teams)) {
         console.log(teams[thinger])
