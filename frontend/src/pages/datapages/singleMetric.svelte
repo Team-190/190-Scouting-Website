@@ -16,7 +16,6 @@
   import * as radarGraph from "../../pages/graphcode/radar.js";
 
   import { v4 as uuidv4 } from "uuid";
-  let uuid = uuidv4();
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -1480,7 +1479,7 @@
 
   function addChart(type) {
     const newChart = {
-      id: uuid,
+      id: uuidv4(),
       type,
       el: null,
       instance: null,
@@ -1554,7 +1553,7 @@
 
     let option = {};
 
-    if (!isNumeric && chart.type !== "pie") {
+    if (!isNumeric && chart.type !== "pie" && chart.type !== "radar") {
       // Show "Not Supported" for numeric charts on string data
       option = {
         title: {
