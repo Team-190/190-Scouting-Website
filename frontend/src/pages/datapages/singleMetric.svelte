@@ -428,6 +428,27 @@
     return String(value);
   }
 
+  // helper that interprets various representations of truth for boolean metrics
+  function booleanTrue(v) {
+    if (v === true) return true;
+    if (v === false) return false;
+    if (v === null || v === undefined || v === "") return false;
+    const s = String(v).toLowerCase().trim();
+    return s === "yes" || s === "true" || s === "1";
+  }
+
+  // check whether any of the Q* columns on a row are truthy
+  function rowHasBooleanTrue(row) {
+    for (const key in row) {
+      if (key.startsWith("Q")) {
+        if (booleanTrue(row[key])) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   function checkIsNumericMetric(metric) {
     // Special case for OPR
     if (metric === "OPR" || metric === "OPR (Offensive Power Rating)") {
@@ -1072,8 +1093,17 @@
         return row;
       })
       .sort((a, b) => {
-        if (!isNumericMetric || isBooleanMetric || isClimbStateMetric)
+        if (isBooleanMetric) {
+          // sort rows with any true/yes value first, then by team
+          const aTrue = rowHasBooleanTrue(a);
+          const bTrue = rowHasBooleanTrue(b);
+          if (aTrue && !bTrue) return -1;
+          if (!aTrue && bTrue) return 1;
           return a.team.localeCompare(b.team);
+        }
+        if (!isNumericMetric || isClimbStateMetric) {
+          return a.team.localeCompare(b.team);
+        }
 
         // Handle null means
         if (a.mean === null && b.mean !== null) return 1;
