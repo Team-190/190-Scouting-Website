@@ -20,7 +20,6 @@
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
   import { fetchGracePage } from "../../utils/api";
   import { v4 as uuidv4 } from "uuid";
-  let uuid = uuidv4();
   ModuleRegistry.registerModules([AllCommunityModule]);
   let domNode;
   let colorblindMode = "normal";
@@ -859,7 +858,7 @@
     charts = [
       ...charts,
       {
-        id: uuid,
+        id: uuidv4(),
         type,
         el: null,
         instance: null,
