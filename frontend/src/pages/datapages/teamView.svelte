@@ -19,14 +19,13 @@
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
   import { fetchGracePage } from "../../utils/api";
-  import { v4 as uuidv4 } from 'uuid';
-let uuid = uuidv4();
+  import { v4 as uuidv4 } from "uuid";
+  let uuid = uuidv4();
   ModuleRegistry.registerModules([AllCommunityModule]);
-
   let domNode;
   let colorblindMode = "normal";
-  let populatecache;
   let gridHeight = 400; // Default height, will be calculated dynamically
+  let eventCode = "";
 
   const ROW_HEIGHT = 25; // Height of each row in pixels
   const HEADER_HEIGHT = 32; // Height of the header row
@@ -34,8 +33,6 @@ let uuid = uuidv4();
   const TBA_BASE_URL = "https://www.thebluealliance.com/api/v3";
 
   let teamOPR: number | null = null;
-  let eventKey = ""; // Will be set in onMount from localStorage
-
   const metricNames = new Map();
   metricNames.set("TimeOfClimb", "Match Climb Time");
   metricNames.set("Defense", "Defense Strategy");
@@ -89,6 +86,12 @@ let uuid = uuidv4();
     }
   }
 
+  function fetchTBALink(match) {
+    const matchNum = String(match);
+    console.log(eventCode);
+    return `https://www.thebluealliance.com/match/${eventCode}_qm${matchNum}`;
+  }
+
   const colorModes = {
     normal: {
       name: "Gradient",
@@ -122,8 +125,7 @@ let uuid = uuidv4();
     },
   };
   let garceData;
-  let eventCode = localStorage.getItem("eventCode");
-  //let eventCode = "2025mawor";
+
   fetchGracePage(eventCode)
     .then((res) => {
       return res.json();
@@ -583,7 +585,7 @@ let uuid = uuidv4();
   function onTeamChange() {
     const teamStr = String(selectedTeam);
     loadTeamData(teamStr);
-    fetchTeamOPR(teamStr, eventKey);
+    fetchTeamOPR(teamStr, eventCode);
     console.log("Selected team: " + selectedTeam);
     console.log(
       "Garce rating for team " +
@@ -592,8 +594,7 @@ let uuid = uuidv4();
         fetchGraceRating(selectedTeam),
     );
     let graceRatingElement = document.getElementById("grace-rating");
-      graceRatingElement.src =
-        fetchGraceRating(selectedTeam);
+    graceRatingElement.src = fetchGraceRating(selectedTeam);
   }
 
   let allTeams = [];
@@ -650,14 +651,14 @@ let uuid = uuidv4();
     return data;
   }
 
-  async function fetchTeamOPR(teamNumber: string, eventKey: string) {
-    if (!eventKey || !teamNumber) {
+  async function fetchTeamOPR(teamNumber: string, eventCode: string) {
+    if (!eventCode || !teamNumber) {
       teamOPR = null;
       return;
     }
 
     try {
-      const response = await fetch(`${TBA_BASE_URL}/event/${eventKey}/oprs`, {
+      const response = await fetch(`${TBA_BASE_URL}/event/${eventCode}/oprs`, {
         headers: {
           "X-TBA-Auth-Key": TBA_API_KEY,
         },
@@ -1835,12 +1836,44 @@ let uuid = uuidv4();
       suppressColumnVirtualisation: true,
       suppressHorizontalScroll: true,
     });
+    setTimeout(() => {
+      try {
+        const headerCells = domNode.querySelectorAll(".ag-header-cell");
+        headerCells.forEach((cell) => {
+          const headerText = (cell.textContent || "").trim();
+          const matchNum = matchNums.find((n) => String(n) === headerText);
+          if (matchNum !== undefined) {
+            cell.style.cursor = "pointer";
+            cell.style.textDecoration = "underline";
+
+            const onClick = (e) => {
+              e.stopPropagation();
+              const tbaLink = fetchTBALink(matchNum);
+              if (tbaLink) window.open(tbaLink, "_blank");
+            };
+            cell.removeEventListener("click", onClick);
+            cell.addEventListener("click", onClick);
+
+            cell.addEventListener(
+              "mouseenter",
+              () => (cell.style.opacity = "0.8"),
+            );
+            cell.addEventListener(
+              "mouseleave",
+              () => (cell.style.opacity = "1"),
+            );
+          }
+        });
+      } catch (err) {
+        console.error("Error attaching header click handlers", err);
+      }
+    }, 0);
   }
 
   onMount(async () => {
     // Load event key from localStorage
-    eventKey = localStorage.getItem("eventCode") || "";
-    console.log("Event key loaded:", eventKey);
+    eventCode = localStorage.getItem("eventCode") || "";
+    console.log("Event key loaded:", eventCode);
 
     // Fetch all data from backend for global stats calculation
     const storedData = localStorage.getItem("data");
@@ -1857,12 +1890,8 @@ let uuid = uuidv4();
     teamViewData = allDataResponse;
     console.log("All data loaded for global stats:", teamViewData);
 
-    // Load event key from localStorage
-    eventKey = localStorage.getItem("eventCode") || "";
-    console.log("Event Key:", eventKey);
-
     // Load team numbers from backend
-    allTeams = await loadTeamNumbers(eventKey);
+    allTeams = await loadTeamNumbers(eventCode);
 
     console.log("Populated team list:", allTeams);
 
@@ -1875,7 +1904,7 @@ let uuid = uuidv4();
     }
 
     // Fetch OPR for initial team
-    await fetchTeamOPR(String(selectedTeam), eventKey);
+    await fetchTeamOPR(String(selectedTeam), eventCode);
 
     console.log("Loading data from team", selectedTeam);
   });

@@ -622,8 +622,7 @@
   }
 
   function processTeamData(dataResponse) {
-
-    const allRows = dataResponse; // Array.isArray(dataResponse?.data) ? dataResponse.data : [];
+    const allRows = JSON.parse(dataResponse); // Array.isArray(dataResponse?.data) ? dataResponse.data : [];
 
     if (allRows.length === 0) {
       throw new Error("No data found from backend");
@@ -1867,7 +1866,6 @@
     try {
       allDataResponse = await fetchAllMetricData();
       console.log("Fetched data from backend:", allDataResponse);
-
       processTeamData(allDataResponse);
 
       if (availableTeams.length === 0) {
