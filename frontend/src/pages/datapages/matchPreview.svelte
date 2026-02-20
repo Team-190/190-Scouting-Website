@@ -80,15 +80,7 @@
     "scouter_name",
     "scouter_error",
   ];
-
-  // Metrics where lower values are better (e.g., time-based metrics)
-  const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime"];
-
-  // Boolean metrics that should be colored green (Yes) or red (No)
-  const BOOLEAN_METRICS = ["AutoClimb", "AttemptClimb"];
-
-  // ClimbState metric needs special handling
-  const CLIMBSTATE_METRIC = "EndState";
+  // ===== ADDED FROM teamView.svelte - END =====
 
   //garce stuff
   let garceData;
@@ -204,89 +196,7 @@
     ].join(",")})`;
   }
 
-  function getBooleanColor(v) {
-    if (v === null || v === undefined || v === "" || v === -1) {
-      return "#808080";
-    }
-    const strVal = String(v).toLowerCase().trim();
-    if (strVal === "yes" || strVal === "true" || strVal === "1")
-      return "#00FF00";
-    if (strVal === "no" || strVal === "false") return "#000000";
-    if (strVal === "0") return "#808080";
-    if (typeof v === "boolean") return v ? "#00FF00" : "#000000";
-    if (isNumeric(v)) {
-      const num = Number(v);
-      if (num === 0) return "#808080";
-      return num > 0 ? "#00FF00" : "#000000";
-    }
-    return "#808080";
-  }
-
-  function getClimbStateColor(climbStateValue, attemptClimbValue) {
-    if (
-      climbStateValue === null ||
-      climbStateValue === undefined ||
-      climbStateValue === "" ||
-      climbStateValue === -1
-    ) {
-      return "#808080";
-    }
-    const stateStr = String(climbStateValue).toLowerCase().trim();
-    if (
-      stateStr === "no_climb" ||
-      stateStr === "no climb" ||
-      stateStr === "noclimb"
-    ) {
-      if (
-        attemptClimbValue === null ||
-        attemptClimbValue === undefined ||
-        attemptClimbValue === ""
-      ) {
-        return "#000000";
-      }
-      const attemptStr = String(attemptClimbValue).toLowerCase().trim();
-      if (
-        attemptStr === "no" ||
-        attemptStr === "false" ||
-        attemptStr === "0" ||
-        attemptClimbValue === false ||
-        attemptClimbValue === 0
-      ) {
-        return "#000000";
-      } else if (
-        attemptStr === "yes" ||
-        attemptStr === "true" ||
-        attemptStr === "1" ||
-        attemptClimbValue === true ||
-        attemptClimbValue === 1
-      ) {
-        return "#FF0000";
-      }
-      return "#000000";
-    }
-    if (stateStr === "l1") return "#FFFF00";
-    if (stateStr === "l2") return "#00FF00";
-    if (stateStr === "l3") return "#0000FF";
-    return "#808080";
-  }
-
-  function colorFromStats(
-    v,
-    mu,
-    sigma,
-    {
-      inverted = false,
-      isBooleanMetric = false,
-      isClimbStateMetric = false,
-      attemptClimbValue = null,
-    } = {},
-  ) {
-    if (isClimbStateMetric) {
-      return getClimbStateColor(v, attemptClimbValue);
-    }
-    if (isBooleanMetric) {
-      return getBooleanColor(v);
-    }
+  function colorFromStats(v, mu, sigma) {
     // For non-numeric data, return neutral color
     if (!isNumeric(v)) {
       return "#333";
@@ -298,7 +208,7 @@
     if (sigma === 0) return "rgb(180,180,180)";
 
     const mode = colorModes[colorblindMode];
-    const z = inverted ? (mu - numValue) / sigma : (numValue - mu) / sigma;
+    const z = (numValue - mu) / sigma;
     const t = Math.min(1, Math.abs(z));
 
     return z < 0
@@ -554,6 +464,45 @@
     return result.sort((a, b) => (a.Match || a.match) - (b.Match || b.match));
   }
   // ===== ADDED FROM teamView.svelte - END =====
+
+  function getLastPlayedMatch(teamNumber: string): string {
+  if (!teamNumber || !allMatches || allMatches.length === 0) return "—";
+
+  const teamKey = `frc${teamNumber}`;
+
+  // Find the currently selected match's index in allMatches
+  const currentMatchIndex = allMatches.findIndex(m => m.key === selectedMatch);
+
+  // Only look at matches BEFORE the current one
+  const previousMatches = currentMatchIndex >= 0
+    ? allMatches.slice(0, currentMatchIndex)
+    : allMatches;
+
+  // Find the last match this team played in
+  let lastMatch = null;
+  for (let i = previousMatches.length - 1; i >= 0; i--) {
+    const m = previousMatches[i];
+    const allTeams = [
+      ...(m.alliances?.red?.team_keys ?? []),
+      ...(m.alliances?.blue?.team_keys ?? []),
+    ];
+    if (allTeams.includes(teamKey)) {
+      lastMatch = m;
+      break;
+    }
+  }
+
+  if (!lastMatch) return "—";
+
+  if (lastMatch.comp_level === "qm") return `Q${lastMatch.match_number}`;
+  if (lastMatch.comp_level === "f") return `F${lastMatch.match_number}`;
+
+  const elimMatches = allMatches.filter(m => m.comp_level !== "qm" && m.comp_level !== "f");
+  const elimIndex = elimMatches.indexOf(lastMatch) + 1;
+  return `M${elimIndex}`;
+}
+  // ===== END NEW =====
+
   async function loadMatchData(matchKey: string) {
     if (!allMatches || allMatches.length === 0) return;
 
@@ -820,6 +769,18 @@
       }
     });
   }
+
+  $: lastScoutedMatches = (() => {
+  if (!teamViewData) return { r0:"—", r1:"—", r2:"—", b0:"—", b1:"—", b2:"—" };
+  return {
+    r0: getLastPlayedMatch(redAlliance[0]),
+    r1: getLastPlayedMatch(redAlliance[1]),
+    r2: getLastPlayedMatch(redAlliance[2]),
+    b0: getLastPlayedMatch(blueAlliance[0]),
+    b1: getLastPlayedMatch(blueAlliance[1]),
+    b2: getLastPlayedMatch(blueAlliance[2]),
+  };
+})();
 
   function updateChartDataset(chart) {
     if (!chart.instance) return;
@@ -1117,9 +1078,6 @@
     // Calculate global stats for each metric across all teams/matches (only for numeric)
     const globalStats = {};
     displayMetrics.forEach((metric) => {
-      const isBoolMetric = BOOLEAN_METRICS.includes(metric);
-      const isClimbMetric = metric === CLIMBSTATE_METRIC;
-
       // Check if metric is numeric based on global data sample
       const allRows = Array.isArray(teamViewData?.data)
         ? teamViewData.data
@@ -1128,23 +1086,19 @@
       let isNumericMetric = true;
       let hasData = false;
 
-      if (!isBoolMetric && !isClimbMetric) {
-        // Check ALL values to determine type
-        for (const r of allRows) {
-          const v = r[metric];
-          if (v !== undefined && v !== null && v !== "") {
-            hasData = true;
-            if (!isNumeric(v)) {
-              isNumericMetric = false;
-              break;
-            }
+      // Check ALL values to determine type
+      for (const r of allRows) {
+        const v = r[metric];
+        if (v !== undefined && v !== null && v !== "") {
+          hasData = true;
+          if (!isNumeric(v)) {
+            isNumericMetric = false;
+            break;
           }
         }
-        // If no data found, assume not numeric (string is safer default)
-        if (!hasData) isNumericMetric = false;
-      } else {
-        isNumericMetric = false;
       }
+      // If no data found, assume not numeric (string is safer default)
+      if (!hasData) isNumericMetric = false;
 
       if (isNumericMetric) {
         allRows.forEach((row) => {
@@ -1161,17 +1115,9 @@
               ? sd(filteredValues, mean(filteredValues))
               : 0,
           isNumeric: true,
-          isBoolean: false,
-          isClimbState: false,
         };
       } else {
-        globalStats[metric] = {
-          mean: 0,
-          sd: 0,
-          isNumeric: false,
-          isBoolean: isBoolMetric,
-          isClimbState: isClimbMetric,
-        };
+        globalStats[metric] = { mean: 0, sd: 0, isNumeric: false };
       }
     });
 
@@ -1189,16 +1135,12 @@
       const row: any = { metric };
       const values = [];
       const isNumericMetric = globalStats[metric]?.isNumeric ?? false;
-      const isBoolMetric = globalStats[metric]?.isBoolean ?? false;
-      const isClimbMetric = globalStats[metric]?.isClimbState ?? false;
 
       qLabels.forEach((q, i) => {
         const match = matches[i];
         let val = match?.[metric];
 
-        if (isBoolMetric || isClimbMetric) {
-          row[q] = val;
-        } else if (isNumericMetric) {
+        if (isNumericMetric) {
           const numVal = isNumeric(val) ? Number(val) : 0;
           row[q] = numVal;
           values.push(numVal);
@@ -1254,35 +1196,6 @@
 
           const metricName = params.data.metric;
           const stats = globalStats[metricName] || { mean: 0, sd: 0 };
-          const isBoolMetric = stats.isBoolean || false;
-          const isClimbMetric = stats.isClimbState || false;
-          const isInverted = INVERTED_METRICS.includes(metricName);
-
-          if (isBoolMetric || isClimbMetric) {
-            let attemptVal = null;
-            if (isClimbMetric) {
-              const qIdx = qLabels.indexOf(params.colDef.field);
-              if (qIdx >= 0 && matches[qIdx]) {
-                attemptVal = matches[qIdx]["AttemptClimb"];
-              }
-            }
-            const bg = colorFromStats(params.value, 0, 0, {
-              isBooleanMetric: isBoolMetric,
-              isClimbStateMetric: isClimbMetric,
-              attemptClimbValue: attemptVal,
-            });
-            const textColor =
-              bg === "#000000" || bg === "#000" || bg === "#0000FF"
-                ? "white"
-                : "black";
-            return {
-              background: bg,
-              color: textColor,
-              fontSize: "18px",
-              fontWeight: 600,
-              textAlign: "center",
-            };
-          }
 
           if (!stats.isNumeric) {
             return {
@@ -1299,9 +1212,7 @@
           const numValue = isNumeric(val) ? Number(val) : 0;
 
           return {
-            background: colorFromStats(numValue, stats.mean, stats.sd, {
-              inverted: isInverted,
-            }),
+            background: colorFromStats(numValue, stats.mean, stats.sd),
             color: numValue === 0 ? "white" : "black",
             fontSize: "18px",
             fontWeight: 600,
@@ -1474,29 +1385,23 @@
 
     const globalStats = {};
     displayMetrics.forEach((metric) => {
-      const isBoolMetric = BOOLEAN_METRICS.includes(metric);
-      const isClimbMetric = metric === CLIMBSTATE_METRIC;
-
       const allRows = Array.isArray(teamViewData) ? teamViewData : [];
       const allValues = [];
       let isNumericMetric = true;
       let hasData = false;
 
-      if (!isBoolMetric && !isClimbMetric) {
-        for (const r of allRows) {
-          const v = r[metric];
-          if (v !== undefined && v !== null && v !== "") {
-            hasData = true;
-            if (!isNumeric(v)) {
-              isNumericMetric = false;
-              break;
-            }
+      for (const r of allRows) {
+        const v = r[metric];
+        if (v !== undefined && v !== null && v !== "") {
+          hasData = true;
+          if (!isNumeric(v)) {
+            isNumericMetric = false;
+            break;
           }
         }
-        if (!hasData) isNumericMetric = false;
-      } else {
-        isNumericMetric = false;
       }
+
+      if (!hasData) isNumericMetric = false;
 
       if (isNumericMetric) {
         allRows.forEach((row) => {
@@ -1513,17 +1418,9 @@
               ? sd(filteredValues, mean(filteredValues))
               : 0,
           isNumeric: true,
-          isBoolean: false,
-          isClimbState: false,
         };
       } else {
-        globalStats[metric] = {
-          mean: 0,
-          sd: 0,
-          isNumeric: false,
-          isBoolean: isBoolMetric,
-          isClimbState: isClimbMetric,
-        };
+        globalStats[metric] = { mean: 0, sd: 0, isNumeric: false };
       }
     });
 
@@ -1533,16 +1430,12 @@
       const row: any = { metric };
       const values = [];
       const isNumericMetric = globalStats[metric]?.isNumeric ?? false;
-      const isBoolMetric = globalStats[metric]?.isBoolean ?? false;
-      const isClimbMetric = globalStats[metric]?.isClimbState ?? false;
 
       qLabels.forEach((q, i) => {
         const match = matches[i];
         let val = match?.[metric];
 
-        if (isBoolMetric || isClimbMetric) {
-          row[q] = val;
-        } else if (isNumericMetric) {
+        if (isNumericMetric) {
           const numVal = isNumeric(val) ? Number(val) : 0;
           row[q] = numVal;
           values.push(numVal);
@@ -1590,35 +1483,6 @@
         cellStyle: (params) => {
           const metricName = params.data.metric;
           const stats = globalStats[metricName] || { mean: 0, sd: 0 };
-          const isBoolMetric = stats.isBoolean || false;
-          const isClimbMetric = stats.isClimbState || false;
-          const isInverted = INVERTED_METRICS.includes(metricName);
-
-          if (isBoolMetric || isClimbMetric) {
-            let attemptVal = null;
-            if (isClimbMetric) {
-              const qIdx = qLabels.indexOf(params.colDef.field);
-              if (qIdx >= 0 && matches[qIdx]) {
-                attemptVal = matches[qIdx]["AttemptClimb"];
-              }
-            }
-            const bg = colorFromStats(params.value, 0, 0, {
-              isBooleanMetric: isBoolMetric,
-              isClimbStateMetric: isClimbMetric,
-              attemptClimbValue: attemptVal,
-            });
-            const textColor =
-              bg === "#000000" || bg === "#000" || bg === "#0000FF"
-                ? "white"
-                : "black";
-            return {
-              background: bg,
-              color: textColor,
-              fontSize: "14px",
-              fontWeight: 600,
-              textAlign: "center",
-            };
-          }
 
           if (!stats.isNumeric) {
             return {
@@ -1635,9 +1499,7 @@
           const numValue = isNumeric(val) ? Number(val) : 0;
 
           return {
-            background: colorFromStats(numValue, stats.mean, stats.sd, {
-              inverted: isInverted,
-            }),
+            background: colorFromStats(numValue, stats.mean, stats.sd),
             color: numValue === 0 ? "white" : "black",
             fontSize: "14px",
             fontWeight: 600,
@@ -1845,131 +1707,77 @@
     </div>
   </div>
 
-  <!-- Grid containers with dropdown in middle -->
+<!-- Grid containers with dropdown in middle -->
   <div class="grid-wrapper">
     <div class="grid-column">
       <div class="team-box">
         <h3 class="team-label red-label">
+          <span class="last-match-badge">Last: {lastScoutedMatches.r0}</span>
           Red 1 - Team {redAlliance[0]}
           {#if teamOPRs[redAlliance[0]]}
-            <span class="opr-badge"
-              >OPR: {teamOPRs[redAlliance[0]].toFixed(2)}</span
-            >
+            <span class="opr-badge">OPR: {teamOPRs[redAlliance[0]].toFixed(2)}</span>
           {/if}
-          <img
-            src={rating[fetchGraceRating(redAlliance[0])]}
-            alt="Grace Rating"
-            style="width: 60px;"
-          />
+          <img src={rating[fetchGraceRating(redAlliance[0])]} alt="Grace Rating" style="width: 60px;" />
         </h3>
-        <div
-          class="grid-container ag-theme-quartz"
-          bind:this={domNode}
-          style="height: {gridHeight}px;"
-        ></div>
+        <div class="grid-container ag-theme-quartz" bind:this={domNode} style="height: {gridHeight}px;"></div>
       </div>
       <div class="team-box">
         <h3 class="team-label red-label">
+          <span class="last-match-badge">Last: {lastScoutedMatches.r1}</span>
           Red 2 - Team {redAlliance[1]}
           {#if teamOPRs[redAlliance[1]]}
-            <span class="opr-badge"
-              >OPR: {teamOPRs[redAlliance[1]].toFixed(2)}</span
-            >
+            <span class="opr-badge">OPR: {teamOPRs[redAlliance[1]].toFixed(2)}</span>
           {/if}
-          <img
-            src={rating[fetchGraceRating(redAlliance[1])]}
-            alt="Grace Rating"
-            style="width: 60px;"
-          />
+          <img src={rating[fetchGraceRating(redAlliance[1])]} alt="Grace Rating" style="width: 60px;" />
         </h3>
-        <div
-          class="grid-container ag-theme-quartz"
-          bind:this={domNode2}
-          style="height: {gridHeight}px;"
-        ></div>
+        <div class="grid-container ag-theme-quartz" bind:this={domNode2} style="height: {gridHeight}px;"></div>
       </div>
       <div class="team-box">
         <h3 class="team-label red-label">
+          <span class="last-match-badge">Last: {lastScoutedMatches.r2}</span>
           Red 3 - Team {redAlliance[2]}
           {#if teamOPRs[redAlliance[2]]}
-            <span class="opr-badge"
-              >OPR: {teamOPRs[redAlliance[2]].toFixed(2)}</span
-            >
+            <span class="opr-badge">OPR: {teamOPRs[redAlliance[2]].toFixed(2)}</span>
           {/if}
-          <img
-            src={rating[fetchGraceRating(redAlliance[2])]}
-            alt="Grace Rating"
-            style="width: 60px;"
-          />
+          <img src={rating[fetchGraceRating(redAlliance[2])]} alt="Grace Rating" style="width: 60px;" />
         </h3>
-        <div
-          class="grid-container ag-theme-quartz"
-          bind:this={domNode3}
-          style="height: {gridHeight}px;"
-        ></div>
+        <div class="grid-container ag-theme-quartz" bind:this={domNode3} style="height: {gridHeight}px;"></div>
       </div>
     </div>
 
     <div class="grid-column">
       <div class="team-box">
         <h3 class="team-label blue-label">
+          <span class="last-match-badge">Last: {lastScoutedMatches.b0}</span>
           Blue 1 - Team {blueAlliance[0]}
           {#if teamOPRs[blueAlliance[0]]}
-            <span class="opr-badge"
-              >OPR: {teamOPRs[blueAlliance[0]].toFixed(2)}</span
-            >
+            <span class="opr-badge">OPR: {teamOPRs[blueAlliance[0]].toFixed(2)}</span>
           {/if}
-          <img
-            src={rating[fetchGraceRating(blueAlliance[0])]}
-            alt="Grace Rating"
-            style="width: 60px;"
-          />
+          <img src={rating[fetchGraceRating(blueAlliance[0])]} alt="Grace Rating" style="width: 60px;" />
         </h3>
-        <div
-          class="grid-container ag-theme-quartz"
-          bind:this={domNodeRight}
-          style="height: {gridHeight}px;"
-        ></div>
+        <div class="grid-container ag-theme-quartz" bind:this={domNodeRight} style="height: {gridHeight}px;"></div>
       </div>
       <div class="team-box">
         <h3 class="team-label blue-label">
+          <span class="last-match-badge">Last: {lastScoutedMatches.b1}</span>
           Blue 2 - Team {blueAlliance[1]}
           {#if teamOPRs[blueAlliance[1]]}
-            <span class="opr-badge"
-              >OPR: {teamOPRs[blueAlliance[1]].toFixed(2)}</span
-            >
+            <span class="opr-badge">OPR: {teamOPRs[blueAlliance[1]].toFixed(2)}</span>
           {/if}
-          <img
-            src={rating[fetchGraceRating(blueAlliance[1])]}
-            alt="Grace Rating"
-            style="width: 60px;"
-          />
+          <img src={rating[fetchGraceRating(blueAlliance[1])]} alt="Grace Rating" style="width: 60px;" />
         </h3>
-        <div
-          class="grid-container ag-theme-quartz"
-          bind:this={domNode4}
-          style="height: {gridHeight}px;"
-        ></div>
+        <div class="grid-container ag-theme-quartz" bind:this={domNode4} style="height: {gridHeight}px;"></div>
       </div>
       <div class="team-box">
         <h3 class="team-label blue-label">
+          <span class="last-match-badge">Last: {lastScoutedMatches.b2}</span>
           Blue 3 - Team {blueAlliance[2]}
           {#if teamOPRs[blueAlliance[2]]}
-            <span class="opr-badge"
-              >OPR: {teamOPRs[blueAlliance[2]].toFixed(2)}</span
-            >
+            <span class="opr-badge">OPR: {teamOPRs[blueAlliance[2]].toFixed(2)}</span>
           {/if}
-          <img
-            src={rating[fetchGraceRating(blueAlliance[2])]}
-            alt="Grace Rating"
-            style="width: 60px;"
-          />
+          <img src={rating[fetchGraceRating(blueAlliance[2])]} alt="Grace Rating" style="width: 60px;" />
         </h3>
-        <div
-          class="grid-container ag-theme-quartz"
-          bind:this={domNode5}
-          style="height: {gridHeight}px;"
-        ></div>
+        <div class="grid-container ag-theme-quartz" bind:this={domNode5} style="height: {gridHeight}px;"></div>
       </div>
     </div>
   </div>
@@ -2136,6 +1944,22 @@
     box-shadow: 0 0 0 3px rgba(200, 27, 0, 0.4);
   }
 
+  button {
+    padding: 8px 15px;
+    background: linear-gradient(135deg, #333 0%, #444 100%);
+    color: white;
+    font-size: 16px;
+    border: 2px solid var(--frc-190-red);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  button:hover {
+    background: linear-gradient(135deg, #444 0%, #555 100%);
+    border-color: #e02200;
+  }
+
   .grid-wrapper {
     width: 80vw;
     display: flex;
@@ -2164,11 +1988,32 @@
     text-align: center;
     border-radius: 6px 6px 0 0;
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+    /* Make the banner a positioning context so the badge can anchor to top-left */
+    position: relative;
     height: 70px;
     display: flex;
     align-items: center;
     justify-content: center;
   }
+
+  /* ===== NEW: Last-scouted-match badge ===== */
+  .last-match-badge {
+    position: absolute;
+    top: 6px;
+    left: 8px;
+    background: rgba(0, 0, 0, 0.45);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    padding: 3px 8px;
+    border-radius: 4px;
+    line-height: 1.2;
+    white-space: nowrap;
+    /* Don't let the badge push other flex children around */
+    pointer-events: none;
+  }
+  /* ===== END NEW ===== */
 
   .red-label {
     background: var(--frc-190-red);
@@ -2188,6 +2033,17 @@
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
   }
 
+  .center-dropdown {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .center-dropdown select {
+    margin: 0;
+    padding: 10px 15px;
+  }
+
   .opr-badge {
     margin-left: 10px;
     padding: 4px 10px;
@@ -2195,5 +2051,155 @@
     border-radius: 4px;
     font-size: 0.9rem;
     font-weight: 600;
+  }
+
+  /* ===== Graph Section Styles ===== */
+  .graph-section {
+    width: 80vw;
+    margin-top: 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .section-title {
+    color: var(--frc-190-red);
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-bottom: 20px;
+    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
+  }
+
+  .dropdown-container {
+    position: relative;
+    margin-bottom: 20px;
+  }
+
+  .plus-btn {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    font-weight: 600;
+    border: 2px solid var(--frc-190-red);
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+    color: white;
+    cursor: pointer;
+    padding: 0;
+    box-sizing: border-box;
+    transition: all 0.3s ease;
+  }
+
+  .plus-btn:hover {
+    background: linear-gradient(135deg, var(--frc-190-red) 0%, #e02200 100%);
+    transform: scale(1.05);
+  }
+
+  .dropdown {
+    position: absolute;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+    border: 2px solid var(--frc-190-red);
+    border-radius: 8px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    width: 150px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    z-index: 10;
+    overflow: hidden;
+  }
+
+  .dropdown li {
+    padding: 12px 15px;
+    cursor: pointer;
+    text-align: center;
+    color: white;
+    font-weight: 500;
+    text-transform: capitalize;
+    transition: background 0.2s ease;
+  }
+
+  .dropdown li:hover {
+    background: var(--frc-190-red);
+  }
+
+  .charts-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    width: 100%;
+  }
+
+  .chart-wrapper {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+    border: 2px solid var(--frc-190-red);
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  }
+
+  .chart-container {
+    width: 100%;
+    height: 300px;
+    flex-grow: 1;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+  }
+
+  .chart-label {
+    margin-top: 10px;
+    font-weight: bold;
+    text-transform: capitalize;
+    text-align: center;
+    color: white;
+    font-size: 1rem;
+  }
+
+  .remove-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: var(--frc-190-red);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10;
+    transition: background 0.2s ease;
+  }
+
+  .remove-btn:hover {
+    background: #e02200;
+  }
+
+  .metric-select {
+    margin-top: 10px;
+  }
+
+  @media (max-width: 1024px) {
+    .charts-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 700px) {
+    .charts-grid {
+      grid-template-columns: 1fr;
+    }
   }
 </style>
