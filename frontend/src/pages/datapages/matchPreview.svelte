@@ -596,8 +596,8 @@
 
     console.log("Loaded teamViewData:", teamViewData);
 
-    // eventCode = "2025mawor";
-    eventCode = localStorage.getItem("eventCode") || "";
+     eventCode = "2025mawor";
+    //eventCode = localStorage.getItem("eventCode") || "";
     console.log("Event Key:", eventCode);
 
     // Fetch OPR data early
@@ -1992,6 +1992,7 @@
     /* Make the banner a positioning context so the badge can anchor to top-left */
     position: relative;
     height: 70px;
+    width: 700px;
     display: flex;
     align-items: center;
     justify-content: center;
