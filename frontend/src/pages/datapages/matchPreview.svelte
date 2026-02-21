@@ -26,7 +26,7 @@
   import { fetchGracePage } from "../../utils/api";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
-  let eventKey = ""; // Will be loaded from localStorage
+  let eventCode = ""; // Will be loaded from localStorage
   let domNode;
   let domNodeRight;
   let domNode2;
@@ -84,7 +84,7 @@
 
   //garce stuff
   let garceData;
-  fetchGracePage(eventKey)
+  fetchGracePage(eventCode)
     .then((res) => {
       return res.json();
     })
@@ -236,7 +236,7 @@
   let allMatches = [];
 
   // Blue Alliance API configuration
-  const TBA_API_KEY = import.meta.env.VITE_AUTH_KEY;
+  const TBA_API_KEY = import.meta.env.VITE_BA_AUTH_KEY;
   const TBA_BASE_URL = "https://www.thebluealliance.com/api/v3";
 
   // Alliance team selections (will be populated from API based on selected match)
@@ -248,15 +248,15 @@
   let teamOPRs = {}; // Cache for OPR values { teamNumber: oprValue }
   let oprLoading = false;
 
-  async function fetchEventOPRs(eventKey) {
-    if (!eventKey) {
+  async function fetchEventOPRs(eventCode) {
+    if (!eventCode) {
       console.warn("No event key provided for OPR fetch");
       return {};
     }
 
     oprLoading = true;
     try {
-      const response = await fetch(`${TBA_BASE_URL}/event/${eventKey}/oprs`, {
+      const response = await fetch(`${TBA_BASE_URL}/event/${eventCode}/oprs`, {
         headers: {
           "X-TBA-Auth-Key": TBA_API_KEY,
         },
@@ -287,10 +287,10 @@
     }
   }
 
-  async function fetchEventMatches(eventKey) {
+  async function fetchEventMatches(eventCode) {
     try {
       const response = await fetch(
-        `${TBA_BASE_URL}/event/${eventKey}/matches`,
+        `${TBA_BASE_URL}/event/${eventCode}/matches`,
         {
           headers: {
             "X-TBA-Auth-Key": TBA_API_KEY,
@@ -583,8 +583,8 @@
     console.log("Red Alliance:", redAlliance, "Blue Alliance:", blueAlliance);
 
     // Fetch OPR data if we don't have it yet
-    if (Object.keys(teamOPRs).length === 0 && eventKey) {
-      teamOPRs = await fetchEventOPRs(eventKey);
+    if (Object.keys(teamOPRs).length === 0 && eventCode) {
+      teamOPRs = await fetchEventOPRs(eventCode);
     }
 
     await tick();
@@ -596,18 +596,18 @@
 
     console.log("Loaded teamViewData:", teamViewData);
 
-    //eventKey = localStorage.getItem("eventCode") || "";
-    console.log("Event Key:", eventKey);
+    eventCode = localStorage.getItem("eventCode") || "";
+    console.log("Event Key:", eventCode);
 
     // Fetch OPR data early
-    if (eventKey) {
-      teamOPRs = await fetchEventOPRs(eventKey);
+    if (eventCode) {
+      teamOPRs = await fetchEventOPRs(eventCode);
       console.log("OPR cache populated:", teamOPRs);
     }
 
     // Fetch matches
-    if (eventKey) {
-      allMatches = await fetchEventMatches(eventKey);
+    if (eventCode) {
+      allMatches = await fetchEventMatches(eventCode);
       console.log("Fetched matches:", allMatches);
     }
 
