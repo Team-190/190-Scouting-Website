@@ -126,9 +126,10 @@ async function getAllData(eventCode) {
 
             // for each scouter who reported on the event match
             let scouterCount = 0;
-            for (scouter in sums[key].keys()) {
+            console.log(sums[key])
+            for (const scouter in Object.keys(sums[key])) {
                 // for each metric the scouter reported
-                for (metric in sums[key][scouter]) {
+                for (const metric of Object.keys(sums[key][scouter])) {
                     if (!keySums[metric]) {
                         keySums[metric] = 0;
                     }
@@ -138,7 +139,7 @@ async function getAllData(eventCode) {
                 scouterCount++;
             }
 
-            for (item in keySums.keys()) {
+            for (const item in Object.keys(keySums)) {
                 keySums[item] /= scouterCount;
             }
 
