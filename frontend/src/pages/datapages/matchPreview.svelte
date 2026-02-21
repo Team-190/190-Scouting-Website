@@ -26,7 +26,7 @@
   import { fetchGracePage } from "../../utils/api";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
-  let eventCode = ""; // Will be loaded from localStorage
+  let eventCode;
   let domNode;
   let domNodeRight;
   let domNode2;
@@ -596,6 +596,7 @@
 
     console.log("Loaded teamViewData:", teamViewData);
 
+    // eventCode = "2025mawor";
     eventCode = localStorage.getItem("eventCode") || "";
     console.log("Event Key:", eventCode);
 
