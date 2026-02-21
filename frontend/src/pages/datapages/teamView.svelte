@@ -24,7 +24,7 @@
   let domNode;
   let colorblindMode = "normal";
   let gridHeight = 400; // Default height, will be calculated dynamically
-  let eventCode = "";
+  let eventCode = localStorage.getItem("eventCode") || "";
 
   const ROW_HEIGHT = 25; // Height of each row in pixels
   const HEADER_HEIGHT = 32; // Height of the header row
@@ -1870,8 +1870,6 @@
   }
 
   onMount(async () => {
-    // Load event key from localStorage
-    eventCode = localStorage.getItem("eventCode") || "";
     console.log("Event key loaded:", eventCode);
 
     // Fetch all data from backend for global stats calculation

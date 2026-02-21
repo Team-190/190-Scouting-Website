@@ -18,7 +18,7 @@
     new URL("../../images/horse.png", import.meta.url).href,
   ];
   let eventCode = localStorage.getItem("eventCode");
-  //let eventCode = "2025mawor";
+  // eventCode = "2025mawor";
 
   let originalTitle = "";
   let teams = new Map();
@@ -73,17 +73,6 @@
             // ];
           }
         })
-        .catch((err) => {
-          console.error("Failed to fetch garce page:", err);
-        });
-
-      fetchGracePage(eventCode)
-        .then((res) => {
-          return res.json();
-        })
-        .then((data) => {
-          console.log(data);
-        });
     } catch (err) {
       console.error("Failed to initialize table data:", err);
     }
