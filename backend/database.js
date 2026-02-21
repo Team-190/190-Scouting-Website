@@ -102,23 +102,27 @@ async function getAllData(eventCode) {
                 }
             }
 
-            for (const key in row) {
+            for (const metric of Object.keys(row)) {
                 // Skip identifiers and non-summable fields
-                if (['id', 'Id', 'ID', 'Team', 'team', 'Match', 'match', 'RecordType', 'ScouterName', 'ScouterError', 'Time', 'time', 'Mode', 'DriveStation'].includes(key)) {
+                if (['id', 'Id', 'ID', 'Team', 'team', 'Match', 'match', 'RecordType', 'ScouterName', 'ScouterError', 'Time', 'time', 'Mode', 'DriveStation'].includes(metric)) {
                     continue;
                 }
                 
                 // Exclude AutoClimb and StartingLocation from sums as they are taken from EndAuto specifically
-                if (['AutoClimb', 'StartingLocation'].includes(key)) continue;
+                if (['AutoClimb', 'StartingLocation'].includes(metric)) continue;
 
-                const val = row[key];
+                const val = row[metric];
                  // Ignore -1 and nulls for sums
                 if (typeof val === 'number' && val !== -1) {
-                    sums[uniqueKey][scouter][key] = (sums[uniqueKey][scouter][key] || 0) + val;
+                    // if (Object.keys(sums[uniqueKey]).length > 1) {console.log(`already a scouter for ${uniqueKey}`)}
+
+                    sums[uniqueKey][scouter][metric] = (sums[uniqueKey][scouter][metric] || 0) + val;
                 }
             }
         }
 
+
+        // for each team match in the data
         const finalData = Object.keys(grouped).map(key => {
             const baseObj = { ...grouped[key] };
 
@@ -126,8 +130,7 @@ async function getAllData(eventCode) {
 
             // for each scouter who reported on the event match
             let scouterCount = 0;
-            console.log(sums[key])
-            for (const scouter in Object.keys(sums[key])) {
+            for (const scouter of Object.keys(sums[key])) {
                 // for each metric the scouter reported
                 for (const metric of Object.keys(sums[key][scouter])) {
                     if (!keySums[metric]) {
@@ -139,12 +142,12 @@ async function getAllData(eventCode) {
                 scouterCount++;
             }
 
-            for (const item in Object.keys(keySums)) {
+            for (const item of Object.keys(keySums)) {
                 keySums[item] /= scouterCount;
             }
 
             // const keySums = sums[key];
-            for (const field in keySums) {
+            for (const field of Object.keys(keySums)) {
                 baseObj[field] = keySums[field];
             }
             
