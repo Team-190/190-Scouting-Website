@@ -169,7 +169,7 @@ app.post("/postRatings", async (req, res) => {
     let rating = req.body.rating;
     let team = req.body.team;
     let file = "driverRatings";
-    if (!rating || !team || !event) {
+    if (rating == null || team == null || event == null) {
         console.log("One or more fields could not be retrieved");
         console.log(`${rating} ${team} ${event}`);
         res.sendStatus(400);

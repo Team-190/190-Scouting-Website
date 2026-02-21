@@ -14,7 +14,8 @@
     new URL("../../images/NeutralGood.png", import.meta.url).href,
     new URL("../../images/PrettyGood.gif", import.meta.url).href,
     new URL("../../images/AHHHHH.png", import.meta.url).href,
-    new URL("../../images/FIRSTpick.gif", import.meta.url).href, new URL("../../images/horse.png", import.meta.url).href
+    new URL("../../images/FIRSTpick.gif", import.meta.url).href,
+    new URL("../../images/horse.png", import.meta.url).href,
   ];
   let eventCode = localStorage.getItem("eventCode");
   //let eventCode = "2025mawor";
@@ -42,48 +43,48 @@
   });
 
   function addPastData() {
-    try{
+    try {
       tableData = allTeams.map((teamNumber) => ({
-      team: teamNumber,
-      name: teams.get(teamNumber),
-      rating: rating[7],
-    }));
-    fetchGracePage(eventCode)
-      .then((res) => {
-        if (!res.ok) throw new Error("Network response was not ok");
-        return res.json();
-      })
-      .then((data) => {
-        for (let team of Object.keys(data)) {
-          let savedRatings = data[team];
-          let lastIndex = Object.keys(savedRatings).length - 1;
-          let savedRatingIndex = savedRatings[lastIndex];
-          let rowIndex = tableData.findIndex((row) => row.team == team);
-          if (rowIndex !== -1) {
-            tableData[rowIndex].rating = rating[savedRatingIndex];
-           }
-          // tableData = [
-          //   ...tableData,
-          //   {
-          //     team: team,
-          //     name: teams.get(parseInt(team)),
-          //     rating: rating[data[team][Object.keys(data[team]).length - 1]],
-          //   },
-          // ];
-        }
-      })
-      .catch((err) => {
-        console.error("Failed to fetch garce page:", err);
-      });
+        team: teamNumber,
+        name: teams.get(teamNumber),
+        rating: rating[7],
+      }));
+      fetchGracePage(eventCode)
+        .then((res) => {
+          if (!res.ok) throw new Error("Network response was not ok");
+          return res.json();
+        })
+        .then((data) => {
+          for (let team of Object.keys(data)) {
+            let savedRatings = data[team];
+            let lastIndex = Object.keys(savedRatings).length - 1;
+            let savedRatingIndex = savedRatings[lastIndex];
+            let rowIndex = tableData.findIndex((row) => row.team == team);
+            if (rowIndex !== -1) {
+              tableData[rowIndex].rating = rating[savedRatingIndex];
+            }
+            // tableData = [
+            //   ...tableData,
+            //   {
+            //     team: team,
+            //     name: teams.get(parseInt(team)),
+            //     rating: rating[data[team][Object.keys(data[team]).length - 1]],
+            //   },
+            // ];
+          }
+        })
+        .catch((err) => {
+          console.error("Failed to fetch garce page:", err);
+        });
 
-    fetchGracePage(eventCode)
-      .then((res) => {
-        return res.json();
-      })
-      .then((data) => {
-        console.log(data);
-      });
-      } catch (err) {
+      fetchGracePage(eventCode)
+        .then((res) => {
+          return res.json();
+        })
+        .then((data) => {
+          console.log(data);
+        });
+    } catch (err) {
       console.error("Failed to initialize table data:", err);
     }
   }
@@ -98,27 +99,38 @@
       return;
     }
 
-    await postGracePage(eventCode, selectedTeam, i);
-
-    const existingIndex = tableData.findIndex(
-      (row) => row.team == selectedTeam,
-    );
-
-    if (existingIndex !== -1) {
-      tableData[existingIndex].rating = ratingEmoji;
-      tableData[existingIndex].name = teams.get(selectedTeam);
-    } else {
-      tableData = [
-        ...tableData,
-        {
-          team: selectedTeam,
-          name: teams.get(parseInt(selectedTeam)),
-          rating: ratingEmoji,
-        },
-      ];
+    if (!eventCode) {
+      alert("Event code is not set. Please set an event code first.");
+      isSubmitting = false;
+      return;
     }
 
-    isSubmitting = false;
+    try {
+      await postGracePage(eventCode, Number(selectedTeam), i);
+
+      const existingIndex = tableData.findIndex(
+        (row) => row.team == selectedTeam,
+      );
+
+      if (existingIndex !== -1) {
+        tableData[existingIndex].rating = ratingEmoji;
+        tableData[existingIndex].name = teams.get(selectedTeam);
+      } else {
+        tableData = [
+          ...tableData,
+          {
+            team: selectedTeam,
+            name: teams.get(parseInt(selectedTeam)),
+            rating: ratingEmoji,
+          },
+        ];
+      }
+    } catch (error) {
+      console.error("Failed to submit rating:", error);
+      alert("Failed to submit rating. Please try again.");
+    } finally {
+      isSubmitting = false;
+    }
   }
 </script>
 
