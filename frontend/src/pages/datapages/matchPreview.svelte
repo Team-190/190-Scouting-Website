@@ -2384,22 +2384,6 @@
     box-shadow: 0 0 0 3px rgba(200, 27, 0, 0.4);
   }
 
-  button {
-    padding: 8px 15px;
-    background: linear-gradient(135deg, #333 0%, #444 100%);
-    color: white;
-    font-size: 16px;
-    border: 2px solid var(--frc-190-red);
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-  }
-
-  button:hover {
-    background: linear-gradient(135deg, #444 0%, #555 100%);
-    border-color: #e02200;
-  }
-
   .grid-wrapper {
     width: 80vw;
     display: flex;
@@ -2481,17 +2465,5 @@
     border-radius: 4px;
     font-size: 0.9rem;
     font-weight: 600;
-  }
-
-  @media (max-width: 1024px) {
-    .charts-grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
-  }
-
-  @media (max-width: 700px) {
-    .charts-grid {
-      grid-template-columns: 1fr;
-    }
   }
 </style>
