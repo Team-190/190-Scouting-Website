@@ -21,12 +21,14 @@
         startingHeight: "",
         fullExtensionHeight: "",
         robotPicture: null,
-        robotPicturePreview: null
+        robotPicturePreview: null,
     };
 
     let submitting = false;
     let submitMessage = "";
     let submitError = false;
+
+    let fileInputNode;
 
     const eventCode = localStorage.getItem("eventCode");
 
@@ -34,7 +36,7 @@
     let allTeams = [];
 
     onMount(async () => {
-        const {_teamNumbers} = await fetchTeams(eventCode);
+        const { _teamNumbers } = await fetchTeams(eventCode);
         allTeams = _teamNumbers;
     });
 
@@ -80,17 +82,11 @@
             startingHeight: "",
             fullExtensionHeight: "",
             robotPicture: null,
-            robotPicturePreview: null
+            robotPicturePreview: null,
         };
-        
-        // Reset file input
-        const fileInput = document.getElementById('robot-picture');
-        if (fileInput) fileInput.value = '';
-        
-        // Reset all text inputs
-        document.querySelectorAll('input[type="text"]').forEach(input => input.value = '');
-        document.querySelectorAll('select').forEach(select => select.value = '');
-        document.querySelectorAll('#teams').forEach(select => select.value = 'Select a team');
+
+        // Reset file input safely via bind:this
+        if (fileInputNode) fileInputNode.value = "";
     }
 
     async function handleSubmit() {
@@ -107,29 +103,64 @@
 
         try {
             let apiFormData = {};
-            
+
             // Add all form fields
-            apiFormData["overBump"] = formData.overBump === true ? 'Y' : formData.overBump === false ? 'N' : '';
-            apiFormData["throughTrench"] = formData.throughTrench === true ? 'Y' : formData.throughTrench === false ? 'N' : '';
+            apiFormData["overBump"] =
+                formData.overBump === true
+                    ? "Y"
+                    : formData.overBump === false
+                      ? "N"
+                      : "";
+            apiFormData["throughTrench"] =
+                formData.throughTrench === true
+                    ? "Y"
+                    : formData.throughTrench === false
+                      ? "N"
+                      : "";
             apiFormData["climbLevels"] = formData.climbLevels;
-            apiFormData["climbDuringAuto"] = formData.climbDuringAuto === true ? 'Y' : formData.climbDuringAuto === false ? 'N' : '';
+            apiFormData["climbDuringAuto"] =
+                formData.climbDuringAuto === true
+                    ? "Y"
+                    : formData.climbDuringAuto === false
+                      ? "N"
+                      : "";
             apiFormData["quantityBallsHopper"] = formData.quantityBallsHopper;
             apiFormData["avgIntakeSpeed"] = formData.avgIntakeSpeed;
             apiFormData["avgShootSpeed"] = formData.avgShootSpeed;
             apiFormData["accuracy"] = formData.accuracy;
             apiFormData["framesize"] = formData.framesize;
-            apiFormData["canUseHP"] = formData.canUseHP === true ? 'Y' : formData.canUseHP === false ? 'N' : '';
-            apiFormData["canUseDepot"] = formData.canUseDepot === true ? 'Y' : formData.canUseDepot === false ? 'N' : '';
-            apiFormData["canFeed"] = formData.canFeed === true ? 'Y' : formData.canFeed === false ? 'N' : '';
+            apiFormData["canUseHP"] =
+                formData.canUseHP === true
+                    ? "Y"
+                    : formData.canUseHP === false
+                      ? "N"
+                      : "";
+            apiFormData["canUseDepot"] =
+                formData.canUseDepot === true
+                    ? "Y"
+                    : formData.canUseDepot === false
+                      ? "N"
+                      : "";
+            apiFormData["canFeed"] =
+                formData.canFeed === true
+                    ? "Y"
+                    : formData.canFeed === false
+                      ? "N"
+                      : "";
             apiFormData["startingHeight"] = formData.startingHeight;
             apiFormData["fullExtensionHeight"] = formData.fullExtensionHeight;
-            
+
             if (formData.robotPicture) {
-                apiFormData['robotPicture'] = formData.robotPicture;
-                apiFormData['robotPicturePreview'] = formData.robotPicturePreview;
+                apiFormData["robotPicture"] = formData.robotPicture;
+                apiFormData["robotPicturePreview"] =
+                    formData.robotPicturePreview;
             }
 
-            let response = await postPitScouting(eventCode, selectedTeam, apiFormData);
+            let response = await postPitScouting(
+                eventCode,
+                selectedTeam,
+                apiFormData,
+            );
 
             if (response.ok) {
                 submitMessage = "✓ Pit scouting data submitted successfully!";
@@ -144,7 +175,7 @@
                 submitError = true;
             }
         } catch (error) {
-            console.error('Submission error:', error);
+            console.error("Submission error:", error);
             submitMessage = `Error: ${error.message}`;
             submitError = true;
         } finally {
@@ -171,14 +202,14 @@
         <!-- Team Information -->
         <div class="form-section">
             <h2 class="section-title">Team Information</h2>
-            
+
             <div class="form-group">
                 <label for="team-number">Team Number</label>
 
                 <select id="teams" name="teams" bind:value={selectedTeam}>
                     <option value="Select a team">Select a team</option>
                     {#each allTeams as team}
-                    <option value={team}>{team}</option>
+                        <option value={team}>{team}</option>
                     {/each}
                 </select>
             </div>
@@ -187,21 +218,25 @@
         <!-- Mobility -->
         <div class="form-section">
             <h2 class="section-title">Mobility</h2>
-            
+
             <div class="form-group">
-                <label>Under Trench</label>
+                <span class="field-label">Under Trench</span>
                 <div class="bool-toggle">
                     <button
                         type="button"
-                        class="bool-btn {formData.throughTrench === true ? 'selected-yes' : ''}"
-                        on:click={() => setBooleanField('throughTrench', true)}
+                        class="bool-btn {formData.throughTrench === true
+                            ? 'selected-yes'
+                            : ''}"
+                        on:click={() => setBooleanField("throughTrench", true)}
                     >
                         Yes
                     </button>
                     <button
                         type="button"
-                        class="bool-btn {formData.throughTrench === false ? 'selected-no' : ''}"
-                        on:click={() => setBooleanField('throughTrench', false)}
+                        class="bool-btn {formData.throughTrench === false
+                            ? 'selected-no'
+                            : ''}"
+                        on:click={() => setBooleanField("throughTrench", false)}
                     >
                         No
                     </button>
@@ -209,19 +244,23 @@
             </div>
 
             <div class="form-group">
-                <label>Over Bump</label>
+                <span class="field-label">Over Bump</span>
                 <div class="bool-toggle">
                     <button
                         type="button"
-                        class="bool-btn {formData.overBump === true ? 'selected-yes' : ''}"
-                        on:click={() => setBooleanField('overBump', true)}
+                        class="bool-btn {formData.overBump === true
+                            ? 'selected-yes'
+                            : ''}"
+                        on:click={() => setBooleanField("overBump", true)}
                     >
                         Yes
                     </button>
                     <button
                         type="button"
-                        class="bool-btn {formData.overBump === false ? 'selected-no' : ''}"
-                        on:click={() => setBooleanField('overBump', false)}
+                        class="bool-btn {formData.overBump === false
+                            ? 'selected-no'
+                            : ''}"
+                        on:click={() => setBooleanField("overBump", false)}
                     >
                         No
                     </button>
@@ -232,13 +271,17 @@
         <!-- Climbing -->
         <div class="form-section">
             <h2 class="section-title">Climbing</h2>
-            
+
             <div class="form-group">
-                <label for="climb-levels">Climb Levels <span class="label-helper">(Didn't Climb, 1, 2, or 3)</span></label>
-                <select 
-                    id="climb-levels" 
+                <label for="climb-levels"
+                    >Climb Levels <span class="label-helper"
+                        >(Didn't Climb, 1, 2, or 3)</span
+                    ></label
+                >
+                <select
+                    id="climb-levels"
                     value={formData.climbLevels}
-                    on:change={(e) => handleInput('climbLevels', e)}
+                    on:change={(e) => handleInput("climbLevels", e)}
                 >
                     <option value="">Select level</option>
                     <option value="0">Doesn't Climb</option>
@@ -249,19 +292,25 @@
             </div>
 
             <div class="form-group">
-                <label>Climb during Auto</label>
+                <span class="field-label">Climb during Auto</span>
                 <div class="bool-toggle">
                     <button
                         type="button"
-                        class="bool-btn {formData.climbDuringAuto === true ? 'selected-yes' : ''}"
-                        on:click={() => setBooleanField('climbDuringAuto', true)}
+                        class="bool-btn {formData.climbDuringAuto === true
+                            ? 'selected-yes'
+                            : ''}"
+                        on:click={() =>
+                            setBooleanField("climbDuringAuto", true)}
                     >
                         Yes
                     </button>
                     <button
                         type="button"
-                        class="bool-btn {formData.climbDuringAuto === false ? 'selected-no' : ''}"
-                        on:click={() => setBooleanField('climbDuringAuto', false)}
+                        class="bool-btn {formData.climbDuringAuto === false
+                            ? 'selected-no'
+                            : ''}"
+                        on:click={() =>
+                            setBooleanField("climbDuringAuto", false)}
                     >
                         No
                     </button>
@@ -272,47 +321,58 @@
         <!-- Game Piece Handling -->
         <div class="form-section">
             <h2 class="section-title">Game Piece Handling</h2>
-            
+
             <div class="form-group">
                 <label for="balls-hopper">Quantity of Balls in Hopper</label>
                 <input
                     type="text"
                     id="balls-hopper"
                     value={formData.quantityBallsHopper}
-                    on:input={(e) => handleInput('quantityBallsHopper', e)}
+                    on:input={(e) => handleInput("quantityBallsHopper", e)}
                     placeholder="Enter quantity"
                 />
             </div>
 
             <div class="form-group">
-                <label for="intake-speed">Avg Intake Speed <span class="label-helper">(per second)</span></label>
+                <label for="intake-speed"
+                    >Avg Intake Speed <span class="label-helper"
+                        >(per second)</span
+                    ></label
+                >
                 <input
                     type="text"
                     id="intake-speed"
                     value={formData.avgIntakeSpeed}
-                    on:input={(e) => handleInput('avgIntakeSpeed', e)}
+                    on:input={(e) => handleInput("avgIntakeSpeed", e)}
                     placeholder="Enter speed"
                 />
             </div>
 
             <div class="form-group">
-                <label for="shoot-speed">Avg Shoot Speed <span class="label-helper">(per second)</span></label>
+                <label for="shoot-speed"
+                    >Avg Shoot Speed <span class="label-helper"
+                        >(per second)</span
+                    ></label
+                >
                 <input
                     type="text"
                     id="shoot-speed"
                     value={formData.avgShootSpeed}
-                    on:input={(e) => handleInput('avgShootSpeed', e)}
+                    on:input={(e) => handleInput("avgShootSpeed", e)}
                     placeholder="Enter speed"
                 />
             </div>
 
             <div class="form-group">
-                <label for="accuracy">Accuracy <span class="label-helper">(percentage)</span></label>
+                <label for="accuracy"
+                    >Accuracy <span class="label-helper">(percentage)</span
+                    ></label
+                >
                 <input
                     type="text"
                     id="accuracy"
                     value={formData.accuracy}
-                    on:input={(e) => handleInput('accuracy', e)}
+                    on:input={(e) => handleInput("accuracy", e)}
                     placeholder="Enter accuracy %"
                 />
             </div>
@@ -321,36 +381,45 @@
         <!-- Robot Specifications -->
         <div class="form-section">
             <h2 class="section-title">Robot Specifications</h2>
-            
+
             <div class="form-group">
-                <label for="framesize">Framesize <span class="label-helper">(inches)</span></label>
+                <label for="framesize"
+                    >Framesize <span class="label-helper">(inches)</span></label
+                >
                 <input
                     type="text"
                     id="framesize"
                     value={formData.framesize}
-                    on:input={(e) => handleInput('framesize', e)}
+                    on:input={(e) => handleInput("framesize", e)}
                     placeholder="Enter framesize"
                 />
             </div>
 
             <div class="form-group">
-                <label for="starting-height">Starting Height <span class="label-helper">(inches)</span></label>
+                <label for="starting-height"
+                    >Starting Height <span class="label-helper">(inches)</span
+                    ></label
+                >
                 <input
                     type="text"
                     id="starting-height"
                     value={formData.startingHeight}
-                    on:input={(e) => handleInput('startingHeight', e)}
+                    on:input={(e) => handleInput("startingHeight", e)}
                     placeholder="Enter starting height"
                 />
             </div>
 
             <div class="form-group">
-                <label for="extension-height">Full Extension Height <span class="label-helper">(inches)</span></label>
+                <label for="extension-height"
+                    >Full Extension Height <span class="label-helper"
+                        >(inches)</span
+                    ></label
+                >
                 <input
                     type="text"
                     id="extension-height"
                     value={formData.fullExtensionHeight}
-                    on:input={(e) => handleInput('fullExtensionHeight', e)}
+                    on:input={(e) => handleInput("fullExtensionHeight", e)}
                     placeholder="Enter full extension height"
                 />
             </div>
@@ -359,21 +428,25 @@
         <!-- Capabilities -->
         <div class="form-section">
             <h2 class="section-title">Capabilities</h2>
-            
+
             <div class="form-group">
-                <label>Can Use HP (Human Player)</label>
+                <span class="field-label">Can Use HP (Human Player)</span>
                 <div class="bool-toggle">
                     <button
                         type="button"
-                        class="bool-btn {formData.canUseHP === true ? 'selected-yes' : ''}"
-                        on:click={() => setBooleanField('canUseHP', true)}
+                        class="bool-btn {formData.canUseHP === true
+                            ? 'selected-yes'
+                            : ''}"
+                        on:click={() => setBooleanField("canUseHP", true)}
                     >
                         Yes
                     </button>
                     <button
                         type="button"
-                        class="bool-btn {formData.canUseHP === false ? 'selected-no' : ''}"
-                        on:click={() => setBooleanField('canUseHP', false)}
+                        class="bool-btn {formData.canUseHP === false
+                            ? 'selected-no'
+                            : ''}"
+                        on:click={() => setBooleanField("canUseHP", false)}
                     >
                         No
                     </button>
@@ -381,19 +454,23 @@
             </div>
 
             <div class="form-group">
-                <label>Can Use Depot</label>
+                <span class="field-label">Can Use Depot</span>
                 <div class="bool-toggle">
                     <button
                         type="button"
-                        class="bool-btn {formData.canUseDepot === true ? 'selected-yes' : ''}"
-                        on:click={() => setBooleanField('canUseDepot', true)}
+                        class="bool-btn {formData.canUseDepot === true
+                            ? 'selected-yes'
+                            : ''}"
+                        on:click={() => setBooleanField("canUseDepot", true)}
                     >
                         Yes
                     </button>
                     <button
                         type="button"
-                        class="bool-btn {formData.canUseDepot === false ? 'selected-no' : ''}"
-                        on:click={() => setBooleanField('canUseDepot', false)}
+                        class="bool-btn {formData.canUseDepot === false
+                            ? 'selected-no'
+                            : ''}"
+                        on:click={() => setBooleanField("canUseDepot", false)}
                     >
                         No
                     </button>
@@ -401,19 +478,23 @@
             </div>
 
             <div class="form-group">
-                <label>Can Feed</label>
+                <span class="field-label">Can Feed</span>
                 <div class="bool-toggle">
                     <button
                         type="button"
-                        class="bool-btn {formData.canFeed === true ? 'selected-yes' : ''}"
-                        on:click={() => setBooleanField('canFeed', true)}
+                        class="bool-btn {formData.canFeed === true
+                            ? 'selected-yes'
+                            : ''}"
+                        on:click={() => setBooleanField("canFeed", true)}
                     >
                         Yes
                     </button>
                     <button
                         type="button"
-                        class="bool-btn {formData.canFeed === false ? 'selected-no' : ''}"
-                        on:click={() => setBooleanField('canFeed', false)}
+                        class="bool-btn {formData.canFeed === false
+                            ? 'selected-no'
+                            : ''}"
+                        on:click={() => setBooleanField("canFeed", false)}
                     >
                         No
                     </button>
@@ -424,21 +505,26 @@
         <!-- Robot Picture -->
         <div class="form-section">
             <h2 class="section-title">Robot Picture</h2>
-            
+
             <div class="form-group">
                 <div class="file-upload-wrapper">
                     <label
                         for="robot-picture"
-                        class="file-upload-label {formData.robotPicture ? 'has-file' : ''}"
+                        class="file-upload-label {formData.robotPicture
+                            ? 'has-file'
+                            : ''}"
                     >
                         <div class="upload-icon">📷</div>
                         <div class="upload-text">
-                            {formData.robotPicture ? formData.robotPicture.name : 'Click to upload photo'}
+                            {formData.robotPicture
+                                ? formData.robotPicture.name
+                                : "Click to upload photo"}
                         </div>
                     </label>
                     <input
                         type="file"
                         id="robot-picture"
+                        bind:this={fileInputNode}
                         accept="image/png,image/jpeg,image/jpg"
                         on:change={handleFileUpload}
                     />
@@ -446,7 +532,10 @@
 
                 {#if formData.robotPicturePreview}
                     <div class="image-preview">
-                        <img src={formData.robotPicturePreview} alt="Robot preview" />
+                        <img
+                            src={formData.robotPicturePreview}
+                            alt="Robot preview"
+                        />
                     </div>
                 {/if}
             </div>
@@ -468,7 +557,7 @@
                 Submit Pit Scouting
             {/if}
         </button>
-        
+
         <button
             type="button"
             class="clear-btn"
@@ -483,19 +572,21 @@
 <style>
     /* FRC 190 Brand Colors */
     :root {
-        --frc-190-red: #C81B00;
-        --wpi-gray: #A9B0B7;
-        --frc-190-black: #4D4D4D;
+        --frc-190-red: #c81b00;
+        --wpi-gray: #a9b0b7;
+        --frc-190-black: #4d4d4d;
     }
 
-    :global(html), :global(body) {
+    :global(html),
+    :global(body) {
         margin: 0;
         padding: 0;
         background: var(--wpi-gray);
         height: 100%;
         width: 100%;
         overflow-x: hidden;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+            Oxygen, Ubuntu, Cantarell, sans-serif;
     }
 
     :global(*) {
@@ -566,7 +657,8 @@
         margin-bottom: 0;
     }
 
-    label {
+    label,
+    .field-label {
         display: block;
         font-weight: 600;
         color: var(--frc-190-black);
@@ -635,9 +727,9 @@
     }
 
     .bool-btn.selected-yes {
-        background: #4CAF50;
+        background: #4caf50;
         color: white;
-        border-color: #4CAF50;
+        border-color: #4caf50;
     }
 
     .bool-btn.selected-no {
@@ -724,7 +816,11 @@
         font-size: 1.1rem;
         font-weight: 700;
         color: white;
-        background: linear-gradient(135deg, var(--frc-190-red) 0%, #a01500 100%);
+        background: linear-gradient(
+            135deg,
+            var(--frc-190-red) 0%,
+            #a01500 100%
+        );
         border: none;
         border-radius: 10px;
         cursor: pointer;
@@ -801,7 +897,9 @@
     }
 
     @keyframes spin {
-        to { transform: rotate(360deg); }
+        to {
+            transform: rotate(360deg);
+        }
     }
 
     /* Desktop optimizations */
@@ -809,11 +907,11 @@
         .form-container {
             padding: 30px;
         }
-        
+
         .header h1 {
             font-size: 2rem;
         }
-        
+
         .submit-section {
             position: relative;
             max-width: 600px;
@@ -826,11 +924,11 @@
         .header h1 {
             font-size: 1.3rem;
         }
-        
+
         .form-container {
             padding: 15px;
         }
-        
+
         .form-section {
             padding: 15px;
         }
