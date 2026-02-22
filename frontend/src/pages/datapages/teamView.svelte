@@ -290,16 +290,16 @@
     if (p === null || p === undefined) return "#4D4D4D";
 
     if (isAlexMode) {
-      // Alex mode: quartiles with Google colors (75, 50, 25, 0)
+      // Alex mode: quartiles with vibrant colors
       switch (p) {
         case 75:
-          return "#4285F4"; // Blue (Top 25%) - RGB: 66 133 244
+          return "#0000FF"; // Blue (Top 25%)
         case 50:
-          return "#34A853"; // Green (50th-75th percentile) - RGB: 52 168 83
+          return "#00FF00"; // Green (50th-75th percentile)
         case 25:
-          return "#FBBC04"; // Yellow (25th-50th percentile) - RGB: 251 188 4
+          return "#FFFF00"; // Yellow (25th-50th percentile)
         case 0:
-          return "#EA4335"; // Red (Bottom 25%) - RGB: 234 67 53
+          return "#FF0000"; // Red (Bottom 25%)
         default:
           return "#4D4D4D";
       }
