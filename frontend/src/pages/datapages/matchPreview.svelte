@@ -236,7 +236,7 @@
   let allMatches = [];
 
   // Blue Alliance API configuration
-  const TBA_API_KEY = import.meta.env.VITE_BA_AUTH_KEY;
+  const TBA_API_KEY = import.meta.env.VITE_AUTH_KEY;
   const TBA_BASE_URL = "https://www.thebluealliance.com/api/v3";
 
   // Alliance team selections (will be populated from API based on selected match)

@@ -36,7 +36,7 @@
     let selected_event = "";
     let showEventSelector = true;
 
-    const TBA_KEY = import.meta.env.VITE_BA_AUTH_KEY;
+    const TBA_KEY = import.meta.env.VITE_AUTH_KEY;
 
     let allEvents = [];
     let events = [];

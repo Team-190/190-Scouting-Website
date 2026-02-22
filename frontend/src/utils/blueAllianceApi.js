@@ -1,4 +1,4 @@
-const blueAllianceAPIKey = import.meta.env.VITE_BA_AUTH_KEY;
+const blueAllianceAPIKey = import.meta.env.VITE_AUTH_KEY;
 
 export async function fetchTeams(eventCode) {
     const apiUrl = `https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/simple`;

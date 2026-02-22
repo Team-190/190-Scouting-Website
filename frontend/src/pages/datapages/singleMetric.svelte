@@ -1634,6 +1634,8 @@
           label: {
             show: true,
             color: "#ffffff",
+            rotate: 90,
+            offset: [20, 0],
           },
         },
       ],
@@ -1676,6 +1678,8 @@
           label: {
             show: true,
             color: "#ffffff",
+             rotate: 90,
+            offset: [20, 0],
           },
         },
       ],
