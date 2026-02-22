@@ -239,7 +239,7 @@
       }
 
       const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-      return brightness > 150 ? "black" : "white";
+      return brightness > 128 ? "black" : "white";
     } catch (e) {
       return "white";
     }
@@ -273,7 +273,7 @@
     if (s === "#4285f4" || s === "rgb(66,133,244)" || s === "rgb(66, 133, 244)")
       return "white"; // Google Blue
     if (s === "#34a853" || s === "rgb(52,168,83)" || s === "rgb(52, 168, 83)")
-      return "white"; // Google Green
+      return "black"; // Google Green
     if (s === "#ea4335" || s === "rgb(234,67,53)" || s === "rgb(234, 67, 53)")
       return "white"; // Google Red
     if (s === "#fbbc04" || s === "rgb(251,188,4)" || s === "rgb(251, 188, 4)")

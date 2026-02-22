@@ -216,6 +216,44 @@
       : lerpColor(mode.mid, mode.above, t);
   }
 
+  // Get color for an OPR value based on all available OPR data
+  function getOPRColor(teamNum) {
+    const oprVal = teamOPRs[teamNum];
+    if (oprVal == null) return { bg: "rgba(0,0,0,0.3)", color: "white" };
+
+    const allOPRValues = Object.values(teamOPRs).filter(
+      (v) => v != null,
+    ) as number[];
+    if (allOPRValues.length < 2)
+      return { bg: "rgba(0,0,0,0.3)", color: "white" };
+
+    const mu =
+      allOPRValues.reduce((a: number, b: number) => a + b, 0) /
+      allOPRValues.length;
+    const sigma = Math.sqrt(
+      allOPRValues.reduce((s: number, v: number) => s + (v - mu) ** 2, 0) /
+        allOPRValues.length,
+    );
+
+    const bg = colorFromStats(oprVal, mu, sigma);
+    // Use white text for dark backgrounds
+    const s = String(bg).trim().toLowerCase();
+    let textColor = "black";
+    if (s === "#000" || s === "#000000" || s === "#333") textColor = "white";
+    else if (s.startsWith("rgb")) {
+      const parts = s.match(/\d+/g);
+      if (parts) {
+        const brightness =
+          (Number(parts[0]) * 299 +
+            Number(parts[1]) * 587 +
+            Number(parts[2]) * 114) /
+          1000;
+        textColor = brightness > 128 ? "black" : "white";
+      }
+    }
+    return { bg, color: textColor };
+  }
+
   function onColorblindChange(e: Event) {
     const target = e.target as HTMLSelectElement;
     colorblindMode = target.value;
@@ -466,41 +504,46 @@
   // ===== ADDED FROM teamView.svelte - END =====
 
   function getLastPlayedMatch(teamNumber: string): string {
-  if (!teamNumber || !allMatches || allMatches.length === 0) return "—";
+    if (!teamNumber || !allMatches || allMatches.length === 0) return "—";
 
-  const teamKey = `frc${teamNumber}`;
+    const teamKey = `frc${teamNumber}`;
 
-  // Find the currently selected match's index in allMatches
-  const currentMatchIndex = allMatches.findIndex(m => m.key === selectedMatch);
+    // Find the currently selected match's index in allMatches
+    const currentMatchIndex = allMatches.findIndex(
+      (m) => m.key === selectedMatch,
+    );
 
-  // Only look at matches BEFORE the current one
-  const previousMatches = currentMatchIndex >= 0
-    ? allMatches.slice(0, currentMatchIndex)
-    : allMatches;
+    // Only look at matches BEFORE the current one
+    const previousMatches =
+      currentMatchIndex >= 0
+        ? allMatches.slice(0, currentMatchIndex)
+        : allMatches;
 
-  // Find the last match this team played in
-  let lastMatch = null;
-  for (let i = previousMatches.length - 1; i >= 0; i--) {
-    const m = previousMatches[i];
-    const allTeams = [
-      ...(m.alliances?.red?.team_keys ?? []),
-      ...(m.alliances?.blue?.team_keys ?? []),
-    ];
-    if (allTeams.includes(teamKey)) {
-      lastMatch = m;
-      break;
+    // Find the last match this team played in
+    let lastMatch = null;
+    for (let i = previousMatches.length - 1; i >= 0; i--) {
+      const m = previousMatches[i];
+      const allTeams = [
+        ...(m.alliances?.red?.team_keys ?? []),
+        ...(m.alliances?.blue?.team_keys ?? []),
+      ];
+      if (allTeams.includes(teamKey)) {
+        lastMatch = m;
+        break;
+      }
     }
+
+    if (!lastMatch) return "—";
+
+    if (lastMatch.comp_level === "qm") return `Q${lastMatch.match_number}`;
+    if (lastMatch.comp_level === "f") return `F${lastMatch.match_number}`;
+
+    const elimMatches = allMatches.filter(
+      (m) => m.comp_level !== "qm" && m.comp_level !== "f",
+    );
+    const elimIndex = elimMatches.indexOf(lastMatch) + 1;
+    return `M${elimIndex}`;
   }
-
-  if (!lastMatch) return "—";
-
-  if (lastMatch.comp_level === "qm") return `Q${lastMatch.match_number}`;
-  if (lastMatch.comp_level === "f") return `F${lastMatch.match_number}`;
-
-  const elimMatches = allMatches.filter(m => m.comp_level !== "qm" && m.comp_level !== "f");
-  const elimIndex = elimMatches.indexOf(lastMatch) + 1;
-  return `M${elimIndex}`;
-}
   // ===== END NEW =====
 
   async function loadMatchData(matchKey: string) {
@@ -771,16 +814,17 @@
   }
 
   $: lastScoutedMatches = (() => {
-  if (!teamViewData) return { r0:"—", r1:"—", r2:"—", b0:"—", b1:"—", b2:"—" };
-  return {
-    r0: getLastPlayedMatch(redAlliance[0]),
-    r1: getLastPlayedMatch(redAlliance[1]),
-    r2: getLastPlayedMatch(redAlliance[2]),
-    b0: getLastPlayedMatch(blueAlliance[0]),
-    b1: getLastPlayedMatch(blueAlliance[1]),
-    b2: getLastPlayedMatch(blueAlliance[2]),
-  };
-})();
+    if (!teamViewData)
+      return { r0: "—", r1: "—", r2: "—", b0: "—", b1: "—", b2: "—" };
+    return {
+      r0: getLastPlayedMatch(redAlliance[0]),
+      r1: getLastPlayedMatch(redAlliance[1]),
+      r2: getLastPlayedMatch(redAlliance[2]),
+      b0: getLastPlayedMatch(blueAlliance[0]),
+      b1: getLastPlayedMatch(blueAlliance[1]),
+      b2: getLastPlayedMatch(blueAlliance[2]),
+    };
+  })();
 
   function updateChartDataset(chart) {
     if (!chart.instance) return;
@@ -1707,7 +1751,7 @@
     </div>
   </div>
 
-<!-- Grid containers with dropdown in middle -->
+  <!-- Grid containers with dropdown in middle -->
   <div class="grid-wrapper">
     <div class="grid-column">
       <div class="team-box">
@@ -1715,33 +1759,72 @@
           <span class="last-match-badge">Last: {lastScoutedMatches.r0}</span>
           Red 1 - Team {redAlliance[0]}
           {#if teamOPRs[redAlliance[0]]}
-            <span class="opr-badge">OPR: {teamOPRs[redAlliance[0]].toFixed(2)}</span>
+            <span
+              class="opr-badge"
+              style="background: {getOPRColor(redAlliance[0])
+                .bg}; color: {getOPRColor(redAlliance[0]).color};"
+              >OPR: {teamOPRs[redAlliance[0]].toFixed(2)}</span
+            >
           {/if}
-          <img src={rating[fetchGraceRating(redAlliance[0])]} alt="Grace Rating" style="width: 60px;" />
+          <img
+            src={rating[fetchGraceRating(redAlliance[0])]}
+            alt="Grace Rating"
+            style="width: 60px;"
+          />
         </h3>
-        <div class="grid-container ag-theme-quartz" bind:this={domNode} style="height: {gridHeight}px;"></div>
+        <div
+          class="grid-container ag-theme-quartz"
+          bind:this={domNode}
+          style="height: {gridHeight}px;"
+        ></div>
       </div>
       <div class="team-box">
         <h3 class="team-label red-label">
           <span class="last-match-badge">Last: {lastScoutedMatches.r1}</span>
           Red 2 - Team {redAlliance[1]}
           {#if teamOPRs[redAlliance[1]]}
-            <span class="opr-badge">OPR: {teamOPRs[redAlliance[1]].toFixed(2)}</span>
+            <span
+              class="opr-badge"
+              style="background: {getOPRColor(redAlliance[1])
+                .bg}; color: {getOPRColor(redAlliance[1]).color};"
+              >OPR: {teamOPRs[redAlliance[1]].toFixed(2)}</span
+            >
           {/if}
-          <img src={rating[fetchGraceRating(redAlliance[1])]} alt="Grace Rating" style="width: 60px;" />
+          <img
+            src={rating[fetchGraceRating(redAlliance[1])]}
+            alt="Grace Rating"
+            style="width: 60px;"
+          />
         </h3>
-        <div class="grid-container ag-theme-quartz" bind:this={domNode2} style="height: {gridHeight}px;"></div>
+        <div
+          class="grid-container ag-theme-quartz"
+          bind:this={domNode2}
+          style="height: {gridHeight}px;"
+        ></div>
       </div>
       <div class="team-box">
         <h3 class="team-label red-label">
           <span class="last-match-badge">Last: {lastScoutedMatches.r2}</span>
           Red 3 - Team {redAlliance[2]}
           {#if teamOPRs[redAlliance[2]]}
-            <span class="opr-badge">OPR: {teamOPRs[redAlliance[2]].toFixed(2)}</span>
+            <span
+              class="opr-badge"
+              style="background: {getOPRColor(redAlliance[2])
+                .bg}; color: {getOPRColor(redAlliance[2]).color};"
+              >OPR: {teamOPRs[redAlliance[2]].toFixed(2)}</span
+            >
           {/if}
-          <img src={rating[fetchGraceRating(redAlliance[2])]} alt="Grace Rating" style="width: 60px;" />
+          <img
+            src={rating[fetchGraceRating(redAlliance[2])]}
+            alt="Grace Rating"
+            style="width: 60px;"
+          />
         </h3>
-        <div class="grid-container ag-theme-quartz" bind:this={domNode3} style="height: {gridHeight}px;"></div>
+        <div
+          class="grid-container ag-theme-quartz"
+          bind:this={domNode3}
+          style="height: {gridHeight}px;"
+        ></div>
       </div>
     </div>
 
@@ -1751,33 +1834,72 @@
           <span class="last-match-badge">Last: {lastScoutedMatches.b0}</span>
           Blue 1 - Team {blueAlliance[0]}
           {#if teamOPRs[blueAlliance[0]]}
-            <span class="opr-badge">OPR: {teamOPRs[blueAlliance[0]].toFixed(2)}</span>
+            <span
+              class="opr-badge"
+              style="background: {getOPRColor(blueAlliance[0])
+                .bg}; color: {getOPRColor(blueAlliance[0]).color};"
+              >OPR: {teamOPRs[blueAlliance[0]].toFixed(2)}</span
+            >
           {/if}
-          <img src={rating[fetchGraceRating(blueAlliance[0])]} alt="Grace Rating" style="width: 60px;" />
+          <img
+            src={rating[fetchGraceRating(blueAlliance[0])]}
+            alt="Grace Rating"
+            style="width: 60px;"
+          />
         </h3>
-        <div class="grid-container ag-theme-quartz" bind:this={domNodeRight} style="height: {gridHeight}px;"></div>
+        <div
+          class="grid-container ag-theme-quartz"
+          bind:this={domNodeRight}
+          style="height: {gridHeight}px;"
+        ></div>
       </div>
       <div class="team-box">
         <h3 class="team-label blue-label">
           <span class="last-match-badge">Last: {lastScoutedMatches.b1}</span>
           Blue 2 - Team {blueAlliance[1]}
           {#if teamOPRs[blueAlliance[1]]}
-            <span class="opr-badge">OPR: {teamOPRs[blueAlliance[1]].toFixed(2)}</span>
+            <span
+              class="opr-badge"
+              style="background: {getOPRColor(blueAlliance[1])
+                .bg}; color: {getOPRColor(blueAlliance[1]).color};"
+              >OPR: {teamOPRs[blueAlliance[1]].toFixed(2)}</span
+            >
           {/if}
-          <img src={rating[fetchGraceRating(blueAlliance[1])]} alt="Grace Rating" style="width: 60px;" />
+          <img
+            src={rating[fetchGraceRating(blueAlliance[1])]}
+            alt="Grace Rating"
+            style="width: 60px;"
+          />
         </h3>
-        <div class="grid-container ag-theme-quartz" bind:this={domNode4} style="height: {gridHeight}px;"></div>
+        <div
+          class="grid-container ag-theme-quartz"
+          bind:this={domNode4}
+          style="height: {gridHeight}px;"
+        ></div>
       </div>
       <div class="team-box">
         <h3 class="team-label blue-label">
           <span class="last-match-badge">Last: {lastScoutedMatches.b2}</span>
           Blue 3 - Team {blueAlliance[2]}
           {#if teamOPRs[blueAlliance[2]]}
-            <span class="opr-badge">OPR: {teamOPRs[blueAlliance[2]].toFixed(2)}</span>
+            <span
+              class="opr-badge"
+              style="background: {getOPRColor(blueAlliance[2])
+                .bg}; color: {getOPRColor(blueAlliance[2]).color};"
+              >OPR: {teamOPRs[blueAlliance[2]].toFixed(2)}</span
+            >
           {/if}
-          <img src={rating[fetchGraceRating(blueAlliance[2])]} alt="Grace Rating" style="width: 60px;" />
+          <img
+            src={rating[fetchGraceRating(blueAlliance[2])]}
+            alt="Grace Rating"
+            style="width: 60px;"
+          />
         </h3>
-        <div class="grid-container ag-theme-quartz" bind:this={domNode5} style="height: {gridHeight}px;"></div>
+        <div
+          class="grid-container ag-theme-quartz"
+          bind:this={domNode5}
+          style="height: {gridHeight}px;"
+        ></div>
       </div>
     </div>
   </div>
