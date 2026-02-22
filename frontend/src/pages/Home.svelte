@@ -1,14 +1,15 @@
 <script>
     import { goto } from '@mateothegreat/svelte5-router';
     import { onMount } from "svelte";
+    import { fetchAllData, fetchEvents } from '../utils/api';
 
     let eventCode = localStorage.getItem("eventCode");
 
     async function cacheAllData() {
         localStorage.clear();
         console.log("Getting all data from storage for event "+eventCode);
-        const data = JSON.stringify((await(await fetch("http://localhost:8000/getAllData?eventCode="+eventCode)).json()).data);
-        
+        const data = JSON.stringify((await (await fetchAllData(eventCode)).json()).data);
+
         console.log(data)
         localStorage.setItem("data", data);
         localStorage.setItem("timestamp", new Date(Date.now()).toLocaleString());
@@ -52,7 +53,7 @@
 
     async function loadDbEvents() {
         try {
-            const res = await fetch("http://localhost:8000/getEvents");
+            const res = await fetchEvents();
             if (res.ok) {
                 dbEvents = await res.json();
             }

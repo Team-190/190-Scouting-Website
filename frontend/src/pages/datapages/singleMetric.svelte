@@ -16,6 +16,7 @@
   import * as radarGraph from "../../pages/graphcode/radar.js";
 
   import { v4 as uuidv4 } from "uuid";
+    import { fetchSingleMetric } from "../../utils/api.js";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -595,9 +596,7 @@
     const eventCode = localStorage.getItem("eventCode");
     console.log("eventCode: ", eventCode);
 
-    const response = await fetch(
-      "http://localhost:8000/singleMetric?eventCode=" + eventCode,
-    );
+    const response = await fetchSingleMetric();
     const result = await response.json();
     return result;
   }

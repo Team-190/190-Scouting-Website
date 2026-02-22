@@ -1,13 +1,13 @@
 const fs = require("fs");
+const path = require("path");
 // const storage = require("./storage");
 const sql = require('mssql');
-require("dotenv").config();
-
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 const config = {
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
-    server: '96.236.26.155',
+    server: process.env.SERVER_IP,
     port: 49172,
     database: '2026manualMatch',
     options: {

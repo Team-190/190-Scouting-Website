@@ -1,4 +1,4 @@
-const blueAllianceAPIKey = import.meta.env.VITE_AUTH_KEY;
+const TBA_API_KEY = import.meta.env.VITE_AUTH_KEY;
 
 export async function fetchTeams(eventCode) {
     const apiUrl = `https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/simple`;
@@ -6,7 +6,7 @@ export async function fetchTeams(eventCode) {
     try {
         const response = await fetch(apiUrl, {
             headers: {
-                "X-TBA-Auth-Key": blueAllianceAPIKey,
+                "X-TBA-Auth-Key": TBA_API_KEY,
             },
         });
 
@@ -33,7 +33,29 @@ export async function fetchTeams(eventCode) {
 export async function fetchOPR(eventCode) {
     return fetch(`https://www.thebluealliance.com/api/v3/event/${eventCode}/oprs`, {
         headers: {
-            'X-TBA-Auth-Key': blueAllianceAPIKey
+            'X-TBA-Auth-Key': TBA_API_KEY
         }
     });
+}
+
+export async function fetchWinners(eventCode) {
+    const apiUrl = `https://www.thebluealliance.com/api/v3/team/frc${eventCode}`;
+
+    try {
+        const response = await fetch(apiUrl, {
+        headers: {
+            "X-TBA-Auth-Key": TBA_API_KEY
+        }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+
+        // retrieve winners
+
+    } catch (error) {
+        console.error('There was a problem fetching team data:', error);
+    }
 }

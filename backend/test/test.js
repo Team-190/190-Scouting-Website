@@ -1,8 +1,7 @@
 require("dotenv").config();
 
-
 function test() {
-    fetch(`http://localhost:${process.env.PORT}/postEventCode`, {
+    fetch(`http://localhost:${process.env.BACKEND_PORT}/postEventCode`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
