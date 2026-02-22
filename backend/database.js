@@ -7,7 +7,7 @@ require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 const config = {
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
-    server: process.env.SERVER_IP,
+    server: process.env.VITE_SERVER_IP,
     port: 49172,
     database: '2026manualMatch',
     options: {

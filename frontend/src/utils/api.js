@@ -1,39 +1,39 @@
-const TESTING = parseInt(import.meta.env.TESTING) || 1;
-const SERVER = !TESTING ? import.meta.env.SERVER_IP : "localhost";
-const BACKEND_PORT = !TESTING ? import.meta.env.BACKEND_PORT : 8000;
+const VITE_TESTING = import.meta.env.VITE_TESTING || 1;
+const VITE_BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT || 8000;
+const SERVER = !parseInt(VITE_TESTING) ? import.meta.env.VITE_SERVER_IP : "localhost";
 
 export function fetchEvents() {
-    const route = `http://${SERVER}:${BACKEND_PORT}/getEvents`;
+    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getEvents`;
     let data = fetch(route);
     return data;
 }
 
 export function fetchAvailableTeams() {
-    const route = `http://${SERVER}:${BACKEND_PORT}/getAvailableTeams`;
+    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getAvailableTeams`;
     let data = fetch(route);
     return data;
 }
 
 export function fetchAllData(eventCode) {
-    const route = `http://${SERVER}:${BACKEND_PORT}/getAllData?eventCode=` + eventCode;
+    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getAllData?eventCode=` + eventCode;
     let data = fetch(route);
     return data;
 }
 
 export function fetchSingleMetric(eventCode) {
-    const route = `http://${SERVER}:${BACKEND_PORT}/singleMetric?eventCode=` + eventCode;
+    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/singleMetric?eventCode=` + eventCode;
     let data = fetch(route);
     return data;
 }
 
 export function fetchGracePage(eventCode) {
-    const route = `http://${SERVER}:${BACKEND_PORT}/getRatings?eventCode=${eventCode}`;
+    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getRatings?eventCode=${eventCode}`;
     let data = fetch(route);
     return data;
 }
 
 export async function postEventCode(eventCode) {
-    const response = await fetch(`http://${SERVER}:${BACKEND_PORT}/postEventCode`, {
+    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/postEventCode`, {
         method: 'POST',
         headers: {
             "Content-Type": "application/json"
@@ -53,7 +53,7 @@ export async function postEventCode(eventCode) {
 }
 
 export async function postGracePage(event, team, rating) {
-    const response = await fetch(`http://${SERVER}:${BACKEND_PORT}/postRatings`, {
+    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/postRatings`, {
         method: 'POST',
         headers: {
             "Content-Type": "application/json"
@@ -75,7 +75,7 @@ export async function postGracePage(event, team, rating) {
 
 export async function postPitScouting(event, team, formData) {
 
-    const response = await fetch(`http://${SERVER}:${BACKEND_PORT}/postPitScouting`, {
+    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/postPitScouting`, {
         method: 'POST',
         headers: {
             "Content-Type": "application/json"
@@ -90,7 +90,7 @@ export async function postPitScouting(event, team, formData) {
 export async function postGompeiMadnessBracket(bracket) {
     // data: { name: "guy", r1: [{matchNumber: 1 , winner: "a1"}, "a2", "a3", "a4"], r2: ["a1", "a2"], r3: ["a1"] }
 
-    const response = await fetch(`http://${SERVER}:${BACKEND_PORT}/postGompeiMadnessBracket`, {
+    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/postGompeiMadnessBracket`, {
         method: 'POST',
         headers: {
             "Content-Type": "application/json"
