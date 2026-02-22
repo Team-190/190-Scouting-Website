@@ -102,6 +102,10 @@
     new URL("../../images/horse.png", import.meta.url).href,
   ];
 
+  const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime"];
+  const BOOLEAN_METRICS = ["AutoClimb", "AttemptClimb"];
+  const CLIMBSTATE_METRIC = "EndState";
+
   const colorModes = {
     normal: {
       name: "Normal",
@@ -126,6 +130,12 @@
       below: [220, 20, 60],
       above: [0, 128, 0],
       mid: [110, 74, 30],
+    },
+    alex: {
+      name: "Alex Coloring",
+      below: [255, 0, 0],
+      above: [0, 0, 255],
+      mid: [255, 255, 0],
     },
   };
   function fetchGraceRating(team) {
@@ -183,6 +193,16 @@
       : (sorted[mid - 1] + sorted[mid]) / 2;
   }
 
+  function percentile(arr, p) {
+    if (arr.length === 0) return 0;
+    const sorted = [...arr].sort((a, b) => a - b);
+    const index = (p / 100) * (sorted.length - 1);
+    const lower = Math.floor(index);
+    const upper = Math.ceil(index);
+    const weight = index % 1;
+    return sorted[lower] * (1 - weight) + sorted[upper] * weight;
+  }
+
   function sd(arr, mu) {
     const variance = arr.reduce((s, v) => s + (v - mu) ** 2, 0) / arr.length;
     return Math.sqrt(variance);
@@ -196,24 +216,283 @@
     ].join(",")})`;
   }
 
-  function colorFromStats(v, mu, sigma) {
-    // For non-numeric data, return neutral color
-    if (!isNumeric(v)) {
+  // Return white only for strict dark backgrounds, else black
+  function textColorForBgStrict(bg) {
+    if (!bg) return "black";
+    const s = String(bg).trim().toLowerCase();
+    if (s === "black" || s === "#000" || s === "#000000" || s === "rgb(0,0,0)")
+      return "white";
+    if (s === "#4d4d4d" || s === "rgb(77,77,77)") return "white";
+    if (
+      s === "#808080" ||
+      s === "rgb(128,128,128)" ||
+      s === "rgb(128, 128, 128)"
+    )
+      return "white";
+    if (s === "#0000ff" || s === "#00f" || s === "rgb(0,0,255)") return "white";
+    if (s === "#ff0000" || s === "#f00" || s === "rgb(255,0,0)") return "white";
+    if (s === "#333") return "white";
+    if (s.startsWith("rgb")) {
+      const parts = s.match(/\d+/g);
+      if (parts) {
+        const brightness =
+          (Number(parts[0]) * 299 +
+            Number(parts[1]) * 587 +
+            Number(parts[2]) * 114) /
+          1000;
+        return brightness > 128 ? "black" : "white";
+      }
+    }
+    return "black";
+  }
+
+  function getAlexBgColor(p, isAlexMode = false) {
+    if (p === null || p === undefined) return "#4D4D4D";
+    if (isAlexMode) {
+      switch (p) {
+        case 75:
+          return "#0000FF";
+        case 50:
+          return "#00FF00";
+        case 25:
+          return "#FFFF00";
+        case 0:
+          return "#FF0000";
+        default:
+          return "#4D4D4D";
+      }
+    } else {
+      switch (p) {
+        case 0:
+          return "#000000";
+        case 20:
+          return "#FF0000";
+        case 40:
+          return "#FFFF00";
+        case 60:
+          return "#00FF00";
+        case 80:
+          return "#0000FF";
+        default:
+          return "#4D4D4D";
+      }
+    }
+  }
+
+  function getAlexTextColor(p) {
+    const bg = getAlexBgColor(p, true);
+    return textColorForBgStrict(bg);
+  }
+
+  function getAlexValuePercentile(v, stats, inverted = false) {
+    if (!isNumeric(v)) return null;
+    const val = Number(v);
+    if (val === -1 || val === 0) return null;
+    if (!stats || stats.p25 == null || stats.p50 == null || stats.p75 == null)
+      return null;
+    const p25 = stats.p25,
+      p50 = stats.p50,
+      p75 = stats.p75;
+    if (inverted) {
+      if (val <= p25) return 75;
+      else if (val <= p50) return 50;
+      else if (val <= p75) return 25;
+      else return 0;
+    } else {
+      if (val >= p75) return 75;
+      else if (val >= p50) return 50;
+      else if (val >= p25) return 25;
+      else return 0;
+    }
+  }
+
+  function getBooleanColor(v) {
+    if (v === null || v === undefined || v === "" || v === -1) return "#808080";
+    const strVal = String(v).toLowerCase().trim();
+    if (strVal === "yes" || strVal === "true" || strVal === "1")
+      return "#00FF00";
+    if (strVal === "no" || strVal === "false") return "#000000";
+    if (strVal === "0") return "#808080";
+    if (typeof v === "boolean") return v ? "#00FF00" : "#000000";
+    if (isNumeric(v)) {
+      const num = Number(v);
+      if (num === 0) return "#808080";
+      return num > 0 ? "#00FF00" : "#000000";
+    }
+    return "#808080";
+  }
+
+  function getClimbStateColor(climbStateValue, attemptClimbValue) {
+    if (
+      climbStateValue === null ||
+      climbStateValue === undefined ||
+      climbStateValue === "" ||
+      climbStateValue === -1
+    )
+      return "#808080";
+    const stateStr = String(climbStateValue).toLowerCase().trim();
+    if (
+      stateStr === "no_climb" ||
+      stateStr === "no climb" ||
+      stateStr === "noclimb"
+    ) {
+      if (
+        attemptClimbValue === null ||
+        attemptClimbValue === undefined ||
+        attemptClimbValue === ""
+      )
+        return "#000000";
+      const attemptStr = String(attemptClimbValue).toLowerCase().trim();
+      if (
+        attemptStr === "no" ||
+        attemptStr === "false" ||
+        attemptStr === "0" ||
+        attemptClimbValue === false ||
+        attemptClimbValue === 0
+      )
+        return "#000000";
+      else if (
+        attemptStr === "yes" ||
+        attemptStr === "true" ||
+        attemptStr === "1" ||
+        attemptClimbValue === true ||
+        attemptClimbValue === 1
+      )
+        return "#FF0000";
+      return "#000000";
+    }
+    if (stateStr === "l1") return "#FFFF00";
+    if (stateStr === "l2") return "#00FF00";
+    if (stateStr === "l3") return "#0000FF";
+    return "#808080";
+  }
+
+  function colorFromStats(
+    v,
+    stats,
+    inverted = false,
+    metricName = null,
+    attemptClimbValue = null,
+  ) {
+    const isBooleanMetric = BOOLEAN_METRICS.includes(metricName);
+    const isClimbStateMetric = metricName === CLIMBSTATE_METRIC;
+
+    if (isClimbStateMetric) return getClimbStateColor(v, attemptClimbValue);
+    if (isBooleanMetric) return getBooleanColor(v);
+    if (!isNumeric(v)) return "#4D4D4D";
+
+    const numValue = Number(v);
+    if (numValue === -1) return "#4D4D4D";
+    if (numValue === 0) return "#000";
+
+    const mode = colorModes[colorblindMode];
+
+    // Alex mode: percentile-based buckets
+    if (colorblindMode === "alex") {
+      const percentileBucket = getAlexValuePercentile(
+        numValue,
+        stats,
+        inverted,
+      );
+      if (percentileBucket !== null)
+        return getAlexBgColor(percentileBucket, true);
       return "#333";
     }
 
-    const numValue = Number(v);
+    // Non-Alex modes: percentile-based smooth gradient
+    if (stats && stats.p25 != null && stats.p50 != null && stats.p75 != null) {
+      const p25 = stats.p25,
+        p50 = stats.p50,
+        p75 = stats.p75;
+      if (p25 === p50 && p50 === p75)
+        return lerpColor(mode.below, mode.above, 0.5);
 
-    if (numValue === 0) return "#000";
-    if (sigma === 0) return "rgb(180,180,180)";
+      let t;
+      if (inverted) {
+        if (numValue <= p25) {
+          t = Math.min(
+            1,
+            0.75 + ((p25 - numValue) / Math.max(p50 - p25, 0.001)) * 0.25,
+          );
+        } else if (numValue <= p50) {
+          t = 0.5 + 0.25 * (1 - (numValue - p25) / Math.max(p50 - p25, 0.001));
+        } else if (numValue <= p75) {
+          t = 0.25 + 0.25 * (1 - (numValue - p50) / Math.max(p75 - p50, 0.001));
+        } else {
+          t = Math.max(
+            0,
+            0.25 * (1 - (numValue - p75) / Math.max(p75 - p50, 0.001)),
+          );
+        }
+      } else {
+        if (numValue >= p75) {
+          t = Math.min(
+            1,
+            0.75 + ((numValue - p75) / Math.max(p75 - p50, 0.001)) * 0.25,
+          );
+        } else if (numValue >= p50) {
+          t = 0.5 + 0.25 * ((numValue - p50) / Math.max(p75 - p50, 0.001));
+        } else if (numValue >= p25) {
+          t = 0.25 + 0.25 * ((numValue - p25) / Math.max(p50 - p25, 0.001));
+        } else {
+          t = Math.max(
+            0,
+            0.25 * (1 - (p25 - numValue) / Math.max(p50 - p25, 0.001)),
+          );
+        }
+      }
+      t = Math.max(0, Math.min(1, t));
+      return t < 0.5
+        ? lerpColor(mode.below, mode.mid, t * 2)
+        : lerpColor(mode.mid, mode.above, (t - 0.5) * 2);
+    }
 
-    const mode = colorModes[colorblindMode];
-    const z = (numValue - mu) / sigma;
-    const t = Math.min(1, Math.abs(z));
+    return "rgb(180,180,180)";
+  }
 
-    return z < 0
-      ? lerpColor(mode.mid, mode.below, t)
-      : lerpColor(mode.mid, mode.above, t);
+  // Get color for an OPR value based on all available OPR data
+  function getOPRColor(teamNum) {
+    const oprVal = teamOPRs[teamNum];
+    if (oprVal == null) return { bg: "rgba(0,0,0,0.3)", color: "white" };
+
+    const allOPRValues = Object.values(teamOPRs).filter(
+      (v) => v != null,
+    ) as number[];
+    if (allOPRValues.length < 2)
+      return { bg: "rgba(0,0,0,0.3)", color: "white" };
+
+    const mu =
+      allOPRValues.reduce((a: number, b: number) => a + b, 0) /
+      allOPRValues.length;
+    const sigma = Math.sqrt(
+      allOPRValues.reduce((s: number, v: number) => s + (v - mu) ** 2, 0) /
+        allOPRValues.length,
+    );
+    const stats = {
+      mean: mu,
+      sd: sigma,
+      p25: percentile(allOPRValues, 25),
+      p50: percentile(allOPRValues, 50),
+      p75: percentile(allOPRValues, 75),
+    };
+
+    const bg = colorFromStats(oprVal, stats, false, "OPR");
+    // Use white text for dark backgrounds
+    const s = String(bg).trim().toLowerCase();
+    let textColor = "black";
+    if (s === "#000" || s === "#000000" || s === "#333") textColor = "white";
+    else if (s.startsWith("rgb")) {
+      const parts = s.match(/\d+/g);
+      if (parts) {
+        const brightness =
+          (Number(parts[0]) * 299 +
+            Number(parts[1]) * 587 +
+            Number(parts[2]) * 114) /
+          1000;
+        textColor = brightness > 128 ? "black" : "white";
+      }
+    }
+    return { bg, color: textColor };
   }
 
   function onColorblindChange(e: Event) {
@@ -466,41 +745,46 @@
   // ===== ADDED FROM teamView.svelte - END =====
 
   function getLastPlayedMatch(teamNumber: string): string {
-  if (!teamNumber || !allMatches || allMatches.length === 0) return "—";
+    if (!teamNumber || !allMatches || allMatches.length === 0) return "—";
 
-  const teamKey = `frc${teamNumber}`;
+    const teamKey = `frc${teamNumber}`;
 
-  // Find the currently selected match's index in allMatches
-  const currentMatchIndex = allMatches.findIndex(m => m.key === selectedMatch);
+    // Find the currently selected match's index in allMatches
+    const currentMatchIndex = allMatches.findIndex(
+      (m) => m.key === selectedMatch,
+    );
 
-  // Only look at matches BEFORE the current one
-  const previousMatches = currentMatchIndex >= 0
-    ? allMatches.slice(0, currentMatchIndex)
-    : allMatches;
+    // Only look at matches BEFORE the current one
+    const previousMatches =
+      currentMatchIndex >= 0
+        ? allMatches.slice(0, currentMatchIndex)
+        : allMatches;
 
-  // Find the last match this team played in
-  let lastMatch = null;
-  for (let i = previousMatches.length - 1; i >= 0; i--) {
-    const m = previousMatches[i];
-    const allTeams = [
-      ...(m.alliances?.red?.team_keys ?? []),
-      ...(m.alliances?.blue?.team_keys ?? []),
-    ];
-    if (allTeams.includes(teamKey)) {
-      lastMatch = m;
-      break;
+    // Find the last match this team played in
+    let lastMatch = null;
+    for (let i = previousMatches.length - 1; i >= 0; i--) {
+      const m = previousMatches[i];
+      const allTeams = [
+        ...(m.alliances?.red?.team_keys ?? []),
+        ...(m.alliances?.blue?.team_keys ?? []),
+      ];
+      if (allTeams.includes(teamKey)) {
+        lastMatch = m;
+        break;
+      }
     }
+
+    if (!lastMatch) return "—";
+
+    if (lastMatch.comp_level === "qm") return `Q${lastMatch.match_number}`;
+    if (lastMatch.comp_level === "f") return `F${lastMatch.match_number}`;
+
+    const elimMatches = allMatches.filter(
+      (m) => m.comp_level !== "qm" && m.comp_level !== "f",
+    );
+    const elimIndex = elimMatches.indexOf(lastMatch) + 1;
+    return `M${elimIndex}`;
   }
-
-  if (!lastMatch) return "—";
-
-  if (lastMatch.comp_level === "qm") return `Q${lastMatch.match_number}`;
-  if (lastMatch.comp_level === "f") return `F${lastMatch.match_number}`;
-
-  const elimMatches = allMatches.filter(m => m.comp_level !== "qm" && m.comp_level !== "f");
-  const elimIndex = elimMatches.indexOf(lastMatch) + 1;
-  return `M${elimIndex}`;
-}
   // ===== END NEW =====
 
   async function loadMatchData(matchKey: string) {
@@ -771,16 +1055,17 @@
   }
 
   $: lastScoutedMatches = (() => {
-  if (!teamViewData) return { r0:"—", r1:"—", r2:"—", b0:"—", b1:"—", b2:"—" };
-  return {
-    r0: getLastPlayedMatch(redAlliance[0]),
-    r1: getLastPlayedMatch(redAlliance[1]),
-    r2: getLastPlayedMatch(redAlliance[2]),
-    b0: getLastPlayedMatch(blueAlliance[0]),
-    b1: getLastPlayedMatch(blueAlliance[1]),
-    b2: getLastPlayedMatch(blueAlliance[2]),
-  };
-})();
+    if (!teamViewData)
+      return { r0: "—", r1: "—", r2: "—", b0: "—", b1: "—", b2: "—" };
+    return {
+      r0: getLastPlayedMatch(redAlliance[0]),
+      r1: getLastPlayedMatch(redAlliance[1]),
+      r2: getLastPlayedMatch(redAlliance[2]),
+      b0: getLastPlayedMatch(blueAlliance[0]),
+      b1: getLastPlayedMatch(blueAlliance[1]),
+      b2: getLastPlayedMatch(blueAlliance[2]),
+    };
+  })();
 
   function updateChartDataset(chart) {
     if (!chart.instance) return;
@@ -1162,7 +1447,7 @@
     const columnDefs = [
       {
         field: "metric",
-        pinned: "left",
+        pinned: "left" as "left",
         flex: 1,
         minWidth: 120,
         headerClass: "header-center",
@@ -1195,7 +1480,14 @@
           }
 
           const metricName = params.data.metric;
-          const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+          const stats = globalStats[metricName] || {
+            mean: 0,
+            sd: 0,
+            p25: 0,
+            p50: 0,
+            p75: 0,
+          };
+          const inverted = INVERTED_METRICS.includes(metricName);
 
           if (!stats.isNumeric) {
             return {
@@ -1211,9 +1503,11 @@
           const val = params.value;
           const numValue = isNumeric(val) ? Number(val) : 0;
 
+          const bg = colorFromStats(numValue, stats, inverted, metricName);
+
           return {
-            background: colorFromStats(numValue, stats.mean, stats.sd),
-            color: numValue === 0 ? "white" : "black",
+            background: bg,
+            color: textColorForBgStrict(bg),
             fontSize: "18px",
             fontWeight: 600,
             textAlign: "center",
@@ -1240,15 +1534,19 @@
         cellClass: "cell-center",
         cellStyle: (params) => {
           const metricName = params.data.metric;
-          const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+          const stats = globalStats[metricName] || {
+            mean: 0,
+            sd: 0,
+            p25: 0,
+            p50: 0,
+            p75: 0,
+          };
+          const inverted = INVERTED_METRICS.includes(metricName);
 
+          const bg = colorFromStats(params.value, stats, inverted, metricName);
           return {
-            background:
-              params.value === 0 || params.value === null
-                ? "#4D4D4D"
-                : colorFromStats(params.value, stats.mean, stats.sd),
-            color:
-              params.value === 0 || params.value === null ? "white" : "black",
+            background: bg,
+            color: textColorForBgStrict(bg),
             fontSize: "18px",
             fontWeight: "bold",
             textAlign: "center",
@@ -1411,16 +1709,24 @@
           }
         });
         const filteredValues = allValues.filter((v) => v !== 0);
+        const mu = filteredValues.length > 0 ? mean(filteredValues) : 0;
         globalStats[metric] = {
-          mean: filteredValues.length > 0 ? mean(filteredValues) : 0,
-          sd:
-            filteredValues.length > 0
-              ? sd(filteredValues, mean(filteredValues))
-              : 0,
+          mean: mu,
+          sd: filteredValues.length > 0 ? sd(filteredValues, mu) : 0,
+          p25: filteredValues.length > 0 ? percentile(filteredValues, 25) : 0,
+          p50: filteredValues.length > 0 ? percentile(filteredValues, 50) : 0,
+          p75: filteredValues.length > 0 ? percentile(filteredValues, 75) : 0,
           isNumeric: true,
         };
       } else {
-        globalStats[metric] = { mean: 0, sd: 0, isNumeric: false };
+        globalStats[metric] = {
+          mean: 0,
+          sd: 0,
+          p25: 0,
+          p50: 0,
+          p75: 0,
+          isNumeric: false,
+        };
       }
     });
 
@@ -1458,7 +1764,7 @@
       {
         headerName: "Metric",
         field: "metric",
-        pinned: "left",
+        pinned: "left" as "left",
         flex: 1,
         minWidth: 100,
         headerClass: "header-center",
@@ -1482,9 +1788,37 @@
         cellClass: "cell-center",
         cellStyle: (params) => {
           const metricName = params.data.metric;
-          const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+          const stats = globalStats[metricName] || {
+            mean: 0,
+            sd: 0,
+            p25: 0,
+            p50: 0,
+            p75: 0,
+          };
+          const inverted = INVERTED_METRICS.includes(metricName);
 
           if (!stats.isNumeric) {
+            // For ClimbState, still color
+            if (metricName === CLIMBSTATE_METRIC) {
+              const bg = getClimbStateColor(params.value, null);
+              return {
+                background: bg,
+                color: textColorForBgStrict(bg),
+                fontSize: "12px",
+                fontWeight: 600,
+                textAlign: "center",
+              };
+            }
+            if (BOOLEAN_METRICS.includes(metricName)) {
+              const bg = getBooleanColor(params.value);
+              return {
+                background: bg,
+                color: textColorForBgStrict(bg),
+                fontSize: "12px",
+                fontWeight: 600,
+                textAlign: "center",
+              };
+            }
             return {
               background: "#333",
               color: "white",
@@ -1497,10 +1831,11 @@
 
           const val = params.value;
           const numValue = isNumeric(val) ? Number(val) : 0;
+          const bg = colorFromStats(numValue, stats, inverted, metricName);
 
           return {
-            background: colorFromStats(numValue, stats.mean, stats.sd),
-            color: numValue === 0 ? "white" : "black",
+            background: bg,
+            color: textColorForBgStrict(bg),
             fontSize: "14px",
             fontWeight: 600,
             textAlign: "center",
@@ -1527,15 +1862,28 @@
         cellClass: "cell-center",
         cellStyle: (params) => {
           const metricName = params.data.metric;
-          const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+          const stats = globalStats[metricName] || {
+            mean: 0,
+            sd: 0,
+            p25: 0,
+            p50: 0,
+            p75: 0,
+          };
+          const inverted = INVERTED_METRICS.includes(metricName);
 
+          if (params.value === 0 || params.value === null) {
+            return {
+              background: "#4D4D4D",
+              color: "white",
+              fontSize: "14px",
+              fontWeight: "bold",
+              textAlign: "center",
+            };
+          }
+          const bg = colorFromStats(params.value, stats, inverted, metricName);
           return {
-            background:
-              params.value === 0 || params.value === null
-                ? "#4D4D4D"
-                : colorFromStats(params.value, stats.mean, stats.sd),
-            color:
-              params.value === 0 || params.value === null ? "white" : "black",
+            background: bg,
+            color: textColorForBgStrict(bg),
             fontSize: "14px",
             fontWeight: "bold",
             textAlign: "center",
@@ -1556,15 +1904,29 @@
         cellClass: "cell-center",
         cellStyle: (params) => {
           const metricName = params.data.metric;
-          const stats = globalStats[metricName] || { mean: 0, sd: 0 };
+          const stats = globalStats[metricName] || {
+            mean: 0,
+            sd: 0,
+            p25: 0,
+            p50: 0,
+            p75: 0,
+          };
+          const inverted = INVERTED_METRICS.includes(metricName);
+
+          if (params.value === 0 || params.value === null) {
+            return {
+              background: "#4D4D4D",
+              color: "white",
+              fontSize: "14px",
+              fontWeight: "bold",
+              textAlign: "center",
+            };
+          }
+          const bg = colorFromStats(params.value, stats, inverted, metricName);
 
           return {
-            background:
-              params.value === 0 || params.value === null
-                ? "#4D4D4D"
-                : colorFromStats(params.value, stats.mean, stats.sd),
-            color:
-              params.value === 0 || params.value === null ? "white" : "black",
+            background: bg,
+            color: textColorForBgStrict(bg),
             fontSize: "14px",
             fontWeight: "bold",
             textAlign: "center",
@@ -1707,7 +2069,7 @@
     </div>
   </div>
 
-<!-- Grid containers with dropdown in middle -->
+  <!-- Grid containers with dropdown in middle -->
   <div class="grid-wrapper">
     <div class="grid-column">
       <div class="team-box">
@@ -1715,33 +2077,72 @@
           <span class="last-match-badge">Last: {lastScoutedMatches.r0}</span>
           Red 1 - Team {redAlliance[0]}
           {#if teamOPRs[redAlliance[0]]}
-            <span class="opr-badge">OPR: {teamOPRs[redAlliance[0]].toFixed(2)}</span>
+            <span
+              class="opr-badge"
+              style="background: {getOPRColor(redAlliance[0])
+                .bg}; color: {getOPRColor(redAlliance[0]).color};"
+              >OPR: {teamOPRs[redAlliance[0]].toFixed(2)}</span
+            >
           {/if}
-          <img src={rating[fetchGraceRating(redAlliance[0])]} alt="Grace Rating" style="width: 60px;" />
+          <img
+            src={rating[fetchGraceRating(redAlliance[0])]}
+            alt="Grace Rating"
+            style="width: 60px;"
+          />
         </h3>
-        <div class="grid-container ag-theme-quartz" bind:this={domNode} style="height: {gridHeight}px;"></div>
+        <div
+          class="grid-container ag-theme-quartz"
+          bind:this={domNode}
+          style="height: {gridHeight}px;"
+        ></div>
       </div>
       <div class="team-box">
         <h3 class="team-label red-label">
           <span class="last-match-badge">Last: {lastScoutedMatches.r1}</span>
           Red 2 - Team {redAlliance[1]}
           {#if teamOPRs[redAlliance[1]]}
-            <span class="opr-badge">OPR: {teamOPRs[redAlliance[1]].toFixed(2)}</span>
+            <span
+              class="opr-badge"
+              style="background: {getOPRColor(redAlliance[1])
+                .bg}; color: {getOPRColor(redAlliance[1]).color};"
+              >OPR: {teamOPRs[redAlliance[1]].toFixed(2)}</span
+            >
           {/if}
-          <img src={rating[fetchGraceRating(redAlliance[1])]} alt="Grace Rating" style="width: 60px;" />
+          <img
+            src={rating[fetchGraceRating(redAlliance[1])]}
+            alt="Grace Rating"
+            style="width: 60px;"
+          />
         </h3>
-        <div class="grid-container ag-theme-quartz" bind:this={domNode2} style="height: {gridHeight}px;"></div>
+        <div
+          class="grid-container ag-theme-quartz"
+          bind:this={domNode2}
+          style="height: {gridHeight}px;"
+        ></div>
       </div>
       <div class="team-box">
         <h3 class="team-label red-label">
           <span class="last-match-badge">Last: {lastScoutedMatches.r2}</span>
           Red 3 - Team {redAlliance[2]}
           {#if teamOPRs[redAlliance[2]]}
-            <span class="opr-badge">OPR: {teamOPRs[redAlliance[2]].toFixed(2)}</span>
+            <span
+              class="opr-badge"
+              style="background: {getOPRColor(redAlliance[2])
+                .bg}; color: {getOPRColor(redAlliance[2]).color};"
+              >OPR: {teamOPRs[redAlliance[2]].toFixed(2)}</span
+            >
           {/if}
-          <img src={rating[fetchGraceRating(redAlliance[2])]} alt="Grace Rating" style="width: 60px;" />
+          <img
+            src={rating[fetchGraceRating(redAlliance[2])]}
+            alt="Grace Rating"
+            style="width: 60px;"
+          />
         </h3>
-        <div class="grid-container ag-theme-quartz" bind:this={domNode3} style="height: {gridHeight}px;"></div>
+        <div
+          class="grid-container ag-theme-quartz"
+          bind:this={domNode3}
+          style="height: {gridHeight}px;"
+        ></div>
       </div>
     </div>
 
@@ -1751,33 +2152,72 @@
           <span class="last-match-badge">Last: {lastScoutedMatches.b0}</span>
           Blue 1 - Team {blueAlliance[0]}
           {#if teamOPRs[blueAlliance[0]]}
-            <span class="opr-badge">OPR: {teamOPRs[blueAlliance[0]].toFixed(2)}</span>
+            <span
+              class="opr-badge"
+              style="background: {getOPRColor(blueAlliance[0])
+                .bg}; color: {getOPRColor(blueAlliance[0]).color};"
+              >OPR: {teamOPRs[blueAlliance[0]].toFixed(2)}</span
+            >
           {/if}
-          <img src={rating[fetchGraceRating(blueAlliance[0])]} alt="Grace Rating" style="width: 60px;" />
+          <img
+            src={rating[fetchGraceRating(blueAlliance[0])]}
+            alt="Grace Rating"
+            style="width: 60px;"
+          />
         </h3>
-        <div class="grid-container ag-theme-quartz" bind:this={domNodeRight} style="height: {gridHeight}px;"></div>
+        <div
+          class="grid-container ag-theme-quartz"
+          bind:this={domNodeRight}
+          style="height: {gridHeight}px;"
+        ></div>
       </div>
       <div class="team-box">
         <h3 class="team-label blue-label">
           <span class="last-match-badge">Last: {lastScoutedMatches.b1}</span>
           Blue 2 - Team {blueAlliance[1]}
           {#if teamOPRs[blueAlliance[1]]}
-            <span class="opr-badge">OPR: {teamOPRs[blueAlliance[1]].toFixed(2)}</span>
+            <span
+              class="opr-badge"
+              style="background: {getOPRColor(blueAlliance[1])
+                .bg}; color: {getOPRColor(blueAlliance[1]).color};"
+              >OPR: {teamOPRs[blueAlliance[1]].toFixed(2)}</span
+            >
           {/if}
-          <img src={rating[fetchGraceRating(blueAlliance[1])]} alt="Grace Rating" style="width: 60px;" />
+          <img
+            src={rating[fetchGraceRating(blueAlliance[1])]}
+            alt="Grace Rating"
+            style="width: 60px;"
+          />
         </h3>
-        <div class="grid-container ag-theme-quartz" bind:this={domNode4} style="height: {gridHeight}px;"></div>
+        <div
+          class="grid-container ag-theme-quartz"
+          bind:this={domNode4}
+          style="height: {gridHeight}px;"
+        ></div>
       </div>
       <div class="team-box">
         <h3 class="team-label blue-label">
           <span class="last-match-badge">Last: {lastScoutedMatches.b2}</span>
           Blue 3 - Team {blueAlliance[2]}
           {#if teamOPRs[blueAlliance[2]]}
-            <span class="opr-badge">OPR: {teamOPRs[blueAlliance[2]].toFixed(2)}</span>
+            <span
+              class="opr-badge"
+              style="background: {getOPRColor(blueAlliance[2])
+                .bg}; color: {getOPRColor(blueAlliance[2]).color};"
+              >OPR: {teamOPRs[blueAlliance[2]].toFixed(2)}</span
+            >
           {/if}
-          <img src={rating[fetchGraceRating(blueAlliance[2])]} alt="Grace Rating" style="width: 60px;" />
+          <img
+            src={rating[fetchGraceRating(blueAlliance[2])]}
+            alt="Grace Rating"
+            style="width: 60px;"
+          />
         </h3>
-        <div class="grid-container ag-theme-quartz" bind:this={domNode5} style="height: {gridHeight}px;"></div>
+        <div
+          class="grid-container ag-theme-quartz"
+          bind:this={domNode5}
+          style="height: {gridHeight}px;"
+        ></div>
       </div>
     </div>
   </div>
@@ -2034,17 +2474,6 @@
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
   }
 
-  .center-dropdown {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .center-dropdown select {
-    margin: 0;
-    padding: 10px 15px;
-  }
-
   .opr-badge {
     margin-left: 10px;
     padding: 4px 10px;
@@ -2052,144 +2481,6 @@
     border-radius: 4px;
     font-size: 0.9rem;
     font-weight: 600;
-  }
-
-  /* ===== Graph Section Styles ===== */
-  .graph-section {
-    width: 80vw;
-    margin-top: 30px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-
-  .section-title {
-    color: var(--frc-190-red);
-    font-size: 1.8rem;
-    font-weight: 700;
-    margin-bottom: 20px;
-    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
-  }
-
-  .dropdown-container {
-    position: relative;
-    margin-bottom: 20px;
-  }
-
-  .plus-btn {
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 2rem;
-    font-weight: 600;
-    border: 2px solid var(--frc-190-red);
-    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-    color: white;
-    cursor: pointer;
-    padding: 0;
-    box-sizing: border-box;
-    transition: all 0.3s ease;
-  }
-
-  .plus-btn:hover {
-    background: linear-gradient(135deg, var(--frc-190-red) 0%, #e02200 100%);
-    transform: scale(1.05);
-  }
-
-  .dropdown {
-    position: absolute;
-    top: 60px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-    border: 2px solid var(--frc-190-red);
-    border-radius: 8px;
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    width: 150px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
-    z-index: 10;
-    overflow: hidden;
-  }
-
-  .dropdown li {
-    padding: 12px 15px;
-    cursor: pointer;
-    text-align: center;
-    color: white;
-    font-weight: 500;
-    text-transform: capitalize;
-    transition: background 0.2s ease;
-  }
-
-  .dropdown li:hover {
-    background: var(--frc-190-red);
-  }
-
-  .charts-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
-    width: 100%;
-  }
-
-  .chart-wrapper {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    width: 100%;
-    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-    border: 2px solid var(--frc-190-red);
-    border-radius: 8px;
-    padding: 15px;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-  }
-
-  .chart-container {
-    width: 100%;
-    height: 300px;
-    flex-grow: 1;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 6px;
-  }
-
-  .chart-label {
-    margin-top: 10px;
-    font-weight: bold;
-    text-transform: capitalize;
-    text-align: center;
-    color: white;
-    font-size: 1rem;
-  }
-
-  .remove-btn {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    border: none;
-    background: var(--frc-190-red);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    z-index: 10;
-    transition: background 0.2s ease;
-  }
-
-  .remove-btn:hover {
-    background: #e02200;
-  }
-
-  .metric-select {
-    margin-top: 10px;
   }
 
   @media (max-width: 1024px) {
