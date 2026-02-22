@@ -49,7 +49,7 @@
   const TBA_API_KEY = import.meta.env.VITE_AUTH_KEY;
   const TBA_BASE_URL = "https://www.thebluealliance.com/api/v3";
 
-  let eventKey = "2025mawor"; // Will be loaded from localStorage
+  let eventCode = ""; // Will be loaded from localStorage
   let teamOPRs = {}; // Cache for OPR values { teamNumber: oprValue }
   let oprLoading = false;
 
@@ -602,15 +602,15 @@
     return result;
   }
 
-  async function fetchEventOPRs(eventKey) {
-    if (!eventKey) {
+  async function fetchEventOPRs(eventCode) {
+    if (!eventCode) {
       console.warn("No event key provided for OPR fetch");
       return {};
     }
 
     oprLoading = true;
     try {
-      const response = await fetch(`${TBA_BASE_URL}/event/2025mawor/oprs`, {
+      const response = await fetch(`${TBA_BASE_URL}/event/${eventCode}/oprs`, {
         headers: {
           "X-TBA-Auth-Key": TBA_API_KEY,
         },
@@ -678,9 +678,9 @@
 
     const metricSet = new Set();
 
-    // Add OPR if we have OPR data OR an event key is set (so the user can select it)
+    // Add OPR if we have OPR data OR an event code is set (so the user can select it)
     // This ensures the Metric dropdown shows OPR even if the fetch failed or returned empty.
-    if (eventKey || Object.keys(teamOPRs).length > 0) {
+    if (eventCode || Object.keys(teamOPRs).length > 0) {
       metricSet.add("OPR (Offensive Power Rating)");
     }
 
@@ -933,9 +933,9 @@
       console.log("Number of OPR entries:", Object.keys(teamOPRs).length);
 
       // If OPR data hasn't been fetched yet, fetch it
-      if (Object.keys(teamOPRs).length === 0 && eventKey) {
+      if (Object.keys(teamOPRs).length === 0 && eventCode) {
         console.log("Fetching OPR data...");
-        fetchEventOPRs(eventKey).then((oprs) => {
+        fetchEventOPRs(eventCode).then((oprs) => {
           teamOPRs = oprs;
           buildOPRGrid();
         });
@@ -1915,11 +1915,11 @@
       }
 
       // IMPORTANT: Fetch OPR data BEFORE computing metrics
-      eventKey = localStorage.getItem("eventCode") || "";
-      console.log("Event Key:", eventKey);
+      eventCode = localStorage.getItem("eventCode") || "";
+      console.log("Event Key:", eventCode);
 
-      if (eventKey) {
-        teamOPRs = await fetchEventOPRs(eventKey);
+      if (eventCode) {
+        teamOPRs = await fetchEventOPRs(eventCode);
         console.log("OPR cache populated:", teamOPRs);
       }
 

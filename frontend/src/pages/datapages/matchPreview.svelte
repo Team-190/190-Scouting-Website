@@ -596,8 +596,7 @@
 
     console.log("Loaded teamViewData:", teamViewData);
 
-     eventCode = "2025mawor";
-    //eventCode = localStorage.getItem("eventCode") || "";
+    eventCode = localStorage.getItem("eventCode") || "";
     console.log("Event Key:", eventCode);
 
     // Fetch OPR data early
