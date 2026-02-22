@@ -1,10 +1,12 @@
 // REQUIRED .env PARAMETERS:
-// PORT - Localhost port to run server
+// VITE_BACKEND_PORT - Port on which the backend runs
+// VITE_FRONTEND_PORT - Port on which the frontend runs
 // SESSION_SECRET - Random string to sign off session cookies
-// DIR - Project directory where files to be served are
-
-// TESTING - Binary value to indicate whether the code is in testing or production
-// USE_CUSTOM_CONFIG - Binary value to allow developers to use custom config.json file
+// VITE_AUTH_KEY - TBA API key
+// DB_USER - Database user to access data
+// DB_PASSWORD - Database password to access data
+// VITE_SERVER_IP - IP of where the backend/frontend are running
+// VITE_TESTING - Binary value to indicate whether the code is in testing or production
 
 const express = require("express");
 const path = require("path");
@@ -12,19 +14,21 @@ const test = require("./test/test.js")
 const database = require("./database.js");
 const session = require("express-session");
 const cors = require("cors");
-require("dotenv").config();
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 const app = express();
-const PORT = process.env.PORT || 8000;
-const testingMode = parseInt(process.env.TESTING) || 0;
-const DIR = process.env.DIR || "test/public";
+const VITE_BACKEND_PORT = process.env.VITE_BACKEND_PORT || 8000;
+const VITE_FRONTEND_PORT = process.env.VITE_FRONTEND_PORT || 5173;
+const VITE_TESTING = process.env.VITE_TESTING || 1;
+const SERVER = !parseInt(VITE_TESTING) ? process.env.VITE_SERVER_IP : "localhost";
+const DIR = process.env.DIR || "./test/public";
 
 // Change later to be correct directory for Svelte files
 const publicDir = path.join(__dirname, DIR);
 
 console.log(DIR);
 
-let eventCode = testingMode ? "2025nhalt1" : "";
+let eventCode = "";
 let bracket;
 
 app.use(express.static(publicDir));
@@ -42,7 +46,7 @@ app.use(
 );
 
 app.use(cors({
-    origin: "http://localhost:5173",
+    origin: `http://${SERVER}:${VITE_FRONTEND_PORT}`,
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type"],
 }))
@@ -94,7 +98,7 @@ app.get("/getAllData", async (req, res) => {
     res.send(result);
 });
 
-app.get("/singleMetric", async (req, res) => {
+app.get("/getSingleMetric", async (req, res) => {
     const eventCode = req.query.eventCode;
     if (!eventCode) return res.sendStatus(403);
 
@@ -237,6 +241,6 @@ app.post("/postGompeiMadnessBracket", async (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
-    console.log("Listening on port " + PORT);
+app.listen(VITE_BACKEND_PORT, () => {
+    console.log("Listening on port " + VITE_BACKEND_PORT);
 });

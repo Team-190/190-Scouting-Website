@@ -9,6 +9,7 @@
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import { v4 as uuidv4 } from "uuid";
+    import { fetchSingleMetric } from "../../utils/api.js";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 

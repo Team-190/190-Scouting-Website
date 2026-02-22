@@ -1,30 +1,39 @@
-export function fetchTeamView(teamNumber) {
-    const route = `http://localhost:8000/getTeamView?teamNumber=${teamNumber}`;
-    console.log(teamNumber);
-    let data = fetch(route);
-    return data;
-}
+const VITE_TESTING = import.meta.env.VITE_TESTING || 1;
+const VITE_BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT || 8000;
+const SERVER = !parseInt(VITE_TESTING) ? import.meta.env.VITE_SERVER_IP : "localhost";
 
-export function fetchAllTeams() {
-    const route = `http://localhost:8000/getAllTeams`;
+export function fetchEvents() {
+    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getEvents`;
     let data = fetch(route);
     return data;
 }
 
 export function fetchAvailableTeams() {
-    const route = `http://localhost:8000/getAvailableTeams`;
+    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getAvailableTeams`;
+    let data = fetch(route);
+    return data;
+}
+
+export function fetchAllData(eventCode) {
+    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getAllData?eventCode=` + eventCode;
+    let data = fetch(route);
+    return data;
+}
+
+export function fetchSingleMetric(eventCode) {
+    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/singleMetric?eventCode=` + eventCode;
     let data = fetch(route);
     return data;
 }
 
 export function fetchGracePage(eventCode) {
-    const route = `http://localhost:8000/getRatings?eventCode=${eventCode}`;
+    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getRatings?eventCode=${eventCode}`;
     let data = fetch(route);
     return data;
 }
 
 export async function postEventCode(eventCode) {
-    const response = await fetch("http://localhost:8000/postEventCode", {
+    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/postEventCode`, {
         method: 'POST',
         headers: {
             "Content-Type": "application/json"
@@ -44,7 +53,7 @@ export async function postEventCode(eventCode) {
 }
 
 export async function postGracePage(event, team, rating) {
-    const response = await fetch("http://localhost:8000/postRatings", {
+    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/postRatings`, {
         method: 'POST',
         headers: {
             "Content-Type": "application/json"
@@ -66,7 +75,7 @@ export async function postGracePage(event, team, rating) {
 
 export async function postPitScouting(event, team, formData) {
 
-    const response = await fetch("http://localhost:8000/postPitScouting", {
+    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/postPitScouting`, {
         method: 'POST',
         headers: {
             "Content-Type": "application/json"
@@ -81,7 +90,7 @@ export async function postPitScouting(event, team, formData) {
 export async function postGompeiMadnessBracket(bracket) {
     // data: { name: "guy", r1: [{matchNumber: 1 , winner: "a1"}, "a2", "a3", "a4"], r2: ["a1", "a2"], r3: ["a1"] }
 
-    const response = await fetch("http://localhost:8000/postGompeiMadnessBracket", {
+    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/postGompeiMadnessBracket`, {
         method: 'POST',
         headers: {
             "Content-Type": "application/json"
@@ -98,28 +107,4 @@ export async function postGompeiMadnessBracket(bracket) {
     const result = await response.text(); // or response.json() if the server responds with JSON
     console.log('Success:', result);
     return result;
-}
-
-
-export async function fetchWinners(eventCode) {
-    const apiKey = import.meta.env.VITE_AUTH_KEY;
-    const apiUrl = `https://www.thebluealliance.com/api/v3/team/frc${eventCode}`;
-
-    try {
-        const response = await fetch(apiUrl, {
-        headers: {
-            "X-TBA-Auth-Key": apiKey
-        }
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-
-        // retrieve winners
-
-    } catch (error) {
-        console.error('There was a problem fetching team data:', error);
-    }
 }
