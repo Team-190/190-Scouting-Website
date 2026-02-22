@@ -1,18 +1,23 @@
 <script>
-    import { goto } from '@mateothegreat/svelte5-router';
+    import { goto } from "@mateothegreat/svelte5-router";
     import { onMount } from "svelte";
-    import { fetchAllData, fetchEvents } from '../utils/api';
+    import { fetchAllData, fetchEvents } from "../utils/api";
 
     let eventCode = localStorage.getItem("eventCode");
 
     async function cacheAllData() {
         localStorage.clear();
-        console.log("Getting all data from storage for event "+eventCode);
-        const data = JSON.stringify((await (await fetchAllData(eventCode)).json()).data);
+        console.log("Getting all data from storage for event " + eventCode);
+        const data = JSON.stringify(
+            (await (await fetchAllData(eventCode)).json()).data,
+        );
 
-        console.log(data)
+        console.log(data);
         localStorage.setItem("data", data);
-        localStorage.setItem("timestamp", new Date(Date.now()).toLocaleString());
+        localStorage.setItem(
+            "timestamp",
+            new Date(Date.now()).toLocaleString(),
+        );
         localStorage.setItem("eventCode", eventCode);
     }
 
@@ -29,7 +34,7 @@
         { value: 9, label: "September" },
         { value: 10, label: "October" },
         { value: 11, label: "November" },
-        { value: 12, label: "December" }
+        { value: 12, label: "December" },
     ];
 
     let selectedYear = new Date().getFullYear();
@@ -66,7 +71,7 @@
         try {
             const res = await fetch(
                 `https://www.thebluealliance.com/api/v3/events/${selectedYear}`,
-                { headers: { "X-TBA-Auth-Key": TBA_KEY } }
+                { headers: { "X-TBA-Auth-Key": TBA_KEY } },
             );
             allEvents = res.ok ? await res.json() : [];
         } catch {
@@ -75,7 +80,7 @@
     }
 
     function filterEvents() {
-        events = allEvents.filter(evt => {
+        events = allEvents.filter((evt) => {
             const [, month] = evt.start_date.split("-").map(Number);
             return month === selectedMonth;
         });
@@ -94,11 +99,21 @@
 
     $: selectedYear && loadEventsForYear().then(filterEvents);
     $: selectedMonth && filterEvents();
-
+    $: {
+        if (eventCode) {
+            localStorage.setItem("eventCode", eventCode);
+        }
+    }
 </script>
 
 <div class="container">
-    <div class="button-wrapper" on:click={cacheAllData}>
+    <div
+        class="button-wrapper"
+        onclick={cacheAllData}
+        role="button"
+        tabindex="0"
+        onkeydown={(e) => e.key === "Enter" && cacheAllData()}
+    >
         <div class="circle">
             <span class="label">Populate Local Storage</span>
         </div>
@@ -106,18 +121,18 @@
 
     {#if showEventSelector}
         <div class="event-selector-panel">
-        <h2>Event Selector</h2>
+            <h2>Event Selector</h2>
 
-        <select class="select" bind:value={eventCode}>
-            {#each dbEvents as event}
-                <option value={event.eventCode}>{event.name}</option>
-            {/each}
-        </select>
+            <select class="select" bind:value={eventCode}>
+                {#each dbEvents as event}
+                    <option value={event.eventCode}>{event.name}</option>
+                {/each}
+            </select>
 
-        <p class="selected-event">
-            You selected: {dbEvents.find(e => e.eventCode === eventCode)?.name || eventCode}
-        </p>
-
+            <p class="selected-event">
+                You selected: {dbEvents.find((e) => e.eventCode === eventCode)
+                    ?.name || eventCode}
+            </p>
         </div>
     {/if}
 </div>
@@ -125,9 +140,9 @@
 <style>
     /* FRC 190 Brand Colors */
     :root {
-        --frc-190-red: #C81B00;
-        --wpi-gray: #A9B0B7;
-        --frc-190-black: #4D4D4D;
+        --frc-190-red: #c81b00;
+        --wpi-gray: #a9b0b7;
+        --frc-190-black: #4d4d4d;
     }
 
     .container {
@@ -152,7 +167,7 @@
     .button-wrapper:hover {
         transform: scale(1.05);
     }
-    
+
     .button-wrapper:active {
         transform: scale(0.95);
     }
@@ -165,7 +180,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
     }
 
     .label {
@@ -192,39 +207,4 @@
     .select {
         height: 22px;
     }
-
-    .selected-event {
-        
-    }
-
-    .submit-button {
-        height: 20px;
-        width: 80px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin: auto;
-    }
-
-    .fab {
-        position: fixed;
-        bottom: 2rem;
-        right: 2rem;
-        padding: 1rem 2rem;
-        background-color: var(--frc-190-black);
-        color: white;
-        border: 2px solid var(--frc-190-red);
-        border-radius: 50px;
-        font-size: 1.2rem;
-        cursor: pointer;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        transition: all 0.2s;
-    }
-
-    .fab:hover {
-        background-color: #333;
-        border-color: #e02200;
-        transform: translateY(-2px);
-    }
-
 </style>

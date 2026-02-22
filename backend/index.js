@@ -14,7 +14,7 @@ const test = require("./test/test.js")
 const database = require("./database.js");
 const session = require("express-session");
 const cors = require("cors");
-require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+require('dotenv').config({ path: path.resolve(__dirname, '../.env'), override: true });
 
 const app = express();
 const VITE_BACKEND_PORT = process.env.VITE_BACKEND_PORT || 8000;
@@ -36,7 +36,7 @@ app.use(express.json());
 
 app.use(
     session({
-        secret: "ffyufytfytfuytftfhgfhgfhfhgfhgfhgf",
+        secret: process.env.SESSION_SECRET || "ffyufytfytfuytftfhgfhgfhfhgfhgfhgf",
         resave: false,
         saveUninitialized: false,
         cookie: {
@@ -46,7 +46,11 @@ app.use(
 );
 
 app.use(cors({
-    origin: `http://${SERVER}:${VITE_FRONTEND_PORT}`,
+    origin: [
+        `http://${SERVER}:${VITE_FRONTEND_PORT}`,
+        `http://localhost:${VITE_FRONTEND_PORT}`,
+        `http://127.0.0.1:${VITE_FRONTEND_PORT}`
+    ],
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type"],
 }))
@@ -73,7 +77,7 @@ app.get("/login", (req, res) => {
 app.get("/getEvents", async (req, res) => {
     try {
         const events = await database.getEvents();
-        console.log("GOT EVENTS:\n"+JSON.stringify(events, null, 2));
+        console.log("GOT EVENTS:\n" + JSON.stringify(events, null, 2));
         res.json(events);
     } catch (error) {
         console.error(error);
@@ -92,7 +96,7 @@ app.get("/getAllData", async (req, res) => {
     const eventCode = req.query.eventCode;
     if (!eventCode) return res.sendStatus(403);
 
-    console.log("alldata requested, eventCode: "+eventCode);
+    console.log("alldata requested, eventCode: " + eventCode);
     let result = await database.getAllData(eventCode);
     console.log(result);
     res.send(result);
@@ -129,13 +133,13 @@ app.get("/getSingleMetric", async (req, res) => {
         console.log(teams[thinger])
     }
 
-    
+
 });
 
 app.get("/getRatings", async (req, res) => {
     const eventCode = req.query.eventCode;
     if (!eventCode) return res.sendStatus(403);
-    
+
     let fileData = await database.readJSONFile("driverRatings");
     fileData = fileData[eventCode];
     res.send(fileData);
@@ -189,7 +193,7 @@ app.post("/postRatings", async (req, res) => {
 
             fileData[event][team][nextRating] = rating;
         } else {
-            fileData[event][team] = {0: rating};
+            fileData[event][team] = { 0: rating };
         }
 
         database.writeJSONFile(file, fileData);
