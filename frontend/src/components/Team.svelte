@@ -1,9 +1,22 @@
 <script>
     export let team;
     export let picked = false;
+    export let onclick = undefined;
+    export let ondragstart = undefined;
+    export let onkeydown = undefined;
 </script>
 
-<div class="list-item" data-team-number={team.team_number} class:picked draggable="true" on:dragstart on:click>
+<div
+    class="list-item"
+    data-team-number={team.team_number}
+    class:picked
+    draggable="true"
+    role="button"
+    tabindex="0"
+    {onclick}
+    {ondragstart}
+    {onkeydown}
+>
     {team.team_number} - {team.nickname}
 </div>
 

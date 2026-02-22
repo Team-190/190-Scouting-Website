@@ -895,6 +895,8 @@
     const gridOptions = {
       rowData: data,
       columnDefs,
+      rowHeight: ROW_HEIGHT,
+      headerHeight: HEADER_HEIGHT,
       defaultColDef: {
         resizable: false,
         sortable: false,

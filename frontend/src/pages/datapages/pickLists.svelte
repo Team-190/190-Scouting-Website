@@ -1,15 +1,18 @@
 <script>
-    import baseX from 'base-x';
-    import pako from 'pako';
-    import { writable } from 'svelte/store';
-    import Team from '../../components/Team.svelte';
-    import { fetchOPR } from '../../utils/blueAllianceApi';
+    import baseX from "base-x";
+    import pako from "pako";
+    import { writable } from "svelte/store";
+    import Team from "../../components/Team.svelte";
+    import { fetchOPR } from "../../utils/blueAllianceApi";
 
-    const BASE85_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~';
+    const BASE85_CHARS =
+        "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~";
     const bs85 = baseX(BASE85_CHARS);
 
     export const teamsStore = writable([]);
-    let tbaApiKey = $state('zhTqFG7csJoif1sNXt3aZngy0LB1X4LxMgTfXBvPscNG0P9FifZCa2uGJcUk2gKW');
+    let tbaApiKey = $state(
+        "zhTqFG7csJoif1sNXt3aZngy0LB1X4LxMgTfXBvPscNG0P9FifZCa2uGJcUk2gKW",
+    );
 
     let picklists = $state({});
     let cachedPicklists = null;
@@ -19,93 +22,104 @@
     $effect(() => {
         localStorage.setItem("eventCode", eventCode);
     });
-    const sessionData = sessionStorage.getItem('picklists');
+    const sessionData = sessionStorage.getItem("picklists");
     if (sessionData) {
         try {
             cachedPicklists = JSON.parse(sessionData);
         } catch (e) {
-            console.error('Failed to parse session picklists.')
+            console.error("Failed to parse session picklists.");
         }
     }
-    
+
     if (!cachedPicklists) {
-        const localData = localStorage.getItem('picklists');
+        const localData = localStorage.getItem("picklists");
         if (localData) {
-        try {
-            cachedPicklists = JSON.parse(localData);
-        } catch (e) {
-            console.error('Failed to parse local picklists', e);
-        }
+            try {
+                cachedPicklists = JSON.parse(localData);
+            } catch (e) {
+                console.error("Failed to parse local picklists", e);
+            }
         }
     }
     if (cachedPicklists) picklists = cachedPicklists;
 
     $effect(() => {
         try {
-            sessionStorage.setItem('picklists', JSON.stringify(picklists));
-            localStorage.setItem('picklists', JSON.stringify(picklists));
+            sessionStorage.setItem("picklists", JSON.stringify(picklists));
+            localStorage.setItem("picklists", JSON.stringify(picklists));
         } catch (e) {
-            console.error('Failed to save picklists', e);
+            console.error("Failed to save picklists", e);
         }
     });
 
     let teams = $state([]);
     let draggedItem = $state(null);
-    let newPickListName = $state('');
+    let newPickListName = $state("");
     let pickedTeams = $state({});
-    let importData = $state('');
+    let importData = $state("");
     let editingPicklistId = $state(null);
-    let editingPicklistName = $state('');
-    let alliances = $state(Array.from({ length: 8 }, (_, i) => ({ id: i + 1, teams: [] })));
-    let activeView = $state('picklists');
+    let editingPicklistName = $state("");
+    let alliances = $state(
+        Array.from({ length: 8 }, (_, i) => ({ id: i + 1, teams: [] })),
+    );
+    let activeView = $state("picklists");
     let rankedTeams = $state([]);
     let isFourTeamAlliance = $state(false);
 
     let cachedAllianceSelections = null;
 
-
-    const sessionAllianceData = sessionStorage.getItem('allianceSelections');
+    const sessionAllianceData = sessionStorage.getItem("allianceSelections");
     if (sessionAllianceData) {
         try {
             cachedAllianceSelections = JSON.parse(sessionAllianceData);
         } catch (e) {
-            console.error('Failed to parse session allianceSelections.');
+            console.error("Failed to parse session allianceSelections.");
         }
     }
 
     if (!cachedAllianceSelections) {
-        const localAllianceData = localStorage.getItem('allianceSelections');
+        const localAllianceData = localStorage.getItem("allianceSelections");
         if (localAllianceData) {
             try {
                 cachedAllianceSelections = JSON.parse(localAllianceData);
             } catch (e) {
-                console.error('Failed to parse local allianceSelections', e);
+                console.error("Failed to parse local allianceSelections", e);
             }
         }
     }
 
-    let allianceSelections = $state(cachedAllianceSelections || {
-        default: {
-            name: 'Default',
-            alliances: Array.from({ length: 8 }, (_, i) => ({ id: i + 1, teams: [] }))
-        }
-    });
+    let allianceSelections = $state(
+        cachedAllianceSelections || {
+            default: {
+                name: "Default",
+                alliances: Array.from({ length: 8 }, (_, i) => ({
+                    id: i + 1,
+                    teams: [],
+                })),
+            },
+        },
+    );
 
     $effect(() => {
         try {
-            sessionStorage.setItem('allianceSelections', JSON.stringify(allianceSelections));
-            localStorage.setItem('allianceSelections', JSON.stringify(allianceSelections));
+            sessionStorage.setItem(
+                "allianceSelections",
+                JSON.stringify(allianceSelections),
+            );
+            localStorage.setItem(
+                "allianceSelections",
+                JSON.stringify(allianceSelections),
+            );
         } catch (e) {
-            console.error('Failed to save allianceSelections', e);
+            console.error("Failed to save allianceSelections", e);
         }
     });
 
-    let activeAllianceSelectionId = $state('default');
-    let newAllianceSelectionName = $state('');
+    let activeAllianceSelectionId = $state("default");
+    let newAllianceSelectionName = $state("");
     let editingAllianceSelectionId = $state(null);
-    let editingAllianceSelectionName = $state('');
-    let allianceImportData = $state('');
-
+    let editingAllianceSelectionName = $state("");
+    let allianceImportData = $state("");
 
     $effect(() => {
         if (eventCode) {
@@ -115,60 +129,73 @@
         }
     });
 
-
     $effect(() => {
         if (allianceSelections[activeAllianceSelectionId]) {
             alliances = allianceSelections[activeAllianceSelectionId].alliances;
-            isFourTeamAlliance = allianceSelections[activeAllianceSelectionId].isFourTeamAlliance || false;
+            isFourTeamAlliance =
+                allianceSelections[activeAllianceSelectionId]
+                    .isFourTeamAlliance || false;
         }
     });
 
     $effect(() => {
         if (allianceSelections[activeAllianceSelectionId]) {
             allianceSelections[activeAllianceSelectionId].alliances = alliances;
-            allianceSelections[activeAllianceSelectionId].isFourTeamAlliance = isFourTeamAlliance;
+            allianceSelections[activeAllianceSelectionId].isFourTeamAlliance =
+                isFourTeamAlliance;
         }
     });
 
     async function exportPicklists() {
         const dataString = Object.values(picklists)
-            .map(list => `${list.name}:${list.teams.map(t => t.team_number).join(',')}`)
-            .join(';');
-        
+            .map(
+                (list) =>
+                    `${list.name}:${list.teams.map((t) => t.team_number).join(",")}`,
+            )
+            .join(";");
+
         const compressedData = pako.deflate(dataString);
         const encodedData = bs85.encode(compressedData);
         try {
             await navigator.clipboard.writeText(encodedData);
         } catch (err) {
-            console.error('Failed to copy text: ', err);
-            alert('Failed to copy picklists.');
+            console.error("Failed to copy text: ", err);
+            alert("Failed to copy picklists.");
         }
     }
 
     function importPicklists() {
         if (!importData) {
-            alert('Please paste the data to import.');
+            alert("Please paste the data to import.");
             return;
         }
         try {
             const decodedBuffer = bs85.decode(importData);
-            const decompressedData = pako.inflate(decodedBuffer, { to: 'string' });
-            
+            const decompressedData = pako.inflate(decodedBuffer, {
+                to: "string",
+            });
+
             const newPicklists = {};
-            const importedLists = decompressedData.split(';');
-            
-            const allTeamNumbers = new Set(teams.map(t => t.team_number.toString()));
+            const importedLists = decompressedData.split(";");
+
+            const allTeamNumbers = new Set(
+                teams.map((t) => t.team_number.toString()),
+            );
 
             for (const listData of importedLists) {
                 if (!listData) continue;
-                const [name, teamNumbersStr] = listData.split(':');
+                const [name, teamNumbersStr] = listData.split(":");
                 if (!name) continue;
 
-                const teamNumbers = teamNumbersStr ? teamNumbersStr.split(',') : [];
+                const teamNumbers = teamNumbersStr
+                    ? teamNumbersStr.split(",")
+                    : [];
                 const newTeams = teamNumbers
-                    .map(numStr => {
+                    .map((numStr) => {
                         if (allTeamNumbers.has(numStr)) {
-                            return teams.find(t => t.team_number.toString() === numStr);
+                            return teams.find(
+                                (t) => t.team_number.toString() === numStr,
+                            );
                         }
                         return null;
                     })
@@ -179,10 +206,10 @@
                 picklists = newPicklists;
             }
 
-            importData = '';
+            importData = "";
         } catch (error) {
-            alert('Failed to parse import data. Please check the format.');
-            console.error('Import error:', error);
+            alert("Failed to parse import data. Please check the format.");
+            console.error("Import error:", error);
         }
     }
 
@@ -191,12 +218,17 @@
     }
 
     function createPickList() {
-        if (newPickListName && !Object.values(picklists).some(p => p.name === newPickListName)) {
+        if (
+            newPickListName &&
+            !Object.values(picklists).some((p) => p.name === newPickListName)
+        ) {
             const newId = `picklist_${Date.now()}`;
             picklists[newId] = { name: newPickListName, teams: [] };
-            newPickListName = '';
-        } else if (Object.values(picklists).some(p => p.name === newPickListName)) {
-            alert('Picklist with that name already exists.');
+            newPickListName = "";
+        } else if (
+            Object.values(picklists).some((p) => p.name === newPickListName)
+        ) {
+            alert("Picklist with that name already exists.");
         }
     }
 
@@ -208,24 +240,29 @@
     function finishEditing(id) {
         if (editingPicklistId === null) return;
 
-        const originalName = Object.entries(picklists).find(([pId]) => pId === id)?.[1].name;
+        const originalName = Object.entries(picklists).find(
+            ([pId]) => pId === id,
+        )?.[1].name;
         const newName = editingPicklistName.trim();
 
         // If name is unchanged, do nothing.
         if (newName === originalName) {
             editingPicklistId = null;
-            editingPicklistName = '';
+            editingPicklistName = "";
             return;
         }
 
         // If name is changed, validate it.
-        if (newName && !Object.values(picklists).some(p => p.name === newName)) {
+        if (
+            newName &&
+            !Object.values(picklists).some((p) => p.name === newName)
+        ) {
             picklists[id].name = newName;
         } else {
-            alert('Picklist name cannot be empty or already exist.');
+            alert("Picklist name cannot be empty or already exist.");
         }
         editingPicklistId = null;
-        editingPicklistName = '';
+        editingPicklistName = "";
     }
 
     function deletePickList(key) {
@@ -234,21 +271,30 @@
 
     async function getTeams() {
         if (!eventCode) {
-            alert('Please select an event first.');
+            alert("Please select an event first.");
             return;
         }
 
         try {
-            console.log('Fetching teams for:', eventCode);
-            const teamPromise = fetch(`https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/simple`, {
-                headers: { 'X-TBA-Auth-Key': tbaApiKey }
-            }).then(res => res.json());
+            console.log("Fetching teams for:", eventCode);
+            const teamPromise = fetch(
+                `https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/simple`,
+                {
+                    headers: { "X-TBA-Auth-Key": tbaApiKey },
+                },
+            ).then((res) => res.json());
 
-            const statusesPromise = fetch(`https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/statuses`, {
-                headers: { 'X-TBA-Auth-Key': tbaApiKey }
-            }).then(res => res.ok ? res.json() : null);
+            const statusesPromise = fetch(
+                `https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/statuses`,
+                {
+                    headers: { "X-TBA-Auth-Key": tbaApiKey },
+                },
+            ).then((res) => (res.ok ? res.json() : null));
 
-            const [teamList, statuses] = await Promise.all([teamPromise, statusesPromise]);
+            const [teamList, statuses] = await Promise.all([
+                teamPromise,
+                statusesPromise,
+            ]);
 
             if (!Array.isArray(teamList)) {
                 console.error("Invalid team list received:", teamList);
@@ -258,8 +304,13 @@
             if (statuses) {
                 const teamRanks = Object.fromEntries(
                     Object.entries(statuses)
-                        .filter(([, status]) => status?.qual?.ranking?.rank != null)
-                        .map(([teamKey, status]) => [teamKey.replace('frc', ''), status.qual.ranking.rank])
+                        .filter(
+                            ([, status]) => status?.qual?.ranking?.rank != null,
+                        )
+                        .map(([teamKey, status]) => [
+                            teamKey.replace("frc", ""),
+                            status.qual.ranking.rank,
+                        ]),
                 );
 
                 teamList.sort((a, b) => {
@@ -276,7 +327,7 @@
             teams = teamList;
         } catch (err) {
             console.error(err);
-            alert('Failed to fetch teams for this event.');
+            alert("Failed to fetch teams for this event.");
         }
     }
 
@@ -296,15 +347,20 @@
 
             // Add to target list, avoiding duplicates
             const target = picklists[targetListKey];
-            if (target && !target.teams.some(t => t.team_number === item.team_number)) {
+            if (
+                target &&
+                !target.teams.some((t) => t.team_number === item.team_number)
+            ) {
                 target.teams.push(item);
             }
 
             // Remove from source if it's a picklist
-            if (sourceList && sourceList !== 'teams') {
+            if (sourceList && sourceList !== "teams") {
                 const source = picklists[sourceList];
                 if (source) {
-                    const index = source.teams.findIndex(t => t.team_number === item.team_number);
+                    const index = source.teams.findIndex(
+                        (t) => t.team_number === item.team_number,
+                    );
                     if (index > -1) {
                         source.teams.splice(index, 1);
                     }
@@ -320,27 +376,36 @@
         if (!draggedItem) return;
 
         // If the drop target is inside a picklist or alliance drop zone, let those handlers deal with it
-        if (event.target.closest('.picklist .list') || event.target.closest('.alliance-list .list')) {
+        if (
+            event.target.closest(".picklist .list") ||
+            event.target.closest(".alliance-list .list")
+        ) {
             return;
         }
 
         const { item, sourceList } = draggedItem;
 
         // Remove from a picklist
-        if (sourceList && sourceList !== 'teams' && picklists[sourceList]) {
+        if (sourceList && sourceList !== "teams" && picklists[sourceList]) {
             const source = picklists[sourceList];
-            const index = source.teams.findIndex(t => t.team_number === item.team_number);
+            const index = source.teams.findIndex(
+                (t) => t.team_number === item.team_number,
+            );
             if (index > -1) {
                 source.teams.splice(index, 1);
                 picklists = { ...picklists };
             }
         }
         // Remove from an alliance
-        else if (sourceList && sourceList.startsWith('alliance_')) {
-            const sourceAllianceId = parseInt(sourceList.split('_')[1]);
-            const sourceAlliance = alliances.find(a => a.id === sourceAllianceId);
+        else if (sourceList && sourceList.startsWith("alliance_")) {
+            const sourceAllianceId = parseInt(sourceList.split("_")[1]);
+            const sourceAlliance = alliances.find(
+                (a) => a.id === sourceAllianceId,
+            );
             if (sourceAlliance) {
-                const index = sourceAlliance.teams.findIndex(t => t.team_number === item.team_number);
+                const index = sourceAlliance.teams.findIndex(
+                    (t) => t.team_number === item.team_number,
+                );
                 if (index > -1) {
                     sourceAlliance.teams.splice(index, 1);
                     alliances = [...alliances];
@@ -358,29 +423,39 @@
         if (draggedItem) {
             const { item, sourceList } = draggedItem;
 
-            const targetAlliance = alliances.find(a => a.id === targetAllianceId);
+            const targetAlliance = alliances.find(
+                (a) => a.id === targetAllianceId,
+            );
 
             if (targetAlliance) {
                 const maxTeams = isFourTeamAlliance ? 4 : 3;
                 // Check if alliance is full
                 if (targetAlliance.teams.length >= maxTeams) {
-                    alert('This alliance is full.');
+                    alert("This alliance is full.");
                     draggedItem = null;
                     return;
                 }
 
                 // Add to target alliance, avoiding duplicates
-                if (!targetAlliance.teams.some(t => t.team_number === item.team_number)) {
+                if (
+                    !targetAlliance.teams.some(
+                        (t) => t.team_number === item.team_number,
+                    )
+                ) {
                     targetAlliance.teams.push(item);
                 }
 
                 // Remove from source if it's another alliance
-                if (sourceList.startsWith('alliance_')) {
-                    const sourceAllianceId = parseInt(sourceList.split('_')[1]);
+                if (sourceList.startsWith("alliance_")) {
+                    const sourceAllianceId = parseInt(sourceList.split("_")[1]);
                     if (sourceAllianceId !== targetAllianceId) {
-                        const sourceAlliance = alliances.find(a => a.id === sourceAllianceId);
+                        const sourceAlliance = alliances.find(
+                            (a) => a.id === sourceAllianceId,
+                        );
                         if (sourceAlliance) {
-                            const index = sourceAlliance.teams.findIndex(t => t.team_number === item.team_number);
+                            const index = sourceAlliance.teams.findIndex(
+                                (t) => t.team_number === item.team_number,
+                            );
                             if (index > -1) {
                                 sourceAlliance.teams.splice(index, 1);
                                 // If a captain was moved, update the alliance captains
@@ -397,17 +472,22 @@
     }
 
     async function rankFill() {
-        createAndSwitchToNewAllianceSelection('Rank Filled');
+        createAndSwitchToNewAllianceSelection("Rank Filled");
         await populateAllianceCaptains();
 
         if (rankedTeams.length === 0) {
-            alert('Please ensure team rankings are loaded. The new selection may be empty.');
+            alert(
+                "Please ensure team rankings are loaded. The new selection may be empty.",
+            );
             return;
         }
 
         // --- Standard Serpentine Draft for remaining picks ---
-        const teamsInAlliances = () => alliances.flatMap(a => a.teams.map(t => `frc${t.team_number}`));
-        let availableRankedTeams = rankedTeams.filter(rt => !teamsInAlliances().includes(rt.team_key));
+        const teamsInAlliances = () =>
+            alliances.flatMap((a) => a.teams.map((t) => `frc${t.team_number}`));
+        let availableRankedTeams = rankedTeams.filter(
+            (rt) => !teamsInAlliances().includes(rt.team_key),
+        );
 
         const pickTeamForAlliance = (alliance) => {
             const maxTeams = isFourTeamAlliance ? 4 : 3;
@@ -415,8 +495,8 @@
 
             if (availableRankedTeams.length > 0) {
                 const teamToPickKey = availableRankedTeams.shift().team_key;
-                const teamNumber = teamToPickKey.replace('frc', '');
-                const team = teams.find(t => t.team_number == teamNumber);
+                const teamNumber = teamToPickKey.replace("frc", "");
+                const team = teams.find((t) => t.team_number == teamNumber);
                 if (team) {
                     alliance.teams.push(team);
                 }
@@ -443,38 +523,46 @@
 
     async function oprFill() {
         if (!eventCode) {
-            alert('Please select an event first.');
+            alert("Please select an event first.");
             return;
         }
-        
-        createAndSwitchToNewAllianceSelection('OPR Filled');
+
+        createAndSwitchToNewAllianceSelection("OPR Filled");
         await populateAllianceCaptains();
 
-        const areCaptainsSet = alliances.every(a => a.teams.length > 0);
+        const areCaptainsSet = alliances.every((a) => a.teams.length > 0);
         if (!areCaptainsSet) {
-            alert('Could not populate all alliance captains. The new selection may be incomplete.');
+            alert(
+                "Could not populate all alliance captains. The new selection may be incomplete.",
+            );
             return;
         }
 
         const response = await fetchOPR(eventCode);
 
         if (!response.ok) {
-            alert('Could not fetch OPRs for this event. They may not be available.');
+            alert(
+                "Could not fetch OPRs for this event. They may not be available.",
+            );
             return;
         }
 
         const oprs = await response.json();
         if (!oprs || !oprs.oprs) {
-            alert('OPRs not available for this event.');
+            alert("OPRs not available for this event.");
             return;
         }
 
-        const sortedTeamNumbers = Object.keys(oprs.oprs).sort((a, b) => oprs.oprs[b] - oprs.oprs[a]);
-        
-        const oprSortedTeams = sortedTeamNumbers.map(teamNumber => {
-            const teamKey = teamNumber.replace('frc', '');
-            return teams.find(t => t.team_number == teamKey);
-        }).filter(Boolean);
+        const sortedTeamNumbers = Object.keys(oprs.oprs).sort(
+            (a, b) => oprs.oprs[b] - oprs.oprs[a],
+        );
+
+        const oprSortedTeams = sortedTeamNumbers
+            .map((teamNumber) => {
+                const teamKey = teamNumber.replace("frc", "");
+                return teams.find((t) => t.team_number == teamKey);
+            })
+            .filter(Boolean);
 
         const pickTeamForAlliance = (pickingAlliance, pickingAllianceIndex) => {
             const maxTeams = isFourTeamAlliance ? 4 : 3;
@@ -482,35 +570,42 @@
 
             // Get a list of teams that are already on a "full" alliance (2+ members)
             const pickedTeams = alliances
-                .filter(a => a.teams.length > 1)
-                .flatMap(a => a.teams.map(t => t.team_number));
+                .filter((a) => a.teams.length > 1)
+                .flatMap((a) => a.teams.map((t) => t.team_number));
 
             // Captains of alliances ranked higher than the current picker are unpickable.
             const unpickableCaptains = alliances
                 .slice(0, pickingAllianceIndex)
-                .filter(a => a.teams.length === 1)
-                .map(a => a.teams[0].team_number);
-            
+                .filter((a) => a.teams.length === 1)
+                .map((a) => a.teams[0].team_number);
+
             // The picking alliance cannot pick itself.
             const selfCaptain = pickingAlliance.teams[0].team_number;
 
             // Find the highest OPR team that is not already picked, not an unpickable captain, and not the picker themselves.
-            const teamToPick = oprSortedTeams.find(t => 
-                !pickedTeams.includes(t.team_number) &&
-                !unpickableCaptains.includes(t.team_number) &&
-                t.team_number !== selfCaptain
+            const teamToPick = oprSortedTeams.find(
+                (t) =>
+                    !pickedTeams.includes(t.team_number) &&
+                    !unpickableCaptains.includes(t.team_number) &&
+                    t.team_number !== selfCaptain,
             );
 
             if (teamToPick) {
                 // Find which alliance this team is currently captain of, if any
-                const originalAlliance = alliances.find(a => a.teams.length === 1 && a.teams[0].team_number === teamToPick.team_number);
+                const originalAlliance = alliances.find(
+                    (a) =>
+                        a.teams.length === 1 &&
+                        a.teams[0].team_number === teamToPick.team_number,
+                );
 
                 // Add the picked team to the picking alliance
                 pickingAlliance.teams.push(teamToPick);
 
                 if (originalAlliance) {
                     // The captain was picked. We need to shift all subsequent captains up.
-                    const vacantAllianceIndex = alliances.findIndex(a => a.id === originalAlliance.id);
+                    const vacantAllianceIndex = alliances.findIndex(
+                        (a) => a.id === originalAlliance.id,
+                    );
 
                     if (vacantAllianceIndex !== -1) {
                         // Shift captains up from the vacant spot to the end
@@ -519,12 +614,22 @@
                         }
 
                         // Now, backfill the last alliance spot with the next highest ranked available team.
-                        const allTeamsInAlliancesNow = alliances.flatMap(a => a.teams.map(t => `frc${t.team_number}`));
-                        const nextCaptain = rankedTeams.find(rt => !allTeamsInAlliancesNow.includes(rt.team_key));
+                        const allTeamsInAlliancesNow = alliances.flatMap((a) =>
+                            a.teams.map((t) => `frc${t.team_number}`),
+                        );
+                        const nextCaptain = rankedTeams.find(
+                            (rt) =>
+                                !allTeamsInAlliancesNow.includes(rt.team_key),
+                        );
 
                         if (nextCaptain) {
-                            const teamNumber = nextCaptain.team_key.replace('frc', '');
-                            const team = teams.find(t => t.team_number == teamNumber);
+                            const teamNumber = nextCaptain.team_key.replace(
+                                "frc",
+                                "",
+                            );
+                            const team = teams.find(
+                                (t) => t.team_number == teamNumber,
+                            );
                             if (team) {
                                 alliances[7].teams = [team]; // Place new captain in the last alliance
                             } else {
@@ -559,37 +664,47 @@
 
     async function epaFill() {
         if (!eventCode) {
-            alert('Please select an event first.');
+            alert("Please select an event first.");
             return;
         }
 
-        createAndSwitchToNewAllianceSelection('EPA Filled');
+        createAndSwitchToNewAllianceSelection("EPA Filled");
         await populateAllianceCaptains();
 
-        const areCaptainsSet = alliances.every(a => a.teams.length > 0);
+        const areCaptainsSet = alliances.every((a) => a.teams.length > 0);
         if (!areCaptainsSet) {
-            alert('Could not populate all alliance captains. The new selection may be incomplete.');
+            alert(
+                "Could not populate all alliance captains. The new selection may be incomplete.",
+            );
             return;
         }
 
-        const response = await fetch(`https://api.statbotics.io/v3/team_events?event=${eventCode}`);
+        const response = await fetch(
+            `https://api.statbotics.io/v3/team_events?event=${eventCode}`,
+        );
 
         if (!response.ok) {
-            alert('Could not fetch EPAs for this event. They may not be available.');
+            alert(
+                "Could not fetch EPAs for this event. They may not be available.",
+            );
             return;
         }
 
         const epas = await response.json();
         if (!epas || epas.length === 0) {
-            alert('EPAs not available for this event.');
+            alert("EPAs not available for this event.");
             return;
         }
 
-        const sortedTeamNumbers = epas.sort((a, b) => b.epa.total_points.mean - a.epa.total_points.mean);
-        
-        const epaSortedTeams = sortedTeamNumbers.map(teamStat => {
-            return teams.find(t => t.team_number == teamStat.team);
-        }).filter(Boolean);
+        const sortedTeamNumbers = epas.sort(
+            (a, b) => b.epa.total_points.mean - a.epa.total_points.mean,
+        );
+
+        const epaSortedTeams = sortedTeamNumbers
+            .map((teamStat) => {
+                return teams.find((t) => t.team_number == teamStat.team);
+            })
+            .filter(Boolean);
 
         const pickTeamForAlliance = (pickingAlliance, pickingAllianceIndex) => {
             const maxTeams = isFourTeamAlliance ? 4 : 3;
@@ -597,35 +712,42 @@
 
             // Get a list of teams that are already on a "full" alliance (2+ members)
             const pickedTeams = alliances
-                .filter(a => a.teams.length > 1)
-                .flatMap(a => a.teams.map(t => t.team_number));
+                .filter((a) => a.teams.length > 1)
+                .flatMap((a) => a.teams.map((t) => t.team_number));
 
             // Captains of alliances ranked higher than the current picker are unpickable.
             const unpickableCaptains = alliances
                 .slice(0, pickingAllianceIndex)
-                .filter(a => a.teams.length === 1)
-                .map(a => a.teams[0].team_number);
-            
+                .filter((a) => a.teams.length === 1)
+                .map((a) => a.teams[0].team_number);
+
             // The picking alliance cannot pick itself.
             const selfCaptain = pickingAlliance.teams[0].team_number;
 
             // Find the highest OPR team that is not already picked, not an unpickable captain, and not the picker themselves.
-            const teamToPick = epaSortedTeams.find(t => 
-                !pickedTeams.includes(t.team_number) &&
-                !unpickableCaptains.includes(t.team_number) &&
-                t.team_number !== selfCaptain
+            const teamToPick = epaSortedTeams.find(
+                (t) =>
+                    !pickedTeams.includes(t.team_number) &&
+                    !unpickableCaptains.includes(t.team_number) &&
+                    t.team_number !== selfCaptain,
             );
 
             if (teamToPick) {
                 // Find which alliance this team is currently captain of, if any
-                const originalAlliance = alliances.find(a => a.teams.length === 1 && a.teams[0].team_number === teamToPick.team_number);
+                const originalAlliance = alliances.find(
+                    (a) =>
+                        a.teams.length === 1 &&
+                        a.teams[0].team_number === teamToPick.team_number,
+                );
 
                 // Add the picked team to the picking alliance
                 pickingAlliance.teams.push(teamToPick);
 
                 if (originalAlliance) {
                     // The captain was picked. We need to shift all subsequent captains up.
-                    const vacantAllianceIndex = alliances.findIndex(a => a.id === originalAlliance.id);
+                    const vacantAllianceIndex = alliances.findIndex(
+                        (a) => a.id === originalAlliance.id,
+                    );
 
                     if (vacantAllianceIndex !== -1) {
                         // Shift captains up from the vacant spot to the end
@@ -634,12 +756,22 @@
                         }
 
                         // Now, backfill the last alliance spot with the next highest ranked available team.
-                        const allTeamsInAlliancesNow = alliances.flatMap(a => a.teams.map(t => `frc${t.team_number}`));
-                        const nextCaptain = rankedTeams.find(rt => !allTeamsInAlliancesNow.includes(rt.team_key));
+                        const allTeamsInAlliancesNow = alliances.flatMap((a) =>
+                            a.teams.map((t) => `frc${t.team_number}`),
+                        );
+                        const nextCaptain = rankedTeams.find(
+                            (rt) =>
+                                !allTeamsInAlliancesNow.includes(rt.team_key),
+                        );
 
                         if (nextCaptain) {
-                            const teamNumber = nextCaptain.team_key.replace('frc', '');
-                            const team = teams.find(t => t.team_number == teamNumber);
+                            const teamNumber = nextCaptain.team_key.replace(
+                                "frc",
+                                "",
+                            );
+                            const team = teams.find(
+                                (t) => t.team_number == teamNumber,
+                            );
                             if (team) {
                                 alliances[7].teams = [team]; // Place new captain in the last alliance
                             } else {
@@ -680,7 +812,9 @@
         }
 
         // Find the first empty alliance captain spot (alliances 1-8)
-        const emptyAllianceIndex = alliances.findIndex(a => a.id <= 8 && a.teams.length === 0);
+        const emptyAllianceIndex = alliances.findIndex(
+            (a) => a.id <= 8 && a.teams.length === 0,
+        );
 
         if (emptyAllianceIndex === -1) {
             // No empty spots, nothing to do.
@@ -694,12 +828,16 @@
 
         // Now alliance 8 (index 7) is the one to fill.
         // Find the highest-ranked team that is not already in an alliance.
-        const teamsInAlliances = alliances.flatMap(a => a.teams.map(t => `frc${t.team_number}`));
-        const nextCaptain = rankedTeams.find(rt => !teamsInAlliances.includes(rt.team_key));
+        const teamsInAlliances = alliances.flatMap((a) =>
+            a.teams.map((t) => `frc${t.team_number}`),
+        );
+        const nextCaptain = rankedTeams.find(
+            (rt) => !teamsInAlliances.includes(rt.team_key),
+        );
 
         if (nextCaptain) {
-            const teamNumber = nextCaptain.team_key.replace('frc', '');
-            const team = teams.find(t => t.team_number == teamNumber);
+            const teamNumber = nextCaptain.team_key.replace("frc", "");
+            const team = teams.find((t) => t.team_number == teamNumber);
             if (team) {
                 alliances[7].teams = [team];
             } else {
@@ -723,15 +861,23 @@
         if (sourceList !== listKey) return; // Only reorder within the same list
 
         const list = picklists[listKey].teams;
-        const draggedIndex = list.findIndex(t => t.team_number === item.team_number);
-        
-        const targetElement = event.target.closest('.list-item');
+        const draggedIndex = list.findIndex(
+            (t) => t.team_number === item.team_number,
+        );
+
+        const targetElement = event.target.closest(".list-item");
         if (!targetElement) return;
 
         const targetTeamNumber = Number(targetElement.dataset.teamNumber);
-        const dropIndex = list.findIndex(t => t.team_number === targetTeamNumber);
+        const dropIndex = list.findIndex(
+            (t) => t.team_number === targetTeamNumber,
+        );
 
-        if (draggedIndex !== -1 && dropIndex !== -1 && draggedIndex !== dropIndex) {
+        if (
+            draggedIndex !== -1 &&
+            dropIndex !== -1 &&
+            draggedIndex !== dropIndex
+        ) {
             // Basic reorder logic
             const [draggedTeam] = list.splice(draggedIndex, 1);
             list.splice(dropIndex, 0, draggedTeam);
@@ -742,25 +888,27 @@
 
     async function createOprPicklist() {
         if (!eventCode) {
-            alert('Please select an event first.');
+            alert("Please select an event first.");
             return;
         }
 
         const response = await fetchOPR(eventCode);
 
         if (!response.ok) {
-            alert('Could not fetch OPRs for this event. They may not be available.');
+            alert(
+                "Could not fetch OPRs for this event. They may not be available.",
+            );
             return;
         }
 
         const oprs = await response.json();
         if (!oprs || !oprs.oprs) {
-            alert('OPRs not available for this event.');
+            alert("OPRs not available for this event.");
             return;
         }
 
-        const picklistName = 'OPR Rank';
-        if (Object.values(picklists).some(p => p.name === picklistName)) {
+        const picklistName = "OPR Rank";
+        if (Object.values(picklists).some((p) => p.name === picklistName)) {
             alert(`A picklist named "${picklistName}" already exists.`);
             return;
         }
@@ -769,12 +917,16 @@
             await getTeams();
         }
 
-        const sortedTeamNumbers = Object.keys(oprs.oprs).sort((a, b) => oprs.oprs[b] - oprs.oprs[a]);
-        
-        const sortedTeams = sortedTeamNumbers.map(teamNumber => {
-            const teamKey = teamNumber.replace('frc', '');
-            return teams.find(t => t.team_number == teamKey);
-        }).filter(Boolean);
+        const sortedTeamNumbers = Object.keys(oprs.oprs).sort(
+            (a, b) => oprs.oprs[b] - oprs.oprs[a],
+        );
+
+        const sortedTeams = sortedTeamNumbers
+            .map((teamNumber) => {
+                const teamKey = teamNumber.replace("frc", "");
+                return teams.find((t) => t.team_number == teamKey);
+            })
+            .filter(Boolean);
 
         const newId = `picklist_${Date.now()}`;
         picklists[newId] = { name: picklistName, teams: sortedTeams };
@@ -782,25 +934,29 @@
 
     async function createEpaPicklist() {
         if (!eventCode) {
-            alert('Please select an event first.');
+            alert("Please select an event first.");
             return;
         }
 
-        const response = await fetch(`https://api.statbotics.io/v3/team_events?event=${eventCode}`);
+        const response = await fetch(
+            `https://api.statbotics.io/v3/team_events?event=${eventCode}`,
+        );
 
         if (!response.ok) {
-            alert('Could not fetch EPA data for this event. They may not be available.');
+            alert(
+                "Could not fetch EPA data for this event. They may not be available.",
+            );
             return;
         }
 
         const eventData = await response.json();
         if (!eventData || !Array.isArray(eventData)) {
-            alert('EPA data not available for this event.');
+            alert("EPA data not available for this event.");
             return;
         }
 
-        const picklistName = 'EPA Rank';
-        if (Object.values(picklists).some(p => p.name === picklistName)) {
+        const picklistName = "EPA Rank";
+        if (Object.values(picklists).some((p) => p.name === picklistName)) {
             alert(`A picklist named "${picklistName}" already exists.`);
             return;
         }
@@ -809,141 +965,174 @@
             await getTeams();
         }
 
-        const sortedTeamStats = eventData.sort((a, b) => b.epa.stats.mean - a.epa.stats.mean);
-        
-        const sortedTeams = sortedTeamStats.map(teamStat => {
-            return teams.find(t => t.team_number == teamStat.team);
-        }).filter(Boolean);
+        const sortedTeamStats = eventData.sort(
+            (a, b) => b.epa.stats.mean - a.epa.stats.mean,
+        );
+
+        const sortedTeams = sortedTeamStats
+            .map((teamStat) => {
+                return teams.find((t) => t.team_number == teamStat.team);
+            })
+            .filter(Boolean);
 
         const newId = `picklist_${Date.now()}`;
         picklists[newId] = { name: picklistName, teams: sortedTeams };
     }
 
     async function populateAllianceCaptains() {
-    if (!eventCode) {
-        alert('Please select an event first.');
-        return;
-    }
-
-    try {
-        const response = await fetch(`https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/statuses`, {
-            headers: { 'X-TBA-Auth-Key': tbaApiKey }
-        });
-        if (!response.ok) throw new Error('Failed to fetch team statuses');
-        const statuses = await response.json();
-
-        const localRankedTeams = Object.entries(statuses)
-            .map(([teamKey, status]) => ({
-                team_key: teamKey,
-                rank: status?.qual?.ranking?.rank
-            }))
-            .filter(t => t.rank != null)
-            .sort((a, b) => a.rank - b.rank);
-
-        rankedTeams = localRankedTeams;
-
-        const top8 = rankedTeams.slice(0, 8);
-
-        if (teams.length === 0) {
-            await getTeams();
+        if (!eventCode) {
+            alert("Please select an event first.");
+            return;
         }
 
-        // Reset alliances
-        alliances = Array.from({ length: 8 }, (_, i) => ({ id: i + 1, teams: [] }));
+        try {
+            const response = await fetch(
+                `https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/statuses`,
+                {
+                    headers: { "X-TBA-Auth-Key": tbaApiKey },
+                },
+            );
+            if (!response.ok) throw new Error("Failed to fetch team statuses");
+            const statuses = await response.json();
 
-        top8.forEach(rankedTeam => {
-            const teamNumber = rankedTeam.team_key.replace('frc', '');
-            const team = teams.find(t => t.team_number == teamNumber);
-            const allianceIndex = rankedTeam.rank - 1;
-            if (team && allianceIndex >= 0 && allianceIndex < 8) {
-                alliances[allianceIndex].teams.push(team);
+            const localRankedTeams = Object.entries(statuses)
+                .map(([teamKey, status]) => ({
+                    team_key: teamKey,
+                    rank: status?.qual?.ranking?.rank,
+                }))
+                .filter((t) => t.rank != null)
+                .sort((a, b) => a.rank - b.rank);
+
+            rankedTeams = localRankedTeams;
+
+            const top8 = rankedTeams.slice(0, 8);
+
+            if (teams.length === 0) {
+                await getTeams();
             }
-        });
 
-        if (top8.length < 8) {
-            alert('Not enough ranked teams to populate all 8 alliance captain spots.');
+            // Reset alliances
+            alliances = Array.from({ length: 8 }, (_, i) => ({
+                id: i + 1,
+                teams: [],
+            }));
+
+            top8.forEach((rankedTeam) => {
+                const teamNumber = rankedTeam.team_key.replace("frc", "");
+                const team = teams.find((t) => t.team_number == teamNumber);
+                const allianceIndex = rankedTeam.rank - 1;
+                if (team && allianceIndex >= 0 && allianceIndex < 8) {
+                    alliances[allianceIndex].teams.push(team);
+                }
+            });
+
+            if (top8.length < 8) {
+                alert(
+                    "Not enough ranked teams to populate all 8 alliance captain spots.",
+                );
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Failed to populate alliance captains.");
         }
-
-    } catch (err) {
-        console.error(err);
-        alert('Failed to populate alliance captains.');
     }
-}
-
 
     function createAllianceSelection() {
         const name = newAllianceSelectionName.trim();
-        if (name && !Object.values(allianceSelections).some(s => s.name === name)) {
+        if (
+            name &&
+            !Object.values(allianceSelections).some((s) => s.name === name)
+        ) {
             const newId = `selection_${Date.now()}`;
             allianceSelections[newId] = {
                 name: name,
-                alliances: Array.from({ length: 8 }, (_, i) => ({ id: i + 1, teams: [] })),
-                isFourTeamAlliance: false
+                alliances: Array.from({ length: 8 }, (_, i) => ({
+                    id: i + 1,
+                    teams: [],
+                })),
+                isFourTeamAlliance: false,
             };
             activeAllianceSelectionId = newId;
-            newAllianceSelectionName = ''; // Clear input after creation
+            newAllianceSelectionName = ""; // Clear input after creation
         } else if (!name) {
-            alert('Please enter a name for the new alliance selection.');
+            alert("Please enter a name for the new alliance selection.");
         } else {
-            alert('An alliance selection with that name already exists.');
+            alert("An alliance selection with that name already exists.");
         }
     }
 
     function startEditingAllianceSelection() {
         if (!activeAllianceSelectionId) return;
         editingAllianceSelectionId = activeAllianceSelectionId;
-        editingAllianceSelectionName = allianceSelections[activeAllianceSelectionId].name;
+        editingAllianceSelectionName =
+            allianceSelections[activeAllianceSelectionId].name;
     }
 
     function finishEditingAllianceSelection() {
         if (editingAllianceSelectionId === null) return;
 
-        const originalName = allianceSelections[editingAllianceSelectionId]?.name;
+        const originalName =
+            allianceSelections[editingAllianceSelectionId]?.name;
         const newName = editingAllianceSelectionName.trim();
 
         // If name is unchanged, do nothing.
         if (newName === originalName) {
             editingAllianceSelectionId = null;
-            editingAllianceSelectionName = '';
+            editingAllianceSelectionName = "";
             return;
         }
 
         // If name is changed, validate it.
-        if (newName && !Object.values(allianceSelections).some(s => s.name === newName)) {
+        if (
+            newName &&
+            !Object.values(allianceSelections).some((s) => s.name === newName)
+        ) {
             allianceSelections[editingAllianceSelectionId].name = newName;
         } else {
-            alert('Alliance selection name cannot be empty or already exist.');
+            alert("Alliance selection name cannot be empty or already exist.");
         }
         editingAllianceSelectionId = null;
-        editingAllianceSelectionName = '';
+        editingAllianceSelectionName = "";
     }
 
     function createAndSwitchToNewAllianceSelection(name) {
         let newName = name;
         let counter = 1;
-        while (Object.values(allianceSelections).some(s => s.name === newName)) {
+        while (
+            Object.values(allianceSelections).some((s) => s.name === newName)
+        ) {
             newName = `${name} ${++counter}`;
         }
 
         const newId = `selection_${Date.now()}`;
         allianceSelections[newId] = {
             name: newName,
-            alliances: Array.from({ length: 8 }, (_, i) => ({ id: i + 1, teams: [] })),
-            isFourTeamAlliance: isFourTeamAlliance
+            alliances: Array.from({ length: 8 }, (_, i) => ({
+                id: i + 1,
+                teams: [],
+            })),
+            isFourTeamAlliance: isFourTeamAlliance,
         };
         activeAllianceSelectionId = newId;
     }
 
     function deleteAllianceSelection() {
-        if (activeAllianceSelectionId === 'default') {
-            alert('You cannot delete the Default selection.');
+        if (activeAllianceSelectionId === "default") {
+            alert("You cannot delete the Default selection.");
             return;
         }
-        if (!activeAllianceSelectionId || Object.keys(allianceSelections).length <= 1) {
-            alert('You cannot delete the last alliance selection.');
+        if (
+            !activeAllianceSelectionId ||
+            Object.keys(allianceSelections).length <= 1
+        ) {
+            alert("You cannot delete the last alliance selection.");
             return;
         }
-        if (confirm(`Are you sure you want to delete the "${allianceSelections[activeAllianceSelectionId].name}" selection?`)) {
+        if (
+            confirm(
+                `Are you sure you want to delete the "${allianceSelections[activeAllianceSelectionId].name}" selection?`,
+            )
+        ) {
             const oldId = activeAllianceSelectionId;
             delete allianceSelections[oldId];
             activeAllianceSelectionId = Object.keys(allianceSelections)[0];
@@ -958,9 +1147,11 @@
 
         const dataString = [
             selection.name,
-            selection.isFourTeamAlliance ? '1' : '0',
-            selection.alliances.map(a => a.teams.map(t => t.team_number).join(',')).join(';')
-        ].join('|');
+            selection.isFourTeamAlliance ? "1" : "0",
+            selection.alliances
+                .map((a) => a.teams.map((t) => t.team_number).join(","))
+                .join(";"),
+        ].join("|");
 
         const compressedData = pako.deflate(dataString);
         const encodedData = bs85.encode(compressedData);
@@ -968,41 +1159,53 @@
         try {
             await navigator.clipboard.writeText(encodedData);
         } catch (err) {
-            console.error('Failed to copy text: ', err);
-            alert('Failed to copy alliance selection.');
+            console.error("Failed to copy text: ", err);
+            alert("Failed to copy alliance selection.");
         }
     }
 
     function pasteAllianceSelection() {
         const importString = allianceImportData;
         if (!importString) {
-            alert('Please paste the alliance selection data into the text box.');
+            alert(
+                "Please paste the alliance selection data into the text box.",
+            );
             return;
         }
 
         try {
             const decodedBuffer = bs85.decode(importString);
-            const decompressedData = pako.inflate(decodedBuffer, { to: 'string' });
-            
-            const parts = decompressedData.split('|');
+            const decompressedData = pako.inflate(decodedBuffer, {
+                to: "string",
+            });
+
+            const parts = decompressedData.split("|");
             if (parts.length !== 3) {
-                throw new Error('Invalid data format');
+                throw new Error("Invalid data format");
             }
 
             const [name, isFourTeamStr, alliancesStr] = parts;
 
             let newName = name;
             let counter = 1;
-            while (Object.values(allianceSelections).some(s => s.name === newName)) {
+            while (
+                Object.values(allianceSelections).some(
+                    (s) => s.name === newName,
+                )
+            ) {
                 newName = `${name} (${++counter})`;
             }
 
-            const isFourTeamAlliance = isFourTeamStr === '1';
-            const allianceTeamStrs = alliancesStr.split(';');
+            const isFourTeamAlliance = isFourTeamStr === "1";
+            const allianceTeamStrs = alliancesStr.split(";");
             const newAlliances = Array.from({ length: 8 }, (_, i) => {
-                const teamNumbers = (allianceTeamStrs[i] || '').split(',').filter(Boolean);
+                const teamNumbers = (allianceTeamStrs[i] || "")
+                    .split(",")
+                    .filter(Boolean);
                 const newTeams = teamNumbers
-                    .map(numStr => teams.find(t => t.team_number.toString() === numStr))
+                    .map((numStr) =>
+                        teams.find((t) => t.team_number.toString() === numStr),
+                    )
                     .filter(Boolean);
                 return { id: i + 1, teams: newTeams };
             });
@@ -1011,32 +1214,37 @@
             allianceSelections[newId] = {
                 name: newName,
                 alliances: newAlliances,
-                isFourTeamAlliance: isFourTeamAlliance
+                isFourTeamAlliance: isFourTeamAlliance,
             };
             activeAllianceSelectionId = newId;
-            allianceImportData = ''; // Clear the input field
+            allianceImportData = ""; // Clear the input field
         } catch (error) {
-            alert('Failed to parse alliance selection data. Please check the format.');
-            console.error('Alliance import error:', error);
+            alert(
+                "Failed to parse alliance selection data. Please check the format.",
+            );
+            console.error("Alliance import error:", error);
         }
     }
 
     $effect(() => {
-        if (activeView === 'alliances' && alliances.every(a => a.teams.length === 0)) {
+        if (
+            eventCode &&
+            activeView === "alliances" &&
+            alliances.every((a) => a.teams.length === 0)
+        ) {
             populateAllianceCaptains();
         }
     });
 
     $effect(() => {
         if (!isFourTeamAlliance) {
-            alliances.forEach(alliance => {
+            alliances.forEach((alliance) => {
                 if (alliance.teams.length > 3) {
                     alliance.teams.length = 3;
                 }
             });
         }
     });
-
 </script>
 
 <div class="page-wrapper">
@@ -1049,57 +1257,90 @@
     <div class="top-controls">
         <div class="top-left-group">
             <div class="tabs">
-                <button class:active={activeView === 'picklists'} on:click={() => activeView = 'picklists'}>
+                <button
+                    class:active={activeView === "picklists"}
+                    onclick={() => (activeView = "picklists")}
+                >
                     Picklists
                 </button>
-                <button class:active={activeView === 'alliances'} on:click={() => activeView = 'alliances'}>
+                <button
+                    class:active={activeView === "alliances"}
+                    onclick={() => (activeView = "alliances")}
+                >
                     Alliance Selection
                 </button>
             </div>
         </div>
         <h3>
-                Selected Event:
-                {#if eventCode}
-                    <span>{eventCode}</span>
-                {:else}
-                    <span style="opacity: 0.6;">(none)</span>
-                {/if}
+            Selected Event:
+            {#if eventCode}
+                <span>{eventCode}</span>
+            {:else}
+                <span style="opacity: 0.6;">(none)</span>
+            {/if}
         </h3>
     </div>
 
     <!-- Main Content Area -->
-    <div class="main-content" on:dragover={handleDragOver} on:drop|preventDefault={handleDropToRemove} role="application">
+    <div
+        class="main-content"
+        ondragover={handleDragOver}
+        ondrop={(e) => { e.preventDefault(); handleDropToRemove(e); }}
+        role="application"
+    >
         <!-- Team List Sidebar -->
         <div class="team-list-container">
             <h2>Teams</h2>
             <div class="team-list">
-                <div class="list" role="application" on:dragover={handleDragOver} on:drop={() => { /* Can't drop back on main list */ }}>
-                    {#each $teamsStore.filter(team => {
+                <div
+                    class="list"
+                    role="application"
+                    ondragover={handleDragOver}
+                    ondrop={() => {
+                        /* Can't drop back on main list */
+                    }}
+                >
+                    {#each $teamsStore.filter((team) => {
                         // If we're on alliance view, filter out teams that are in alliances
-                        if (activeView === 'alliances') {
-                            const isInAlliance = alliances.some(alliance => 
-                                alliance.teams.some(t => t.team_number === team.team_number)
-                            );
+                        if (activeView === "alliances") {
+                            const isInAlliance = alliances.some( (alliance) => alliance.teams.some((t) => t.team_number === team.team_number), );
                             return !isInAlliance;
                         }
                         return true;
                     }) as team (team.team_number)}
-                        <Team {team} picked={!!pickedTeams[team.team_number]} on:click={() => toggleTeamPicked(team.team_number)} on:dragstart={() => handleDragStart(team, 'teams')} />
+                        <Team
+                            {team}
+                            picked={!!pickedTeams[team.team_number]}
+                            onclick={() => toggleTeamPicked(team.team_number)}
+                            ondragstart={() => handleDragStart(team, "teams")}
+                        />
                     {/each}
                 </div>
             </div>
         </div>
 
         <!-- Right Side View Container -->
-        <div class="view-container" role="application" on:dragover={handleDragOver} on:drop|preventDefault={handleDropToRemove}>
-            {#if activeView === 'picklists'}
+        <div
+            class="view-container"
+            role="application"
+            ondragover={handleDragOver}
+            ondrop={(e) => { e.preventDefault(); handleDropToRemove(e); }}
+        >
+            {#if activeView === "picklists"}
                 <div class="picklist-view">
                     <!-- Create New Picklist Input -->
                     <div style="margin-bottom: 20px;">
-                        <input type="text" bind:value={newPickListName} placeholder="New picklist name" style="width: 300px;" />
-                        <button on:click={createPickList}>Create Picklist</button>
+                        <input
+                            type="text"
+                            bind:value={newPickListName}
+                            placeholder="New picklist name"
+                            style="width: 300px;"
+                        />
+                        <button onclick={createPickList}
+                            >Create Picklist</button
+                        >
                     </div>
-                    
+
                     <div class="container">
                         {#each Object.entries(picklists) as [key, list]}
                             <div class="picklist">
@@ -1108,19 +1349,43 @@
                                         <input
                                             type="text"
                                             bind:value={editingPicklistName}
-                                            on:blur={() => finishEditing(key)}
-                                            on:keydown={(e) => e.key === 'Enter' && finishEditing(key)}
-                                            on:focus={(e) => e.currentTarget.select()}
-                                            autofocus
+                                            onblur={() => finishEditing(key)}
+                                            onkeydown={(e) =>
+                                                e.key === "Enter" &&
+                                                finishEditing(key)}
+                                            onfocus={(e) =>
+                                                e.currentTarget.select()}
                                         />
                                     {:else}
-                                        <span on:click={() => startEditing(key, list.name)}>{list.name}</span>
+                                        <span role="button" tabindex="0" onkeydown={(e) => e.key === "Enter" && startEditing(key, list.name)} onclick={() => startEditing(key, list.name)}>{list.name}</span>
                                     {/if}
-                                    <button on:click={() => deletePickList(key)} style="background: transparent; border: none; font-size: 1.2rem; padding: 0;">X</button>
+                                    <button
+                                        onclick={() => deletePickList(key)}
+                                        style="background: transparent; border: none; font-size: 1.2rem; padding: 0;"
+                                        >X</button
+                                    >
                                 </h2>
-                                <div class="list" role="application" on:dragover={handleDragOver} on:drop={() => handleDrop(key)} on:dragenter={(e) => handleDragEnter(e, key)}>
+                                <div
+                                    class="list"
+                                    role="application"
+                                    ondragover={handleDragOver}
+                                    ondrop={() => handleDrop(key)}
+                                    ondragenter={(e) =>
+                                        handleDragEnter(e, key)}
+                                >
                                     {#each list.teams as team (team.team_number)}
-                                        <Team {team} picked={!!pickedTeams[team.team_number]} on:click={() => toggleTeamPicked(team.team_number)} on:dragstart={() => handleDragStart(team, key)} />
+                                        <Team
+                                            {team}
+                                            picked={!!pickedTeams[
+                                                team.team_number
+                                            ]}
+                                            onclick={() =>
+                                                toggleTeamPicked(
+                                                    team.team_number,
+                                                )}
+                                            ondragstart={() =>
+                                                handleDragStart(team, key)}
+                                        />
                                     {/each}
                                 </div>
                             </div>
@@ -1130,76 +1395,131 @@
                     <div class="share-container">
                         <div class="share-controls">
                             <h3>Share Picklists</h3>
-                            <p style="margin: 5px 0 10px; font-size: 0.9em; opacity: 0.8;">Generate a code to share your current picklists with others.</p>
-                            <button on:click={exportPicklists}>Copy Code to Clipboard</button>
+                            <p
+                                style="margin: 5px 0 10px; font-size: 0.9em; opacity: 0.8;"
+                            >
+                                Generate a code to share your current picklists
+                                with others.
+                            </p>
+                            <button onclick={exportPicklists}
+                                >Copy Code to Clipboard</button
+                            >
                         </div>
                         <div class="share-controls">
                             <h3>Import Picklists</h3>
-                            <textarea bind:value={importData} rows="4" placeholder="Paste shared data string here..."></textarea>
+                            <textarea
+                                bind:value={importData}
+                                rows="4"
+                                placeholder="Paste shared data string here..."
+                            ></textarea>
                             <br />
-                            <button on:click={importPicklists}>Import Data</button>
+                            <button onclick={importPicklists}
+                                >Import Data</button
+                            >
                         </div>
                     </div>
 
                     <div class="fixed-buttons">
-                        <button on:click={createOprPicklist}>Create OPR Picklist</button>
-                        <button on:click={createEpaPicklist}>Create EPA Picklist</button>
+                        <button onclick={createOprPicklist}
+                            >Create OPR Picklist</button
+                        >
+                        <button onclick={createEpaPicklist}
+                            >Create EPA Picklist</button
+                        >
                     </div>
                 </div>
             {/if}
 
-            {#if activeView === 'alliances'}
+            {#if activeView === "alliances"}
                 <div class="alliance-selection">
                     <div class="alliance-with-picklists">
                         <div class="alliance-main">
                             <div class="alliance-controls">
                                 <h2>Alliance Selection Board</h2>
-                                <div style="display: flex; gap: 20px; align-items: center;">
-                                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                                        <input type="checkbox" bind:checked={isFourTeamAlliance} style="width: 20px; height: 20px;" />
+                                <div
+                                    style="display: flex; gap: 20px; align-items: center;"
+                                >
+                                    <label
+                                        style="display: flex; align-items: center; gap: 10px; cursor: pointer;"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            bind:checked={isFourTeamAlliance}
+                                            style="width: 20px; height: 20px;"
+                                        />
                                         4 teams per alliance
                                     </label>
-                                    <button on:click={populateAllianceCaptains}>Reset Board</button>
+                                    <button onclick={populateAllianceCaptains}
+                                        >Reset Board</button
+                                    >
                                 </div>
                             </div>
-                            
+
                             <div class="alliances-container">
                                 {#each alliances as alliance}
-                                    <div class="alliance-list" role="application" on:dragover={handleDragOver} on:drop={() => handleDropOnAlliance(alliance.id)}>
+                                    <div
+                                        class="alliance-list"
+                                        role="application"
+                                        ondragover={handleDragOver}
+                                        ondrop={() =>
+                                            handleDropOnAlliance(alliance.id)}
+                                    >
                                         <h3>Alliance {alliance.id}</h3>
-                                        <div class="list" role="application" on:dragover={handleDragOver} on:drop={() => handleDropOnAlliance(alliance.id)}>
+                                        <div
+                                            class="list"
+                                            role="application"
+                                            ondragover={handleDragOver}
+                                            ondrop={() =>
+                                                handleDropOnAlliance(
+                                                    alliance.id,
+                                                )}
+                                        >
                                             {#each alliance.teams as team (team.team_number)}
-                                                <Team {team} picked={!!pickedTeams[team.team_number]} on:click={() => toggleTeamPicked(team.team_number)} on:dragstart={() => handleDragStart(team, `alliance_${alliance.id}`)} />
+                                                <Team
+                                                    {team}
+                                                    picked={!!pickedTeams[
+                                                        team.team_number
+                                                    ]}
+                                                    onclick={() =>
+                                                        toggleTeamPicked(
+                                                            team.team_number,
+                                                        )}
+                                                    ondragstart={() =>
+                                                        handleDragStart(
+                                                            team,
+                                                            `alliance_${alliance.id}`,
+                                                        )}
+                                                />
                                             {/each}
                                         </div>
                                     </div>
                                 {/each}
                             </div>
-                            
+
                             <div class="fixed-buttons">
-                                <button on:click={rankFill}>Fill by Rank</button>
-                                <button on:click={oprFill}>Fill by OPR</button>
-                                <button on:click={epaFill}>Fill by EPA</button>
+                                <button onclick={rankFill}>Fill by Rank</button
+                                >
+                                <button onclick={oprFill}>Fill by OPR</button>
+                                <button onclick={epaFill}>Fill by EPA</button>
                             </div>
                         </div>
-                        
+
                         <div class="picklists-sidebar">
                             <h2>Picklists</h2>
                             <div class="picklists-scroll">
                                 {#if Object.keys(picklists).length === 0}
-                                    <p style="padding: 20px; text-align: center; opacity: 0.6;">No picklists created yet</p>
+                                    <p
+                                        style="padding: 20px; text-align: center; opacity: 0.6;"
+                                    >
+                                        No picklists created yet
+                                    </p>
                                 {:else}
                                     {#each Object.entries(picklists) as [key, list]}
                                         <div class="sidebar-picklist">
                                             <h3>{list.name}</h3>
                                             <div class="sidebar-list">
                                                 {#each list.teams as team, index (team.team_number)}
-                                                    <div 
-                                                        class="sidebar-team" 
-                                                        class:picked={!!pickedTeams[team.team_number]}
-                                                        draggable="true" 
-                                                        on:dragstart={() => handleDragStart(team, key)}
-                                                        on:click={() => toggleTeamPicked(team.team_number)}>
+                                                    <div role="button" tabindex="0" class="sidebar-team" class:picked={!!pickedTeams[team.team_number]} draggable="true" ondragstart={() => handleDragStart(team, key)} onclick={() => toggleTeamPicked(team.team_number)} onkeydown={(e) => e.key === "Enter" && toggleTeamPicked(team.team_number)}>
                                                         {team.team_number}
                                                     </div>
                                                 {/each}
@@ -1214,60 +1534,87 @@
             {/if}
         </div>
     </div>
-    
-    {#if activeView === 'alliances'}
-    <div class="bottom-bar">
-        <div class="alliance-management">
-            <div class="current-selection-display">
-                {#if editingAllianceSelectionId === activeAllianceSelectionId}
-                    <input
-                        type="text"
-                        bind:value={editingAllianceSelectionName}
-                        on:blur={finishEditingAllianceSelection}
-                        on:keydown={(e) => e.key === 'Enter' && finishEditingAllianceSelection()}
-                        on:focus={(e) => e.currentTarget.select()}
-                        autofocus
-                    />
-                {:else}
-                    <span on:click={startEditingAllianceSelection} title="Click to rename">
-                        {allianceSelections[activeAllianceSelectionId]?.name || 'Select a selection'}
-                    </span>
-                {/if}
-            </div>
 
-            <select id="alliance-selection-switcher" bind:value={activeAllianceSelectionId} style="background: #333; border: 1px solid #555;">
-                {#each Object.entries(allianceSelections) as [id, selection]}
-                    <option value={id}>{selection.name}</option>
-                {/each}
-            </select>
-            
-            <button on:click={deleteAllianceSelection} disabled={Object.keys(allianceSelections).length <= 1 || activeAllianceSelectionId === 'default'}>Delete</button>
-            <div style="width: 1px; height: 20px; background: #555; margin: 0 5px;"></div>
-            <button on:click={copyAllianceSelection}>Copy</button>
-            <input type="text" bind:value={allianceImportData} placeholder="Paste data..." style="width: 150px;" />
-            <button on:click={pasteAllianceSelection}>Paste</button>
-            
-            <div style="width: 1px; height: 20px; background: #555; margin: 0 5px;"></div>
-            
-            <input type="text" bind:value={newAllianceSelectionName} placeholder="New list name" on:keydown={(e) => e.key === 'Enter' && createAllianceSelection()} style="width: 150px;" />
-            <button on:click={createAllianceSelection}>New</button>
+    {#if activeView === "alliances"}
+        <div class="bottom-bar">
+            <div class="alliance-management">
+                <div class="current-selection-display">
+                    {#if editingAllianceSelectionId === activeAllianceSelectionId}
+                        <input
+                            type="text"
+                            bind:value={editingAllianceSelectionName}
+                            onblur={finishEditingAllianceSelection}
+                            onkeydown={(e) =>
+                                e.key === "Enter" &&
+                                finishEditingAllianceSelection()}
+                            onfocus={(e) => e.currentTarget.select()}
+                        />
+                    {:else}
+                        <span role="button" tabindex="0" onkeydown={(e) => e.key === "Enter" && startEditingAllianceSelection()} onclick={startEditingAllianceSelection} title="Click to rename">
+                            {allianceSelections[activeAllianceSelectionId]
+                                ?.name || "Select a selection"}
+                        </span>
+                    {/if}
+                </div>
+
+                <select
+                    id="alliance-selection-switcher"
+                    bind:value={activeAllianceSelectionId}
+                    style="background: #333; border: 1px solid #555;"
+                >
+                    {#each Object.entries(allianceSelections) as [id, selection]}
+                        <option value={id}>{selection.name}</option>
+                    {/each}
+                </select>
+
+                <button
+                    onclick={deleteAllianceSelection}
+                    disabled={Object.keys(allianceSelections).length <= 1 ||
+                        activeAllianceSelectionId === "default"}>Delete</button
+                >
+                <div
+                    style="width: 1px; height: 20px; background: #555; margin: 0 5px;"
+                ></div>
+                <button onclick={copyAllianceSelection}>Copy</button>
+                <input
+                    type="text"
+                    bind:value={allianceImportData}
+                    placeholder="Paste data..."
+                    style="width: 150px;"
+                />
+                <button onclick={pasteAllianceSelection}>Paste</button>
+
+                <div
+                    style="width: 1px; height: 20px; background: #555; margin: 0 5px;"
+                ></div>
+
+                <input
+                    type="text"
+                    bind:value={newAllianceSelectionName}
+                    placeholder="New list name"
+                    onkeydown={(e) =>
+                        e.key === "Enter" && createAllianceSelection()}
+                    style="width: 150px;"
+                />
+                <button onclick={createAllianceSelection}>New</button>
+            </div>
         </div>
-    </div>
     {/if}
 </div>
 
 <style>
     /* FRC 190 Brand Colors & Global Resets */
     :root {
-        --frc-190-red: #C81B00;
-        --wpi-gray: #A9B0B7;
-        --frc-190-black: #4D4D4D;
+        --frc-190-red: #c81b00;
+        --wpi-gray: #a9b0b7;
+        --frc-190-black: #4d4d4d;
         --dark-bg: #1a1a1a;
         --darker-bg: #121212;
         --card-bg: #2d2d2d;
     }
 
-    :global(html), :global(body) {
+    :global(html),
+    :global(body) {
         margin: 0;
         padding: 0;
         background: var(--wpi-gray);
@@ -1300,7 +1647,7 @@
         background: linear-gradient(135deg, #444 0%, #555 100%);
         border-color: #e02200;
         transform: translateY(-1px);
-        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
     }
 
     button:active {
@@ -1313,7 +1660,9 @@
         transform: none;
     }
 
-    input[type="text"], textarea, select {
+    input[type="text"],
+    textarea,
+    select {
         padding: 8px 12px;
         border: 2px solid var(--frc-190-red);
         background: #333;
@@ -1322,7 +1671,9 @@
         font-size: 14px;
     }
 
-    input[type="text"]:focus, textarea:focus, select:focus {
+    input[type="text"]:focus,
+    textarea:focus,
+    select:focus {
         outline: none;
         box-shadow: 0 0 0 2px rgba(200, 27, 0, 0.4);
     }
@@ -1430,9 +1781,9 @@
         display: flex;
         flex-direction: column;
         height: 75vh;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
     }
-    
+
     .team-list-container h2 {
         background: var(--frc-190-red);
         color: white;
@@ -1462,7 +1813,8 @@
         margin-top: 20px;
     }
 
-    .picklist, .alliance-list {
+    .picklist,
+    .alliance-list {
         background: var(--dark-bg);
         border: 2px solid var(--frc-190-black);
         border-radius: 8px;
@@ -1470,10 +1822,11 @@
         flex-direction: column;
         min-height: 400px; /* Changed to min-height for flexibility */
         overflow: hidden;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     }
 
-    .picklist h2, .alliance-list h3 {
+    .picklist h2,
+    .alliance-list h3 {
         background: var(--frc-190-red);
         color: white;
         margin: 0;
@@ -1483,15 +1836,16 @@
         justify-content: space-between;
         align-items: center;
     }
-    
+
     .picklist h2 input {
-        background: rgba(0,0,0,0.2);
-        border: 1px solid rgba(255,255,255,0.3);
+        background: rgba(0, 0, 0, 0.2);
+        border: 1px solid rgba(255, 255, 255, 0.3);
         color: white;
         width: 70%;
     }
 
-    .picklist .list, .alliance-list .list {
+    .picklist .list,
+    .alliance-list .list {
         flex: 1;
         overflow-y: auto;
         padding: 10px;
@@ -1513,7 +1867,7 @@
     .share-controls {
         flex: 1;
     }
-    
+
     .share-controls h3 {
         margin-top: 0;
         color: var(--frc-190-red);
@@ -1529,9 +1883,9 @@
         gap: 10px;
         z-index: 50;
     }
-    
+
     .fixed-buttons button {
-        box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
     }
 
     /* Alliance Selection View */
@@ -1556,10 +1910,13 @@
         align-items: center;
         color: white;
     }
-    
+
     .alliances-container {
         display: grid;
-        grid-template-columns: repeat(4, 1fr); /* 4 columns = all 8 alliances visible */
+        grid-template-columns: repeat(
+            4,
+            1fr
+        ); /* 4 columns = all 8 alliances visible */
         gap: 8px; /* Minimum practical gap */
         max-width: 100%;
     }
@@ -1578,7 +1935,7 @@
         display: flex;
         flex-direction: column;
         height: 75vh;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
     }
 
     .picklists-sidebar h2 {
@@ -1661,9 +2018,9 @@
         z-index: 100;
         display: flex;
         justify-content: center;
-        box-shadow: 0 -4px 10px rgba(0,0,0,0.3);
+        box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.3);
     }
-    
+
     .alliance-management {
         background: #222;
         padding: 10px 20px;
@@ -1673,9 +2030,9 @@
         gap: 15px;
         border: 1px solid #444;
     }
-    
+
     .alliance-management input {
-        border-radius: 20px; 
+        border-radius: 20px;
     }
 
     .current-selection-display {
