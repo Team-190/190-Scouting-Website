@@ -135,11 +135,7 @@
   let gridInstance, gridInstance2, gridInstance3;
   let gridInstanceRight, gridInstance4, gridInstance5;
 
-  fetchGracePage(eventCode)
-    .then((r) => r.json())
-    .then((d) => {
-      garceData = d;
-    });
+  // Grace data is fetched in onMount after eventCode is set
 
   // ─── Math Helpers ─────────────────────────────────────────────────────────────
 
@@ -1375,6 +1371,13 @@
     eventCode = localStorage.getItem("eventCode") || "";
 
     if (eventCode) {
+      fetchGracePage(eventCode)
+        .then((r) => r.json())
+        .then((d) => {
+          garceData = d;
+        })
+        .catch((e) => console.error("Failed to fetch grace data:", e));
+
       teamOPRs = await fetchEventOPRs(eventCode);
       allMatches = await fetchEventMatches(eventCode);
     }
