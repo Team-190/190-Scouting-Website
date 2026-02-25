@@ -106,7 +106,7 @@
   // ─── State ────────────────────────────────────────────────────────────────────
 
   let domNode;
-  let colorblindMode = "normal";
+  let colorblindMode = localStorage.getItem("colorblindMode") || "normal";
   let gridHeight = 400;
   let gridInstance = null;
   let eventCode = localStorage.getItem("eventCode") || "";
@@ -528,6 +528,7 @@
 
   function onColorblindChange(e: Event) {
     colorblindMode = (e.target as HTMLSelectElement).value;
+    localStorage.setItem("colorblindMode", colorblindMode);
     if (selectedTeam) loadTeamData(String(selectedTeam));
   }
 

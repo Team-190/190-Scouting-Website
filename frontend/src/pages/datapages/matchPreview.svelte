@@ -114,7 +114,7 @@
   // ─── State ────────────────────────────────────────────────────────────────────
 
   let eventCode: string;
-  let colorblindMode = "normal";
+  let colorblindMode = localStorage.getItem("colorblindMode") || "normal";
   let gridHeight = 400;
   let teamViewData = null;
   let garceData;
@@ -919,6 +919,7 @@
 
   function onColorblindChange(e: Event) {
     colorblindMode = (e.target as HTMLSelectElement).value;
+    localStorage.setItem("colorblindMode", colorblindMode);
     if (selectedTeam) loadTeamData(selectedTeam);
     loadAllAllianceTeams();
   }

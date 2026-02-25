@@ -130,7 +130,7 @@
   let metrics = [];
   let selectedMetric = "";
   let dataMetric = "";
-  let colorblindMode = "normal";
+  let colorblindMode = localStorage.getItem("colorblindMode") || "normal";
   let eventCode = "";
   let teamOPRs = {};
   let gridApi = null;
@@ -924,6 +924,7 @@
 
   function onColorblindChange(e) {
     colorblindMode = e.target.value;
+    localStorage.setItem("colorblindMode", colorblindMode);
     buildGrid();
   }
 
