@@ -1912,6 +1912,7 @@
     }
 
     .alliances-container {
+        overflow-y: scroll;
         display: grid;
         grid-template-columns: repeat(
             4,
@@ -1919,6 +1920,7 @@
         ); /* 4 columns = all 8 alliances visible */
         gap: 8px; /* Minimum practical gap */
         max-width: 100%;
+        height: 60vh;
     }
     @media (max-width: 1600px) {
         .alliances-container {
