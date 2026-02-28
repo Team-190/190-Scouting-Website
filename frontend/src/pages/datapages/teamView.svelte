@@ -41,6 +41,7 @@
     ["EndState", "Climb State"],
     ["LadderLocation", "Ladder Location"],
     ["Strategy", "Strategy"],
+    ["EstimatedPoints", "Estimated Points"],
   ]);
 
   const EXCLUDED_FIELDS = [
@@ -612,7 +613,15 @@
       );
     });
 
-    if (data.length > 0) data = aggregateMatches(data);
+    if (data.length > 0) {
+      data = aggregateMatches(data);
+      for (const match of data) {
+        match.EstimatedPoints = await estimateTeamPoints(
+          teamNumber,
+          match.Match,
+        );
+      }
+    }
     cache[teamNumber] = data;
     buildGrid(data);
   }
@@ -660,8 +669,8 @@
         allTeamsData.push(...aggregateMatches(td)),
       );
     }
-
-    const allRows = allTeamsData.length > 0 ? allTeamsData : matches;
+    
+    const allRows = [...allTeamsData, ...matches];
 
     // Compute per-metric global stats
     const globalStats: Record<string, any> = {};
