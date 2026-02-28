@@ -41,7 +41,7 @@
     ["EndState", "Climb State"],
     ["LadderLocation", "Ladder Location"],
     ["Strategy", "Strategy"],
-    ["EstimatedPoints", "Estimated Points"],
+    ["EstimatedPoints", "EFS (Estimated Fuel Scored)"],
   ]);
 
   const EXCLUDED_FIELDS = [
