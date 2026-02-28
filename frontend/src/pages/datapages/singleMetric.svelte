@@ -598,7 +598,8 @@
       availableTeams.forEach((team) => {
         (teamData[team] ?? []).forEach((row) => {
           const val = Number(row[dataMetric] ?? 0);
-          if (val !== -1 && isNumeric(row[dataMetric])) allValues.push(val);
+          if (val !== 0 && val !== -1 && isNumeric(row[dataMetric]))
+            allValues.push(val);
         });
       });
       globalStats = computeGlobalStats(allValues);
@@ -648,7 +649,7 @@
             } else {
               const num = Number(v);
               row[label] = num;
-              if (num !== -1) values.push(num);
+              if (num !== 0 && num !== -1) values.push(num);
             }
           } else {
             row[label] = normalizeValue(v);
@@ -767,7 +768,7 @@
       availableTeams.map(async (team) => {
         const matches = teamData[team] ?? [];
         const row: any = { team, hasData: false };
-        const nonZero: number[] = [];
+        const efsValues: number[] = [];
 
         await Promise.all(
           matches.map(async (matchRow, i) => {
@@ -779,15 +780,15 @@
               data,
             );
             row[qLabels[i]] = efs;
-            if (efs !== null && efs > 0) {
-              nonZero.push(efs);
+            if (efs !== null) {
+              efsValues.push(efs);
               row.hasData = true;
             }
           }),
         );
 
-        row.mean = nonZero.length ? Number(mean(nonZero).toFixed(2)) : null;
-        row.median = nonZero.length ? Number(median(nonZero).toFixed(2)) : null;
+        row.mean = efsValues.length ? Number(mean(efsValues).toFixed(2)) : null;
+        row.median = efsValues.length ? Number(median(efsValues).toFixed(2)) : null;
         return row;
       }),
     );
@@ -1163,9 +1164,6 @@
       cellClass: "cell-center",
       cellStyle: (params) => {
         const v = params.value;
-        if (v === 0) {
-          return statCellStyle("black", "white", "3px solid #C81B00");
-        }
         const bg =
           v === null || v === undefined
             ? "#4D4D4D"
@@ -1174,7 +1172,6 @@
       },
       valueFormatter: (params) => {
         if (!params.data?.hasData || params.value == null) return "";
-        if (params.value === 0) return "0";
         return Number(params.value).toFixed(2);
       },
     };
@@ -1191,9 +1188,6 @@
       cellClass: "cell-center",
       cellStyle: (params) => {
         const v = params.value;
-        if (v === 0) {
-          return statCellStyle("black", "white", "2px solid #555");
-        }
         const bg =
           v === null || v === undefined
             ? "#4D4D4D"
@@ -1202,7 +1196,6 @@
       },
       valueFormatter: (params) => {
         if (!params.data?.hasData || params.value == null) return "";
-        if (params.value === 0) return "0";
         return Number(params.value).toFixed(2);
       },
     };
