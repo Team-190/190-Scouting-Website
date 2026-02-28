@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import {
     AllCommunityModule,
     createGrid,
@@ -43,7 +43,10 @@
     ["LadderLocation", "Ladder Location"],
     ["Strategy", "Strategy"],
     ["OPR", "OPR (Offensive Power Rating)"],
+    ["EFS", "EFS (Estimated Fuel Score)"],
   ]);
+
+  const EFS_DISPLAY = "EFS (Estimated Fuel Score)";
 
   const INVERTED_METRICS = new Set(["TimeOfClimb", "ClimbTime"]);
   const BOOLEAN_METRICS = new Set(["AutoClimb", "AttemptClimb"]);
@@ -133,7 +136,7 @@
   let selectedMetric = "";
   let dataMetric = "";
   let colorblindMode = localStorage.getItem("colorblindMode") || "normal";
-  let eventCode = "";
+  let eventCode = localStorage.getItem("eventCode");
   let teamOPRs = {};
   let gridApi = null;
   let domNode;
@@ -370,6 +373,106 @@
     return localStorage.getItem("data");
   }
 
+  async function fetchMatchAlliances(): Promise<Record<number, any>> {
+    if (!eventCode) {
+      return {};
+    }
+    try {
+      const res = await fetch(`${TBA_BASE_URL}/event/${eventCode}/matches`, {
+        headers: { "X-TBA-Auth-Key": TBA_API_KEY },
+      });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      const result: Record<number, any> = {};
+      data.forEach((match) => {
+        if (match.comp_level !== "qm") return;
+        const num = match.match_number;
+        result[num] = {
+          red: (match.alliances.red.team_keys ?? []).map((k) =>
+            k.replace("frc", ""),
+          ),
+          blue: (match.alliances.blue.team_keys ?? []).map((k) =>
+            k.replace("frc", ""),
+          ),
+          redScore: match.score_breakdown.red.hubScore.totalCount ?? null,
+          blueScore: match.score_breakdown.blue.hubScore.totalCount ?? null,
+        };
+      });
+      return result;
+    } catch (e) {
+      console.error("Error fetching match alliances:", e);
+      return {};
+    }
+  }
+
+  async function estimateTeamPoints(
+    teamStr,
+    matchNumber,
+    preloadedAlliances?: Record<number, any>,
+    preloadedData?: any[],
+  ): Promise<number | null> {
+    const alliances = preloadedAlliances ?? (await fetchMatchAlliances());
+    const data = preloadedData ?? JSON.parse(await fetchAllMetricData());
+    const alliance = alliances[matchNumber];
+
+    if (!data || !alliance) return null;
+
+    const teamStrClean = String(teamStr).replace(/\D/g, "");
+
+    const teamRows = data.filter((row) => {
+      if (row.RecordType === "Match_Event") return false;
+      const raw = String(row.Team || row.team || "").replace(/\D/g, "");
+      return raw === teamStrClean && Number(row.Match) === matchNumber;
+    });
+
+    if (!teamRows.length) return null;
+
+    const onRed = alliance.red
+      .map((t) => t.replace(/\D/g, ""))
+      .includes(teamStrClean);
+    const allianceScore = onRed ? alliance.redScore : alliance.blueScore;
+    const allianceTeams = (onRed ? alliance.red : alliance.blue).map((t) =>
+      t.replace(/\D/g, ""),
+    );
+
+    const teamShootingTime = teamRows.reduce((sum, row) => {
+      const v = row.FuelShootingTime;
+      return sum + (isNumeric(v) && Number(v) > 0 ? Number(v) : 0);
+    }, 0);
+
+    const allianceRows = data.filter((row) => {
+      if (row.RecordType === "Match_Event") return false;
+      const raw = String(row.Team || row.team || "").replace(/\D/g, "");
+      return Number(row.Match) === matchNumber && allianceTeams.includes(raw);
+    });
+
+    const totalAllianceShootingTime = allianceRows.reduce((sum, row) => {
+      const v = row.FuelShootingTime;
+      return sum + (isNumeric(v) && Number(v) > 0 ? Number(v) : 0);
+    }, 0);
+
+    const pointsPerSecond =
+      totalAllianceShootingTime > 0
+        ? allianceScore / totalAllianceShootingTime
+        : 0;
+    const estimatedPoints =
+      Math.round(teamShootingTime * pointsPerSecond * 10) / 10;
+
+    console.log(`[Match ${matchNumber}] Team ${teamStr}`, {
+      allianceColor: onRed ? "red" : "blue",
+      allianceTeams,
+      allianceScore,
+      teamShootingTime,
+      totalAllianceShootingTime,
+      pointsPerSecond: pointsPerSecond.toFixed(4),
+      estimatedPoints,
+    });
+
+    return estimatedPoints;
+  }
+
   async function fetchEventOPRs(code) {
     if (!code) return {};
     try {
@@ -408,6 +511,7 @@
     if (!availableTeams.length) return [];
     const set = new Set();
     if (eventCode || Object.keys(teamOPRs).length) set.add(OPR_DISPLAY);
+    if (eventCode) set.add(EFS_DISPLAY);
     for (const team of availableTeams) {
       for (const row of teamData[team] ?? []) {
         Object.keys(row).forEach((k) => {
@@ -421,6 +525,7 @@
 
   function resolveDataKey(displayMetric) {
     if (displayMetric === OPR_DISPLAY) return "OPR";
+    if (displayMetric === EFS_DISPLAY) return "EFS";
     for (const [key, val] of METRIC_DISPLAY_NAMES) {
       if (val === displayMetric) return key;
     }
@@ -461,6 +566,11 @@
 
   function buildGrid() {
     if (!domNode || !selectedMetric || !availableTeams.length) return;
+
+    if (selectedMetric === EFS_DISPLAY) {
+      buildEFSGrid();
+      return;
+    }
 
     if (selectedMetric === OPR_DISPLAY) {
       if (!Object.keys(teamOPRs).length && eventCode) {
@@ -520,8 +630,8 @@
     rowData = availableTeams
       .map((team) => {
         const rows = teamData[team] ?? [];
-        const row = { team };
-        const values = [];
+        const row: any = { team };
+        const values: number[] = [];
 
         row.hasData = rows.some((r) => {
           const v = r[dataMetric];
@@ -619,6 +729,214 @@
     gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT;
     applyGrid(columnDefs);
     updateAllCharts();
+  }
+
+  let efsLoading = false;
+  async function getOrFetchAlliances() {
+    return await fetchMatchAlliances();
+  }
+
+  async function buildEFSGrid() {
+    if (!availableTeams.length) return;
+    efsLoading = true;
+
+    applyGrid(
+      [
+        {
+          headerName: "Loading EFS data…",
+          field: "msg",
+          flex: 1,
+          cellStyle: { textAlign: "center", color: "white", padding: "20px" },
+        },
+      ],
+      [{ msg: "Fetching match alliances from TBA…" }],
+    );
+
+    const alliances = await getOrFetchAlliances();
+    const data = JSON.parse(await fetchAllMetricData());
+
+    const maxMatchCount = availableTeams.reduce(
+      (max, team) => Math.max(max, (teamData[team] ?? []).length),
+      0,
+    );
+    const qLabels = Array.from(
+      { length: maxMatchCount },
+      (_, i) => `Q${i + 1}`,
+    );
+
+    rowData = await Promise.all(
+      availableTeams.map(async (team) => {
+        const matches = teamData[team] ?? [];
+        const row: any = { team, hasData: false };
+        const nonZero: number[] = [];
+
+        await Promise.all(
+          matches.map(async (matchRow, i) => {
+            const matchNum = Number(matchRow.Match);
+            const efs = await estimateTeamPoints(
+              String(team),
+              matchNum,
+              alliances,
+              data,
+            );
+            row[qLabels[i]] = efs;
+            if (efs !== null && efs > 0) {
+              nonZero.push(efs);
+              row.hasData = true;
+            }
+          }),
+        );
+
+        row.mean = nonZero.length ? Number(mean(nonZero).toFixed(2)) : null;
+        row.median = nonZero.length ? Number(median(nonZero).toFixed(2)) : null;
+        return row;
+      }),
+    );
+
+    if (!rowData.some((r) => r.hasData)) {
+      applyGrid(
+        [
+          {
+            headerName: "Message",
+            field: "message",
+            flex: 1,
+            cellStyle: { textAlign: "center", padding: "20px", color: "white" },
+          },
+        ],
+        [
+          {
+            message:
+              "No EFS data could be computed — check that FuelShootingTime is scouted and TBA alliance data is available.",
+          },
+        ],
+      );
+      efsLoading = false;
+      return;
+    }
+
+    const allEfsValues: number[] = [];
+    rowData.forEach((r) =>
+      qLabels.forEach((q) => {
+        const v = r[q];
+        if (v !== null && v > 0) allEfsValues.push(v);
+      }),
+    );
+    const efsGlobalStats = computeGlobalStats(allEfsValues);
+
+    rowData = rowData
+      .sort((a, b) => {
+        if (a.mean === null && b.mean !== null) return 1;
+        if (b.mean === null && a.mean !== null) return -1;
+        if (a.mean === null) return 0;
+        return b.mean - a.mean;
+      })
+      .map((row, i, arr) => {
+        const validRows = arr.filter((r) => r.mean !== null);
+        const rank =
+          validRows.length > 0
+            ? (validRows.length - validRows.indexOf(row) - 1) / validRows.length
+            : 0;
+        return {
+          ...row,
+          alexPercentile:
+            row.mean !== null
+              ? rank < 0.2
+                ? 0
+                : rank < 0.4
+                  ? 20
+                  : rank < 0.6
+                    ? 40
+                    : rank < 0.8
+                      ? 60
+                      : 80
+              : null,
+        };
+      });
+
+    const efsCellStyle = (v) => {
+      if (v === null || v === undefined)
+        return {
+          background: "#333",
+          color: "white",
+          fontWeight: 600,
+          fontSize: "16px",
+          textAlign: "center",
+          border: "1px solid #555",
+        };
+      if (v === 0)
+        return {
+          background: "black",
+          color: "white",
+          fontWeight: 600,
+          fontSize: "18px",
+          textAlign: "center",
+        };
+      const bg = colorFromStats(v, efsGlobalStats, false, "EFS");
+      return {
+        background: bg,
+        color: textColorForBg(bg),
+        fontWeight: 600,
+        fontSize: "18px",
+        textAlign: "center",
+      };
+    };
+
+    const efsStatStyle = (v, border) => {
+      if (v === null || v === undefined)
+        return statCellStyle("#4D4D4D", "white", border);
+      if (v === 0) return statCellStyle("black", "white", border);
+      const bg = colorFromStats(v, efsGlobalStats, false, "EFS");
+      return statCellStyle(bg, textColorForBg(bg), border);
+    };
+
+    const columnDefs = [
+      makeTeamColumn(),
+      ...qLabels.map((q) => ({
+        headerName: q,
+        field: q,
+        flex: 1,
+        minWidth: 70,
+        headerClass: "header-center",
+        cellClass: "cell-center",
+        cellStyle: (params) => efsCellStyle(params.value),
+        valueFormatter: (params) =>
+          params.value !== null && params.value !== undefined
+            ? Number(params.value).toFixed(1)
+            : "",
+      })),
+      {
+        headerName: "Mean",
+        field: "mean",
+        flex: 1,
+        minWidth: 80,
+        headerClass: "header-center",
+        cellClass: "cell-center",
+        cellStyle: (params) => efsStatStyle(params.value, "3px solid #C81B00"),
+        valueFormatter: (params) =>
+          params.value != null && params.data?.hasData
+            ? Number(params.value).toFixed(2)
+            : "",
+      },
+      {
+        headerName: "Med.",
+        field: "median",
+        flex: 1,
+        minWidth: 80,
+        headerClass: "header-center",
+        cellClass: "cell-center",
+        cellStyle: (params) => efsStatStyle(params.value, "2px solid #555"),
+        valueFormatter: (params) =>
+          params.value != null && params.data?.hasData
+            ? Number(params.value).toFixed(2)
+            : "",
+      },
+      makePercentileColumn(false),
+    ];
+
+    gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT;
+    applyGrid(columnDefs);
+    updateAllCharts();
+    efsLoading = false;
   }
 
   function buildOPRGrid() {
@@ -952,7 +1270,7 @@
   // ─── Chart Management ─────────────────────────────────────────────────────────
 
   function addChart(type) {
-    const chart = {
+    const chart: any = {
       id: uuidv4(),
       type,
       el: null,
@@ -1211,7 +1529,7 @@
 
     const selectedTeams =
       chart.selectedTeams?.size > 0
-        ? Array.from(chart.selectedTeams).sort((a, b) => a - b)
+        ? Array.from(chart.selectedTeams).sort((a, b) => Number(a) - Number(b))
         : availableTeams;
 
     const maxValues = numericMetrics.map((m) => {
@@ -1320,7 +1638,6 @@
         return;
       }
 
-      eventCode = localStorage.getItem("eventCode") || "";
       if (eventCode) teamOPRs = await fetchEventOPRs(eventCode);
 
       metrics = computeMetrics();
@@ -1384,6 +1701,10 @@
           {/each}
         </select>
       </div>
+      {#if efsLoading}
+        <span style="color: #ffcc00; font-size: 14px; font-weight: 600;">
+        </span>
+      {/if}
     {/if}
   </div>
 
