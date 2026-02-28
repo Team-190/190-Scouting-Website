@@ -10,6 +10,7 @@
     import GracePage from "./pages/datapages/gracePage.svelte";
     import MarchMadness from "./pages/datapages/marchMadness.svelte";
     import MatchPreview from "./pages/datapages/matchPreview.svelte";
+    import QualPage from "./pages/datapages/qualPage.svelte";
 
     const routes = [
         { path: "/", component: Home },
@@ -19,7 +20,8 @@
         { path: "/pitScouting", component: PitScouting },
         { path: "/gracePage", component: GracePage },
         { path: "/marchMadness", component: MarchMadness },
-        { path: "/matchPreview", component: MatchPreview }
+        { path: "/matchPreview", component: MatchPreview },
+        { path: "/qualPage", component: QualPage }
     ];
 </script>
 
@@ -30,7 +32,7 @@
 </main>
 
 <style>
-    /* Ensure navbar doesn’t cover content */
+    /* Ensure navbar doesn't cover content */
     .page-content {
         padding-top: 20px; /* same as Navbar height */
     }

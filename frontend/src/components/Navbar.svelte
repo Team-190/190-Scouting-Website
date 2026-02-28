@@ -15,6 +15,7 @@
         <button on:click={() => goto('/singleMetric')}>Event View</button>
         <button on:click={() => goto('/teamView')}>Team View</button>
         <button on:click={() => goto('/pitScouting')}>Pit Scouting</button>
+        <button on:click={() => goto('/qualPage')}>Qualitative Scouting</button>
         <button on:click={() => goto('/gracePage')}>Grace Page</button>
         <button on:click={() => goto('/marchMadness')}>Gompei Madness</button>
         <button on:click={() => goto('/matchPreview')}>Match Preview</button>
