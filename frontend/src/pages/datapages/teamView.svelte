@@ -13,6 +13,7 @@
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
   import { fetchGracePage } from "../../utils/api";
+  import { fetchMatchAlliances } from "../../utils/blueAllianceApi";
   import { v4 as uuidv4 } from "uuid";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
@@ -409,45 +410,13 @@
       teamOPR = null;
     }
   }
-  async function fetchMatchAlliances(): Promise<Record<number, any>> {
-    if (!eventCode) {
-      return {};
-    }
-    try {
-      const res = await fetch(`${TBA_BASE_URL}/event/${eventCode}/matches`, {
-        headers: { "X-TBA-Auth-Key": TBA_API_KEY },
-      });
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      const result: Record<number, any> = {};
-      data.forEach((match) => {
-        if (match.comp_level !== "qm") return;
-        const num = match.match_number;
-        result[num] = {
-          red: (match.alliances.red.team_keys ?? []).map((k) =>
-            k.replace("frc", ""),
-          ),
-          blue: (match.alliances.blue.team_keys ?? []).map((k) =>
-            k.replace("frc", ""),
-          ),
-          redScore: match.score_breakdown.red.hubScore.totalCount ?? null,
-          blueScore: match.score_breakdown.blue.hubScore.totalCount ?? null,
-        };
-      });
-      return result;
-    } catch (e) {
-      console.error("Error fetching match alliances:", e);
-      return {};
-    }
-  }
+
 
   async function estimateTeamPoints(
     teamStr,
     matchNumber,
   ): Promise<number | null> {
-    let alliances = await fetchMatchAlliances();
+    let alliances = await fetchMatchAlliances(eventCode);
     let alliance = alliances[matchNumber];
 
     if (!teamViewData || !alliance) return null;

@@ -14,6 +14,7 @@
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import { v4 as uuidv4 } from "uuid";
   import { fetchSingleMetric } from "../../utils/api.js";
+  import { fetchMatchAlliances } from "../../utils/blueAllianceApi";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -373,39 +374,6 @@
     return localStorage.getItem("data");
   }
 
-  async function fetchMatchAlliances(): Promise<Record<number, any>> {
-    if (!eventCode) {
-      return {};
-    }
-    try {
-      const res = await fetch(`${TBA_BASE_URL}/event/${eventCode}/matches`, {
-        headers: { "X-TBA-Auth-Key": TBA_API_KEY },
-      });
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      const result: Record<number, any> = {};
-      data.forEach((match) => {
-        if (match.comp_level !== "qm") return;
-        const num = match.match_number;
-        result[num] = {
-          red: (match.alliances.red.team_keys ?? []).map((k) =>
-            k.replace("frc", ""),
-          ),
-          blue: (match.alliances.blue.team_keys ?? []).map((k) =>
-            k.replace("frc", ""),
-          ),
-          redScore: match.score_breakdown.red.hubScore.totalCount ?? null,
-          blueScore: match.score_breakdown.blue.hubScore.totalCount ?? null,
-        };
-      });
-      return result;
-    } catch (e) {
-      console.error("Error fetching match alliances:", e);
-      return {};
-    }
-  }
 
   async function estimateTeamPoints(
     teamStr,
@@ -413,7 +381,7 @@
     preloadedAlliances?: Record<number, any>,
     preloadedData?: any[],
   ): Promise<number | null> {
-    const alliances = preloadedAlliances ?? (await fetchMatchAlliances());
+    const alliances = preloadedAlliances ?? (await fetchMatchAlliances(eventCode));
     const data = preloadedData ?? JSON.parse(await fetchAllMetricData());
     const alliance = alliances[matchNumber];
 
@@ -737,9 +705,6 @@
   }
 
   let efsLoading = false;
-  async function getOrFetchAlliances() {
-    return await fetchMatchAlliances();
-  }
 
   async function buildEFSGrid() {
     if (!availableTeams.length) return;
@@ -757,7 +722,7 @@
       [{ msg: "Fetching match alliances from TBA…" }],
     );
 
-    const alliances = await getOrFetchAlliances();
+    const alliances = await fetchMatchAlliances(eventCode);
     const data = JSON.parse(await fetchAllMetricData());
 
     const maxMatchCount = availableTeams.reduce(

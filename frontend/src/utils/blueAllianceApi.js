@@ -29,6 +29,39 @@ export async function fetchTeams(eventCode) {
     }
 }
 
+export async function fetchMatchAlliances(eventCode) {
+    if (!eventCode) {
+      return {};
+    }
+    try {
+      const res = await fetch(`https://www.thebluealliance.com/api/v3/event/${eventCode}/matches`, {
+        headers: { "X-TBA-Auth-Key": TBA_API_KEY },
+      });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      const result = {};
+      data.forEach((match) => {
+        if (match.comp_level !== "qm") return;
+        const num = match.match_number;
+        result[num] = {
+          red: (match.alliances.red.team_keys ?? []).map((k) =>
+            k.replace("frc", ""),
+          ),
+          blue: (match.alliances.blue.team_keys ?? []).map((k) =>
+            k.replace("frc", ""),
+          ),
+          redScore: match.score_breakdown.red.hubScore.totalCount ?? null,
+          blueScore: match.score_breakdown.blue.hubScore.totalCount ?? null,
+        };
+      });
+      return result;
+    } catch (e) {
+      console.error("Error fetching match alliances:", e);
+      return {};
+    }
+  }
 
 export async function fetchOPR(eventCode) {
     return fetch(`https://www.thebluealliance.com/api/v3/event/${eventCode}/oprs`, {
