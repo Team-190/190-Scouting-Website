@@ -1,8 +1,13 @@
 <script>
     import { onMount } from "svelte";
 
+    const TBA_API_KEY = "zhTqFG7csJoif1sNXt3aZngy0LB1X4LxMgTfXBvPscNG0P9FifZCa2uGJcUk2gKW";
+    const TBA_BASE_URL = "https://www.thebluealliance.com/api/v3";
+
     let Name = "";
     let winners = [];
+    let loadingAlliances = true;
+    let eventCode = "";
 
     let seeds = [
         { id: "A1", name: "Alliance 1", seed: 1 },
@@ -27,7 +32,7 @@
         m7: { id: "m7", num: 7, name: "Match 7", round: "r2", red: null, blue: null, winner: null, desc: "W1 vs W2" },
         m8: { id: "m8", num: 8, name: "Match 8", round: "r2", red: null, blue: null, winner: null, desc: "W3 vs W4" },
         
-        m9:  { id: "m9",  num: 9, name: "Match 9",  round: "r3", red: null, blue: null, winner: null, desc: "L7 vs W6" },
+        m9:  { id: "m9",  num: 9,  name: "Match 9",  round: "r3", red: null, blue: null, winner: null, desc: "L7 vs W6" },
         m10: { id: "m10", num: 10, name: "Match 10", round: "r3", red: null, blue: null, winner: null, desc: "W5 vs L8" },
         
         m11: { id: "m11", num: 11, name: "Match 11", round: "r4", red: null, blue: null, winner: null, desc: "W7 vs W8" },
@@ -61,12 +66,49 @@
         f1: { winner: null, loser: null }
     };
 
-    // Helper to generate placeholder text
-    // We reverse map logic: Who feeds into M5 Red? m1 loser.
-    // Ideally we compute this or store it. For simplicitly, hardcode logic or look up.
+    async function fetchAlliances(code) {
+        if (!code) return;
+        try {
+            const res = await fetch(`${TBA_BASE_URL}/event/${code}/alliances`, {
+                headers: { "X-TBA-Auth-Key": TBA_API_KEY }
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+
+            // TBA returns alliances sorted by seed (index 0 = Alliance 1)
+            const newSeeds = data.slice(0, 8).map((alliance, i) => {
+                const teams = alliance.picks
+                    .map(k => k.replace("frc", ""))
+                    .join("-");
+                return {
+                    id: `A${i + 1}`,
+                    name: teams,
+                    seed: i + 1
+                };
+            });
+
+            // Pad to 8 if fewer alliances returned
+            while (newSeeds.length < 8) {
+                const i = newSeeds.length;
+                newSeeds.push({ id: `A${i + 1}`, name: `Alliance ${i + 1}`, seed: i + 1 });
+            }
+
+            seeds = newSeeds;
+
+            // Re-initialize round 1 matches with updated seeds
+            matches.m1.red  = seeds[0]; matches.m1.blue  = seeds[7];
+            matches.m2.red  = seeds[3]; matches.m2.blue  = seeds[4];
+            matches.m3.red  = seeds[1]; matches.m3.blue  = seeds[6];
+            matches.m4.red  = seeds[2]; matches.m4.blue  = seeds[5];
+            matches = { ...matches };
+        } catch (e) {
+            console.error("Failed to fetch alliances:", e);
+        } finally {
+            loadingAlliances = false;
+        }
+    }
+
     function getPlaceholder(matchId, side) {
-        // Reverse lookup based on progression map could be complex.
-        // Hardcoding standard text for brevity and performance.
         const map = {
             m5: { red: "Loser of M1", blue: "Loser of M2" },
             m6: { red: "Loser of M3", blue: "Loser of M4" },
@@ -93,12 +135,10 @@
         const winnerObj = match[side];
         if (!winnerObj) return; 
 
-        // Update current match
         match.winner = side;
         const loserSide = side === 'red' ? 'blue' : 'red';
         const loserObj = match[loserSide];
 
-        // Trigger progression
         const rule = progression[matchId];
         if (rule) {
             if (rule.winner) {
@@ -126,17 +166,12 @@
             return;
         }
 
-        const winnerEntry = {
-            name: Name
-        };
+        const winnerEntry = { name: Name };
 
-        // Group matches by round dynamically
         const roundGroups = {};
         Object.values(matches).forEach(match => {
             if (match.winner) {
-                if (!roundGroups[match.round]) {
-                    roundGroups[match.round] = [];
-                }
+                if (!roundGroups[match.round]) roundGroups[match.round] = [];
                 roundGroups[match.round].push({
                     alliance: match[match.winner].id,
                     match: match.num
@@ -144,16 +179,22 @@
             }
         });
 
-        // Add all rounds to the entry
         Object.assign(winnerEntry, roundGroups);
-
         winners = [...winners, winnerEntry];
         console.log("Winners array:", winners);
         alert(`Winners saved!`);
-
-        // Reset form
         Name = "";
-    }</script>
+    }
+
+    onMount(async () => {
+        eventCode = localStorage.getItem("eventCode") || "";
+        if (eventCode) {
+            await fetchAlliances(eventCode);
+        } else {
+            loadingAlliances = false;
+        }
+    });
+</script>
 
 <!-- Inline Snippet for Match Card -->
 {#snippet matchCard(match)}
@@ -199,6 +240,10 @@
 {/snippet}
 
 <div class="bracket-app">
+    {#if loadingAlliances}
+        <div class="loading-overlay">Loading alliance data...</div>
+    {/if}
+
     <!-- Header Labels -->
     <div class="headers">
         <div>ROUND 1</div>
@@ -223,8 +268,6 @@
          <div class="label-upper">UPPER BRACKET</div>
          <div class="label-lower">LOWER BRACKET</div>
 
-        <!-- Matches Placement -->
-        
         <!-- Round 1 -->
         <div class="cell m1">{@render matchCard(matches.m1)}</div>
         <div class="cell m2">{@render matchCard(matches.m2)}</div>
@@ -239,7 +282,6 @@
         <div class="cell m11">{@render matchCard(matches.m11)}</div>
 
         <!-- Lower Bracket -->
-        <!-- R2 Lower -->
         <div class="cell m5">{@render matchCard(matches.m5)}</div>
         <div class="cell m6">{@render matchCard(matches.m6)}</div>
 
@@ -255,7 +297,6 @@
 
         <!-- Finals -->
         <div class="cell f1">{@render matchCard(matches.f1)}</div>
-
     </div>
 </div>
 
@@ -289,6 +330,17 @@
         position: relative;
     }
 
+    .loading-overlay {
+        text-align: center;
+        font-weight: bold;
+        color: var(--frc-190-black);
+        padding: 10px;
+        font-size: 14px;
+        background: rgba(255,255,255,0.7);
+        border-radius: 6px;
+        margin-bottom: 8px;
+    }
+
     .headers {
         display: grid;
         grid-template-columns: repeat(6, 1fr);
@@ -303,7 +355,7 @@
     .bracket-grid {
         display: grid;
         grid-template-columns: repeat(6, 1fr);
-        grid-template-rows: repeat(40, 30px); /* 30px rows for fine placement */
+        grid-template-rows: repeat(40, 30px);
         position: relative;
     }
 
@@ -313,21 +365,14 @@
         background: #f0f0f0;
         z-index: 0;
     }
-    .col-bg:nth-child(2) { grid-column: 1; } /* Odd/Even shift logic handling below */
-    .col-bg.odd { background: #fff; }
-    .col-bg.even { background: #e0e0e0; }
-
-    /* Assign columns to backgrounds manually for certainty */
-    .col-bg:nth-of-type(1) { grid-column: 1; background: #fff; }
-    .col-bg:nth-of-type(2) { grid-column: 2; background: #eee; }
-    .col-bg:nth-of-type(3) { grid-column: 3; background: #ddd; }
-    .col-bg:nth-of-type(4) { grid-column: 4; background: #ccc; }
-    .col-bg:nth-of-type(5) { grid-column: 5; background: #bbb; }
-    .col-bg:nth-of-type(6) { grid-column: 6; background: #aaa; }
-    /* Let's stick to lighter alternating grays */
-    .col-bg:nth-of-type(odd) { background: #ffffff; }
+    .col-bg:nth-of-type(1) { grid-column: 1; }
+    .col-bg:nth-of-type(2) { grid-column: 2; }
+    .col-bg:nth-of-type(3) { grid-column: 3; }
+    .col-bg:nth-of-type(4) { grid-column: 4; }
+    .col-bg:nth-of-type(5) { grid-column: 5; }
+    .col-bg:nth-of-type(6) { grid-column: 6; }
+    .col-bg:nth-of-type(odd)  { background: #ffffff; }
     .col-bg:nth-of-type(even) { background: #f2f2f2; }
-
 
     /* Side Labels */
     .label-upper {
@@ -354,56 +399,40 @@
         color: #666;
         position: absolute;
         left: -30px;
-        top: 140px; /* manually adjust */
+        top: 140px;
     }
 
-    /* Match Cells Position */
+    /* Match Cells */
     .cell {
         z-index: 1;
         position: relative;
         display: flex;
         flex-direction: column;
         justify-content: center;
-        padding-right: 20px; /* Space for connectors */
+        padding-right: 20px;
     }
 
-    /* --- PLACEMENT MAP (Row indices approx) --- */
-    
-    /* Round 1 */
+    /* Placement */
     .m1 { grid-column: 1; grid-row: 2; }
     .m2 { grid-column: 1; grid-row: 6; }
     .m3 { grid-column: 1; grid-row: 10; }
     .m4 { grid-column: 1; grid-row: 14; }
 
-    /* Round 2 Upper */
-    .m7 { grid-column: 2; grid-row: 4; } /* Matches M1/M2 mid */
-    .m8 { grid-column: 2; grid-row: 12; } /* Matches M3/M4 mid */
+    .m7 { grid-column: 2; grid-row: 4; }
+    .m8 { grid-column: 2; grid-row: 12; }
 
-    /* Round 4 Upper (Semi) */
-    .m11 { grid-column: 4; grid-row: 8; } /* Matches M7/M8 mid */
+    .m11 { grid-column: 4; grid-row: 8; }
 
-    /* Round 2 Lower (Losers M1/M2) */
     .m5 { grid-column: 2; grid-row: 18; }
     .m6 { grid-column: 2; grid-row: 24; }
 
-    /* Round 3 Lower */
-    .m10 { grid-column: 3; grid-row: 18; } /* Feeds from M5 + L8 */
-    .m9  { grid-column: 3; grid-row: 24; } /* Feeds from M6 + L7 */
+    .m10 { grid-column: 3; grid-row: 18; }
+    .m9  { grid-column: 3; grid-row: 24; }
 
-    /* Wait, checking diagram flow carefully */
-    /* M5 and M10 share a row ish? */
-    /* M5 is L1 vs L2. M10 is W5 vs L8. So M10 is same Y level as M5 usually. */
-    /* M6 is L3 vs L4. M9 is W6 vs L7. So M9 same Y level as M6. */
-    
-    /* Round 4 Lower */
-    /* M12 is W10 vs W9. So M12 is between m10 and m9 Y level? */
     .m12 { grid-column: 4; grid-row: 21; } 
 
-    /* Round 5 Lower (Final Lower) */
-    /* M13 is W12 vs L11. */
     .m13 { grid-column: 5; grid-row: 21; } 
 
-    /* Finals */
     .f1 { grid-column: 6; grid-row: 14; }
 
     /* MATCH CARD STYLES */
@@ -423,7 +452,6 @@
         align-items: center;
         height: 28px;
         padding-left: 5px;
-        /* Chevron Shape pointing right */
         clip-path: polygon(0 0, 92% 0, 100% 50%, 92% 100%, 0 100%);
         margin-bottom: 2px;
         cursor: pointer;
@@ -431,17 +459,18 @@
     }
     .alliance-bar:hover { transform: scale(1.02); }
 
-    .alliance-bar.red { background: #e75a5a; }
+    .alliance-bar.red  { background: #e75a5a; }
     .alliance-bar.blue { background: #5a9ce7; }
     .alliance-bar.winner { filter: brightness(1.2) contrast(1.1); border-left: 4px solid gold; }
-    .alliance-bar.tbd { opacity: 0.7; background: #888; }
-    .alliance-bar.red.tbd { background: #a65858; }
+    .alliance-bar.tbd { opacity: 0.7; }
+    .alliance-bar.red.tbd  { background: #a65858; }
     .alliance-bar.blue.tbd { background: #587ca6; }
 
     .rank {
         background: rgba(0,0,0,0.3);
         width: 20px;
         height: 20px;
+        min-width: 20px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -454,14 +483,15 @@
         overflow: hidden;
         text-overflow: ellipsis;
         flex-grow: 1;
-        padding-right: 15px; /* clear chevron tip */
+        padding-right: 15px;
+        font-size: 11px;
     }
 
     .match-info-bar {
         position: absolute;
         top: 50%;
         left: 0;
-        right: 10px; /* Don't cover visual tip */
+        right: 10px;
         height: 14px;
         background: black;
         color: white;
@@ -472,14 +502,12 @@
         justify-content: space-between;
         padding: 0 10px;
         font-size: 9px;
-        /* Thin bar */
         width: 60%;
-        margin-left: 15%; /* Centeredish */
+        margin-left: 15%;
         border-radius: 2px;
     }
 
-    /* CONNECTOR LINES */
-    /* Using ::before/after on .cell */
+    /* Connector stubs */
     .cell::before, .cell::after {
         content: '';
         position: absolute;
@@ -487,76 +515,17 @@
         z-index: -1;
     }
 
-    /* M1, M2 -> M7 */
-    /* M1 output: R down */
-    .m1::after { top: 50%; right: 0; width: 100%; height: 2px; transform: translateX(50%); } /* Line out? No grid gap is 0? */
-    /* We used 1fr columns. 1300px / 6 ~ 216px. Card width ~ 190px. Gap ~ 26px. */
-    
-    /* Let's define specific connectors based on relative positions */
-    
-    /* General Output Right Stub */
     .cell::after {
         right: -15px; top: 50%; width: 15px; height: 2px;
     }
 
-    /* M1: Down to M7 */
-    .m1::before {
-        right: -15px; top: 50%; width: 2px; height: 140%; /* reaches down */
-    }
-    
-    /* M2: Up to M7 */
-    .m2::before {
-         right: -15px; bottom: 50%; width: 2px; height: 140%;
-    }
-    
-    /* M7: Input stub handled by M1/M2 lines meeting? No, need input line. */
-    /* Or M7 just has a left stub */
-    .m7::before {
-        left: -15px; top: 50%; width: 15px; height: 2px;
-    }
+    .m1::before { right: -15px; top: 50%; width: 2px; height: 130%; }
+    .m2::before { right: -15px; bottom: 50%; width: 2px; height: 130%; }
+    .m7::before { left: -15px; top: 50%; width: 15px; height: 2px; }
 
-     /* M7 Output to M11 (Down) */
-     .m7::after { right: -15px; width: 15px; }
-    /* We need a separate element for vertical line if ::before used for input */
-    .m7 .match-card::after {
-         content: ''; position: absolute; right: -15px; top: 50%; width: 2px; height: 160%; background: black; z-index:-1;
-    }
-    
-    /* M8 Output to M11 (Up) */
-    .m8 .match-card::after {
-        content: ''; position: absolute; right: -15px; bottom: 50%; width: 2px; height: 160%; background: black; z-index:-1;
-    }
-
-    /* M11 Input */
-    .m11::before {
-        left: -15px; top: 50%; width: 15px; height: 2px;
-    }
-
-    /* Manual Connectivity Styling is tricky with just raw CSS classes. 
-       Ideally SVG lines, but CSS lines work if fixed height.
-       Since we use grid-row, we can estimate heights. */
-
-    /* Fix M1/M2 Connector */
-    .m1::before { height: 130%; } /* M1 row 2 -> M7 row 4. Diff 2 rows = 60px. */
-    .m2::before { height: 130%; bottom: 50%; top: auto; } /* M2 row 6 -> M7 row 4. Diff 2 rows. */
-
-    /* M3/M4 -> M8 */
-    /* M3 row 10 -> M8 row 12 */
     .m3::before { right: -15px; top: 50%; width: 2px; height: 130%; }
-    .m3::after { width: 15px; right: -15px; top: 50%; }
-
     .m4::before { right: -15px; bottom: 50%; width: 2px; height: 130%; }
-    .m4::after { width: 15px; right: -15px; top: 50%; }
-
     .m8::before { left: -15px; top: 50%; width: 15px; height: 2px; }
-
-    /* Loser Drops... */
-    /* M1 Loser -> M5 (Row 2 -> Row 18). Huge drop. */
-    /* M2 Loser -> M5. (Row 6 -> Row 18). */
-    /* This requires complex lines crossing. */
-    /* For now, just ensure the boxes render correctly as requested "Look Like This". 
-       Exact connector perfection might need SVG overaly. 
-       I will add basic input/output stubs to imply connection. */
 
     .cell::before { display: block; }
 
@@ -608,5 +577,4 @@
         transform: translateY(-1px);
         box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
     }
-
 </style>
