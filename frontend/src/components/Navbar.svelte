@@ -2,9 +2,7 @@
     import { goto } from "@mateothegreat/svelte5-router";
     import logo from "../images/frc190_Logo.png";
     import { onMount } from "svelte";
-
-    const TBA_API_KEY = "zhTqFG7csJoif1sNXt3aZngy0LB1X4LxMgTfXBvPscNG0P9FifZCa2uGJcUk2gKW";
-    const TBA_BASE_URL = "https://www.thebluealliance.com/api/v3";
+    import { fetchAlliancesAvailable } from "../utils/blueAllianceApi";
 
     let isMenuOpen = false;
     let alliancesAvailable = false;
@@ -20,24 +18,7 @@
 
     async function checkAlliances() {
         const eventCode = localStorage.getItem("eventCode");
-        if (!eventCode) {
-            alliancesAvailable = false;
-            return;
-        }
-        try {
-            const res = await fetch(`${TBA_BASE_URL}/event/${eventCode}/alliances`, {
-                headers: { "X-TBA-Auth-Key": TBA_API_KEY }
-            });
-            if (!res.ok) {
-                alliancesAvailable = false;
-                return;
-            }
-            const data = await res.json();
-            alliancesAvailable = Array.isArray(data) && data.length > 0 && data[0]?.picks?.length > 0;
-        } catch (e) {
-            console.error("Failed to check alliances:", e);
-            alliancesAvailable = false;
-        }
+        alliancesAvailable = await fetchAlliancesAvailable(eventCode);
     }
 
     function onStorageChange(e) {
@@ -132,7 +113,7 @@
                     <button class="madness-btn" on:click={() => navigate("/marchMadness")}>
                         <span class="madness-shine"></span>
                         <span class="madness-shine madness-shine-2"></span>
-                        🏆 Gompei Madness
+                        Gompei Madness
                     </button>
                 </div>
             {/if}
