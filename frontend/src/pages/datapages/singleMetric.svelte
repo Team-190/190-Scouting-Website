@@ -674,10 +674,16 @@
         }
         if (!isNumericMetric || isClimbStateMetric)
           return a.team.localeCompare(b.team);
+        if (inverted) {
+          const aVal = a.mean === null || a.mean === 0 ? Infinity : a.mean;
+          const bVal = b.mean === null || b.mean === 0 ? Infinity : b.mean;
+          return aVal - bVal;
+        }
+
         if (a.mean === null && b.mean !== null) return 1;
         if (b.mean === null && a.mean !== null) return -1;
         if (a.mean === null) return 0;
-        return inverted ? a.mean - b.mean : b.mean - a.mean;
+        return b.mean - a.mean;
       })
       .map((row, i, arr) => {
         if (
@@ -767,7 +773,7 @@
       availableTeams.map(async (team) => {
         const matches = teamData[team] ?? [];
         const row: any = { team, hasData: false };
-        const nonZero: number[] = [];
+        const efsValues: number[] = [];
 
         await Promise.all(
           matches.map(async (matchRow, i) => {
@@ -779,15 +785,17 @@
               data,
             );
             row[qLabels[i]] = efs;
-            if (efs !== null && efs > 0) {
-              nonZero.push(efs);
+            if (efs !== null) {
+              efsValues.push(efs);
               row.hasData = true;
             }
           }),
         );
 
-        row.mean = nonZero.length ? Number(mean(nonZero).toFixed(2)) : null;
-        row.median = nonZero.length ? Number(median(nonZero).toFixed(2)) : null;
+        row.mean = efsValues.length ? Number(mean(efsValues).toFixed(2)) : null;
+        row.median = efsValues.length
+          ? Number(median(efsValues).toFixed(2))
+          : null;
         return row;
       }),
     );
@@ -1163,9 +1171,6 @@
       cellClass: "cell-center",
       cellStyle: (params) => {
         const v = params.value;
-        if (v === 0) {
-          return statCellStyle("black", "white", "3px solid #C81B00");
-        }
         const bg =
           v === null || v === undefined
             ? "#4D4D4D"
@@ -1174,7 +1179,6 @@
       },
       valueFormatter: (params) => {
         if (!params.data?.hasData || params.value == null) return "";
-        if (params.value === 0) return "0";
         return Number(params.value).toFixed(2);
       },
     };
@@ -1191,9 +1195,6 @@
       cellClass: "cell-center",
       cellStyle: (params) => {
         const v = params.value;
-        if (v === 0) {
-          return statCellStyle("black", "white", "2px solid #555");
-        }
         const bg =
           v === null || v === undefined
             ? "#4D4D4D"
@@ -1202,7 +1203,6 @@
       },
       valueFormatter: (params) => {
         if (!params.data?.hasData || params.value == null) return "";
-        if (params.value === 0) return "0";
         return Number(params.value).toFixed(2);
       },
     };

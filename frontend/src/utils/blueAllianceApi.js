@@ -59,3 +59,44 @@ export async function fetchWinners(eventCode) {
         console.error('There was a problem fetching team data:', error);
     }
 }
+
+/**
+ * Fetches alliances for an event and returns whether they have been posted.
+ * @param {string} eventCode
+ * @returns {Promise<boolean>} true if alliances are posted with picks, false otherwise
+ */
+export async function fetchAlliancesAvailable(eventCode) {
+    if (!eventCode) return false;
+    try {
+        const response = await fetch(
+            `https://www.thebluealliance.com/api/v3/event/${eventCode}/alliances`,
+            { headers: { "X-TBA-Auth-Key": TBA_API_KEY } }
+        );
+        if (!response.ok) return false;
+        const data = await response.json();
+        return Array.isArray(data) && data.length > 0 && data[0]?.picks?.length > 0;
+    } catch (error) {
+        console.error("There was a problem fetching alliance data:", error);
+        return false;
+    }
+}
+
+/**
+ * Fetches the full alliance list for an event.
+ * @param {string} eventCode
+ * @returns {Promise<Array>} array of alliance objects from TBA, or empty array on failure
+ */
+export async function fetchAlliances(eventCode) {
+    if (!eventCode) return [];
+    try {
+        const response = await fetch(
+            `https://www.thebluealliance.com/api/v3/event/${eventCode}/alliances`,
+            { headers: { "X-TBA-Auth-Key": TBA_API_KEY } }
+        );
+        if (!response.ok) return [];
+        return await response.json();
+    } catch (error) {
+        console.error("There was a problem fetching alliance data:", error);
+        return [];
+    }
+}
