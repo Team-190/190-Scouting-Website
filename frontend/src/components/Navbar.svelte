@@ -72,6 +72,7 @@
             <button on:click={() => navigate("/teamView")}>Team View</button>
             <button on:click={() => navigate("/pitScouting")}>Pit Scouting</button>
             <button on:click={() => navigate("/gracePage")}>Grace Page</button>
+            <button on:click={() => navigate("/matchPreview")}>Match Preview</button>
 
             {#if alliancesAvailable}
                 <div class="madness-wrapper">
@@ -127,8 +128,6 @@
                     {/if}
                 </div>
             {/if}
-
-            <button on:click={() => navigate("/matchPreview")}>Match Preview</button>
         </div>
     </div>
 </nav>
