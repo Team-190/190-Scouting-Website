@@ -4,7 +4,7 @@
     createGrid,
     ModuleRegistry,
   } from "ag-grid-community";
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import "ag-grid-community/styles/ag-grid.css";
   import "ag-grid-community/styles/ag-theme-quartz.css";
   import * as barGraph from "../../pages/graphcode/bar.js";
@@ -23,6 +23,7 @@
   const TBA_BASE_URL = "https://www.thebluealliance.com/api/v3";
   const ROW_HEIGHT = 25;
   const HEADER_HEIGHT = 32;
+  const HIGHLIGHTED_TEAM_KEY = "singleMetric_highlightedTeam";
 
   const METRIC_DISPLAY_NAMES = new Map([
     ["TimeOfClimb", "Match Climb Time"],
@@ -125,6 +126,7 @@
 
   let loading = true;
   let error = "";
+  let highlightedTeam = localStorage.getItem(HIGHLIGHTED_TEAM_KEY) || null;
   let availableTeams = [];
   let teamData = {};
   let metrics = [];
@@ -706,12 +708,23 @@
       width: 100,
       headerClass: "header-center",
       cellClass: "cell-center",
-      cellStyle: {
-        background: "#C81B00",
-        color: "white",
-        fontWeight: "bold",
-        fontSize: "18px",
-        textAlign: "center",
+      cellStyle: (params) => {
+        const isHighlighted = params.value === highlightedTeam;
+        return {
+          background: isHighlighted ? "#FFD700" : "#C81B00",
+          color: isHighlighted ? "black" : "white",
+          fontWeight: "bold",
+          fontSize: "18px",
+          textAlign: "center",
+          cursor: "pointer",
+        };
+      },
+      onCellClicked: (params) => {
+        const team = params.value;
+        if (!team) return;
+        highlightedTeam = highlightedTeam === team ? null : team;
+        broadcastHighlightedTeam(highlightedTeam);
+        gridApi?.redrawRows();
       },
     };
   }
@@ -891,26 +904,34 @@
     };
   }
 
+  function broadcastHighlightedTeam(team) {
+    if (team) {
+      localStorage.setItem(HIGHLIGHTED_TEAM_KEY, team);
+    } else {
+      localStorage.removeItem(HIGHLIGHTED_TEAM_KEY);
+    }
+  }
+
   function applyGrid(columnDefs, data = rowData) {
-    const gridOptions = {
-      rowData: data,
-      columnDefs,
-      rowHeight: ROW_HEIGHT,
-      headerHeight: HEADER_HEIGHT,
-      defaultColDef: {
-        resizable: false,
-        sortable: false,
-        suppressMovable: true,
-        cellStyle: { fontSize: "18px" },
-      },
-      suppressColumnVirtualisation: true,
-      suppressHorizontalScroll: true,
-    };
     if (gridApi) {
       gridApi.setGridOption("columnDefs", columnDefs);
       gridApi.setGridOption("rowData", data);
     } else {
-      gridApi = createGrid(domNode, gridOptions);
+      gridApi = createGrid(domNode, {
+        rowData: data,
+        columnDefs,
+        rowHeight: ROW_HEIGHT,
+        headerHeight: HEADER_HEIGHT,
+        defaultColDef: {
+          resizable: false,
+          sortable: false,
+          suppressMovable: true,
+          cellStyle: { fontSize: "18px" },
+        },
+        suppressColumnVirtualisation: true,
+        suppressHorizontalScroll: true,
+        theme: /** @type {"legacy"} */ ("legacy"),
+      });
     }
   }
 
@@ -1276,9 +1297,19 @@
     buildGrid();
   }
 
+  // ─── Cross-tab sync ──────────────────────────────────────────────────────────
+
+  function handleStorageEvent(e) {
+    if (e.key !== HIGHLIGHTED_TEAM_KEY) return;
+    highlightedTeam = e.newValue || null;
+    gridApi?.redrawRows();
+  }
+
   // ─── Mount ────────────────────────────────────────────────────────────────────
 
   onMount(async () => {
+    window.addEventListener("storage", handleStorageEvent);
+
     try {
       const raw = await fetchAllMetricData();
       processTeamData(JSON.parse(raw));
@@ -1308,6 +1339,10 @@
       loading = false;
       console.error("Error loading data:", e);
     }
+  });
+
+  onDestroy(() => {
+    window.removeEventListener("storage", handleStorageEvent);
   });
 </script>
 
