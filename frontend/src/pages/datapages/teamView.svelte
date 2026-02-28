@@ -669,7 +669,7 @@
         allTeamsData.push(...aggregateMatches(td)),
       );
     }
-    
+
     const allRows = [...allTeamsData, ...matches];
 
     // Compute per-metric global stats
@@ -758,7 +758,7 @@
       });
 
       if (isNumericMetric && !isBooleanMetric && !isClimbStateMetric) {
-        const nonZero = values.filter((v) => v !== 0 && v !== -1);
+        const nonZero = values.filter((v) => v !== -1);
         row.mean = nonZero.length ? Number(mean(nonZero).toFixed(2)) : null;
         row.median = nonZero.length ? Number(median(nonZero).toFixed(2)) : null;
       } else {
@@ -901,7 +901,8 @@
       if (isBool || isClimb || !globalStats[metric]?.isNumeric)
         return normalizeValue(params.value);
       const num = isNumeric(params.value) ? Number(params.value) : 0;
-      return num === 0 ? "0" : num.toFixed(2);
+      if (params.value === 0) return "0";
+      return num === 0 ? "" : num.toFixed(2);
     };
 
     const statCellStyle = (border: string) => (params) => {
@@ -934,9 +935,9 @@
     };
 
     const statValueFormatter = (params) => {
-      if (params.value === null || params.value === undefined) return "";
+      if (params.value === 0) return "0";
       const num = Number(params.value);
-      return num === 0 ? "0" : num.toFixed(2);
+      return num === 0 ? "" : num.toFixed(2);
     };
 
     const columnDefs = [
