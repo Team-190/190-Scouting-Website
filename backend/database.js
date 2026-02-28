@@ -9,7 +9,6 @@ const config = {
     password: process.env.DB_PASSWORD,
     server: process.env.VITE_SERVER_IP,
     port: 49172,
-    database: '2026manualMatch',
     options: {
         encrypt: false,
         trustServerCertificate: true
