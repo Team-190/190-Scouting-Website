@@ -100,3 +100,30 @@ export async function fetchAlliances(eventCode) {
         return [];
     }
 }
+
+/**
+ * Returns true if at least one elimination match has been played IRL.
+ * Uses the TBA /event/{code}/matches endpoint and checks for sf/ef/f matches
+ * that have a winning alliance (i.e. actual_time is set and winning_alliance is non-empty).
+ * @param {string} eventCode
+ * @returns {Promise<boolean>}
+ */
+export async function fetchElimsHaveStarted(eventCode) {
+    if (!eventCode) return false;
+    try {
+        const response = await fetch(
+            `https://www.thebluealliance.com/api/v3/event/${eventCode}/matches`,
+            { headers: { "X-TBA-Auth-Key": TBA_API_KEY } }
+        );
+        if (!response.ok) return false;
+        const matches = await response.json();
+        return matches.some(m =>
+            (m.comp_level === "sf" || m.comp_level === "ef" || m.comp_level === "f") &&
+            m.winning_alliance !== "" &&
+            m.winning_alliance !== null
+        );
+    } catch (error) {
+        console.error("There was a problem checking elim matches:", error);
+        return false;
+    }
+}

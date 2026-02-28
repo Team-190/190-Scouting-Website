@@ -1,11 +1,12 @@
 <script>
     import { onMount } from "svelte";
-    import { fetchAlliances as fetchAlliancesFromAPI } from "../../utils/blueAllianceApi";
+    import { fetchAlliances as fetchAlliancesFromAPI, fetchElimsHaveStarted } from "../../utils/blueAllianceApi";
 
     let Name = "";
     let winners = [];
     let loadingAlliances = true;
     let eventCode = "";
+    let elimsStarted = false;
 
     let seeds = [
         { id: "A1", name: "Alliance 1", seed: 1 },
@@ -181,13 +182,30 @@
         Name = "";
     }
 
-    onMount(async () => {
+    async function checkElimsStarted() {
+        const code = localStorage.getItem("eventCode") || "";
+        if (!code) return;
+        elimsStarted = await fetchElimsHaveStarted(code);
+        // Also broadcast so Navbar can react
+        localStorage.setItem("elimsStarted", elimsStarted ? "1" : "0");
+        window.dispatchEvent(new StorageEvent("storage", {
+            key: "elimsStarted",
+            newValue: elimsStarted ? "1" : "0",
+            storageArea: localStorage,
+        }));
+    }
+
+    onMount(() => {
         eventCode = localStorage.getItem("eventCode") || "";
         if (eventCode) {
-            await fetchAlliances(eventCode);
+            fetchAlliances(eventCode).then(() => checkElimsStarted());
         } else {
             loadingAlliances = false;
+            checkElimsStarted();
         }
+        // Poll every 60s — elim matches happen fast once they start
+        const interval = setInterval(checkElimsStarted, 60000);
+        return () => clearInterval(interval);
     });
 </script>
 
@@ -234,6 +252,7 @@
     </div>
 {/snippet}
 
+{#if !elimsStarted}
 <div class="submissionSection">
     <label for="Name">Your Name:</label>
     <input
@@ -244,6 +263,7 @@
     />
     <button on:click={handleSubmit}>Submit Winners</button>
 </div>
+{/if}
 
 <div class="bracket-app">
     {#if loadingAlliances}

@@ -2,10 +2,11 @@
     import { goto } from "@mateothegreat/svelte5-router";
     import logo from "../images/frc190_Logo.png";
     import { onMount } from "svelte";
-    import { fetchAlliancesAvailable } from "../utils/blueAllianceApi";
+    import { fetchAlliancesAvailable, fetchElimsHaveStarted } from "../utils/blueAllianceApi";
 
     let isMenuOpen = false;
     let alliancesAvailable = false;
+    let elimsStarted = false;
 
     function toggleMenu() {
         isMenuOpen = !isMenuOpen;
@@ -19,11 +20,15 @@
     async function checkAlliances() {
         const eventCode = localStorage.getItem("eventCode");
         alliancesAvailable = await fetchAlliancesAvailable(eventCode);
+        elimsStarted = await fetchElimsHaveStarted(eventCode);
     }
 
     function onStorageChange(e) {
         if (e.key === "eventCode" && e.newValue) {
             checkAlliances();
+        }
+        if (e.key === "elimsStarted") {
+            elimsStarted = e.newValue === "1";
         }
     }
 
@@ -71,50 +76,56 @@
 
             {#if alliancesAvailable}
                 <div class="madness-wrapper">
-                    <!-- 5 expanding shockwave rings -->
-                    {#each Array(5) as _, i}
-                        <div class="shockwave" style="--ri: {i}"></div>
-                    {/each}
-
-                    <!-- Smoke puffs -->
-                    {#each Array(10) as _, i}
-                        <div class="smoke-puff" style="--si: {i}"></div>
-                    {/each}
-
-                    <!-- Confetti burst -->
-                    {#each Array(28) as _, i}
-                        <div class="confetti" style="--ci: {i}">
-                            {#if i % 6 === 0}★{:else if i % 6 === 1}●{:else if i % 6 === 2}■{:else if i % 6 === 3}♦{:else if i % 6 === 4}🏆{:else}⚡{/if}
-                        </div>
-                    {/each}
-
-                    <!-- Orbiting stars -->
-                    {#each Array(4) as _, i}
-                        <div class="orbit-ring" style="--oi: {i}">
-                            <div class="orbit-star">⭐</div>
-                        </div>
-                    {/each}
-
-                    <!-- Lightning bolts -->
-                    {#each Array(6) as _, i}
-                        <div class="lightning" style="--li: {i}">⚡</div>
-                    {/each}
-
-                    <!-- Sparkles (more of them) -->
-                    <div class="sparkle-container">
-                        {#each Array(12) as _, i}
-                            <div class="sparkle" style="--i: {i}">✦</div>
+                    {#if !elimsStarted}
+                        <!-- 5 expanding shockwave rings -->
+                        {#each Array(5) as _, i}
+                            <div class="shockwave" style="--ri: {i}"></div>
                         {/each}
-                    </div>
 
-                    <!-- Screen flash overlay -->
-                    <div class="flash-overlay"></div>
+                        <!-- Smoke puffs -->
+                        {#each Array(10) as _, i}
+                            <div class="smoke-puff" style="--si: {i}"></div>
+                        {/each}
 
-                    <button class="madness-btn" on:click={() => navigate("/marchMadness")}>
-                        <span class="madness-shine"></span>
-                        <span class="madness-shine madness-shine-2"></span>
-                        Gompei Madness
-                    </button>
+                        <!-- Confetti burst -->
+                        {#each Array(28) as _, i}
+                            <div class="confetti" style="--ci: {i}">
+                                {#if i % 6 === 0}★{:else if i % 6 === 1}●{:else if i % 6 === 2}■{:else if i % 6 === 3}♦{:else if i % 6 === 4}🏆{:else}⚡{/if}
+                            </div>
+                        {/each}
+
+                        <!-- Orbiting stars -->
+                        {#each Array(4) as _, i}
+                            <div class="orbit-ring" style="--oi: {i}">
+                                <div class="orbit-star">⭐</div>
+                            </div>
+                        {/each}
+
+                        <!-- Lightning bolts -->
+                        {#each Array(6) as _, i}
+                            <div class="lightning" style="--li: {i}">⚡</div>
+                        {/each}
+
+                        <!-- Sparkles -->
+                        <div class="sparkle-container">
+                            {#each Array(12) as _, i}
+                                <div class="sparkle" style="--i: {i}">✦</div>
+                            {/each}
+                        </div>
+
+                        <!-- Screen flash overlay -->
+                        <div class="flash-overlay"></div>
+
+                        <button class="madness-btn" on:click={() => navigate("/marchMadness")}>
+                            <span class="madness-shine"></span>
+                            <span class="madness-shine madness-shine-2"></span>
+                            Gompei Madness
+                        </button>
+                    {:else}
+                        <button on:click={() => navigate("/marchMadness")}>
+                            Gompei Madness
+                        </button>
+                    {/if}
                 </div>
             {/if}
         </div>
