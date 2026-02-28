@@ -41,6 +41,7 @@
     ["EndState", "Climb State"],
     ["LadderLocation", "Ladder Location"],
     ["Strategy", "Strategy"],
+    ["EstimatedPoints", "EFS (Estimated Fuel Scored)"],
   ]);
 
   const EXCLUDED_FIELDS = [
@@ -109,7 +110,6 @@
   let colorblindMode = localStorage.getItem("colorblindMode") || "normal";
   let gridHeight = 400;
   let gridInstance = null;
-  let eventCode = localStorage.getItem("eventCode") || "";
   let teamViewData = null;
   let allTeams = [];
   let selectedTeam: number | null = null;
@@ -119,6 +119,7 @@
   let charts = [];
   let chartTypes = ["bar", "line", "pie", "scatter", "radar"];
   let showDropdown = false;
+  let eventCode = localStorage.getItem("eventCode");
 
   fetchGracePage(eventCode)
     .then((res) => res.json())
@@ -403,6 +404,107 @@
       teamOPR = null;
     }
   }
+  async function fetchMatchAlliances(): Promise<Record<number, any>> {
+    if (!eventCode) {
+      return {};
+    }
+    try {
+      const res = await fetch(`${TBA_BASE_URL}/event/${eventCode}/matches`, {
+        headers: { "X-TBA-Auth-Key": TBA_API_KEY },
+      });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      const result: Record<number, any> = {};
+      data.forEach((match) => {
+        if (match.comp_level !== "qm") return;
+        const num = match.match_number;
+        result[num] = {
+          red: (match.alliances.red.team_keys ?? []).map((k) =>
+            k.replace("frc", ""),
+          ),
+          blue: (match.alliances.blue.team_keys ?? []).map((k) =>
+            k.replace("frc", ""),
+          ),
+          redScore: match.score_breakdown.red.hubScore.totalCount ?? null,
+          blueScore: match.score_breakdown.blue.hubScore.totalCount ?? null,
+        };
+      });
+      return result;
+    } catch (e) {
+      console.error("Error fetching match alliances:", e);
+      return {};
+    }
+  }
+
+  async function estimateTeamPoints(
+    teamStr,
+    matchNumber,
+  ): Promise<number | null> {
+    let alliances = await fetchMatchAlliances();
+    let alliance = alliances[matchNumber];
+
+    if (!teamViewData || !alliance) return null;
+
+    const teamStrClean = String(teamStr).replace(/\D/g, "");
+
+    const teamRows = teamViewData.filter((row) => {
+      if (row.RecordType === "Match_Event") {
+        return false;
+      }
+      const raw = String(row.Team || row.team || "").replace(/\D/g, "");
+      return raw === teamStrClean && Number(row.Match) === matchNumber;
+    });
+
+    if (!teamRows.length) {
+      return null;
+    }
+
+    const onRed = alliance.red
+      .map((t) => t.replace(/\D/g, ""))
+      .includes(teamStrClean);
+    const allianceScore = onRed ? alliance.redScore : alliance.blueScore;
+    const allianceTeams = (onRed ? alliance.red : alliance.blue).map((t) =>
+      t.replace(/\D/g, ""),
+    );
+
+    const teamShootingTime = teamRows.reduce((sum, row) => {
+      const v = row.FuelShootingTime;
+      return sum + (isNumeric(v) && Number(v) > 0 ? Number(v) : 0);
+    }, 0);
+
+    const allianceRows = teamViewData.filter((row) => {
+      if (row.RecordType === "Match_Event") return false;
+      const raw = String(row.Team || row.team || "").replace(/\D/g, "");
+      return Number(row.Match) === matchNumber && allianceTeams.includes(raw);
+    });
+
+    const totalAllianceShootingTime = allianceRows.reduce((sum, row) => {
+      const v = row.FuelShootingTime;
+      return sum + (isNumeric(v) && Number(v) > 0 ? Number(v) : 0);
+    }, 0);
+
+    const pointsPerSecond =
+      totalAllianceShootingTime > 0
+        ? allianceScore / totalAllianceShootingTime
+        : 0;
+
+    const estimatedPoints =
+      Math.round(teamShootingTime * pointsPerSecond * 10) / 10;
+
+    console.log(`[Match ${matchNumber}] Team ${teamStr}`, {
+      allianceColor: onRed ? "red" : "blue",
+      allianceTeams,
+      allianceScore,
+      teamShootingTime,
+      totalAllianceShootingTime,
+      pointsPerSecond: pointsPerSecond.toFixed(4),
+      estimatedPoints,
+    });
+
+    return estimatedPoints;
+  }
 
   function fetchGraceRating(team) {
     if (!garceData || garceData[team] === undefined)
@@ -511,7 +613,15 @@
       );
     });
 
-    if (data.length > 0) data = aggregateMatches(data);
+    if (data.length > 0) {
+      data = aggregateMatches(data);
+      for (const match of data) {
+        match.EstimatedPoints = await estimateTeamPoints(
+          teamNumber,
+          match.Match,
+        );
+      }
+    }
     cache[teamNumber] = data;
     buildGrid(data);
   }
@@ -560,7 +670,7 @@
       );
     }
 
-    const allRows = allTeamsData.length > 0 ? allTeamsData : matches;
+    const allRows = [...allTeamsData, ...matches];
 
     // Compute per-metric global stats
     const globalStats: Record<string, any> = {};
@@ -648,7 +758,7 @@
       });
 
       if (isNumericMetric && !isBooleanMetric && !isClimbStateMetric) {
-        const nonZero = values.filter((v) => v !== 0 && v !== -1);
+        const nonZero = values.filter((v) => v !== -1);
         row.mean = nonZero.length ? Number(mean(nonZero).toFixed(2)) : null;
         row.median = nonZero.length ? Number(median(nonZero).toFixed(2)) : null;
       } else {
@@ -791,7 +901,8 @@
       if (isBool || isClimb || !globalStats[metric]?.isNumeric)
         return normalizeValue(params.value);
       const num = isNumeric(params.value) ? Number(params.value) : 0;
-      return num === 0 ? "0" : num.toFixed(2);
+      if (params.value === 0) return "0";
+      return num === 0 ? "" : num.toFixed(2);
     };
 
     const statCellStyle = (border: string) => (params) => {
@@ -824,9 +935,9 @@
     };
 
     const statValueFormatter = (params) => {
-      if (params.value === null || params.value === undefined) return "";
+      if (params.value === 0) return "0";
       const num = Number(params.value);
-      return num === 0 ? "0" : num.toFixed(2);
+      return num === 0 ? "" : num.toFixed(2);
     };
 
     const columnDefs = [
@@ -1215,7 +1326,6 @@
         allTeams.find((t) => t.toString() === "190") ?? allTeams[0];
       loadTeamData(selectedTeam);
     }
-
     await fetchTeamOPR(String(selectedTeam));
   });
 </script>
