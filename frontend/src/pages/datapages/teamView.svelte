@@ -173,11 +173,16 @@
   function checkIsNumericMetric(metric, teamData) {
     if (!teamData?.length) return false;
     let hasData = false;
+    console.log("team Data ", teamData);
     for (const row of teamData) {
       const v = row[metric];
+      console.log("metric: ", metric, v);
       if (v !== undefined && v !== null && v !== "") {
         hasData = true;
-        if (!isNumeric(v)) return false;
+        if (!isNumeric(v)) {
+          console.log("Non-numeric value found:", v);
+          return false;
+        }
       }
     }
     return hasData;
@@ -628,9 +633,9 @@
 
   // ─── Event Handlers ───────────────────────────────────────────────────────────
 
-  function onTeamChange() {
+  async function onTeamChange() {
     const teamStr = String(selectedTeam);
-    loadTeamData(teamStr);
+    await loadTeamData(teamStr);
     fetchTeamOPR(teamStr);
     const graceEl = document.getElementById("grace-rating") as HTMLImageElement;
     if (graceEl) graceEl.src = fetchGraceRating(selectedTeam);
@@ -1106,7 +1111,7 @@
     });
   }
 
-  $: if (selectedTeam) {
+  $: if (selectedTeam && cache[selectedTeam]) {
     charts.forEach((c) => {
       if (c.instance) updateChartDataset(c);
     });
