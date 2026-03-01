@@ -685,7 +685,7 @@
   }
 
   /* ── Responsive ── */
-  @media (max-width: 1000px) {
+  @media (max-width: 1220px) {
     .brand-text {
       font-size: 1.2rem;
     }
