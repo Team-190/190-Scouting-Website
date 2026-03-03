@@ -411,7 +411,6 @@
     }
   }
 
-
   async function estimateTeamPoints(
     teamStr,
     matchNumber,
@@ -1032,6 +1031,34 @@
     }, 0);
   }
 
+  // ─── Match Events ─────────────────────────────────────────────────────────────
+
+  $: matchEvents = (() => {
+    if (!teamViewData || !selectedTeam) return [];
+    const teamStr = String(selectedTeam).replace(/\D/g, "");
+    return teamViewData
+      .filter((row) => {
+        if (row.RecordType !== "Match_Event") return false;
+        const raw = row.Team || row.team;
+        if (!raw) return false;
+        return String(raw).replace(/\D/g, "") === teamStr;
+      })
+      .map((row) => ({
+        match: row.Match,
+        event:
+          row.MatchEvent && row.MatchEvent !== "-" ? row.MatchEvent : "Unknown",
+        time: row.Time
+          ? new Date(row.Time).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            })
+          : "—",
+        phase: row.Mode && row.Mode !== "-" ? row.Mode : "—",
+      }))
+      .sort((a, b) => Number(a.match) - Number(b.match));
+  })();
+
   // ─── Charts ───────────────────────────────────────────────────────────────────
 
   $: metricOptions =
@@ -1351,6 +1378,34 @@
     style="height: {gridHeight}px;"
   ></div>
 
+  <div class="events-section">
+    <h2 class="section-title">Match Events</h2>
+    {#if matchEvents.length > 0}
+      <table class="events-table">
+        <thead>
+          <tr>
+            <th>Match</th>
+            <th>Event</th>
+            <th>Time</th>
+            <th>Phase</th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each matchEvents as ev}
+            <tr>
+              <td>{ev.match}</td>
+              <td>{ev.event}</td>
+              <td>{ev.time}</td>
+              <td>{ev.phase}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    {:else}
+      <p class="no-events">No match events recorded.</p>
+    {/if}
+  </div>
+
   <div class="graph-section">
     <h2 class="section-title">Charts & Graphs</h2>
 
@@ -1568,6 +1623,47 @@
     background: var(--frc-190-black);
     border-radius: 8px;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+  }
+
+  .events-section {
+    width: 80vw;
+    margin-top: 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .events-table {
+    width: 100%;
+    max-width: 800px;
+    border-collapse: collapse;
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+    border: 2px solid var(--frc-190-red);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  }
+  .events-table th {
+    background: var(--frc-190-red);
+    color: white;
+    font-size: 16px;
+    font-weight: 700;
+    padding: 10px 16px;
+    text-align: center;
+  }
+  .events-table td {
+    color: white;
+    font-size: 15px;
+    padding: 10px 16px;
+    text-align: center;
+    border-top: 1px solid #444;
+  }
+  .events-table tbody tr:hover {
+    background: rgba(200, 27, 0, 0.15);
+  }
+  .no-events {
+    color: #999;
+    font-size: 16px;
+    font-style: italic;
   }
 
   .graph-section {
