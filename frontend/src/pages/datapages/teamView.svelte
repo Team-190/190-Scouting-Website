@@ -43,12 +43,6 @@
     ["LadderLocation", "Ladder Location"],
     ["Strategy", "Strategy"],
     ["EstimatedPoints", "EFS (Estimated Fuel Scored)"],
-    ["FarBlueZoneTime", "Far Blue Zone Time"],
-    ["FarRedZoneTime", "Far Red Zone Time"],
-    ["NearBlueZoneTime", "Near Blue Zone Time"],
-    ["NearRedZoneTime", "Near Red Zone Time"],
-    ["NearNeutralZoneTime", "Near Neutral Zone Time"],
-    ["FarNeutralZoneTime", "Far Neutral Zone Time"],
   ]);
 
   const EXCLUDED_FIELDS = [
@@ -61,6 +55,13 @@
     "Time",
     "Mode",
     "DriveStation",
+    "FarBlueZoneTime",
+    "FarRedZoneTime",
+    "NearBlueZoneTime",
+    "NearRedZoneTime",
+    "NearNeutralZoneTime",
+    "FarNeutralZoneTime",
+    "NearFar",
   ];
 
   const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime"];

@@ -45,12 +45,6 @@
     ["Strategy", "Strategy"],
     ["OPR", "OPR (Offensive Power Rating)"],
     ["EFS", "EFS (Estimated Fuel Score)"],
-     ["FarBlueZoneTime", "Far Blue Zone Time"],
-    ["FarRedZoneTime", "Far Red Zone Time"],
-    ["NearBlueZoneTime", "Near Blue Zone Time"],
-    ["NearRedZoneTime", "Near Red Zone Time"],
-    ["NearNeutralZoneTime", "Near Neutral Zone Time"],
-    ["FarNeutralZoneTime", "Far Neutral Zone Time"],
   ]);
 
   const EFS_DISPLAY = "EFS (Estimated Fuel Score)";
@@ -70,6 +64,13 @@
     "Time",
     "Mode",
     "DriveStation",
+    "FarBlueZoneTime",
+    "FarRedZoneTime",
+    "NearBlueZoneTime",
+    "NearRedZoneTime",
+    "NearNeutralZoneTime",
+    "FarNeutralZoneTime",
+    "NearFar",
   ]);
 
   // Metrics excluded from radar chart
@@ -380,14 +381,14 @@
     return localStorage.getItem("data");
   }
 
-
   async function estimateTeamPoints(
     teamStr,
     matchNumber,
     preloadedAlliances?: Record<number, any>,
     preloadedData?: any[],
   ): Promise<number | null> {
-    const alliances = preloadedAlliances ?? (await fetchMatchAlliances(eventCode));
+    const alliances =
+      preloadedAlliances ?? (await fetchMatchAlliances(eventCode));
     const data = preloadedData ?? JSON.parse(await fetchAllMetricData());
     const alliance = alliances[matchNumber];
 
