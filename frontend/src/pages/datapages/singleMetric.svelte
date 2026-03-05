@@ -45,6 +45,12 @@
     ["Strategy", "Strategy"],
     ["OPR", "OPR (Offensive Power Rating)"],
     ["EFS", "EFS (Estimated Fuel Score)"],
+    ["FarBlueZoneTime", "Far Blue Zone Time"],
+    ["FarRedZoneTime", "Far Red Zone Time"],
+    ["NearBlueZoneTime", "Near Blue Zone Time"],
+    ["NearRedZoneTime", "Near Red Zone Time"],
+    ["NearNeutralZoneTime", "Near Neutral Zone Time"],
+    ["FarNeutralZoneTime", "Far Neutral Zone Time"],
   ]);
 
   const EFS_DISPLAY = "EFS (Estimated Fuel Score)";
@@ -1002,7 +1008,7 @@
       headerName: "Team",
       field: "team",
       pinned: "left",
-      width: 100,
+      width: 150,
       headerClass: "header-center",
       cellClass: "cell-center",
       cellStyle: (params) => {
@@ -1911,7 +1917,7 @@
   :global(.ag-header-cell) {
     background: var(--frc-190-red) !important;
     color: white !important;
-    font-size: 18px;
+    font-size: 16px;
     font-weight: bold;
   }
   :global(.ag-header-cell.header-center .ag-header-cell-label) {
