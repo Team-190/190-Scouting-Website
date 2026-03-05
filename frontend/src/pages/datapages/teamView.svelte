@@ -496,7 +496,6 @@
   }
 
   function getNearFarByMatch(teamNumber) {
-
     let rows = teamViewData.filter((row) => {
       if (row.RecordType === "Match_Event") return false;
       let raw = String(row.Team || row.team || "").replace(/\D/g, "");
@@ -535,51 +534,47 @@
     }
 
     for (let [matchNum, zones] of Object.entries(byMatch)) {
-      let near = zones.NearBlueZoneTime + zones.NearRedZoneTime + zones.NearNeutralZoneTime;
-      let far = zones.FarBlueZoneTime + zones.FarRedZoneTime + zones.FarNeutralZoneTime;
+      let near =
+        zones.NearBlueZoneTime +
+        zones.NearRedZoneTime +
+        zones.NearNeutralZoneTime;
+      let far =
+        zones.FarBlueZoneTime + zones.FarRedZoneTime + zones.FarNeutralZoneTime;
       let neutral = zones.NearNeutralZoneTime + zones.FarNeutralZoneTime;
       let red = zones.NearRedZoneTime + zones.FarRedZoneTime;
       let blue = zones.NearBlueZoneTime + zones.FarBlueZoneTime;
       let total = near + far;
       byMatch[matchNum].total = total;
       byMatch[matchNum].nearPercentage =
-        total > 0
-          ? Math.round(
-              ((near) /
-                total) *
-                1000,
-            ) / 10
-          : 0;
+        total > 0 ? Math.round((near / total) * 1000) / 10 : 0;
 
       byMatch[matchNum].farPercentage =
-        total > 0
-          ? Math.round(
-              ((far) /
-                total) *
-                1000,
-            ) / 10
-          : 0;
+        total > 0 ? Math.round((far / total) * 1000) / 10 : 0;
 
-      byMatch[matchNum].neutralPercentage =  total > 0
-          ? Math.round(
-              ((neutral) /
-                total) *
-                1000,
-            ) / 10
+      byMatch[matchNum].neutralPercentage =
+        total > 0 ? Math.round((neutral / total) * 1000) / 10 : 0;
+      byMatch[matchNum].redPercentage =
+        total > 0 ? Math.round((red / total) * 1000) / 10 : 0;
+      byMatch[matchNum].bluePercentage =
+        total > 0 ? Math.round((blue / total) * 1000) / 10 : 0;
+
+      byMatch[matchNum].nearBluePercentage =
+        total > 0
+          ? Math.round((zones.NearBlueZoneTime / total) * 1000) / 10
           : 0;
-      byMatch[matchNum].redPercentage =  total > 0
-          ? Math.round(
-              ((red) /
-                total) *
-                1000,
-            ) / 10
+      byMatch[matchNum].nearRedPercentage =
+        total > 0 ? Math.round((zones.NearRedZoneTime / total) * 1000) / 10 : 0;
+      byMatch[matchNum].farBluePercentage =
+        total > 0 ? Math.round((zones.FarBlueZoneTime / total) * 1000) / 10 : 0;
+      byMatch[matchNum].farRedPercentage =
+        total > 0 ? Math.round((zones.FarRedZoneTime / total) * 1000) / 10 : 0;
+      byMatch[matchNum].farNeutralPercentage =
+        total > 0
+          ? Math.round((zones.FarNeutralZoneTime / total) * 1000) / 10
           : 0;
-      byMatch[matchNum].bluePercentage =  total > 0
-          ? Math.round(
-              ((blue) /
-                total) *
-                1000,
-            ) / 10
+      byMatch[matchNum].nearNeutralPercentage =
+        total > 0
+          ? Math.round((zones.NearNeutralZoneTime / total) * 1000) / 10
           : 0;
     }
 
@@ -588,46 +583,53 @@
   }
 
   function makeNearFarRows(rowData, matches) {
-  let teamNumber = String(selectedTeam).replace(/\D/g, "");
-  let byMatch = getNearFarByMatch(teamNumber);
+    let teamNumber = String(selectedTeam).replace(/\D/g, "");
+    let byMatch = getNearFarByMatch(teamNumber);
 
-  if (!Object.keys(byMatch).length) return rowData;
+    if (!Object.keys(byMatch).length) return rowData;
 
-  let nearFarMetrics = [
-    { key: "nearPercentage",    label: "Near Zone %" },
-    { key: "farPercentage",     label: "Far Zone %" },
-    { key: "neutralPercentage", label: "Neutral Zone %" },
-    { key: "redPercentage",     label: "Red Zone %" },
-    { key: "bluePercentage",    label: "Blue Zone %" },
-  ];
+    let nearFarMetrics = [
+      { key: "nearPercentage", label: "Near Zone %" },
+      { key: "farPercentage", label: "Far Zone %" },
+      { key: "neutralPercentage", label: "Neutral Zone %" },
+      { key: "redPercentage", label: "Red Zone %" },
+      { key: "bluePercentage", label: "Blue Zone %" },
+      { key: "nearBluePercentage", label: "Near Blue Zone %" },
+      { key: "nearRedPercentage", label: "Near Red Zone %" },
+      { key: "farBluePercentage", label: "Far Blue Zone %" },
+      { key: "farRedPercentage", label: "Far Red Zone %" },
+      { key: "farNeutralPercentage", label: "Far Neutral Zone %" },
+      { key: "nearNeutralPercentage", label: "Near Neutral Zone %" },
+      
+    ];
 
-  const qLabels = matches.map((_, i) => `Q${i + 1}`);
+    const qLabels = matches.map((_, i) => `Q${i + 1}`);
 
-  const newRows = nearFarMetrics.map(({ key, label }) => {
-    let row = {
-      metric: label,
-      mean: null,
-      median: null,
-      percentile: null,
-    };
+    const newRows = nearFarMetrics.map(({ key, label }) => {
+      let row = {
+        metric: label,
+        mean: null,
+        median: null,
+        percentile: null,
+      };
 
-    const values: number[] = [];
+      const values: number[] = [];
 
-    qLabels.forEach((q, i) => {
-      const matchNum = matches[i]?.Match;
-      const v = byMatch[matchNum]?.[key] ?? null;
-      row[q] = v;
-      if (v !== null) values.push(v);
+      qLabels.forEach((q, i) => {
+        const matchNum = matches[i]?.Match;
+        const v = byMatch[matchNum]?.[key] ?? null;
+        row[q] = v;
+        if (v !== null) values.push(v);
+      });
+
+      row.mean = Number(mean(values).toFixed(2));
+      row.median = Number(median(values).toFixed(2));
+
+      return row;
     });
 
-    row.mean =  Number(mean(values).toFixed(2));
-    row.median = Number(median(values).toFixed(2));
-
-    return row;
-  });
-
-  return [...rowData, ...newRows];
-}
+    return [...rowData, ...newRows];
+  }
 
   function fetchGraceRating(team) {
     if (!garceData || garceData[team] === undefined)
