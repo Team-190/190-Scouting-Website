@@ -43,25 +43,34 @@
     ["LadderLocation", "Ladder Location"],
     ["Strategy", "Strategy"],
     ["EstimatedPoints", "EFS (Estimated Fuel Scored)"],
+    // ["BallsPerSecond", "BPS (Balls Per Second)"],
+    ["RecordType", "Record Type"],
+    ["Time", "Time"],
+    ["FarBlueZoneTime", "Far Blue Zone Time"],
+    ["FarRedZoneTime", "Far Red Zone Time"],
+    ["NearBlueZoneTime", "Near Blue Zone Time"],
+    ["NearRedZoneTime", "Near Red Zone Time"],
+    ["NearNeutralZoneTime", "Near Neutral Zone Time"],
+    ["FarNeutralZoneTime", "Far Neutral Zone Time"],
   ]);
 
   const EXCLUDED_FIELDS = [
     "Match",
     "Team",
     "Id",
-    "RecordType",
+    // "RecordType",
     "ScouterName",
     "ScouterError",
-    "Time",
+    // "Time",
     "Mode",
     "DriveStation",
-    "FarBlueZoneTime",
-    "FarRedZoneTime",
-    "NearBlueZoneTime",
-    "NearRedZoneTime",
-    "NearNeutralZoneTime",
-    "FarNeutralZoneTime",
-    "NearFar",
+    // "FarBlueZoneTime",
+    // "FarRedZoneTime",
+    // "NearBlueZoneTime",
+    // "NearRedZoneTime",
+    // "NearNeutralZoneTime",
+    // "FarNeutralZoneTime",
+    // "NearFar",
   ];
 
   const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime"];
@@ -486,6 +495,140 @@
     return estimatedPoints;
   }
 
+  function getNearFarByMatch(teamNumber) {
+
+    let rows = teamViewData.filter((row) => {
+      if (row.RecordType === "Match_Event") return false;
+      let raw = String(row.Team || row.team || "").replace(/\D/g, "");
+      return raw === teamNumber;
+    });
+
+    let byMatch = {};
+
+    for (let row of rows) {
+      let matchNum = Number(row.Match);
+      if (!matchNum) continue;
+
+      if (!byMatch[matchNum]) {
+        byMatch[matchNum] = {
+          NearBlueZoneTime: 0,
+          NearRedZoneTime: 0,
+          NearNeutralZoneTime: 0,
+          FarBlueZoneTime: 0,
+          FarRedZoneTime: 0,
+          FarNeutralZoneTime: 0,
+        };
+      }
+
+      for (let zone of Object.keys(byMatch[matchNum])) {
+        let v = row[zone];
+        if (
+          v !== undefined &&
+          v !== null &&
+          v !== "" &&
+          v !== -1 &&
+          isNumeric(v)
+        ) {
+          byMatch[matchNum][zone] += Number(v);
+        }
+      }
+    }
+
+    for (let [matchNum, zones] of Object.entries(byMatch)) {
+      let near = zones.NearBlueZoneTime + zones.NearRedZoneTime + zones.NearNeutralZoneTime;
+      let far = zones.FarBlueZoneTime + zones.FarRedZoneTime + zones.FarNeutralZoneTime;
+      let neutral = zones.NearNeutralZoneTime + zones.FarNeutralZoneTime;
+      let red = zones.NearRedZoneTime + zones.FarRedZoneTime;
+      let blue = zones.NearBlueZoneTime + zones.FarBlueZoneTime;
+      let total = near + far;
+      byMatch[matchNum].total = total;
+      byMatch[matchNum].nearPercentage =
+        total > 0
+          ? Math.round(
+              ((near) /
+                total) *
+                1000,
+            ) / 10
+          : 0;
+
+      byMatch[matchNum].farPercentage =
+        total > 0
+          ? Math.round(
+              ((far) /
+                total) *
+                1000,
+            ) / 10
+          : 0;
+
+      byMatch[matchNum].neutralPercentage =  total > 0
+          ? Math.round(
+              ((neutral) /
+                total) *
+                1000,
+            ) / 10
+          : 0;
+      byMatch[matchNum].redPercentage =  total > 0
+          ? Math.round(
+              ((red) /
+                total) *
+                1000,
+            ) / 10
+          : 0;
+      byMatch[matchNum].bluePercentage =  total > 0
+          ? Math.round(
+              ((blue) /
+                total) *
+                1000,
+            ) / 10
+          : 0;
+    }
+
+    console.log(`[Team ${teamNumber}] Near/Far by Match`, byMatch);
+    return byMatch;
+  }
+
+  function makeNearFarRows(rowData, matches) {
+  let teamNumber = String(selectedTeam).replace(/\D/g, "");
+  let byMatch = getNearFarByMatch(teamNumber);
+
+  if (!Object.keys(byMatch).length) return rowData;
+
+  let nearFarMetrics = [
+    { key: "nearPercentage",    label: "Near Zone %" },
+    { key: "farPercentage",     label: "Far Zone %" },
+    { key: "neutralPercentage", label: "Neutral Zone %" },
+    { key: "redPercentage",     label: "Red Zone %" },
+    { key: "bluePercentage",    label: "Blue Zone %" },
+  ];
+
+  const qLabels = matches.map((_, i) => `Q${i + 1}`);
+
+  const newRows = nearFarMetrics.map(({ key, label }) => {
+    let row = {
+      metric: label,
+      mean: null,
+      median: null,
+      percentile: null,
+    };
+
+    const values: number[] = [];
+
+    qLabels.forEach((q, i) => {
+      const matchNum = matches[i]?.Match;
+      const v = byMatch[matchNum]?.[key] ?? null;
+      row[q] = v;
+      if (v !== null) values.push(v);
+    });
+
+    row.mean =  Number(mean(values).toFixed(2));
+    row.median = Number(median(values).toFixed(2));
+
+    return row;
+  });
+
+  return [...rowData, ...newRows];
+}
+
   function fetchGraceRating(team) {
     if (!garceData || garceData[team] === undefined)
       return rating[rating.length - 1];
@@ -717,7 +860,7 @@
     });
 
     // Build row data (one row per metric)
-    const rowData = displayMetrics.map((metric) => {
+    let rowData = displayMetrics.map((metric) => {
       const isBooleanMetric = BOOLEAN_METRICS.includes(metric);
       const isClimbStateMetric = metric === CLIMBSTATE_METRIC;
       const isNumericMetric = globalStats[metric]?.isNumeric ?? false;
@@ -790,6 +933,8 @@
                   ? 20
                   : 0;
       }
+
+      makeNearFarRows(rowData, matches);
     });
 
     // ── Column Definitions ──
@@ -993,6 +1138,7 @@
       },
     ];
 
+    rowData = makeNearFarRows(rowData, matches);
     gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT;
 
     if (gridInstance) gridInstance.destroy();
@@ -1335,6 +1481,7 @@
       loadTeamData(selectedTeam);
     }
     await fetchTeamOPR(String(selectedTeam));
+    getNearFarByMatch(String(selectedTeam));
   });
 </script>
 
