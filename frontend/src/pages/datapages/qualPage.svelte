@@ -236,17 +236,11 @@
       ...teleopAnswers,
     };
 
-    const response = await fetch("http://localhost:8000/qualPage", {
-      method: 'POST', // Specify the method
-      headers: {
-        'Content-Type': 'application/json' // Inform the server the body format
-      },
-      body: JSON.stringify(record) // Convert the JavaScript object to a JSON string
-    });
-
     const existing = JSON.parse(localStorage.getItem("scoutingData") || "[]");
     existing.push(record);
     localStorage.setItem("scoutingData", JSON.stringify(existing));
+
+    
 
     phase = "done";
   }

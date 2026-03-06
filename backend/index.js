@@ -251,6 +251,29 @@ app.post("/postPitScouting", async (req, res) => {
 
         database.writeJSONFile(file, fileData);
 
+        res.sendStatus(200);
+    }
+});
+
+app.post("/postQualitativeScouting", async (req, res) => {
+    let event = req.body.event;
+    let rating = req.body.rating;
+    let team = req.body.team;
+    let match = req.body.match;
+    let file = "qualitativeScoutingData";
+    if (rating == null || team == null || event == null || match == nul) {
+        console.log("One or more fields could not be retrieved");
+        console.log(`${rating} ${team} ${event}`);
+        res.sendStatus(400);
+    }
+    else {
+        console.log(formData)
+        let fileData = await database.readJSONFile(file);
+        fileData[event] ||= {};
+        fileData[event][team] ||= {};
+        fileData[event][team][match] = formData;
+
+        database.writeJSONFile(file, fileData);
 
         res.sendStatus(200);
     }
@@ -265,7 +288,7 @@ app.post("/postGompeiMadnessBracket", async (req, res) => {
     }
 });
 
-app.post("/qualPage", async (req, res) => {
+app.post("/postQualitativePage", async (req, res) => {
     console.log(req.body);
     return res.sendStatus(200);
 })

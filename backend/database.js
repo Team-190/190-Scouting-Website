@@ -107,12 +107,6 @@ async function getAllData(eventCode) {
                     continue;
                 }
                 
-
-
-
-
-
-                
                 // Exclude AutoClimb and StartingLocation from sums as they are taken from EndAuto specifically
                 if (['AutoClimb', 'StartingLocation'].includes(metric)) continue;
 
@@ -125,7 +119,6 @@ async function getAllData(eventCode) {
                 }
             }
         }
-
 
         // for each team match in the data
         const finalData = Object.keys(grouped).map(key => {

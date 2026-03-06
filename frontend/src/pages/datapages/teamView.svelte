@@ -13,7 +13,7 @@
   import * as pieGraph from "../../pages/graphcode/pie.js";
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
-  import { fetchGracePage, fetchPitScouting } from "../../utils/api";
+  import { fetchGracePage, fetchPitScoutingImage } from "../../utils/api";
   import {
     fetchMatchAlliances,
     fetchMatchScores,
@@ -771,6 +771,7 @@
     await loadTeamData(teamStr);
     fetchTeamOPR(teamStr);
     populateMatchDropdown(selectedTeam);
+    teamQualData = getQualDataForTeam(selectedTeam);
     const graceEl = document.getElementById("grace-rating") as HTMLImageElement;
     if (graceEl) graceEl.src = fetchGraceRating(selectedTeam);
     fetchRobotPicture(selectedTeam);
@@ -848,7 +849,6 @@
       )
       .sort((a, b) => a.Match - b.Match);
   }
-
   // ─── Grid Building ────────────────────────────────────────────────────────────
 
   function buildGrid(matches) {
@@ -1594,10 +1594,9 @@
   onMount(async () => {
     const stored = localStorage.getItem("data");
     teamViewData = stored ? JSON.parse(stored) : [];
-    const storedQual = localStorage.getItem("scoutingData");
-    const qualData = storedQual ? JSON.parse(storedQual) : [];
     teamQualData = getQualDataForTeam(selectedTeam);
 
+    console.log(teamQualData);
     allTeams = await loadTeamNumbers();
 
     if (allTeams.length > 0) {

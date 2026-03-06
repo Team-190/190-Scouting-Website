@@ -38,6 +38,12 @@ export function fetchPitScoutingImage(eventCode, team) {
     return data;
 }
 
+
+////////////// POST Methods \\\\\\\\\\\\\\
+////////////// POST Methods \\\\\\\\\\\\\\
+////////////// POST Methods \\\\\\\\\\\\\\
+
+
 export async function postEventCode(eventCode) {
     const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/postEventCode`, {
         method: 'POST',
@@ -82,6 +88,19 @@ export async function postGracePage(event, team, rating) {
 export async function postPitScouting(event, team, formData) {
 
     const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/postPitScouting`, {
+        method: 'POST',
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({event, team, formData})
+    });
+    
+    return response;
+}
+
+export async function postQualitativeScouting(event, team, formData) {
+
+    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/postQualitativeScouting`, {
         method: 'POST',
         headers: {
             "Content-Type": "application/json"
