@@ -12,7 +12,6 @@
   import * as pieGraph from "../../pages/graphcode/pie.js";
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
-  import { fetchGracePage } from "../../utils/api";
   import { fetchMatchAlliances } from "../../utils/blueAllianceApi";
   import { v4 as uuidv4 } from "uuid";
   import { fetchGracePage, fetchPitScouting } from "../../utils/api";
