@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import {
     createGrid,
     ModuleRegistry,
@@ -12,7 +12,6 @@
   import * as pieGraph from "../../pages/graphcode/pie.js";
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
-  import { fetchGracePage } from "../../utils/api";
   import { fetchMatchAlliances } from "../../utils/blueAllianceApi";
   import { v4 as uuidv4 } from "uuid";
   import { fetchGracePage, fetchPitScouting } from "../../utils/api";
@@ -603,7 +602,6 @@
       { key: "farRedPercentage", label: "Far Red Zone %" },
       { key: "farNeutralPercentage", label: "Far Neutral Zone %" },
       { key: "nearNeutralPercentage", label: "Near Neutral Zone %" },
-      
     ];
 
     const qLabels = matches.map((_, i) => `Q${i + 1}`);
@@ -770,15 +768,56 @@
 
   // ─── Event Handlers ───────────────────────────────────────────────────────────
 
-  function onTeamChange() {
-  const teamStr = String(selectedTeam);
-  loadTeamData(teamStr);
-  fetchTeamOPR(teamStr);
-  fetchRobotPicture(selectedTeam);
-  teamQualData = getQualDataForTeam(selectedTeam);
-  const graceEl = document.getElementById("grace-rating") as HTMLImageElement;
-  if (graceEl) graceEl.src = fetchGraceRating(selectedTeam);
-}
+  async function onTeamChange() {
+    const teamStr = String(selectedTeam);
+    await loadTeamData(teamStr);
+    fetchTeamOPR(teamStr);
+    populateMatchDropdown(selectedTeam);
+    const graceEl = document.getElementById("grace-rating") as HTMLImageElement;
+    if (graceEl) graceEl.src = fetchGraceRating(selectedTeam);
+  }
+  function populateMatchDropdown(teamNumber) {
+    const dropdown = document.querySelector(
+      ".match-dropdown",
+    ) as HTMLSelectElement;
+    if (!dropdown || !cache[teamNumber]) return;
+    dropdown.innerHTML = "";
+    let matches = cache[selectedTeam].map((m) => m.Match);
+    matches.forEach((match) => {
+      let option = document.createElement("option");
+      option.value = match;
+      option.textContent = `${match}`;
+      dropdown.appendChild(option);
+    });
+    onMatchChange();
+  }
+
+  function setZoneValue(zoneName: string, value: number | null) {
+    const el = document.querySelector(`[data-zone="${zoneName}"]`) as HTMLElement;
+    if (!el) return;
+    el.textContent = value != null ? String(value) : "—";
+    const cell = el.closest(".zone-cell") as HTMLElement;
+    if (cell) {
+      const intensity = value != null ? Math.min(value / 50, 1) : 0;
+      cell.style.setProperty("--zone-intensity", String(intensity));
+    }
+  }
+
+  function onMatchChange() {
+    const teamStr = String(selectedTeam);
+    const dropdown = document.querySelector(".match-dropdown") as HTMLSelectElement;
+    if (!dropdown) return;
+    const match = dropdown.value;
+    const nearFarData = getNearFarByMatch(teamStr);
+    const d = nearFarData[Number(match)] ?? {};
+    setZoneValue("nearBluePercentage", d.nearBluePercentage ?? null);
+    setZoneValue("nearNeutralPercentage", d.nearNeutralPercentage ?? null);
+    setZoneValue("nearRedPercentage", d.nearRedPercentage ?? null);
+    setZoneValue("farBluePercentage", d.farBluePercentage ?? null);
+    setZoneValue("farNeutralPercentage", d.farNeutralPercentage ?? null);
+    setZoneValue("farRedPercentage", d.farRedPercentage ?? null);
+    console.log("Selected Match:", match, "Near/Far Data:", d);
+  }
   function onColorblindChange(e: Event) {
     colorblindMode = (e.target as HTMLSelectElement).value;
     localStorage.setItem("colorblindMode", colorblindMode);
@@ -1175,6 +1214,7 @@
       columnDefs,
       rowHeight: ROW_HEIGHT,
       headerHeight: HEADER_HEIGHT,
+      domLayout: "autoHeight",
       defaultColDef: {
         resizable: false,
         sortable: false,
@@ -1513,7 +1553,9 @@
     }
 
     await fetchTeamOPR(String(selectedTeam));
-    await fetchRobotPicture(selectedTeam);
+    await tick();
+    populateMatchDropdown(selectedTeam);
+    onMatchChange();
   });
 </script>
 
@@ -1573,7 +1615,6 @@
   <div
     class="grid-container ag-theme-quartz"
     bind:this={domNode}
-    style="height: {gridHeight}px;"
   ></div>
 
   {#if teamQualData.length > 0}
@@ -1604,6 +1645,67 @@
       </div>
     </div>
   {/if}
+
+  <div class="map-section">
+    <h2 class="section-title">Map</h2>
+
+    <div class="map-controls">
+      <label for="match-dropdown">Match:</label>
+      <select name="match-dropdown" class="match-dropdown" on:change={onMatchChange}></select>
+    </div>
+
+    <div class="map-wrapper">
+      <div class="map-container">
+        <img
+          class="field-img"
+          src={new URL("../../images/FieldImage.png", import.meta.url).href}
+          alt="FRC Field"
+        />
+        <div class="zone-grid">
+          <div class="row-label far-label">FAR</div>
+          <div class="row-label near-label">NEAR</div>
+
+          <div class="zone-cell far-red-zone">
+            <span class="zone-name">Red</span>
+            <span class="zone-value" data-zone="farRedPercentage">—</span>
+            <span class="zone-unit">%</span>
+          </div>
+          <div class="zone-cell far-neutral-zone">
+            <span class="zone-name">Neutral</span>
+            <span class="zone-value" data-zone="farNeutralPercentage">—</span>
+            <span class="zone-unit">%</span>
+          </div>
+          <div class="zone-cell far-blue-zone">
+            <span class="zone-name">Blue</span>
+            <span class="zone-value" data-zone="farBluePercentage">—</span>
+            <span class="zone-unit">%</span>
+          </div>
+
+          <div class="zone-cell near-red-zone">
+            <span class="zone-name">Red</span>
+            <span class="zone-value" data-zone="nearRedPercentage">—</span>
+            <span class="zone-unit">%</span>
+          </div>
+          <div class="zone-cell near-neutral-zone">
+            <span class="zone-name">Neutral</span>
+            <span class="zone-value" data-zone="nearNeutralPercentage">—</span>
+            <span class="zone-unit">%</span>
+          </div>
+          <div class="zone-cell near-blue-zone">
+            <span class="zone-name">Blue</span>
+            <span class="zone-value" data-zone="nearBluePercentage">—</span>
+            <span class="zone-unit">%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="map-legend">
+        <div class="legend-item"><span class="legend-swatch red-swatch"></span> Red Alliance Zone</div>
+        <div class="legend-item"><span class="legend-swatch neutral-swatch"></span> Neutral Zone</div>
+        <div class="legend-item"><span class="legend-swatch blue-swatch"></span> Blue Alliance Zone</div>
+      </div>
+    </div>
+  </div>
 
   <div class="graph-section">
     <h2 class="section-title">Charts & Graphs</h2>
@@ -1666,6 +1768,152 @@
     --wpi-gray: #a9b0b7;
     --frc-190-black: #4d4d4d;
   }
+
+  /* ── Map Section ── */
+  .map-section {
+    width: 80vw;
+    margin-top: 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .map-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .map-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+  }
+  .map-container {
+    position: relative;
+    width: 100%;
+    max-width: 860px;
+    aspect-ratio: 2 / 1;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 3px solid var(--frc-190-red);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+  }
+  .field-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: brightness(0.45) saturate(0.7);
+  }
+  .zone-grid {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-columns: 52px 1fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 4px;
+    padding: 8px;
+  }
+  .row-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    color: rgba(255,255,255,0.85);
+    text-transform: uppercase;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+  }
+  .far-label  { grid-row: 1; grid-column: 1; }
+  .near-label { grid-row: 2; grid-column: 1; }
+  .zone-cell {
+    --zone-intensity: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    padding: 8px 4px 6px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .zone-cell:hover {
+    transform: scale(1.03);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    z-index: 2;
+  }
+  .far-red-zone, .near-red-zone {
+    background: rgba(200, 27, 0, calc(0.25 + var(--zone-intensity) * 0.45));
+    border: 1.5px solid rgba(255, 100, 80, 0.5);
+  }
+  .far-neutral-zone, .near-neutral-zone {
+    background: rgba(100, 100, 100, calc(0.25 + var(--zone-intensity) * 0.45));
+    border: 1.5px solid rgba(180, 180, 180, 0.4);
+  }
+  .far-blue-zone, .near-blue-zone {
+    background: rgba(30, 100, 220, calc(0.25 + var(--zone-intensity) * 0.45));
+    border: 1.5px solid rgba(100, 160, 255, 0.5);
+  }
+  .far-red-zone     { grid-row: 1; grid-column: 2; }
+  .far-neutral-zone { grid-row: 1; grid-column: 3; }
+  .far-blue-zone    { grid-row: 1; grid-column: 4; }
+  .near-red-zone    { grid-row: 2; grid-column: 2; }
+  .near-neutral-zone{ grid-row: 2; grid-column: 3; }
+  .near-blue-zone   { grid-row: 2; grid-column: 4; }
+  .zone-name {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.75);
+    text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+    margin-bottom: 2px;
+  }
+  .zone-value {
+    font-size: 1.6rem;
+    font-weight: 900;
+    color: #ffffff;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.9);
+    line-height: 1;
+  }
+  .zone-unit {
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.6);
+    font-weight: 600;
+    margin-top: 1px;
+  }
+  .map-legend {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: rgba(255,255,255,0.85);
+    font-size: 0.82rem;
+    font-weight: 600;
+  }
+  .legend-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    display: inline-block;
+  }
+  .red-swatch     { background: rgba(200, 27, 0, 0.8); border: 1px solid rgba(255,100,80,0.6); }
+  .neutral-swatch { background: rgba(120, 120, 120, 0.8); border: 1px solid rgba(200,200,200,0.4); }
+  .blue-swatch    { background: rgba(30, 100, 220, 0.8); border: 1px solid rgba(100,160,255,0.6); }
 
   :global(html),
   :global(body) {

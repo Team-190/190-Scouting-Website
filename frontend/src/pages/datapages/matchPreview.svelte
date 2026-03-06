@@ -40,6 +40,13 @@
     ["EndState", "Climb State"],
     ["LadderLocation", "Ladder Location"],
     ["Strategy", "Strategy"],
+     ["RecordType", "Record Type"],
+    ["FarBlueZoneTime", "Far Blue Zone Time"],
+    ["FarRedZoneTime", "Far Red Zone Time"],
+    ["NearBlueZoneTime", "Near Blue Zone Time"],
+    ["NearRedZoneTime", "Near Red Zone Time"],
+    ["NearNeutralZoneTime", "Near Neutral Zone Time"],
+    ["FarNeutralZoneTime", "Far Neutral Zone Time"],
   ]);
 
   const EXCLUDED_FIELDS = new Set([
