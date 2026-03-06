@@ -273,110 +273,74 @@
     <p class="subtitle">FRC Team 190 — Qualitative Scouting Data</p>
   </div>
 
-  <!-- Phase indicator -->
-  <div class="phase-indicator">
-    <div class="phase-step active">
-      <div class="phase-dot done-dot">✓</div>
-      <span>Setup</span>
-    </div>
-    <div class="phase-line {phase === 'teleop' || phase === 'done' ? 'filled' : ''}"></div>
-    <div class="phase-step {phase === 'auto' ? 'current' : 'active'}">
-      <div class="phase-dot {phase === 'auto' ? 'pulse-dot' : ''}">A</div>
-      <span>Autonomous</span>
-    </div>
-    <div class="phase-line {phase === 'teleop' || phase === 'done' ? 'filled' : ''}"></div>
-    <div class="phase-step {phase === 'teleop' ? 'current' : phase === 'done' ? 'active' : 'inactive'}">
-      <div class="phase-dot {phase === 'teleop' ? 'pulse-dot' : ''}">T</div>
-      <span>Teleop</span>
-    </div>
-    <div class="phase-line {phase === 'done' ? 'filled' : ''}"></div>
-    <div class="phase-step {phase === 'done' ? 'current' : 'inactive'}">
-      <div class="phase-dot {phase === 'done' ? 'pulse-dot' : ''}">✓</div>
-      <span>Done</span>
-    </div>
-  </div>
-
   <!-- ── AUTO ───────────────────────────────────────────────────────────────── -->
   {#if phase === "auto"}
-    <div class="card">
-      <h2 class="card-title">
-        <span class="title-badge auto-badge">AUTO</span>
-        Match Setup &amp; Autonomous Path
-      </h2>
+    <div class="auto-layout">
+      <div class="card">
+        <h2 class="card-title">
+          <span class="title-badge auto-badge">AUTO</span>
+          Match Setup &amp; Autonomous Path
+        </h2>
 
-      <div class="setup-grid">
-        <div class="field-group">
-          <label for="scouter-name">Scouter Name</label>
-          <input id="scouter-name" type="text" bind:value={scouterName} placeholder="Your name…" class="text-input" />
-        </div>
-        <div class="field-group">
-          <label for="team-number">Team Number</label>
-          <input id="team-number" type="number" bind:value={teamNumber} placeholder="e.g. 190" class="text-input" />
-        </div>
-        <div class="field-group">
-          <label for="match-select">Match Number</label>
-          <select id="match-select" bind:value={matchNumber} class="styled-select">
-            {#each MATCH_NUMBERS as num}
-              <option value={num}>Match {num}</option>
-            {/each}
-          </select>
-        </div>
-        <div class="field-group">
-          <label for="start-select">Starting Position</label>
-          <select id="start-select" bind:value={startSpot} class="styled-select">
-            {#each START_SPOTS as spot}
-              <option value={spot}>{spot}</option>
-            {/each}
-          </select>
-        </div>
-        <div class="field-group">
-          <label>Alliance</label>
-          <div class="alliance-toggle">
-            <button class="alliance-btn {alliance === 'Red'  ? 'active-red'  : ''}" on:click={() => (alliance = 'Red')}>🔴 Red</button>
-            <button class="alliance-btn {alliance === 'Blue' ? 'active-blue' : ''}" on:click={() => (alliance = 'Blue')}>🔵 Blue</button>
+        <div class="setup-grid">
+          <div class="field-group">
+            <label for="scouter-name">Scouter Name</label>
+            <input id="scouter-name" type="text" bind:value={scouterName} placeholder="Your name…" class="text-input" />
           </div>
-        </div>
-      </div>
-
-      <div class="canvas-section">
-        <div class="canvas-header">
-          <h3>Draw Robot Autonomous Path</h3>
-          <p class="canvas-hint">Click and drag to draw. The shaded zone on the left is your starting area.</p>
-          <div class="canvas-tools">
-            <button class="tool-btn {tool === 'draw'  ? 'tool-active' : ''}" on:click={() => (tool = 'draw')}>✏️ Draw</button>
-            <button class="tool-btn {tool === 'erase' ? 'tool-active' : ''}" on:click={() => (tool = 'erase')}>🧹 Erase</button>
-            <button class="tool-btn clear-btn" on:click={clearCanvas}>🗑 Clear All</button>
+          <div class="field-group">
+            <label for="team-number">Team Number</label>
+            <input id="team-number" type="number" bind:value={teamNumber} placeholder="e.g. 190" class="text-input" />
+          </div>
+          <div class="field-group">
+            <label for="match-select">Match Number</label>
+            <select id="match-select" bind:value={matchNumber} class="styled-select">
+              {#each MATCH_NUMBERS as num}
+                <option value={num}>Match {num}</option>
+              {/each}
+            </select>
           </div>
         </div>
 
-        <div class="canvas-wrapper" style="--alliance-color: {allianceColor}">
-          <canvas
-            use:initCanvas
-            width={700}
-            height={350}
-            class="field-canvas"
-            on:mousedown={onPointerDown}
-            on:mousemove={onPointerMove}
-            on:mouseup={onPointerUp}
-            on:touchstart={onPointerDown}
-            on:touchmove={onPointerMove}
-            on:touchend={onPointerUp}
-          ></canvas>
-        </div>
+        <div class="canvas-section">
+          <div class="canvas-header">
+            <h3>Draw Robot Autonomous Path</h3>
+            <p class="canvas-hint">Click and drag to draw. The shaded zone on the left is your starting area.</p>
+            <div class="canvas-tools">
+              <button class="tool-btn {tool === 'draw'  ? 'tool-active' : ''}" on:click={() => (tool = 'draw')}>✏️ Draw</button>
+              <button class="tool-btn {tool === 'erase' ? 'tool-active' : ''}" on:click={() => (tool = 'erase')}>🧹 Erase</button>
+              <button class="tool-btn clear-btn" on:click={clearCanvas}>🗑 Clear All</button>
+            </div>
+          </div>
 
-        <p class="path-count">
-          {drawnPaths.length} stroke{drawnPaths.length !== 1 ? "s" : ""} drawn
-          {#if drawnPaths.length > 0}
-            <button class="undo-btn" on:click={undoLast}>↩ Undo</button>
-          {/if}
-        </p>
+          <div class="canvas-wrapper" style="--alliance-color: {allianceColor}">
+            <canvas
+              use:initCanvas
+              width={700}
+              height={350}
+              class="field-canvas"
+              on:mousedown={onPointerDown}
+              on:mousemove={onPointerMove}
+              on:mouseup={onPointerUp}
+              on:touchstart={onPointerDown}
+              on:touchmove={onPointerMove}
+              on:touchend={onPointerUp}
+            ></canvas>
+          </div>
+
+          <p class="path-count">
+            {drawnPaths.length} stroke{drawnPaths.length !== 1 ? "s" : ""} drawn
+            {#if drawnPaths.length > 0}
+              <button class="undo-btn" on:click={undoLast}>↩ Undo</button>
+            {/if}
+          </p>
+        </div>
       </div>
 
-      <button class="phase-btn teleop-btn" on:click={proceedToTeleop}>
-        <span>Proceed to Teleoperated Phase</span>
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <button class="phase-btn teleop-btn side-teleop-btn" on:click={proceedToTeleop}>
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline>
         </svg>
+        <span>Proceed to Teleop</span>
       </button>
     </div>
 
@@ -488,13 +452,23 @@
   .phase-line { width: 36px; height: 2px; background: #444; margin-bottom: 16px; transition: background 0.3s; }
   .phase-line.filled { background: var(--frc-red); }
 
+  /* Auto layout — card + side button */
+  .auto-layout {
+    display: flex;
+    align-items: stretch;
+    gap: 12px;
+    width: 100%;
+    max-width: 940px;
+  }
+
   /* Card */
   .card {
-    width: 100%; max-width: 820px;
+    flex: 1;
     background: linear-gradient(135deg, #1a1a1a, #2a2a2a);
     border: 2px solid var(--frc-red); border-radius: 12px; padding: 28px;
     box-shadow: 0 8px 30px rgba(0,0,0,0.4); color: white;
   }
+
   .card-title {
     font-size: 1.4rem; font-weight: 700; margin: 0 0 24px;
     display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
@@ -562,12 +536,42 @@
 
   /* Phase buttons */
   .phase-btn {
-    width: 100%; padding: 18px 24px; border: none; border-radius: 10px;
-    font-size: 1.05rem; font-weight: 700; cursor: pointer;
-    display: flex; align-items: center; justify-content: center; gap: 12px; transition: all 0.25s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border: none;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 15px;
+    transition: all 0.2s;
+    width: 100%;
   }
+
+  /* Side teleop button — stretches full height of the auto-layout */
+  .side-teleop-btn {
+    width: 260px;
+    flex-shrink: 0;
+    flex-direction: column;
+    gap: 14px;
+    padding: 24px 12px;
+    border-radius: 12px;
+    border: 2px solid var(--frc-red);
+    letter-spacing: 0.5px;
+    text-align: center;
+    font-size: 13px;
+  }
+
+  .side-teleop-btn svg {
+    flex-shrink: 0;
+  }
+
   .teleop-btn { background: linear-gradient(135deg, var(--frc-red), #a01500); color: white; box-shadow: 0 4px 20px rgba(200,27,0,0.4); }
   .teleop-btn:hover { filter: brightness(1.1); transform: translateY(-2px); box-shadow: 0 8px 28px rgba(200,27,0,0.55); }
+
+  /* Override translateY for side button since it's horizontal */
+  .side-teleop-btn:hover { transform: none; filter: brightness(1.12); }
+
   .submit-btn { background: linear-gradient(135deg, #1a6b1a, #0f4d0f); color: white; box-shadow: 0 4px 20px rgba(26,107,26,0.4); }
   .submit-btn:hover { filter: brightness(1.15); transform: translateY(-2px); }
 
@@ -602,7 +606,7 @@
     cursor: pointer; white-space: nowrap; transition: all 0.2s; flex-shrink: 0;
   }
   .back-btn:hover { border-color: #888; color: white; }
-  .teleop-actions .phase-btn { flex: 1; }
+  .teleop-actions .phase-btn { flex: 1; padding: 18px 24px; border-radius: 10px; }
 
   /* Done */
   .done-card { text-align: center; padding: 48px 28px; }
