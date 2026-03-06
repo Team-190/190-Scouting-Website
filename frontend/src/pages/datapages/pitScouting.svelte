@@ -81,16 +81,25 @@
         const apiFormData = {
             ...Object.fromEntries(boolFields.map(f => [f, boolToYN(formData[f])])),
             ...Object.fromEntries(plainFields.map(f => [f, formData[f]])),
-            ...(formData.robotPicture && {
-                robotPicture: formData.robotPicture,
-                robotPicturePreview: formData.robotPicturePreview,
-            }),
         };
 
-        try {
-            const response = await postPitScouting(eventCode, selectedTeam, apiFormData);
+        const existing = JSON.parse(localStorage.getItem("pitScouting") || "[]");
+        existing.push(apiFormData);
+        localStorage.setItem("pitScouting", JSON.stringify(existing));
 
+
+        try {
+            const apiFormDataWithImage = {
+                ...apiFormData,
+                ...(formData.robotPicture && {
+                    robotPicturePreview: formData.robotPicturePreview,
+                })
+            };
+
+            const response = await postPitScouting(eventCode, selectedTeam, apiFormDataWithImage);
+            
             if (response.ok) {
+                localStorage.removeItem("pitScouting");
                 submitMessage = "✓ Pit scouting data submitted successfully!";
                 submitError = false;
                 clearForm();

@@ -98,14 +98,14 @@ export async function postPitScouting(event, team, formData) {
     return response;
 }
 
-export async function postQualitativeScouting(event, team, formData) {
+export async function postQualitativeScouting(event, team, match, formData) {
 
     const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/postQualitativeScouting`, {
         method: 'POST',
         headers: {
             "Content-Type": "application/json"
         },
-        body: JSON.stringify({event, team, formData})
+        body: JSON.stringify({event, team, match, formData})
     });
     
     return response;

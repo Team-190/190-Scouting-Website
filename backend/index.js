@@ -257,13 +257,13 @@ app.post("/postPitScouting", async (req, res) => {
 
 app.post("/postQualitativeScouting", async (req, res) => {
     let event = req.body.event;
-    let rating = req.body.rating;
-    let team = req.body.team;
     let match = req.body.match;
+    let team = req.body.team;
+    let formData = req.body.formData;
     let file = "qualitativeScoutingData";
-    if (rating == null || team == null || event == null || match == nul) {
+    if (formData == null || team == null || event == null || match == null) {
         console.log("One or more fields could not be retrieved");
-        console.log(`${rating} ${team} ${event}`);
+        console.log(`${formData} ${team} ${event} ${match}`);
         res.sendStatus(400);
     }
     else {

@@ -1,7 +1,10 @@
 <script>
+    import { postQualitativeScouting } from "../../utils/api";
+
   // ─── Constants ────────────────────────────────────────────────────────────────
 
   const ROBOT_COLORS = { Red: "#C81B00", Blue: "#003087" };
+  const eventCode = localStorage.getItem("eventCode");
 
   const START_SPOTS = [
     "Left (Facing Driver)",
@@ -240,7 +243,15 @@
     existing.push(record);
     localStorage.setItem("scoutingData", JSON.stringify(existing));
 
-    
+    try {
+      const response = await postQualitativeScouting(eventCode, teamNumber, matchNumber, record);
+
+      if (response.ok) {
+        localStorage.removeItem("scoutingData");
+      }
+    } catch (e) {
+      console.log("No internet, saving data later...");
+    }
 
     phase = "done";
   }
