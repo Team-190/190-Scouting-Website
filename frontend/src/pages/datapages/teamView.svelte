@@ -593,13 +593,19 @@
 
   if (!Object.keys(byMatch).length) return rowData;
 
-  let nearFarMetrics = [
-    { key: "nearPercentage",    label: "Near Zone %" },
-    { key: "farPercentage",     label: "Far Zone %" },
-    { key: "neutralPercentage", label: "Neutral Zone %" },
-    { key: "redPercentage",     label: "Red Zone %" },
-    { key: "bluePercentage",    label: "Blue Zone %" },
-  ];
+    let nearFarMetrics = [
+      { key: "nearPercentage", label: "Near Zone %" },
+      { key: "farPercentage", label: "Far Zone %" },
+      { key: "neutralPercentage", label: "Neutral Zone %" },
+      { key: "redPercentage", label: "Red Zone %" },
+      { key: "bluePercentage", label: "Blue Zone %" },
+      { key: "nearBluePercentage", label: "Near Blue Zone %" },
+      { key: "nearRedPercentage", label: "Near Red Zone %" },
+      { key: "farBluePercentage", label: "Far Blue Zone %" },
+      { key: "farRedPercentage", label: "Far Red Zone %" },
+      { key: "farNeutralPercentage", label: "Far Neutral Zone %" },
+      { key: "nearNeutralPercentage", label: "Near Neutral Zone %" },
+    ];
 
   const qLabels = matches.map((_, i) => `Q${i + 1}`);
 
@@ -755,10 +761,57 @@
     const teamStr = String(selectedTeam);
     await loadTeamData(teamStr);
     fetchTeamOPR(teamStr);
+    populateMatchDropdown(selectedTeam);
+    onMatchChange();
     const graceEl = document.getElementById("grace-rating") as HTMLImageElement;
     if (graceEl) graceEl.src = fetchGraceRating(selectedTeam);
   }
+  function populateMatchDropdown(teamNumber) {
+    const dropdown = document.querySelector(
+      ".match-dropdown",
+    ) as HTMLSelectElement;
+    if (!dropdown || !cache[teamNumber]) return;
+    dropdown.innerHTML = "";
+    let matches = cache[selectedTeam].map((m) => m.Match);
+    matches.forEach((match) => {
+      let option = document.createElement("option");
+      option.value = match;
+      option.textContent = `${match}`;
+      dropdown.appendChild(option);
+    });
+  }
 
+  function setZoneValue(className: string, value: number) {
+    const el = document.querySelector(`.zone-value.${className}`) as HTMLElement;
+    if (!el) return;
+    el.textContent = value != null ? String(value) : "—";
+    // Dynamically tint the cell opacity based on value intensity
+    const cell = el.closest(".zone-cell") as HTMLElement;
+    if (cell) {
+      const intensity = Math.min(value / 50, 1); // 50% = full opacity
+      cell.style.setProperty("--zone-intensity", String(intensity));
+    }
+  }
+
+  function onMatchChange() {
+    const teamStr = String(selectedTeam);
+    let match = (document.querySelector(".match-dropdown") as HTMLSelectElement)
+      .value;
+    let nearFarData = getNearFarByMatch(teamStr);
+    const d = nearFarData[Number(match)] ?? {};
+    setZoneValue("nearBluePercentage", d.nearBluePercentage ?? null);
+    setZoneValue("nearNeutralPercentage", d.nearNeutralPercentage ?? null);
+    setZoneValue("nearRedPercentage", d.nearRedPercentage ?? null);
+    setZoneValue("farBluePercentage", d.farBluePercentage ?? null);
+    setZoneValue("farNeutralPercentage", d.farNeutralPercentage ?? null);
+    setZoneValue("farRedPercentage", d.farRedPercentage ?? null);
+    console.log(
+      "Selected Match:",
+      match,
+      "Near/Far Data:",
+      nearFarData[Number(match)],
+    );
+  }
   function onColorblindChange(e: Event) {
     colorblindMode = (e.target as HTMLSelectElement).value;
     localStorage.setItem("colorblindMode", colorblindMode);
@@ -795,7 +848,6 @@
 
     const allRows = [...allTeamsData, ...matches];
 
-    // Compute per-metric global stats
     const globalStats: Record<string, any> = {};
     displayMetrics.forEach((metric) => {
       const isBooleanMetric = BOOLEAN_METRICS.includes(metric);
@@ -1147,6 +1199,7 @@
       columnDefs,
       rowHeight: ROW_HEIGHT,
       headerHeight: HEADER_HEIGHT,
+      domLayout: "autoHeight",
       defaultColDef: {
         resizable: false,
         sortable: false,
@@ -1469,7 +1522,7 @@
 
   // ─── Mount ────────────────────────────────────────────────────────────────────
 
-  onMount(async () => {
+ onMount(async () => {
     const stored = localStorage.getItem("data");
     teamViewData = stored ? JSON.parse(stored) : [];
 
@@ -1478,10 +1531,10 @@
     if (allTeams.length > 0) {
       selectedTeam =
         allTeams.find((t) => t.toString() === "190") ?? allTeams[0];
-      loadTeamData(selectedTeam);
+      await loadTeamData(selectedTeam);
     }
     await fetchTeamOPR(String(selectedTeam));
-    getNearFarByMatch(String(selectedTeam));
+    populateMatchDropdown(selectedTeam);
   });
 </script>
 
@@ -1560,6 +1613,78 @@
     {/if}
   </div>
 
+  <div class="map-section">
+    <h2 class="section-title">Map</h2>
+
+    <div class="map-controls">
+      <label for="match-dropdown">Match:</label>
+      <select
+        name="match-dropdown"
+        class="match-dropdown"
+        on:change={onMatchChange}
+      >
+      </select>
+    </div>
+
+    <div class="map-wrapper">
+      <div class="map-container">
+        <img
+          class="field-img"
+          src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQJf-7QJfUVG4NmccD7q8W3gwBAEb-7SUiT2g&s"
+          alt="FRC Field"
+        />
+
+        <!-- Zone overlay grid -->
+        <div class="zone-grid">
+          <!-- Row labels -->
+          <div class="row-label far-label">FAR</div>
+          <div class="row-label near-label">NEAR</div>
+
+          <!-- Far row -->
+          <div class="zone-cell far-red-zone">
+            <span class="zone-name">Red</span>
+            <span class="zone-value farRedPercentage">—</span>
+            <span class="zone-unit">%</span>
+          </div>
+          <div class="zone-cell far-neutral-zone">
+            <span class="zone-name">Neutral</span>
+            <span class="zone-value farNeutralPercentage">—</span>
+            <span class="zone-unit">%</span>
+          </div>
+          <div class="zone-cell far-blue-zone">
+            <span class="zone-name">Blue</span>
+            <span class="zone-value farBluePercentage">—</span>
+            <span class="zone-unit">%</span>
+          </div>
+
+          <!-- Near row -->
+          <div class="zone-cell near-red-zone">
+            <span class="zone-name">Red</span>
+            <span class="zone-value nearRedPercentage">—</span>
+            <span class="zone-unit">%</span>
+          </div>
+          <div class="zone-cell near-neutral-zone">
+            <span class="zone-name">Neutral</span>
+            <span class="zone-value nearNeutralPercentage">—</span>
+            <span class="zone-unit">%</span>
+          </div>
+          <div class="zone-cell near-blue-zone">
+            <span class="zone-name">Blue</span>
+            <span class="zone-value nearBluePercentage">—</span>
+            <span class="zone-unit">%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Legend -->
+      <div class="map-legend">
+        <div class="legend-item"><span class="legend-swatch red-swatch"></span> Red Alliance Zone</div>
+        <div class="legend-item"><span class="legend-swatch neutral-swatch"></span> Neutral Zone</div>
+        <div class="legend-item"><span class="legend-swatch blue-swatch"></span> Blue Alliance Zone</div>
+      </div>
+    </div>
+  </div>
+
   <div class="graph-section">
     <h2 class="section-title">Charts & Graphs</h2>
 
@@ -1622,6 +1747,165 @@
     --frc-190-black: #4d4d4d;
   }
 
+  /* ── Map Section ── */
+  .map-section {
+    width: 80vw;
+    margin-top: 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .map-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .map-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .map-container {
+    position: relative;
+    width: 100%;
+    max-width: 860px;
+    aspect-ratio: 2 / 1;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 3px solid var(--frc-190-red);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+  }
+
+  .field-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: brightness(0.45) saturate(0.7);
+    border-radius: 10px;
+  }
+
+  .zone-grid {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-columns: 52px 1fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    padding: 8px;
+  }
+
+  .row-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    color: rgba(255,255,255,0.85);
+    text-transform: uppercase;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+  }
+
+  .far-label  { grid-row: 1; grid-column: 1; }
+  .near-label { grid-row: 2; grid-column: 1; }
+  .zone-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    padding: 8px;
+  }
+  .zone-cell:hover {
+    transform: scale(1.03);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    z-index: 2;
+  }
+
+  .far-red-zone, .near-red-zone {
+    background: rgba(200, 27, 0, calc(0.25 + var(--zone-intensity) * 0.45));
+    border: 1.5px solid rgba(255, 100, 80, 0.5);
+  }
+  .far-neutral-zone, .near-neutral-zone {
+    background: rgba(100, 100, 100, calc(0.25 + var(--zone-intensity) * 0.45));
+    border: 1.5px solid rgba(180, 180, 180, 0.4);
+  }
+  .far-blue-zone, .near-blue-zone {
+    background: rgba(30, 100, 220, calc(0.25 + var(--zone-intensity) * 0.45));
+    border: 1.5px solid rgba(100, 160, 255, 0.5);
+  }
+
+  .far-red-zone     { grid-row: 1; grid-column: 2; }
+  .far-neutral-zone { grid-row: 1; grid-column: 3; }
+  .far-blue-zone    { grid-row: 1; grid-column: 4; }
+  .near-red-zone    { grid-row: 2; grid-column: 2; }
+  .near-neutral-zone{ grid-row: 2; grid-column: 3; }
+  .near-blue-zone   { grid-row: 2; grid-column: 4; }
+
+  .zone-name {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.75);
+    text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+    margin-bottom: 2px;
+  }
+
+  .zone-value {
+    font-size: 1.6rem;
+    font-weight: 900;
+    color: #ffffff;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.9), 0 0 12px rgba(255,255,255,0.15);
+    line-height: 1;
+  }
+
+  .zone-unit {
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.6);
+    font-weight: 600;
+    margin-top: 1px;
+  }
+
+  .map-legend {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: rgba(255,255,255,0.85);
+    font-size: 0.82rem;
+    font-weight: 600;
+  }
+
+  .legend-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    display: inline-block;
+  }
+  .red-swatch     { background: rgba(200, 27, 0, 0.8); border: 1px solid rgba(255,100,80,0.6); }
+  .neutral-swatch { background: rgba(120, 120, 120, 0.8); border: 1px solid rgba(200,200,200,0.4); }
+  .blue-swatch    { background: rgba(30, 100, 220, 0.8); border: 1px solid rgba(100,160,255,0.6); }
+
   :global(html),
   :global(body) {
     margin: 0;
@@ -1678,7 +1962,6 @@
     overflow: hidden;
   }
   :global(.ag-body-viewport) {
-    overflow-y: scroll !important;
     overflow-x: auto !important;
   }
   :global(.ag-body-viewport::-webkit-scrollbar) {
