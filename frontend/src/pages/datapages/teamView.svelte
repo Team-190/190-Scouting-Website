@@ -528,7 +528,8 @@
           v !== -1 &&
           isNumeric(v)
         ) {
-          byMatch[matchNum][zone] += Number(v);
+          // Use the value directly (don't sum) — zone times are already correct per row
+          byMatch[matchNum][zone] = Number(v);
         }
       }
     }
@@ -676,6 +677,13 @@
       "ScouterError",
     ]);
 
+    // Zone time fields should NOT be summed — take last valid value instead
+    const ZONE_TIME_FIELDS = new Set([
+      "NearBlueZoneTime", "FarBlueZoneTime",
+      "NearNeutralZoneTime", "FarNeutralZoneTime",
+      "NearRedZoneTime", "FarRedZoneTime",
+    ]);
+
     return Object.keys(grouped)
       .map((matchNum) => {
         const rows = grouped[matchNum].sort(
@@ -711,7 +719,13 @@
               return;
 
             const state = fieldState[key];
-            if (state.type === "string") {
+            // Zone time fields: take last valid value, never sum
+            if (ZONE_TIME_FIELDS.has(key)) {
+              if (isNumeric(val)) {
+                state.type = "numeric";
+                state.val = Number(val);
+              }
+            } else if (state.type === "string") {
               if (!isNumeric(val)) state.val = val;
             } else if (state.type === "numeric") {
               if (isNumeric(val)) state.val += Number(val);

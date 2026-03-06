@@ -63,6 +63,13 @@ async function getAllData(eventCode) {
         // endAutoOverrides will hold specific fields from EndAuto rows
         const endAutoOverrides = {};
 
+        // Zone time fields that should ONLY come from EndMatch rows (averaged)
+        const ZONE_TIME_FIELDS = ['NearBlueZoneTime', 'FarBlueZoneTime', 'NearNeutralZoneTime', 'FarNeutralZoneTime', 'NearRedZoneTime', 'FarRedZoneTime'];
+        // Case-insensitive lookup set for skipping zone times in the sum loop
+        const ZONE_TIME_FIELDS_LOWER = new Set(ZONE_TIME_FIELDS.map(f => f.toLowerCase()));
+        // Collect zone time values from EndMatch rows into arrays for averaging
+        const endMatchZoneTimes = {};
+
         for (const row of rows) {
             const team = row.Team || row.team;
             const match = row.Match || row.match;
@@ -101,9 +108,30 @@ async function getAllData(eventCode) {
                 }
             }
 
+            // Collect zone time values from EndMatch rows only (for averaging later)
+            if (row.RecordType === 'EndMatch') {
+                if (!endMatchZoneTimes[uniqueKey]) {
+                    endMatchZoneTimes[uniqueKey] = {};
+                    for (const field of ZONE_TIME_FIELDS) {
+                        endMatchZoneTimes[uniqueKey][field] = [];
+                    }
+                }
+                for (const field of ZONE_TIME_FIELDS) {
+                    const val = row[field];
+                    if (val !== -1 && val != null && typeof val === 'number') {
+                        endMatchZoneTimes[uniqueKey][field].push(val);
+                    }
+                }
+            }
+
             for (const metric of Object.keys(row)) {
+                // Skip zone time fields (case-insensitive) — these come only from EndMatch rows
+                if (ZONE_TIME_FIELDS_LOWER.has(metric.toLowerCase())) {
+                    continue;
+                }
+
                 // Skip identifiers and non-summable fields
-                if (['NearBlueZoneTimer', 'FarBlueZoneTimer', 'NearNeutralZoneTimer', 'NearRedZoneTimer', 'FarNeutralZoneTimer', 'FarRedZoneTimer', 'id', 'Id', 'ID', 'Team', 'team', 'Match', 'match', 'RecordType', 'ScouterName', 'ScouterError', 'Time', 'time', 'Mode', 'DriveStation'].includes(metric)) {
+                if (['id', 'Id', 'ID', 'Team', 'team', 'Match', 'match', 'RecordType', 'ScouterName', 'ScouterError', 'Time', 'time', 'Mode', 'DriveStation'].includes(metric)) {
                     continue;
                 }
                 
@@ -111,10 +139,8 @@ async function getAllData(eventCode) {
                 if (['AutoClimb', 'StartingLocation'].includes(metric)) continue;
 
                 const val = row[metric];
-                 // Ignore -1 and nulls for sums
+                // Ignore -1 and nulls for sums
                 if (typeof val === 'number' && val !== -1) {
-                    // if (Object.keys(sums[uniqueKey]).length > 1) {console.log(`already a scouter for ${uniqueKey}`)}
-
                     sums[uniqueKey][scouter][metric] = (sums[uniqueKey][scouter][metric] || 0) + val;
                 }
             }
@@ -144,7 +170,6 @@ async function getAllData(eventCode) {
                 keySums[item] /= scouterCount;
             }
 
-            // const keySums = sums[key];
             for (const field of Object.keys(keySums)) {
                 baseObj[field] = keySums[field];
             }
@@ -153,6 +178,18 @@ async function getAllData(eventCode) {
             if (endAutoOverrides[key]) {
                 if (endAutoOverrides[key]['AutoClimb'] !== undefined) baseObj['AutoClimb'] = endAutoOverrides[key]['AutoClimb'];
                 if (endAutoOverrides[key]['StartingLocation'] !== undefined) baseObj['StartingLocation'] = endAutoOverrides[key]['StartingLocation'];
+            }
+
+            // Apply zone times: average only from EndMatch rows
+            if (endMatchZoneTimes[key]) {
+                for (const field of ZONE_TIME_FIELDS) {
+                    const values = endMatchZoneTimes[key][field];
+                    if (values && values.length > 0) {
+                        baseObj[field] = values.reduce((a, b) => a + b, 0) / values.length;
+                    } else {
+                        baseObj[field] = 0;
+                    }
+                }
             }
             
             return baseObj;
