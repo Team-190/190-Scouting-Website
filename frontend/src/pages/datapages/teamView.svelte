@@ -1467,6 +1467,33 @@
     return { avoidanceScores, overallAverage, barOption };
   }
 
+  function getBarOption(teamData, metric) {
+    return {
+      title: {
+        text: chartTitle(metric),
+        textStyle: { color: "#ffffff", fontSize: 16 },
+      },
+      tooltip: { trigger: "axis" },
+      xAxis: {
+        type: "category",
+        data: teamData.map((_, i) => `Q${i + 1}`),
+        axisLabel: { color: "#ffffff" },
+      },
+      yAxis: { type: "value", axisLabel: { color: "#ffffff" } },
+      series: [
+        {
+          data: teamData.map((d) =>
+            isNumeric(d[metric]) ? Number(d[metric]) : 0,
+          ),
+          type: "bar",
+          name: `Team ${selectedTeam}`,
+          itemStyle: { color: "#C81B00" },
+          label: { show: true, color: "#ffffff" },
+        },
+      ],
+    };
+  }
+
   function getLineOption(teamData, metric) {
     return {
       title: {
