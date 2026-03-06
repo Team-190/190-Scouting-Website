@@ -149,6 +149,16 @@ app.get("/winnerOfGompeiMadness", async (req, res) => {
     let winner = req.body.winner;
 });
 
+app.get("/getPitScouting", async (req, res) => {
+    const eventCode = req.query.eventCode;
+    const team = req.query.team;
+    if (!eventCode || !team) return res.sendStatus(400);
+
+    let fileData = await database.readJSONFile("pitScoutingData");
+    const teamData = fileData?.[eventCode]?.[team] ?? null;
+    res.json(teamData);
+});
+
 app.post("/postEventCode", async (req, res) => {
     eventCode = req.body.eventCode;
     if (!eventCode) {
