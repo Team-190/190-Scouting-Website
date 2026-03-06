@@ -1,28 +1,21 @@
-<script>
+<script lang="ts">
     import { onMount } from "svelte";
     import { postPitScouting } from "../../utils/api";
     import { fetchTeams } from "../../utils/blueAllianceApi";
 
+    const boolFields = ["overBump", "throughTrench", "climbDuringAuto", "canUseHP", "canUseDepot", "canFeed"] as const;
+    const plainFields = ["climbLevels", "quantityBallsHopper", "avgIntakeSpeed", "avgShootSpeed", "accuracy", "framesize", "startingHeight", "fullExtensionHeight"] as const;
+
     // Form data
-    let formData = {
+    const defaultFormData = {
         teamNumber: "",
-        throughTrench: null,
-        overBump: null,
-        climbLevels: "",
-        climbDuringAuto: null,
-        quantityBallsHopper: "",
-        avgIntakeSpeed: "",
-        avgShootSpeed: "",
-        accuracy: "",
-        framesize: "",
-        canUseHP: null,
-        canUseDepot: null,
-        canFeed: null,
-        startingHeight: "",
-        fullExtensionHeight: "",
+        ...Object.fromEntries(boolFields.map(f => [f, null])) as Record<typeof boolFields[number], null>,
+        ...Object.fromEntries(plainFields.map(f => [f, ""])) as Record<typeof plainFields[number], string>,
         robotPicture: null,
         robotPicturePreview: null,
     };
+
+    let formData = structuredClone(defaultFormData);
 
     let submitting = false;
     let submitMessage = "";
@@ -65,32 +58,13 @@
     }
 
     function clearForm() {
-        formData = {
-            teamNumber: "",
-            throughTrench: null,
-            overBump: null,
-            climbLevels: "",
-            climbDuringAuto: null,
-            quantityBallsHopper: "",
-            avgIntakeSpeed: "",
-            avgShootSpeed: "",
-            accuracy: "",
-            framesize: "",
-            canUseHP: null,
-            canUseDepot: null,
-            canFeed: null,
-            startingHeight: "",
-            fullExtensionHeight: "",
-            robotPicture: null,
-            robotPicturePreview: null,
-        };
+        formData = structuredClone(defaultFormData);
 
         // Reset file input safely via bind:this
         if (fileInputNode) fileInputNode.value = "";
     }
 
     async function handleSubmit() {
-        // Validation
         if (!selectedTeam) {
             submitMessage = "Please enter a team number";
             submitError = true;
@@ -101,77 +75,28 @@
         submitMessage = "";
         submitError = false;
 
+        // Helper to convert boolean to Y/N
+        const boolToYN = (val) => val === true ? "Y" : val === false ? "N" : "";
+
+        const apiFormData = {
+            ...Object.fromEntries(boolFields.map(f => [f, boolToYN(formData[f])])),
+            ...Object.fromEntries(plainFields.map(f => [f, formData[f]])),
+            ...(formData.robotPicture && {
+                robotPicture: formData.robotPicture,
+                robotPicturePreview: formData.robotPicturePreview,
+            }),
+        };
+
         try {
-            let apiFormData = {};
-
-            // Add all form fields
-            apiFormData["overBump"] =
-                formData.overBump === true
-                    ? "Y"
-                    : formData.overBump === false
-                      ? "N"
-                      : "";
-            apiFormData["throughTrench"] =
-                formData.throughTrench === true
-                    ? "Y"
-                    : formData.throughTrench === false
-                      ? "N"
-                      : "";
-            apiFormData["climbLevels"] = formData.climbLevels;
-            apiFormData["climbDuringAuto"] =
-                formData.climbDuringAuto === true
-                    ? "Y"
-                    : formData.climbDuringAuto === false
-                      ? "N"
-                      : "";
-            apiFormData["quantityBallsHopper"] = formData.quantityBallsHopper;
-            apiFormData["avgIntakeSpeed"] = formData.avgIntakeSpeed;
-            apiFormData["avgShootSpeed"] = formData.avgShootSpeed;
-            apiFormData["accuracy"] = formData.accuracy;
-            apiFormData["framesize"] = formData.framesize;
-            apiFormData["canUseHP"] =
-                formData.canUseHP === true
-                    ? "Y"
-                    : formData.canUseHP === false
-                      ? "N"
-                      : "";
-            apiFormData["canUseDepot"] =
-                formData.canUseDepot === true
-                    ? "Y"
-                    : formData.canUseDepot === false
-                      ? "N"
-                      : "";
-            apiFormData["canFeed"] =
-                formData.canFeed === true
-                    ? "Y"
-                    : formData.canFeed === false
-                      ? "N"
-                      : "";
-            apiFormData["startingHeight"] = formData.startingHeight;
-            apiFormData["fullExtensionHeight"] = formData.fullExtensionHeight;
-
-            if (formData.robotPicture) {
-                apiFormData["robotPicture"] = formData.robotPicture;
-                apiFormData["robotPicturePreview"] =
-                    formData.robotPicturePreview;
-            }
-
-            let response = await postPitScouting(
-                eventCode,
-                selectedTeam,
-                apiFormData,
-            );
+            const response = await postPitScouting(eventCode, selectedTeam, apiFormData);
 
             if (response.ok) {
                 submitMessage = "✓ Pit scouting data submitted successfully!";
                 submitError = false;
                 clearForm();
-                setTimeout(() => {
-                    submitMessage = "";
-                }, 3000);
+                setTimeout(() => { submitMessage = ""; }, 3000);
             } else {
-                const error = await response.text();
-                submitMessage = `Error: ${error}`;
+                submitMessage = `Error: ${await response.text()}`;
                 submitError = true;
             }
         } catch (error) {

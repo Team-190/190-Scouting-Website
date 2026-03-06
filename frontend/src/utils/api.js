@@ -32,6 +32,12 @@ export function fetchGracePage(eventCode) {
     return data;
 }
 
+export function fetchPitScoutingImage(eventCode, team) {
+    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getPitScoutingImage?eventCode=${eventCode}&teamNumber=${team}`;
+    let data = fetch(route);
+    return data;
+}
+
 export async function postEventCode(eventCode) {
     const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/postEventCode`, {
         method: 'POST',

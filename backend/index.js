@@ -14,6 +14,7 @@ const test = require("./test/test.js")
 const database = require("./database.js");
 const session = require("express-session");
 const cors = require("cors");
+const base64 = require("base64");
 require('dotenv').config({ path: path.resolve(__dirname, '../.env'), override: true });
 
 const app = express();
@@ -92,6 +93,18 @@ app.get("/getAvailableTeams", async (req, res) => {
     res.send(result);
 });
 
+app.get("/getPitScoutingImage", async (req, res) => {
+    const eventCode = req.query.eventCode;
+    const team = req.query.team;
+    if (!eventCode || !team) return res.sendStatus(403);
+    let result = await database.readJSONFile("pitScoutingData");
+
+    const base64Data = result.split(",")[1];
+    const imageBytes = atob(base64Data);
+
+    res.send(imageBytes);
+});
+
 app.get("/getAllData", async (req, res) => {
     const eventCode = req.query.eventCode;
     if (!eventCode) return res.sendStatus(403);
@@ -132,8 +145,6 @@ app.get("/getSingleMetric", async (req, res) => {
     for (let thinger of Object.keys(teams)) {
         console.log(teams[thinger])
     }
-
-
 });
 
 app.get("/getRatings", async (req, res) => {
@@ -148,6 +159,12 @@ app.get("/getRatings", async (req, res) => {
 app.get("/winnerOfGompeiMadness", async (req, res) => {
     let winner = req.body.winner;
 });
+
+
+////////////// POST Methods \\\\\\\\\\\\\\
+////////////// POST Methods \\\\\\\\\\\\\\
+////////////// POST Methods \\\\\\\\\\\\\\
+
 
 app.post("/postEventCode", async (req, res) => {
     eventCode = req.body.eventCode;

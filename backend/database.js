@@ -166,30 +166,6 @@ async function getAllData(eventCode) {
     }
 }
 
-// Legacy code for getting team view. may be implemented again
-// async function getAllTeamsView(eventCode) {
-//     let jsonConfig;
-//     try {
-//         const raw = fs.readFileSync(`test/${eventCode}-config.json`, 'utf8');
-//         jsonConfig = JSON.parse(raw);
-//     } catch (error) {
-//         console.error(`Failed to load config for ${eventCode}:`, error);
-//         return { data: null, error };
-//     }
-
-//     console.log(["Team"].concat(jsonConfig.teamView[0].columns));
-//     const columns = ["Team"].concat(jsonConfig.teamView[0].columns).map(c => `[${c}]`).join(", ");
-
-//     try {
-//         await sql.connect(config);
-//         const query = `SELECT ${columns} FROM [${eventCode}].[dbo].[Activities] WHERE RecordType = 'EndMatch'`;
-//         const result = await sql.query(query);
-//         return { data: result.recordset, error: null }; 
-//     } catch (err) {
-//         console.error("getAllTeamsView error:", err);
-//         return { data: null, error: err };
-//     }
-// }
 
 async function readJSONFile(filename) {
     try {
