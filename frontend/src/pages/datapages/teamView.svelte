@@ -64,13 +64,6 @@
     "Time",
     "Mode",
     "DriveStation",
-    // "FarBlueZoneTime",
-    // "FarRedZoneTime",
-    // "NearBlueZoneTime",
-    // "NearRedZoneTime",
-    // "NearNeutralZoneTime",
-    // "FarNeutralZoneTime",
-    // "NearFar",
   ];
 
   const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime"];

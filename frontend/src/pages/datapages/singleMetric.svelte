@@ -1,19 +1,18 @@
 <script lang="ts">
   import {
-    AllCommunityModule,
-    createGrid,
-    ModuleRegistry,
+      AllCommunityModule,
+      createGrid,
+      ModuleRegistry,
   } from "ag-grid-community";
-  import { onMount, onDestroy } from "svelte";
   import "ag-grid-community/styles/ag-grid.css";
   import "ag-grid-community/styles/ag-theme-quartz.css";
+  import { onDestroy, onMount } from "svelte";
+  import { v4 as uuidv4 } from "uuid";
   import * as barGraph from "../../pages/graphcode/bar.js";
   import * as lineGraph from "../../pages/graphcode/line.js";
   import * as pieGraph from "../../pages/graphcode/pie.js";
-  import * as scatterGraph from "../../pages/graphcode/scatter.js";
   import * as radarGraph from "../../pages/graphcode/radar.js";
-  import { v4 as uuidv4 } from "uuid";
-  import { fetchSingleMetric } from "../../utils/api.js";
+  import * as scatterGraph from "../../pages/graphcode/scatter.js";
   import { fetchMatchAlliances } from "../../utils/blueAllianceApi";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
@@ -35,6 +34,7 @@
     ["AutoClimb", "Auto Climb"],
     ["AttemptClimb", "Climb Attempt"],
     ["BumpTraversal", "Times Over Bump"],
+    ["TrenchTraversal", "Times Under Trench"],
     ["StartingLocation", "Starting Location"],
     ["MatchEvent", "Match Event"],
     ["FuelIntakingTime", "Fuel Intaking Time"],
