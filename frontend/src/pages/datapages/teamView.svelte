@@ -641,10 +641,10 @@
     robotPicturePreview = null;
     if (!eventCode || !teamNumber) return;
     try {
-      const res = await fetchPitScouting(eventCode, String(teamNumber));
-      if (!res.ok) return;
-      const data = await res.json();
-      robotPicturePreview = data?.robotPicturePreview ?? null;
+        const res = await fetchPitScoutingImage(eventCode, teamNumber);
+        if (!res.ok) return;
+        const data = await res.text();
+        robotPicturePreview = data ?? null;
     } catch (e) {
       console.error("Error fetching robot picture:", e);
       robotPicturePreview = null;

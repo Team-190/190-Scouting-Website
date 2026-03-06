@@ -14,7 +14,6 @@ const test = require("./test/test.js")
 const database = require("./database.js");
 const session = require("express-session");
 const cors = require("cors");
-const base64 = require("base64");
 require('dotenv').config({ path: path.resolve(__dirname, '../.env'), override: true });
 
 const app = express();
@@ -95,14 +94,18 @@ app.get("/getAvailableTeams", async (req, res) => {
 
 app.get("/getPitScoutingImage", async (req, res) => {
     const eventCode = req.query.eventCode;
-    const team = req.query.team;
-    if (!eventCode || !team) return res.sendStatus(403);
+    const teamNumber = req.query.teamNumber;
+    if (!eventCode || !teamNumber) return res.sendStatus(403);
+
     let result = await database.readJSONFile("pitScoutingData");
 
-    const base64Data = result.split(",")[1];
-    const imageBytes = atob(base64Data);
+    try {
+        result = result[eventCode][teamNumber]["robotPicturePreview"];
+    } catch (e) {
+        return res.sendStatus(404);
+    }
 
-    res.send(imageBytes);
+    res.send(result);
 });
 
 app.get("/getAllData", async (req, res) => {
