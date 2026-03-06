@@ -1630,7 +1630,7 @@
       <div class="map-container">
         <img
           class="field-img"
-          src="../../images/FieldImage.png"
+          src={new URL("../../images/FieldImage.png", import.meta.url).href}
           alt="FRC Field"
         />
 
