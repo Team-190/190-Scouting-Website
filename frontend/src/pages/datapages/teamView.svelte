@@ -1630,7 +1630,7 @@
       <div class="map-container">
         <img
           class="field-img"
-          src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQJf-7QJfUVG4NmccD7q8W3gwBAEb-7SUiT2g&s"
+          src="../../images/FieldImage.png"
           alt="FRC Field"
         />
 
