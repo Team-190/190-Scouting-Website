@@ -15,6 +15,7 @@
   import { fetchGracePage } from "../../utils/api";
   import { fetchMatchAlliances } from "../../utils/blueAllianceApi";
   import { v4 as uuidv4 } from "uuid";
+  import { fetchGracePage, fetchPitScouting } from "../../utils/api";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -137,6 +138,8 @@
   let chartTypes = ["bar", "line", "pie", "scatter", "radar"];
   let showDropdown = false;
   let eventCode = localStorage.getItem("eventCode");
+  let robotPicturePreview: string | null = null;
+  let teamQualData = [];
 
   fetchGracePage(eventCode)
     .then((res) => res.json())
@@ -637,6 +640,20 @@
     return rating[teamEntry[Object.keys(teamEntry).length - 1]];
   }
 
+  async function fetchRobotPicture(teamNumber) {
+    robotPicturePreview = null;
+    if (!eventCode || !teamNumber) return;
+    try {
+        const res = await fetchPitScouting(eventCode, String(teamNumber));
+        if (!res.ok) return;
+        const data = await res.json();
+        robotPicturePreview = data?.robotPicturePreview ?? null;
+    } catch (e) {
+        console.error("Error fetching robot picture:", e);
+        robotPicturePreview = null;
+    }
+}
+
   // ─── Match Aggregation ────────────────────────────────────────────────────────
 
   function aggregateMatches(rawData) {
@@ -807,6 +824,14 @@
     localStorage.setItem("colorblindMode", colorblindMode);
     if (selectedTeam) loadTeamData(String(selectedTeam));
   }
+
+  function getQualDataForTeam(teamNumber) {
+  const storedQual = localStorage.getItem("scoutingData");
+  const qualData = storedQual ? JSON.parse(storedQual) : [];
+  return qualData.filter((row) =>
+    String(row.Team).replace(/\D/g, "") === String(teamNumber).replace(/\D/g, "")
+  ).sort((a, b) => a.Match - b.Match);
+}
 
   // ─── Grid Building ────────────────────────────────────────────────────────────
 
@@ -1516,6 +1541,9 @@
   onMount(async () => {
     const stored = localStorage.getItem("data");
     teamViewData = stored ? JSON.parse(stored) : [];
+    const storedQual = localStorage.getItem("scoutingData");
+    const qualData = storedQual ? JSON.parse(storedQual) : [];
+    teamQualData = getQualDataForTeam(selectedTeam);
 
     allTeams = await loadTeamNumbers();
 
@@ -1524,6 +1552,7 @@
         allTeams.find((t) => t.toString() === "190") ?? allTeams[0];
       loadTeamData(selectedTeam);
     }
+
     await fetchTeamOPR(String(selectedTeam));
     await tick();
     populateMatchDropdown(selectedTeam);
@@ -1558,52 +1587,65 @@
       </select>
     </div>
     <div>
-      <label for="colorblind-select">Colorblind Mode:</label>
-      <select
-        id="colorblind-select"
-        bind:value={colorblindMode}
-        on:change={onColorblindChange}
-      >
-        {#each Object.entries(COLOR_MODES) as [key, mode]}
-          <option value={key}>{mode.name}</option>
-        {/each}
-      </select>
+  <label for="colorblind-select">Colorblind Mode:</label>
+  <select
+    id="colorblind-select"
+    bind:value={colorblindMode}
+    on:change={onColorblindChange}
+  >
+    {#each Object.entries(COLOR_MODES) as [key, mode]}
+      <option value={key}>{mode.name}</option>
+    {/each}
+  </select>
+  <div class="robot-pic-display">
+    {#if robotPicturePreview}
+      <img
+        src={robotPicturePreview}
+        alt="Robot {selectedTeam}"
+        style="height: 60px; width: auto; border-radius: 6px; border: 2px solid var(--frc-190-red); object-fit: contain;"
+      />
+    {:else}
+      <span style="color: #888; font-size: 12px;">No photo</span>
+    {/if}
+  </div>
+  </div>
     </div>
     <img src="" alt="" id="grace-rating" />
-  </div>
+
 
   <div
     class="grid-container ag-theme-quartz"
     bind:this={domNode}
   ></div>
 
-  <div class="events-section">
-    <h2 class="section-title">Match Events</h2>
-    {#if matchEvents.length > 0}
-      <table class="events-table">
-        <thead>
-          <tr>
-            <th>Match</th>
-            <th>Event</th>
-            <th>Time</th>
-            <th>Phase</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each matchEvents as ev}
-            <tr>
-              <td>{ev.match}</td>
-              <td>{ev.event}</td>
-              <td>{ev.time}</td>
-              <td>{ev.phase}</td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-    {:else}
-      <p class="no-events">No match events recorded.</p>
-    {/if}
-  </div>
+  {#if teamQualData.length > 0}
+    <div class="qual-section">
+      <h2 class="section-title">Qualitative Scouting Notes</h2>
+      <div class="qual-grid">
+        {#each teamQualData as row}
+          <div class="qual-card">
+            <div class="qual-card-header">Match {row.Match}</div>
+            {#each [
+              ["Trench Feed Volume",    row.trenchFeedVolume],
+              ["Defense Effectiveness", row.defenseEffectiveness],
+              ["Defense Avoidance",     row.defenseAvoidance],
+              ["Intake Efficiency",     row.intakeEfficiency],
+              ["Strongest Aspect",      row.strongestAspect],
+              ["Mechanical Notes",      row.mechanicalNotes],
+              ["Match Events",          row.matchEvents],
+            ] as [label, value]}
+              {#if value}
+                <div class="qual-row">
+                  <span class="qual-label">{label}</span>
+                  <span class="qual-value">{value}</span>
+                </div>
+              {/if}
+            {/each}
+          </div>
+        {/each}
+      </div>
+    </div>
+  {/if}
 
   <div class="map-section">
     <h2 class="section-title">Map</h2>
@@ -2091,6 +2133,12 @@
     position: relative;
     margin-bottom: 20px;
   }
+
+.robot-pic-display {
+  width: 90px;
+}
+
+
   .plus-btn {
     width: 50px;
     height: 50px;
@@ -2224,4 +2272,70 @@
       grid-template-columns: 1fr;
     }
   }
+  
+  .qual-section {
+  width: 80vw;
+  margin-top: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.qual-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  width: 100%;
+}
+
+.qual-card {
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+  border: 2px solid var(--frc-190-red);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.qual-card-header {
+  background: var(--frc-190-red);
+  color: white;
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 8px 14px;
+  letter-spacing: 0.5px;
+}
+
+.qual-row {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 14px;
+  border-bottom: 1px solid #333;
+}
+
+.qual-row:last-child {
+  border-bottom: none;
+}
+
+.qual-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--frc-190-red);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 3px;
+}
+
+.qual-value {
+  font-size: 0.9rem;
+  color: #ddd;
+  line-height: 1.4;
+}
+
+@media (max-width: 1024px) {
+  .qual-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 700px) {
+  .qual-grid { grid-template-columns: 1fr; }
+}
+
 </style>
