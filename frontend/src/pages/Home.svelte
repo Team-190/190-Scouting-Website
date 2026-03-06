@@ -51,8 +51,6 @@
     onMount(async () => {
         const currentYear = new Date().getFullYear();
         years = Array.from({ length: currentYear - 2014 }, (_, i) => 2015 + i);
-        // await loadEventsForYear();
-        // filterEvents();
         await loadDbEvents();
     });
 
@@ -102,6 +100,11 @@
     $: {
         if (eventCode) {
             localStorage.setItem("eventCode", eventCode);
+            window.dispatchEvent(new StorageEvent("storage", {
+                key: "eventCode",
+                newValue: eventCode,
+                storageArea: localStorage,
+            }));
         }
     }
 </script>
@@ -138,7 +141,6 @@
 </div>
 
 <style>
-    /* FRC 190 Brand Colors */
     :root {
         --frc-190-red: #c81b00;
         --wpi-gray: #a9b0b7;

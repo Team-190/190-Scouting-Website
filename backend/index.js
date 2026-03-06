@@ -255,6 +255,11 @@ app.post("/postGompeiMadnessBracket", async (req, res) => {
     }
 });
 
+app.post("/qualPage", async (req, res) => {
+    console.log(req.body);
+    return res.sendStatus(200);
+})
+
 app.listen(VITE_BACKEND_PORT, () => {
     console.log("Listening on port " + VITE_BACKEND_PORT);
 });

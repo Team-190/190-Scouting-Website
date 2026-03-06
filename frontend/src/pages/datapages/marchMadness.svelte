@@ -1,13 +1,12 @@
 <script>
     import { onMount } from "svelte";
-
-    const TBA_API_KEY = "zhTqFG7csJoif1sNXt3aZngy0LB1X4LxMgTfXBvPscNG0P9FifZCa2uGJcUk2gKW";
-    const TBA_BASE_URL = "https://www.thebluealliance.com/api/v3";
+    import { fetchAlliances as fetchAlliancesFromAPI, fetchElimsHaveStarted } from "../../utils/blueAllianceApi";
 
     let Name = "";
     let winners = [];
     let loadingAlliances = true;
     let eventCode = "";
+    let elimsStarted = false;
 
     let seeds = [
         { id: "A1", name: "Alliance 1", seed: 1 },
@@ -69,11 +68,8 @@
     async function fetchAlliances(code) {
         if (!code) return;
         try {
-            const res = await fetch(`${TBA_BASE_URL}/event/${code}/alliances`, {
-                headers: { "X-TBA-Auth-Key": TBA_API_KEY }
-            });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            const data = await res.json();
+            const data = await fetchAlliancesFromAPI(code);
+            if (!data || !data.length) throw new Error("No alliance data");
 
             // TBA returns alliances sorted by seed (index 0 = Alliance 1)
             const newSeeds = data.slice(0, 8).map((alliance, i) => {
@@ -186,13 +182,30 @@
         Name = "";
     }
 
-    onMount(async () => {
+    async function checkElimsStarted() {
+        const code = localStorage.getItem("eventCode") || "";
+        if (!code) return;
+        elimsStarted = await fetchElimsHaveStarted(code);
+        // Also broadcast so Navbar can react
+        localStorage.setItem("elimsStarted", elimsStarted ? "1" : "0");
+        window.dispatchEvent(new StorageEvent("storage", {
+            key: "elimsStarted",
+            newValue: elimsStarted ? "1" : "0",
+            storageArea: localStorage,
+        }));
+    }
+
+    onMount(() => {
         eventCode = localStorage.getItem("eventCode") || "";
         if (eventCode) {
-            await fetchAlliances(eventCode);
+            fetchAlliances(eventCode).then(() => checkElimsStarted());
         } else {
             loadingAlliances = false;
+            checkElimsStarted();
         }
+        // Poll every 60s — elim matches happen fast once they start
+        const interval = setInterval(checkElimsStarted, 60000);
+        return () => clearInterval(interval);
     });
 </script>
 
@@ -238,6 +251,19 @@
         </div>
     </div>
 {/snippet}
+
+{#if !elimsStarted}
+<div class="submissionSection">
+    <label for="Name">Your Name:</label>
+    <input
+        id="Name"
+        type="text"
+        bind:value={Name}
+        placeholder="Enter name"
+    />
+    <button on:click={handleSubmit}>Submit Winners</button>
+</div>
+{/if}
 
 <div class="bracket-app">
     {#if loadingAlliances}
@@ -300,16 +326,6 @@
     </div>
 </div>
 
-<div class="submissionSection">
-    <label for="Name">Your Name:</label>
-    <input
-        id="Name"
-        type="text"
-        bind:value={Name}
-        placeholder="Enter name"
-    />
-    <button on:click={handleSubmit}>Submit Winners</button>
-</div>
 
 <style>
     :root {
@@ -326,7 +342,7 @@
 
     .bracket-app {
         width: 1300px;
-        margin: 20px auto;
+        margin: 10px auto;
         position: relative;
     }
 
@@ -355,7 +371,7 @@
     .bracket-grid {
         display: grid;
         grid-template-columns: repeat(6, 1fr);
-        grid-template-rows: repeat(40, 30px);
+        grid-template-rows: repeat(28, 28px);
         position: relative;
     }
 
@@ -530,24 +546,23 @@
     .cell::before { display: block; }
 
     .submissionSection {
-        width: 100%;
+        width: 1300px;
+        margin: 0 auto 10px auto;
         display: flex;
-        flex-direction: column;
+        flex-direction: row;
         align-items: center;
-        margin-top: 30px;
         gap: 10px;
-        padding: 20px;
     }
 
     .submissionSection label {
         font-weight: bold;
         color: var(--frc-190-black);
+        white-space: nowrap;
     }
 
     .submissionSection input {
-        width: 300px;
-        max-width: 90%;
-        padding: 10px;
+        width: 220px;
+        padding: 7px 10px;
         border: 2px solid var(--frc-190-red);
         background: white;
         color: var(--frc-190-black);
@@ -561,7 +576,7 @@
     }
 
     .submissionSection button {
-        padding: 10px 20px;
+        padding: 7px 18px;
         border: 2px solid var(--frc-190-red);
         background: linear-gradient(135deg, #333 0%, #444 100%);
         color: white;
@@ -569,6 +584,7 @@
         border-radius: 6px;
         cursor: pointer;
         transition: all 0.2s;
+        white-space: nowrap;
     }
 
     .submissionSection button:hover {

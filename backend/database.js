@@ -9,7 +9,6 @@ const config = {
     password: process.env.DB_PASSWORD,
     server: process.env.VITE_SERVER_IP,
     port: 49172,
-    database: '2026manualMatch',
     options: {
         encrypt: false,
         trustServerCertificate: true
@@ -104,9 +103,15 @@ async function getAllData(eventCode) {
 
             for (const metric of Object.keys(row)) {
                 // Skip identifiers and non-summable fields
-                if (['id', 'Id', 'ID', 'Team', 'team', 'Match', 'match', 'RecordType', 'ScouterName', 'ScouterError', 'Time', 'time', 'Mode', 'DriveStation'].includes(metric)) {
+                if (['NearBlueZoneTimer', 'FarBlueZoneTimer', 'NearNeutralZoneTimer', 'NearRedZoneTimer', 'FarNeutralZoneTimer', 'FarRedZoneTimer', 'id', 'Id', 'ID', 'Team', 'team', 'Match', 'match', 'RecordType', 'ScouterName', 'ScouterError', 'Time', 'time', 'Mode', 'DriveStation'].includes(metric)) {
                     continue;
                 }
+                
+
+
+
+
+
                 
                 // Exclude AutoClimb and StartingLocation from sums as they are taken from EndAuto specifically
                 if (['AutoClimb', 'StartingLocation'].includes(metric)) continue;

@@ -12,6 +12,8 @@
   import * as pieGraph from "../../pages/graphcode/pie.js";
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
+  import { fetchGracePage } from "../../utils/api";
+  import { fetchMatchAlliances } from "../../utils/blueAllianceApi";
   import { v4 as uuidv4 } from "uuid";
   import { fetchGracePage, fetchPitScouting } from "../../utils/api";
 
@@ -42,18 +44,34 @@
     ["LadderLocation", "Ladder Location"],
     ["Strategy", "Strategy"],
     ["EstimatedPoints", "EFS (Estimated Fuel Scored)"],
+    // ["BallsPerSecond", "BPS (Balls Per Second)"],
+    ["RecordType", "Record Type"],
+    ["Time", "Time"],
+    ["FarBlueZoneTime", "Far Blue Zone Time"],
+    ["FarRedZoneTime", "Far Red Zone Time"],
+    ["NearBlueZoneTime", "Near Blue Zone Time"],
+    ["NearRedZoneTime", "Near Red Zone Time"],
+    ["NearNeutralZoneTime", "Near Neutral Zone Time"],
+    ["FarNeutralZoneTime", "Far Neutral Zone Time"],
   ]);
 
   const EXCLUDED_FIELDS = [
     "Match",
     "Team",
     "Id",
-    "RecordType",
+    // "RecordType",
     "ScouterName",
     "ScouterError",
-    "Time",
+    // "Time",
     "Mode",
     "DriveStation",
+    // "FarBlueZoneTime",
+    // "FarRedZoneTime",
+    // "NearBlueZoneTime",
+    // "NearRedZoneTime",
+    // "NearNeutralZoneTime",
+    // "FarNeutralZoneTime",
+    // "NearFar",
   ];
 
   const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime"];
@@ -175,11 +193,16 @@
   function checkIsNumericMetric(metric, teamData) {
     if (!teamData?.length) return false;
     let hasData = false;
+    console.log("team Data ", teamData);
     for (const row of teamData) {
       const v = row[metric];
+      console.log("metric: ", metric, v);
       if (v !== undefined && v !== null && v !== "") {
         hasData = true;
-        if (!isNumeric(v)) return false;
+        if (!isNumeric(v)) {
+          console.log("Non-numeric value found:", v);
+          return false;
+        }
       }
     }
     return hasData;
@@ -406,45 +429,12 @@
       teamOPR = null;
     }
   }
-  async function fetchMatchAlliances(): Promise<Record<number, any>> {
-    if (!eventCode) {
-      return {};
-    }
-    try {
-      const res = await fetch(`${TBA_BASE_URL}/event/${eventCode}/matches`, {
-        headers: { "X-TBA-Auth-Key": TBA_API_KEY },
-      });
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      const result: Record<number, any> = {};
-      data.forEach((match) => {
-        if (match.comp_level !== "qm") return;
-        const num = match.match_number;
-        result[num] = {
-          red: (match.alliances.red.team_keys ?? []).map((k) =>
-            k.replace("frc", ""),
-          ),
-          blue: (match.alliances.blue.team_keys ?? []).map((k) =>
-            k.replace("frc", ""),
-          ),
-          redScore: match.score_breakdown.red.hubScore.totalCount ?? null,
-          blueScore: match.score_breakdown.blue.hubScore.totalCount ?? null,
-        };
-      });
-      return result;
-    } catch (e) {
-      console.error("Error fetching match alliances:", e);
-      return {};
-    }
-  }
 
   async function estimateTeamPoints(
     teamStr,
     matchNumber,
   ): Promise<number | null> {
-    let alliances = await fetchMatchAlliances();
+    let alliances = await fetchMatchAlliances(eventCode);
     let alliance = alliances[matchNumber];
 
     if (!teamViewData || !alliance) return null;
@@ -506,6 +496,142 @@
     });
 
     return estimatedPoints;
+  }
+
+  function getNearFarByMatch(teamNumber) {
+    let rows = teamViewData.filter((row) => {
+      if (row.RecordType === "Match_Event") return false;
+      let raw = String(row.Team || row.team || "").replace(/\D/g, "");
+      return raw === teamNumber;
+    });
+
+    let byMatch = {};
+
+    for (let row of rows) {
+      let matchNum = Number(row.Match);
+      if (!matchNum) continue;
+
+      if (!byMatch[matchNum]) {
+        byMatch[matchNum] = {
+          NearBlueZoneTime: 0,
+          NearRedZoneTime: 0,
+          NearNeutralZoneTime: 0,
+          FarBlueZoneTime: 0,
+          FarRedZoneTime: 0,
+          FarNeutralZoneTime: 0,
+        };
+      }
+
+      for (let zone of Object.keys(byMatch[matchNum])) {
+        let v = row[zone];
+        if (
+          v !== undefined &&
+          v !== null &&
+          v !== "" &&
+          v !== -1 &&
+          isNumeric(v)
+        ) {
+          byMatch[matchNum][zone] += Number(v);
+        }
+      }
+    }
+
+    for (let [matchNum, zones] of Object.entries(byMatch)) {
+      let near =
+        zones.NearBlueZoneTime +
+        zones.NearRedZoneTime +
+        zones.NearNeutralZoneTime;
+      let far =
+        zones.FarBlueZoneTime + zones.FarRedZoneTime + zones.FarNeutralZoneTime;
+      let neutral = zones.NearNeutralZoneTime + zones.FarNeutralZoneTime;
+      let red = zones.NearRedZoneTime + zones.FarRedZoneTime;
+      let blue = zones.NearBlueZoneTime + zones.FarBlueZoneTime;
+      let total = near + far;
+      byMatch[matchNum].total = total;
+      byMatch[matchNum].nearPercentage =
+        total > 0 ? Math.round((near / total) * 1000) / 10 : 0;
+
+      byMatch[matchNum].farPercentage =
+        total > 0 ? Math.round((far / total) * 1000) / 10 : 0;
+
+      byMatch[matchNum].neutralPercentage =
+        total > 0 ? Math.round((neutral / total) * 1000) / 10 : 0;
+      byMatch[matchNum].redPercentage =
+        total > 0 ? Math.round((red / total) * 1000) / 10 : 0;
+      byMatch[matchNum].bluePercentage =
+        total > 0 ? Math.round((blue / total) * 1000) / 10 : 0;
+
+      byMatch[matchNum].nearBluePercentage =
+        total > 0
+          ? Math.round((zones.NearBlueZoneTime / total) * 1000) / 10
+          : 0;
+      byMatch[matchNum].nearRedPercentage =
+        total > 0 ? Math.round((zones.NearRedZoneTime / total) * 1000) / 10 : 0;
+      byMatch[matchNum].farBluePercentage =
+        total > 0 ? Math.round((zones.FarBlueZoneTime / total) * 1000) / 10 : 0;
+      byMatch[matchNum].farRedPercentage =
+        total > 0 ? Math.round((zones.FarRedZoneTime / total) * 1000) / 10 : 0;
+      byMatch[matchNum].farNeutralPercentage =
+        total > 0
+          ? Math.round((zones.FarNeutralZoneTime / total) * 1000) / 10
+          : 0;
+      byMatch[matchNum].nearNeutralPercentage =
+        total > 0
+          ? Math.round((zones.NearNeutralZoneTime / total) * 1000) / 10
+          : 0;
+    }
+
+    console.log(`[Team ${teamNumber}] Near/Far by Match`, byMatch);
+    return byMatch;
+  }
+
+  function makeNearFarRows(rowData, matches) {
+    let teamNumber = String(selectedTeam).replace(/\D/g, "");
+    let byMatch = getNearFarByMatch(teamNumber);
+
+    if (!Object.keys(byMatch).length) return rowData;
+
+    let nearFarMetrics = [
+      { key: "nearPercentage", label: "Near Zone %" },
+      { key: "farPercentage", label: "Far Zone %" },
+      { key: "neutralPercentage", label: "Neutral Zone %" },
+      { key: "redPercentage", label: "Red Zone %" },
+      { key: "bluePercentage", label: "Blue Zone %" },
+      { key: "nearBluePercentage", label: "Near Blue Zone %" },
+      { key: "nearRedPercentage", label: "Near Red Zone %" },
+      { key: "farBluePercentage", label: "Far Blue Zone %" },
+      { key: "farRedPercentage", label: "Far Red Zone %" },
+      { key: "farNeutralPercentage", label: "Far Neutral Zone %" },
+      { key: "nearNeutralPercentage", label: "Near Neutral Zone %" },
+      
+    ];
+
+    const qLabels = matches.map((_, i) => `Q${i + 1}`);
+
+    const newRows = nearFarMetrics.map(({ key, label }) => {
+      let row = {
+        metric: label,
+        mean: null,
+        median: null,
+        percentile: null,
+      };
+
+      const values: number[] = [];
+
+      qLabels.forEach((q, i) => {
+        const matchNum = matches[i]?.Match;
+        const v = byMatch[matchNum]?.[key] ?? null;
+        row[q] = v;
+        if (v !== null) values.push(v);
+      });
+
+      row.mean = Number(mean(values).toFixed(2));
+      row.median = Number(median(values).toFixed(2));
+
+      return row;
+    });
+
+    return [...rowData, ...newRows];
   }
 
   function fetchGraceRating(team) {
@@ -762,7 +888,7 @@
     });
 
     // Build row data (one row per metric)
-    const rowData = displayMetrics.map((metric) => {
+    let rowData = displayMetrics.map((metric) => {
       const isBooleanMetric = BOOLEAN_METRICS.includes(metric);
       const isClimbStateMetric = metric === CLIMBSTATE_METRIC;
       const isNumericMetric = globalStats[metric]?.isNumeric ?? false;
@@ -835,6 +961,8 @@
                   ? 20
                   : 0;
       }
+
+      makeNearFarRows(rowData, matches);
     });
 
     // ── Column Definitions ──
@@ -1038,6 +1166,7 @@
       },
     ];
 
+    rowData = makeNearFarRows(rowData, matches);
     gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT;
 
     if (gridInstance) gridInstance.destroy();
@@ -1082,6 +1211,34 @@
       }
     }, 0);
   }
+
+  // ─── Match Events ─────────────────────────────────────────────────────────────
+
+  $: matchEvents = (() => {
+    if (!teamViewData || !selectedTeam) return [];
+    const teamStr = String(selectedTeam).replace(/\D/g, "");
+    return teamViewData
+      .filter((row) => {
+        if (row.RecordType !== "Match_Event") return false;
+        const raw = row.Team || row.team;
+        if (!raw) return false;
+        return String(raw).replace(/\D/g, "") === teamStr;
+      })
+      .map((row) => ({
+        match: row.Match,
+        event:
+          row.MatchEvent && row.MatchEvent !== "-" ? row.MatchEvent : "Unknown",
+        time: row.Time
+          ? new Date(row.Time).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            })
+          : "—",
+        phase: row.Mode && row.Mode !== "-" ? row.Mode : "—",
+      }))
+      .sort((a, b) => Number(a.match) - Number(b.match));
+  })();
 
   // ─── Charts ───────────────────────────────────────────────────────────────────
 
@@ -1131,7 +1288,7 @@
     });
   }
 
-  $: if (selectedTeam) {
+  $: if (selectedTeam && cache[selectedTeam]) {
     charts.forEach((c) => {
       if (c.instance) updateChartDataset(c);
     });
@@ -1665,6 +1822,47 @@
     background: var(--frc-190-black);
     border-radius: 8px;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+  }
+
+  .events-section {
+    width: 80vw;
+    margin-top: 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .events-table {
+    width: 100%;
+    max-width: 800px;
+    border-collapse: collapse;
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+    border: 2px solid var(--frc-190-red);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  }
+  .events-table th {
+    background: var(--frc-190-red);
+    color: white;
+    font-size: 16px;
+    font-weight: 700;
+    padding: 10px 16px;
+    text-align: center;
+  }
+  .events-table td {
+    color: white;
+    font-size: 15px;
+    padding: 10px 16px;
+    text-align: center;
+    border-top: 1px solid #444;
+  }
+  .events-table tbody tr:hover {
+    background: rgba(200, 27, 0, 0.15);
+  }
+  .no-events {
+    color: #999;
+    font-size: 16px;
+    font-style: italic;
   }
 
   .graph-section {

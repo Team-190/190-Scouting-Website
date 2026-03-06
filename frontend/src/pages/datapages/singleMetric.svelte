@@ -14,6 +14,7 @@
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import { v4 as uuidv4 } from "uuid";
   import { fetchSingleMetric } from "../../utils/api.js";
+  import { fetchMatchAlliances } from "../../utils/blueAllianceApi";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -44,6 +45,12 @@
     ["Strategy", "Strategy"],
     ["OPR", "OPR (Offensive Power Rating)"],
     ["EFS", "EFS (Estimated Fuel Score)"],
+    ["FarBlueZoneTime", "Far Blue Zone Time"],
+    ["FarRedZoneTime", "Far Red Zone Time"],
+    ["NearBlueZoneTime", "Near Blue Zone Time"],
+    ["NearRedZoneTime", "Near Red Zone Time"],
+    ["NearNeutralZoneTime", "Near Neutral Zone Time"],
+    ["FarNeutralZoneTime", "Far Neutral Zone Time"],
   ]);
 
   const EFS_DISPLAY = "EFS (Estimated Fuel Score)";
@@ -63,6 +70,13 @@
     "Time",
     "Mode",
     "DriveStation",
+    "FarBlueZoneTime",
+    "FarRedZoneTime",
+    "NearBlueZoneTime",
+    "NearRedZoneTime",
+    "NearNeutralZoneTime",
+    "FarNeutralZoneTime",
+    "NearFar",
   ]);
 
   // Metrics excluded from radar chart
@@ -373,47 +387,14 @@
     return localStorage.getItem("data");
   }
 
-  async function fetchMatchAlliances(): Promise<Record<number, any>> {
-    if (!eventCode) {
-      return {};
-    }
-    try {
-      const res = await fetch(`${TBA_BASE_URL}/event/${eventCode}/matches`, {
-        headers: { "X-TBA-Auth-Key": TBA_API_KEY },
-      });
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      const result: Record<number, any> = {};
-      data.forEach((match) => {
-        if (match.comp_level !== "qm") return;
-        const num = match.match_number;
-        result[num] = {
-          red: (match.alliances.red.team_keys ?? []).map((k) =>
-            k.replace("frc", ""),
-          ),
-          blue: (match.alliances.blue.team_keys ?? []).map((k) =>
-            k.replace("frc", ""),
-          ),
-          redScore: match.score_breakdown.red.hubScore.totalCount ?? null,
-          blueScore: match.score_breakdown.blue.hubScore.totalCount ?? null,
-        };
-      });
-      return result;
-    } catch (e) {
-      console.error("Error fetching match alliances:", e);
-      return {};
-    }
-  }
-
   async function estimateTeamPoints(
     teamStr,
     matchNumber,
     preloadedAlliances?: Record<number, any>,
     preloadedData?: any[],
   ): Promise<number | null> {
-    const alliances = preloadedAlliances ?? (await fetchMatchAlliances());
+    const alliances =
+      preloadedAlliances ?? (await fetchMatchAlliances(eventCode));
     const data = preloadedData ?? JSON.parse(await fetchAllMetricData());
     const alliance = alliances[matchNumber];
 
@@ -674,10 +655,16 @@
         }
         if (!isNumericMetric || isClimbStateMetric)
           return a.team.localeCompare(b.team);
+        if (inverted) {
+          const aVal = a.mean === null || a.mean === 0 ? Infinity : a.mean;
+          const bVal = b.mean === null || b.mean === 0 ? Infinity : b.mean;
+          return aVal - bVal;
+        }
+
         if (a.mean === null && b.mean !== null) return 1;
         if (b.mean === null && a.mean !== null) return -1;
         if (a.mean === null) return 0;
-        return inverted ? a.mean - b.mean : b.mean - a.mean;
+        return b.mean - a.mean;
       })
       .map((row, i, arr) => {
         if (
@@ -731,9 +718,6 @@
   }
 
   let efsLoading = false;
-  async function getOrFetchAlliances() {
-    return await fetchMatchAlliances();
-  }
 
   async function buildEFSGrid() {
     if (!availableTeams.length) return;
@@ -751,7 +735,7 @@
       [{ msg: "Fetching match alliances from TBA…" }],
     );
 
-    const alliances = await getOrFetchAlliances();
+    const alliances = await fetchMatchAlliances(eventCode);
     const data = JSON.parse(await fetchAllMetricData());
 
     const maxMatchCount = availableTeams.reduce(
@@ -767,7 +751,7 @@
       availableTeams.map(async (team) => {
         const matches = teamData[team] ?? [];
         const row: any = { team, hasData: false };
-        const nonZero: number[] = [];
+        const efsValues: number[] = [];
 
         await Promise.all(
           matches.map(async (matchRow, i) => {
@@ -779,15 +763,17 @@
               data,
             );
             row[qLabels[i]] = efs;
-            if (efs !== null && efs > 0) {
-              nonZero.push(efs);
+            if (efs !== null) {
+              efsValues.push(efs);
               row.hasData = true;
             }
           }),
         );
 
-        row.mean = nonZero.length ? Number(mean(nonZero).toFixed(2)) : null;
-        row.median = nonZero.length ? Number(median(nonZero).toFixed(2)) : null;
+        row.mean = efsValues.length ? Number(mean(efsValues).toFixed(2)) : null;
+        row.median = efsValues.length
+          ? Number(median(efsValues).toFixed(2))
+          : null;
         return row;
       }),
     );
@@ -1022,7 +1008,7 @@
       headerName: "Team",
       field: "team",
       pinned: "left",
-      width: 100,
+      width: 150,
       headerClass: "header-center",
       cellClass: "cell-center",
       cellStyle: (params) => {
@@ -1163,9 +1149,6 @@
       cellClass: "cell-center",
       cellStyle: (params) => {
         const v = params.value;
-        if (v === 0) {
-          return statCellStyle("black", "white", "3px solid #C81B00");
-        }
         const bg =
           v === null || v === undefined
             ? "#4D4D4D"
@@ -1174,7 +1157,6 @@
       },
       valueFormatter: (params) => {
         if (!params.data?.hasData || params.value == null) return "";
-        if (params.value === 0) return "0";
         return Number(params.value).toFixed(2);
       },
     };
@@ -1191,9 +1173,6 @@
       cellClass: "cell-center",
       cellStyle: (params) => {
         const v = params.value;
-        if (v === 0) {
-          return statCellStyle("black", "white", "2px solid #555");
-        }
         const bg =
           v === null || v === undefined
             ? "#4D4D4D"
@@ -1202,7 +1181,6 @@
       },
       valueFormatter: (params) => {
         if (!params.data?.hasData || params.value == null) return "";
-        if (params.value === 0) return "0";
         return Number(params.value).toFixed(2);
       },
     };
@@ -1939,7 +1917,7 @@
   :global(.ag-header-cell) {
     background: var(--frc-190-red) !important;
     color: white !important;
-    font-size: 18px;
+    font-size: 16px;
     font-weight: bold;
   }
   :global(.ag-header-cell.header-center .ag-header-cell-label) {
