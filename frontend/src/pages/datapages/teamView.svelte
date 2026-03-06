@@ -1,8 +1,8 @@
 <script lang="ts">
   import {
-      AllCommunityModule,
-      createGrid,
-      ModuleRegistry,
+    AllCommunityModule,
+    createGrid,
+    ModuleRegistry,
   } from "ag-grid-community";
   import "ag-grid-community/styles/ag-grid.css";
   import "ag-grid-community/styles/ag-theme-quartz.css";
@@ -14,7 +14,10 @@
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
   import { fetchGracePage, fetchPitScouting } from "../../utils/api";
-  import { fetchMatchAlliances } from "../../utils/blueAllianceApi";
+  import {
+    fetchMatchAlliances,
+    fetchMatchScores,
+  } from "../../utils/blueAllianceApi";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -132,6 +135,8 @@
   let eventCode = localStorage.getItem("eventCode");
   let robotPicturePreview: string | null = null;
   let teamQualData = [];
+  let avoidanceChartEl;
+  let avoidanceChartInstance;
 
   fetchGracePage(eventCode)
     .then((res) => res.json())
@@ -636,15 +641,15 @@
     robotPicturePreview = null;
     if (!eventCode || !teamNumber) return;
     try {
-        const res = await fetchPitScouting(eventCode, String(teamNumber));
-        if (!res.ok) return;
-        const data = await res.json();
-        robotPicturePreview = data?.robotPicturePreview ?? null;
+      const res = await fetchPitScouting(eventCode, String(teamNumber));
+      if (!res.ok) return;
+      const data = await res.json();
+      robotPicturePreview = data?.robotPicturePreview ?? null;
     } catch (e) {
-        console.error("Error fetching robot picture:", e);
-        robotPicturePreview = null;
+      console.error("Error fetching robot picture:", e);
+      robotPicturePreview = null;
     }
-}
+  }
 
   // ─── Match Aggregation ────────────────────────────────────────────────────────
 
@@ -770,7 +775,8 @@
     if (graceEl) graceEl.src = fetchGraceRating(selectedTeam);
     fetchRobotPicture(selectedTeam);
   }
-  function populateMatchDropdown(teamNumber) {
+
+  async function populateMatchDropdown(teamNumber) {
     const dropdown = document.querySelector(
       ".match-dropdown",
     ) as HTMLSelectElement;
@@ -784,10 +790,21 @@
       dropdown.appendChild(option);
     });
     onMatchChange();
+
+    let { barOption } = await compareWithMean();
+    if (avoidanceChartEl) {
+      if (!avoidanceChartInstance) {
+        const echarts = await import("echarts");
+        avoidanceChartInstance = echarts.init(avoidanceChartEl);
+      }
+      avoidanceChartInstance.setOption(barOption, true);
+    }
   }
 
   function setZoneValue(zoneName: string, value: number | null) {
-    const el = document.querySelector(`[data-zone="${zoneName}"]`) as HTMLElement;
+    const el = document.querySelector(
+      `[data-zone="${zoneName}"]`,
+    ) as HTMLElement;
     if (!el) return;
     el.textContent = value != null ? String(value) : "—";
     const cell = el.closest(".zone-cell") as HTMLElement;
@@ -799,7 +816,9 @@
 
   function onMatchChange() {
     const teamStr = String(selectedTeam);
-    const dropdown = document.querySelector(".match-dropdown") as HTMLSelectElement;
+    const dropdown = document.querySelector(
+      ".match-dropdown",
+    ) as HTMLSelectElement;
     if (!dropdown) return;
     const match = dropdown.value;
     const nearFarData = getNearFarByMatch(teamStr);
@@ -819,12 +838,16 @@
   }
 
   function getQualDataForTeam(teamNumber) {
-  const storedQual = localStorage.getItem("scoutingData");
-  const qualData = storedQual ? JSON.parse(storedQual) : [];
-  return qualData.filter((row) =>
-    String(row.Team).replace(/\D/g, "") === String(teamNumber).replace(/\D/g, "")
-  ).sort((a, b) => a.Match - b.Match);
-}
+    const storedQual = localStorage.getItem("scoutingData");
+    const qualData = storedQual ? JSON.parse(storedQual) : [];
+    return qualData
+      .filter(
+        (row) =>
+          String(row.Team).replace(/\D/g, "") ===
+          String(teamNumber).replace(/\D/g, ""),
+      )
+      .sort((a, b) => a.Match - b.Match);
+  }
 
   // ─── Grid Building ────────────────────────────────────────────────────────────
 
@@ -1366,31 +1389,68 @@
     return `Team ${selectedTeam} - ${METRIC_DISPLAY_NAMES.get(metric) || metric.replaceAll("_", " ")}`;
   }
 
-  function getBarOption(teamData, metric) {
-    return {
+  async function compareWithMean() {
+    let teamNumber = String(selectedTeam).replace(/\D/g, "");
+    let teamData = cache[teamNumber];
+
+    let avoidanceMatches = teamData.filter(
+      (match) =>
+        match.Avoidance !== "Select" &&
+        match.Avoidance !== undefined &&
+        match.Avoidance !== null &&
+        match.Avoidance !== "" &&
+        match.Avoidance !== -1 &&
+        match.Avoidance !== "None",
+    );
+
+    let avoidanceScores = await Promise.all(
+      avoidanceMatches.map((match) =>
+        fetchMatchScores(eventCode, match, teamNumber),
+      ),
+    );
+
+    let allScores = await Promise.all(
+      teamData.map((match) => fetchMatchScores(eventCode, match, teamNumber)),
+    );
+
+    let validAllScores = allScores.filter((s) => s !== null);
+    let overallAverage =
+      validAllScores.length > 0
+        ? validAllScores.reduce((a, b) => a + b, 0) / validAllScores.length
+        : 0;
+
+    let barOption = {
       title: {
-        text: chartTitle(metric),
+        text: `Team ${selectedTeam} — Avoidance scores`,
         textStyle: { color: "#ffffff", fontSize: 16 },
       },
       tooltip: { trigger: "axis" },
+      yAxis: { type: "value", axisLabel: { color: "#ffffff" } },
       xAxis: {
         type: "category",
-        data: teamData.map((_, i) => `Q${i + 1}`),
+        data: [...avoidanceMatches.map((m) => `Q${m.Match}`), "Mean"],
         axisLabel: { color: "#ffffff" },
       },
-      yAxis: { type: "value", axisLabel: { color: "#ffffff" } },
       series: [
         {
-          data: teamData.map((d) =>
-            isNumeric(d[metric]) ? Number(d[metric]) : 0,
-          ),
+          data: [
+            ...avoidanceScores.map((s) => ({
+              value: s ?? 0,
+              itemStyle: { color: "#C81B00" },
+            })),
+            {
+              value: Math.round(overallAverage),
+              itemStyle: { color: "#000000" }, 
+            },
+          ],
           type: "bar",
           name: `Team ${selectedTeam}`,
-          itemStyle: { color: "#C81B00" },
           label: { show: true, color: "#ffffff" },
         },
       ],
     };
+
+    return { avoidanceScores, overallAverage, barOption };
   }
 
   function getLineOption(teamData, metric) {
@@ -1543,7 +1603,7 @@
     if (allTeams.length > 0) {
       selectedTeam =
         allTeams.find((t) => t.toString() === "190") ?? allTeams[0];
-      loadTeamData(selectedTeam);
+      await loadTeamData(selectedTeam);
     }
 
     await fetchTeamOPR(String(selectedTeam));
@@ -1592,7 +1652,12 @@
       </select>
     </div>
     <div>
-      <img src="" alt="" id="grace-rating" style="height: 50px; width: auto; border-radius: 6px;"/>
+      <img
+        src=""
+        alt=""
+        id="grace-rating"
+        style="height: 50px; width: auto; border-radius: 6px;"
+      />
     </div>
   </div>
 
@@ -1608,10 +1673,7 @@
     {/if}
   </div>
 
-  <div
-    class="grid-container ag-theme-quartz"
-    bind:this={domNode}
-  ></div>
+  <div class="grid-container ag-theme-quartz" bind:this={domNode}></div>
 
   {#if teamQualData.length > 0}
     <div class="qual-section">
@@ -1620,15 +1682,7 @@
         {#each teamQualData as row}
           <div class="qual-card">
             <div class="qual-card-header">Match {row.Match}</div>
-            {#each [
-              ["Trench Feed Volume",    row.trenchFeedVolume],
-              ["Defense Effectiveness", row.defenseEffectiveness],
-              ["Defense Avoidance",     row.defenseAvoidance],
-              ["Intake Efficiency",     row.intakeEfficiency],
-              ["Strongest Aspect",      row.strongestAspect],
-              ["Mechanical Notes",      row.mechanicalNotes],
-              ["Match Events",          row.matchEvents],
-            ] as [label, value]}
+            {#each [["Trench Feed Volume", row.trenchFeedVolume], ["Defense Effectiveness", row.defenseEffectiveness], ["Defense Avoidance", row.defenseAvoidance], ["Intake Efficiency", row.intakeEfficiency], ["Strongest Aspect", row.strongestAspect], ["Mechanical Notes", row.mechanicalNotes], ["Match Events", row.matchEvents]] as [label, value]}
               {#if value}
                 <div class="qual-row">
                   <span class="qual-label">{label}</span>
@@ -1647,7 +1701,11 @@
 
     <div class="map-controls">
       <label for="match-dropdown">Match:</label>
-      <select name="match-dropdown" class="match-dropdown" on:change={onMatchChange}></select>
+      <select
+        name="match-dropdown"
+        class="match-dropdown"
+        on:change={onMatchChange}
+      ></select>
     </div>
 
     <div class="map-wrapper">
@@ -1696,13 +1754,24 @@
       </div>
 
       <div class="map-legend">
-        <div class="legend-item"><span class="legend-swatch red-swatch"></span> Red Alliance Zone</div>
-        <div class="legend-item"><span class="legend-swatch neutral-swatch"></span> Neutral Zone</div>
-        <div class="legend-item"><span class="legend-swatch blue-swatch"></span> Blue Alliance Zone</div>
+        <div class="legend-item">
+          <span class="legend-swatch red-swatch"></span> Red Alliance Zone
+        </div>
+        <div class="legend-item">
+          <span class="legend-swatch neutral-swatch"></span> Neutral Zone
+        </div>
+        <div class="legend-item">
+          <span class="legend-swatch blue-swatch"></span> Blue Alliance Zone
+        </div>
       </div>
     </div>
   </div>
-
+  <div class="avoidance-section">
+    <h2 class="section-title">Scores When Avoiding Defense</h2>
+    <div class="avoidance-chart-wrapper">
+      <div class="avoidance-chart" bind:this={avoidanceChartEl}></div>
+    </div>
+  </div>
   <div class="graph-section">
     <h2 class="section-title">Charts & Graphs</h2>
 
@@ -1826,12 +1895,18 @@
     font-size: 0.7rem;
     font-weight: 800;
     letter-spacing: 0.15em;
-    color: rgba(255,255,255,0.85);
+    color: rgba(255, 255, 255, 0.85);
     text-transform: uppercase;
-    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
   }
-  .far-label  { grid-row: 1; grid-column: 1; }
-  .near-label { grid-row: 2; grid-column: 1; }
+  .far-label {
+    grid-row: 1;
+    grid-column: 1;
+  }
+  .near-label {
+    grid-row: 2;
+    grid-column: 1;
+  }
   .zone-cell {
     --zone-intensity: 0;
     display: flex;
@@ -1840,45 +1915,68 @@
     justify-content: center;
     border-radius: 8px;
     padding: 8px 4px 6px;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    transition:
+      transform 0.15s ease,
+      box-shadow 0.15s ease;
   }
   .zone-cell:hover {
     transform: scale(1.03);
-    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
     z-index: 2;
   }
-  .far-red-zone, .near-red-zone {
+  .far-red-zone,
+  .near-red-zone {
     background: rgba(200, 27, 0, calc(0.25 + var(--zone-intensity) * 0.45));
     border: 1.5px solid rgba(255, 100, 80, 0.5);
   }
-  .far-neutral-zone, .near-neutral-zone {
+  .far-neutral-zone,
+  .near-neutral-zone {
     background: rgba(100, 100, 100, calc(0.25 + var(--zone-intensity) * 0.45));
     border: 1.5px solid rgba(180, 180, 180, 0.4);
   }
-  .far-blue-zone, .near-blue-zone {
+  .far-blue-zone,
+  .near-blue-zone {
     background: rgba(30, 100, 220, calc(0.25 + var(--zone-intensity) * 0.45));
     border: 1.5px solid rgba(100, 160, 255, 0.5);
   }
-  .far-red-zone     { grid-row: 1; grid-column: 2; }
-  .far-neutral-zone { grid-row: 1; grid-column: 3; }
-  .far-blue-zone    { grid-row: 1; grid-column: 4; }
-  .near-red-zone    { grid-row: 2; grid-column: 2; }
-  .near-neutral-zone{ grid-row: 2; grid-column: 3; }
-  .near-blue-zone   { grid-row: 2; grid-column: 4; }
+  .far-red-zone {
+    grid-row: 1;
+    grid-column: 2;
+  }
+  .far-neutral-zone {
+    grid-row: 1;
+    grid-column: 3;
+  }
+  .far-blue-zone {
+    grid-row: 1;
+    grid-column: 4;
+  }
+  .near-red-zone {
+    grid-row: 2;
+    grid-column: 2;
+  }
+  .near-neutral-zone {
+    grid-row: 2;
+    grid-column: 3;
+  }
+  .near-blue-zone {
+    grid-row: 2;
+    grid-column: 4;
+  }
   .zone-name {
     font-size: 0.65rem;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: rgba(255, 255, 255, 0.75);
-    text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
     margin-bottom: 2px;
   }
   .zone-value {
     font-size: 1.6rem;
     font-weight: 900;
     color: #ffffff;
-    text-shadow: 0 2px 8px rgba(0,0,0,0.9);
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
     line-height: 1;
   }
   .zone-unit {
@@ -1897,7 +1995,7 @@
     display: flex;
     align-items: center;
     gap: 7px;
-    color: rgba(255,255,255,0.85);
+    color: rgba(255, 255, 255, 0.85);
     font-size: 0.82rem;
     font-weight: 600;
   }
@@ -1907,9 +2005,18 @@
     border-radius: 3px;
     display: inline-block;
   }
-  .red-swatch     { background: rgba(200, 27, 0, 0.8); border: 1px solid rgba(255,100,80,0.6); }
-  .neutral-swatch { background: rgba(120, 120, 120, 0.8); border: 1px solid rgba(200,200,200,0.4); }
-  .blue-swatch    { background: rgba(30, 100, 220, 0.8); border: 1px solid rgba(100,160,255,0.6); }
+  .red-swatch {
+    background: rgba(200, 27, 0, 0.8);
+    border: 1px solid rgba(255, 100, 80, 0.6);
+  }
+  .neutral-swatch {
+    background: rgba(120, 120, 120, 0.8);
+    border: 1px solid rgba(200, 200, 200, 0.4);
+  }
+  .blue-swatch {
+    background: rgba(30, 100, 220, 0.8);
+    border: 1px solid rgba(100, 160, 255, 0.6);
+  }
 
   :global(html),
   :global(body) {
@@ -2130,13 +2237,12 @@
     margin-bottom: 20px;
   }
 
-.robot-pic-display {
-  display: flex;
-  justify-content: center;
-  width: 100%;
-  margin-bottom: 20px;
-}
-
+  .robot-pic-display {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    margin-bottom: 20px;
+  }
 
   .plus-btn {
     width: 50px;
@@ -2271,70 +2377,96 @@
       grid-template-columns: 1fr;
     }
   }
-  
+
   .qual-section {
-  width: 80vw;
-  margin-top: 30px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
+    width: 80vw;
+    margin-top: 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
 
-.qual-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  width: 100%;
-}
+  .qual-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    width: 100%;
+  }
 
-.qual-card {
-  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-  border: 2px solid var(--frc-190-red);
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-}
+  .qual-card {
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+    border: 2px solid var(--frc-190-red);
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  }
 
-.qual-card-header {
-  background: var(--frc-190-red);
-  color: white;
-  font-weight: 700;
-  font-size: 1rem;
-  padding: 8px 14px;
-  letter-spacing: 0.5px;
-}
+  .qual-card-header {
+    background: var(--frc-190-red);
+    color: white;
+    font-weight: 700;
+    font-size: 1rem;
+    padding: 8px 14px;
+    letter-spacing: 0.5px;
+  }
 
-.qual-row {
-  display: flex;
-  flex-direction: column;
-  padding: 10px 14px;
-  border-bottom: 1px solid #333;
-}
+  .qual-row {
+    display: flex;
+    flex-direction: column;
+    padding: 10px 14px;
+    border-bottom: 1px solid #333;
+  }
 
-.qual-row:last-child {
-  border-bottom: none;
-}
+  .qual-row:last-child {
+    border-bottom: none;
+  }
 
-.qual-label {
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: var(--frc-190-red);
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-  margin-bottom: 3px;
-}
+  .qual-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--frc-190-red);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 3px;
+  }
 
-.qual-value {
-  font-size: 0.9rem;
-  color: #ddd;
-  line-height: 1.4;
-}
+  .qual-value {
+    font-size: 0.9rem;
+    color: #ddd;
+    line-height: 1.4;
+  }
 
-@media (max-width: 1024px) {
-  .qual-grid { grid-template-columns: repeat(2, 1fr); }
-}
-@media (max-width: 700px) {
-  .qual-grid { grid-template-columns: 1fr; }
-}
+  @media (max-width: 1024px) {
+    .qual-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+  @media (max-width: 700px) {
+    .qual-grid {
+      grid-template-columns: 1fr;
+    }
+  }
 
+  .avoidance-section {
+    width: 80vw;
+    margin-top: 30px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .avoidance-chart-wrapper {
+    width: 100%;
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+    border: 2px solid var(--frc-190-red);
+    border-radius: 8px;
+    padding: 15px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  }
+
+  .avoidance-chart {
+    width: 100%;
+    height: 350px;
+    border-radius: 6px;
+  }
 </style>
