@@ -1,20 +1,20 @@
 <script lang="ts">
-  import { onMount, tick } from "svelte";
   import {
-    createGrid,
-    ModuleRegistry,
-    AllCommunityModule,
+      AllCommunityModule,
+      createGrid,
+      ModuleRegistry,
   } from "ag-grid-community";
   import "ag-grid-community/styles/ag-grid.css";
   import "ag-grid-community/styles/ag-theme-quartz.css";
+  import { onMount, tick } from "svelte";
+  import { v4 as uuidv4 } from "uuid";
   import * as barGraph from "../../pages/graphcode/bar.js";
   import * as lineGraph from "../../pages/graphcode/line.js";
   import * as pieGraph from "../../pages/graphcode/pie.js";
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
-  import { fetchMatchAlliances } from "../../utils/blueAllianceApi";
-  import { v4 as uuidv4 } from "uuid";
   import { fetchGracePage, fetchPitScouting } from "../../utils/api";
+  import { fetchMatchAlliances } from "../../utils/blueAllianceApi";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -58,10 +58,10 @@
     "Match",
     "Team",
     "Id",
-    // "RecordType",
+    "RecordType",
     "ScouterName",
     "ScouterError",
-    // "Time",
+    "Time",
     "Mode",
     "DriveStation",
     // "FarBlueZoneTime",
@@ -775,6 +775,7 @@
     populateMatchDropdown(selectedTeam);
     const graceEl = document.getElementById("grace-rating") as HTMLImageElement;
     if (graceEl) graceEl.src = fetchGraceRating(selectedTeam);
+    fetchRobotPicture(selectedTeam);
   }
   function populateMatchDropdown(teamNumber) {
     const dropdown = document.querySelector(
@@ -1567,7 +1568,7 @@
     <p class="subtitle">FRC Team 190 - Scouting Data Analysis</p>
   </div>
 
-  <div class="controls">
+  <div class="top-controls">
     <div class="opr-display">
       <span class="opr-label"
         >OPR: {teamOPR !== null ? teamOPR.toFixed(2) : "N/A"}</span
@@ -1586,31 +1587,33 @@
       </select>
     </div>
     <div>
-  <label for="colorblind-select">Colorblind Mode:</label>
-  <select
-    id="colorblind-select"
-    bind:value={colorblindMode}
-    on:change={onColorblindChange}
-  >
-    {#each Object.entries(COLOR_MODES) as [key, mode]}
-      <option value={key}>{mode.name}</option>
-    {/each}
-  </select>
+      <label for="colorblind-select">Colorblind Mode:</label>
+      <select
+        id="colorblind-select"
+        bind:value={colorblindMode}
+        on:change={onColorblindChange}
+      >
+        {#each Object.entries(COLOR_MODES) as [key, mode]}
+          <option value={key}>{mode.name}</option>
+        {/each}
+      </select>
+    </div>
+    <div>
+      <img src="" alt="" id="grace-rating" style="height: 50px; width: auto; border-radius: 6px;"/>
+    </div>
+  </div>
+
   <div class="robot-pic-display">
     {#if robotPicturePreview}
       <img
         src={robotPicturePreview}
         alt="Robot {selectedTeam}"
-        style="height: 60px; width: auto; border-radius: 6px; border: 2px solid var(--frc-190-red); object-fit: contain;"
+        style="height: 600px; width: auto; border-radius: 6px; border: 2px solid var(--frc-190-red); object-fit: contain;"
       />
     {:else}
       <span style="color: #888; font-size: 12px;">No photo</span>
     {/if}
   </div>
-  </div>
-    </div>
-    <img src="" alt="" id="grace-rating" />
-
 
   <div
     class="grid-container ag-theme-quartz"
@@ -2009,7 +2012,7 @@
     margin: 0;
   }
 
-  .controls {
+  .top-controls {
     padding: 15px 25px;
     background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
     color: white;
@@ -2025,7 +2028,7 @@
     border: 2px solid var(--frc-190-red);
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
   }
-  .controls label {
+  .top-controls label {
     font-weight: 600;
     color: #fff;
   }
@@ -2070,6 +2073,7 @@
     background: var(--frc-190-black);
     border-radius: 8px;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    margin-top: 20px;
   }
 
   .events-section {
@@ -2134,7 +2138,10 @@
   }
 
 .robot-pic-display {
-  width: 90px;
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-bottom: 20px;
 }
 
 
