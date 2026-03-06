@@ -1,13 +1,9 @@
 <script>
+  import fieldImageSrc from "../../images/FieldImage.png";
+
   // ─── Constants ────────────────────────────────────────────────────────────────
 
-  const ROBOT_COLORS = { Red: "#C81B00", Blue: "#003087" };
-
-  const START_SPOTS = [
-    "Left (Facing Driver)",
-    "Center",
-    "Right (Facing Driver)",
-  ];
+  const ROBOT_COLORS = "#FFFFFF";
 
   const MATCH_NUMBERS = Array.from({ length: 100 }, (_, i) => i + 1);
 
@@ -53,7 +49,6 @@
 
   let phase = "auto";
   let matchNumber = 1;
-  let startSpot = START_SPOTS[1];
   let alliance = "Red";
   let teamNumber = "";
   let scouterName = "";
@@ -64,6 +59,7 @@
   let drawnPaths = [];
   let currentPath = [];
   let tool = "draw";
+  let fieldImg = null;
 
   let teleopAnswers = {};
   TELEOP_QUESTIONS.forEach((q) => { teleopAnswers[q.id] = ""; });
@@ -72,6 +68,9 @@
   function initCanvas(node) {
     canvasEl = node;
     ctx = node.getContext("2d");
+    fieldImg = new Image();
+    fieldImg.src = fieldImageSrc;
+    fieldImg.onload = () => redrawCanvas();
     redrawCanvas();
     return {
       destroy() { ctx = null; canvasEl = null; }
@@ -99,7 +98,7 @@
     currentPath = [pos];
     ctx.beginPath();
     ctx.arc(pos.x, pos.y, 2, 0, Math.PI * 2);
-    ctx.fillStyle = ROBOT_COLORS[alliance];
+    ctx.fillStyle = ROBOT_COLORS;
     ctx.fill();
   }
 
@@ -113,7 +112,7 @@
       ctx.beginPath();
       ctx.moveTo(prev.x, prev.y);
       ctx.lineTo(pos.x, pos.y);
-      ctx.strokeStyle = ROBOT_COLORS[alliance];
+      ctx.strokeStyle = ROBOT_COLORS;
       ctx.lineWidth = 3;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
@@ -145,7 +144,7 @@
     ctx.lineTo(last.x - sz * Math.cos(angle - Math.PI / 6), last.y - sz * Math.sin(angle - Math.PI / 6));
     ctx.moveTo(last.x, last.y);
     ctx.lineTo(last.x - sz * Math.cos(angle + Math.PI / 6), last.y - sz * Math.sin(angle + Math.PI / 6));
-    ctx.strokeStyle = ROBOT_COLORS[alliance];
+    ctx.strokeStyle = ROBOT_COLORS;
     ctx.lineWidth = 3;
     ctx.stroke();
   }
@@ -165,41 +164,36 @@
     if (!ctx || !canvasEl) return;
     const W = canvasEl.width;
     const H = canvasEl.height;
-    const color = ROBOT_COLORS[alliance];
+    const color = ROBOT_COLORS;
 
     ctx.clearRect(0, 0, W, H);
 
-    // Grid
-    ctx.strokeStyle = "rgba(255,255,255,0.07)";
-    ctx.lineWidth = 1;
-    for (let x = 0; x <= W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-    for (let y = 0; y <= H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
-
-    // Start zone
-    ctx.fillStyle = color + "2A";
-    ctx.fillRect(0, 0, W * 0.18, H);
-    ctx.strokeStyle = color + "77";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(1, 1, W * 0.18 - 2, H - 2);
-
-    // Robot dot
-    const dotX = W * 0.09;
-    const dotY = startSpot === "Left (Facing Driver)" ? H * 0.2
-               : startSpot === "Center"               ? H * 0.5
-               :                                         H * 0.8;
-    ctx.beginPath();
-    ctx.arc(dotX, dotY, 14, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.fill();
-    ctx.strokeStyle = "white";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    if (teamNumber) {
-      ctx.fillStyle = "white";
-      ctx.font = "bold 11px monospace";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(String(teamNumber).slice(0, 4), dotX, dotY);
+    // Field image background (crop left/right to show only the playing field)
+    if (fieldImg && fieldImg.complete && fieldImg.naturalWidth > 0) {
+      const imgW = fieldImg.naturalWidth;
+      const imgH = fieldImg.naturalHeight;
+      // Crop ~15% from each side to remove scoring table / sideline areas
+      const cropPct = 0.15;
+      const sx = imgW * cropPct;
+      const sw = imgW * (1 - 2 * cropPct);
+      // Vertically, fit the full height then cover-crop if needed
+      const srcAspect = sw / imgH;
+      const dstAspect = W / H;
+      let finalSx = sx, finalSy = 0, finalSw = sw, finalSh = imgH;
+      // Shift the image up by biasing the vertical crop toward the top
+      const verticalBias = 0.6; // 0 = top, 0.5 = center, 1 = bottom
+      if (dstAspect > srcAspect) {
+        // canvas is wider than cropped source — crop top/bottom
+        const needed = sw / dstAspect;
+        finalSy = (imgH - needed) * verticalBias;
+        finalSh = needed;
+      } else {
+        // canvas is taller — crop a bit more left/right
+        const needed = imgH * dstAspect;
+        finalSx = sx + (sw - needed) / 2;
+        finalSw = needed;
+      }
+      ctx.drawImage(fieldImg, finalSx, finalSy, finalSw, finalSh, 0, 0, W, H);
     }
 
     // Replay paths
@@ -218,9 +212,6 @@
     });
   }
 
-  // Redraw when visual settings change
-  $: if (ctx) { alliance; startSpot; teamNumber; redrawCanvas(); }
-
   // ─── Phase transitions ────────────────────────────────────────────────────────
   function proceedToTeleop() { phase = "teleop"; }
 
@@ -231,7 +222,6 @@
       Team: teamNumber,
       ScouterName: scouterName,
       Alliance: alliance,
-      StartingLocation: startSpot,
       AutoPath: drawnPaths,
       ...teleopAnswers,
     };
@@ -309,8 +299,8 @@
           <div class="canvas-wrapper" style="--alliance-color: {allianceColor}">
             <canvas
               use:initCanvas
-              width={700}
-              height={350}
+              width={1200}
+              height={600}
               class="field-canvas"
               on:mousedown={onPointerDown}
               on:mousemove={onPointerMove}
@@ -452,7 +442,7 @@
     align-items: stretch;
     gap: 12px;
     width: 100%;
-    max-width: 940px;
+    max-width: 1200px;
   }
 
   /* Card */
