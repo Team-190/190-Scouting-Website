@@ -114,8 +114,3 @@ export async function postGompeiMadnessBracket(bracket) {
     console.log('Success:', result);
     return result;
 }
-
-export async function fetchPitScouting(eventCode, team) {
-    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getPitScouting?eventCode=${eventCode}&team=${team}`;
-    return fetch(route);
-}

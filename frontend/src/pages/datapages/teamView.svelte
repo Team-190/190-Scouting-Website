@@ -13,7 +13,7 @@
   import * as pieGraph from "../../pages/graphcode/pie.js";
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
-  import { fetchGracePage, fetchPitScouting } from "../../utils/api";
+  import { fetchGracePage, fetchPitScoutingImage } from "../../utils/api";
   import { fetchMatchAlliances } from "../../utils/blueAllianceApi";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
@@ -636,10 +636,10 @@
     robotPicturePreview = null;
     if (!eventCode || !teamNumber) return;
     try {
-        const res = await fetchPitScouting(eventCode, String(teamNumber));
+        const res = await fetchPitScoutingImage(eventCode, teamNumber);
         if (!res.ok) return;
-        const data = await res.json();
-        robotPicturePreview = data?.robotPicturePreview ?? null;
+        const data = await res.text();
+        robotPicturePreview = data ?? null;
     } catch (e) {
         console.error("Error fetching robot picture:", e);
         robotPicturePreview = null;
