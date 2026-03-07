@@ -1,5 +1,4 @@
 <script>
-    import { goto } from "@mateothegreat/svelte5-router";
     import { onMount } from "svelte";
     import { fetchAllData, fetchEvents, fetchPitScouting, fetchQualitativeScouting } from "../utils/api";
 
@@ -8,15 +7,19 @@
     async function cacheAllData() {
         localStorage.clear();
         console.log("Getting all data from storage for event " + eventCode);
-        const data = JSON.stringify(
-            (await (await fetchAllData(eventCode)).json()).data,
-        );
-        const pitScouting = JSON.stringify(
-            (await (await fetchPitScouting(eventCode)).json()),
-        );
-        const qualitativeScouting = JSON.stringify(
-            (await (await fetchQualitativeScouting(eventCode)).json()),
-        );
+        
+        const dataRes = await fetchAllData(eventCode);
+        const dataText = await dataRes.text();
+        const dataJson = dataText ? JSON.parse(dataText) : {};
+        const data = JSON.stringify(dataJson.data || []);
+
+        const pitRes = await fetchPitScouting(eventCode);
+        const pitText = await pitRes.text();
+        const pitScouting = pitText ? JSON.stringify(JSON.parse(pitText)) : "{}";
+
+        const qualRes = await fetchQualitativeScouting(eventCode);
+        const qualText = await qualRes.text();
+        const qualitativeScouting = qualText ? JSON.stringify(JSON.parse(qualText)) : "{}";
 
         console.log(data);
         localStorage.setItem("data", data);

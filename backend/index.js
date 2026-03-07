@@ -106,6 +106,8 @@ app.get("/getPitScouting", async (req, res) => {
     let result = await database.readJSONFile("pitScoutingData");
     result = result[eventCode];
 
+    if (!result) return res.send({});
+
     const stripped = Object.fromEntries(
         Object.entries(result).map(([team, data]) => {
             const { robotPicturePreview, ...rest } = data;

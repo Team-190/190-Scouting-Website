@@ -205,7 +205,15 @@ async function getAllData(eventCode) {
 
 async function readJSONFile(filename) {
     try {
-        fileData = JSON.parse(fs.readFileSync(filename+".json", { encoding: 'utf8', flag: 'r' }));
+        const fullPath = filename + ".json";
+        if (!fs.existsSync(fullPath)) {
+            fs.writeFileSync(fullPath, "{}", "utf8");
+        }
+        const rawData = fs.readFileSync(fullPath, { encoding: 'utf8', flag: 'r' });
+        if (!rawData || !rawData.trim()) {
+            return {};
+        }
+        const fileData = JSON.parse(rawData);
         return fileData;
     } catch (error) {
         console.log("Error reading file", error);

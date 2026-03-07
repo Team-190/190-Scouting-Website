@@ -1,6 +1,7 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { postPitScouting, fetchAvailableTeams } from "../../utils/api";
+    import { postPitScouting } from "../../utils/api";
+    import { fetchTeams } from "../../utils/blueAllianceApi";
 
     const boolFields = ["overBump", "throughTrench", "climbDuringAuto", "canUseHP", "canUseDepot", "canFeed"] as const;
     const plainFields = ["climbLevels", "quantityBallsHopper", "avgIntakeSpeed", "avgShootSpeed", "accuracy", "framesize", "startingHeight", "fullExtensionHeight"] as const;
@@ -28,8 +29,8 @@
     let allTeams = [];
 
     onMount(async () => {
-        const { data } = await (await fetchAvailableTeams(eventCode)).json();
-        allTeams = data;
+        const { _teamNumbers } = await fetchTeams(eventCode);
+        allTeams = _teamNumbers;
     });
 
     function handleInput(field, event) {

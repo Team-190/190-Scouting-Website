@@ -282,8 +282,8 @@
 
         <div class="setup-grid">
           <div class="field-group">
-            <label for="scouter-name">Scouter Name</label>
-            <input id="scouter-name" type="text" bind:value={scouterName} placeholder="Your name…" class="text-input" />
+            <label for="scouter-name">Scouter Initials</label>
+            <input id="scouter-name" type="text" bind:value={scouterName} placeholder="RK…" class="text-input" />
           </div>
           <div class="field-group">
             <label for="team-number">Team Number</label>
