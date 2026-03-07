@@ -32,7 +32,7 @@ async function getEvents() {
 }
 
 // Get the teams participating in an event
-async function getAvailableTeams() {
+async function getAvailableTeams(eventCode) {
     try {
         await sql.connect(config);
         const result = await sql.query(`SELECT DISTINCT team FROM [${eventCode}].[dbo].[Activities]`);

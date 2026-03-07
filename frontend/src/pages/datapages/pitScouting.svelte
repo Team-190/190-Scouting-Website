@@ -1,7 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { postPitScouting } from "../../utils/api";
-    import { fetchTeams } from "../../utils/blueAllianceApi";
+    import { postPitScouting, fetchAvailableTeams } from "../../utils/api";
 
     const boolFields = ["overBump", "throughTrench", "climbDuringAuto", "canUseHP", "canUseDepot", "canFeed"] as const;
     const plainFields = ["climbLevels", "quantityBallsHopper", "avgIntakeSpeed", "avgShootSpeed", "accuracy", "framesize", "startingHeight", "fullExtensionHeight"] as const;
@@ -29,8 +28,8 @@
     let allTeams = [];
 
     onMount(async () => {
-        const { _teamNumbers } = await fetchTeams(eventCode);
-        allTeams = _teamNumbers;
+        const { data } = await (await fetchAvailableTeams(eventCode)).json();
+        allTeams = data;
     });
 
     function handleInput(field, event) {
@@ -65,7 +64,7 @@
     }
 
     async function handleSubmit() {
-        if (!selectedTeam) {
+        if (!selectedTeam || selectedTeam === "Select a team") {
             submitMessage = "Please enter a team number";
             submitError = true;
             return;
@@ -79,6 +78,7 @@
         const boolToYN = (val) => val === true ? "Y" : val === false ? "N" : "";
 
         const apiFormData = {
+            teamNumber: selectedTeam,
             ...Object.fromEntries(boolFields.map(f => [f, boolToYN(formData[f])])),
             ...Object.fromEntries(plainFields.map(f => [f, formData[f]])),
         };
@@ -96,22 +96,35 @@
                 })
             };
 
-            const response = await postPitScouting(eventCode, selectedTeam, apiFormDataWithImage);
+            for (let i = 0; i < existing.length; i++) {
+                const isLast = i === existing.length - 1;
+                let response = await postPitScouting(
+                    eventCode,
+                    isLast ? selectedTeam : existing[i].teamNumber,
+                    isLast ? apiFormDataWithImage : existing[i]
+                );
+                if (response.ok) {
+                    existing.splice(i, 1);
+                    i--;
+                    localStorage.setItem("pitScouting", JSON.stringify(existing));
+                }
+            }
             
-            if (response.ok) {
-                localStorage.removeItem("pitScouting");
-                submitMessage = "✓ Pit scouting data submitted successfully!";
+            if (existing.length === 0) {
+                submitMessage = "✓ Pit scouting data submitted to server successfully!";
                 submitError = false;
                 clearForm();
                 setTimeout(() => { submitMessage = ""; }, 3000);
             } else {
-                submitMessage = `Error: ${await response.text()}`;
+                submitMessage = `Some entries failed to submit and were saved locally.`;
                 submitError = true;
             }
         } catch (error) {
             console.error("Submission error:", error);
-            submitMessage = `Error: ${error.message}`;
-            submitError = true;
+            submitMessage = "No internet, so pit scouting data was sent to local storage.";
+            submitError = false;
+            clearForm();
+            setTimeout(() => { submitMessage = ""; }, 3000);
         } finally {
             submitting = false;
         }

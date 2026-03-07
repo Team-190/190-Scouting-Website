@@ -8,8 +8,8 @@ export function fetchEvents() {
     return data;
 }
 
-export function fetchAvailableTeams() {
-    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getAvailableTeams`;
+export function fetchAvailableTeams(eventCode) {
+    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getAvailableTeams?eventCode=` + eventCode;
     let data = fetch(route);
     return data;
 }

@@ -233,10 +233,14 @@
     localStorage.setItem("scoutingData", JSON.stringify(existing));
 
     try {
-      const response = await postQualitativeScouting(eventCode, teamNumber, matchNumber, record);
 
-      if (response.ok) {
-        localStorage.removeItem("scoutingData");
+      for (let i = 0; i < existing.length; i++) {
+        const response = await postQualitativeScouting(eventCode, existing[i].Team, existing[i].Match, existing[i]);
+        if (response.ok) {
+          existing.splice(i, 1);
+          i--;
+          localStorage.setItem("scoutingData", JSON.stringify(existing));
+        }
       }
     } catch (e) {
       console.log("No internet, saving data later...");
