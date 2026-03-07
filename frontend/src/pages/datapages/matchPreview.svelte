@@ -12,7 +12,7 @@
   import * as pieGraph from "../../pages/graphcode/pie.js";
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
-  import { fetchGracePage } from "../../utils/api";
+  import { fetchGracePage } from "../../utils/api.js";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 

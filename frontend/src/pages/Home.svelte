@@ -1,7 +1,7 @@
 <script>
     import { goto } from "@mateothegreat/svelte5-router";
     import { onMount } from "svelte";
-    import { fetchAllData, fetchEvents } from "../utils/api";
+    import { fetchAllData, fetchEvents, fetchPitScouting, fetchQualitativeScouting } from "../utils/api";
 
     let eventCode = localStorage.getItem("eventCode");
 
@@ -11,9 +11,18 @@
         const data = JSON.stringify(
             (await (await fetchAllData(eventCode)).json()).data,
         );
+        const pitScouting = JSON.stringify(
+            (await (await fetchPitScouting(eventCode)).json()),
+        );
+        const qualitativeScouting = JSON.stringify(
+            (await (await fetchQualitativeScouting(eventCode)).json()),
+        );
 
         console.log(data);
         localStorage.setItem("data", data);
+        localStorage.setItem("retrievePit", pitScouting);
+        localStorage.setItem("retrieveQual", qualitativeScouting);
+
         localStorage.setItem(
             "timestamp",
             new Date(Date.now()).toLocaleString(),

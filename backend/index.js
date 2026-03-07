@@ -92,6 +92,30 @@ app.get("/getAvailableTeams", async (req, res) => {
     res.send(result);
 });
 
+app.get("/getQualitativeScouting", async (req, res) => {
+    const eventCode = req.query.eventCode;
+    if (!eventCode) return res.sendStatus(403);
+    let result = await database.readJSONFile("qualitativeScoutingData");
+    result = result[eventCode];
+    res.send(result);
+});
+
+app.get("/getPitScouting", async (req, res) => {
+    const eventCode = req.query.eventCode;
+    if (!eventCode) return res.sendStatus(403);
+    let result = await database.readJSONFile("pitScoutingData");
+    result = result[eventCode];
+
+    const stripped = Object.fromEntries(
+        Object.entries(result).map(([team, data]) => {
+            const { robotPicturePreview, ...rest } = data;
+            return [team, rest];
+        })
+    );
+
+    res.send(stripped);
+});
+
 app.get("/getPitScoutingImage", async (req, res) => {
     const eventCode = req.query.eventCode;
     const teamNumber = req.query.teamNumber;
@@ -287,11 +311,6 @@ app.post("/postGompeiMadnessBracket", async (req, res) => {
         res.sendStatus(200);
     }
 });
-
-app.post("/postQualitativePage", async (req, res) => {
-    console.log(req.body);
-    return res.sendStatus(200);
-})
 
 app.listen(VITE_BACKEND_PORT, () => {
     console.log("Listening on port " + VITE_BACKEND_PORT);

@@ -26,14 +26,26 @@ export function fetchSingleMetric(eventCode) {
     return data;
 }
 
-export function fetchGracePage(eventCode) {
-    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getRatings?eventCode=${eventCode}`;
+export function fetchQualitativeScouting(eventCode) {
+    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getQualitativeScouting?eventCode=` + eventCode;
+    let data = fetch(route);
+    return data;
+}
+
+export function fetchPitScouting(eventCode) {
+    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getPitScouting?eventCode=` + eventCode;
     let data = fetch(route);
     return data;
 }
 
 export function fetchPitScoutingImage(eventCode, team) {
     const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getPitScoutingImage?eventCode=${eventCode}&teamNumber=${team}`;
+    let data = fetch(route);
+    return data;
+}
+
+export function fetchGracePage(eventCode) {
+    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getRatings?eventCode=${eventCode}`;
     let data = fetch(route);
     return data;
 }

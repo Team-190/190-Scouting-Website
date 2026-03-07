@@ -13,7 +13,7 @@
   import * as pieGraph from "../../pages/graphcode/pie.js";
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
-  import { fetchGracePage, fetchPitScoutingImage } from "../../utils/api";
+  import { fetchGracePage, fetchPitScoutingImage } from "../../utils/api.js";
   import {
     fetchMatchAlliances,
     fetchMatchScores,
@@ -135,6 +135,7 @@
   let eventCode = localStorage.getItem("eventCode");
   let robotPicturePreview: string | null = null;
   let teamQualData = [];
+  let teamPitData = [];
   let avoidanceChartEl;
   let avoidanceChartInstance;
 
@@ -786,6 +787,8 @@
     fetchTeamOPR(teamStr);
     populateMatchDropdown(selectedTeam);
     teamQualData = getQualDataForTeam(selectedTeam);
+    teamPitData = getPitDataForTeam(selectedTeam);
+    console.log("stored", teamPitData);
     const graceEl = document.getElementById("grace-rating") as HTMLImageElement;
     if (graceEl) graceEl.src = fetchGraceRating(selectedTeam);
     fetchRobotPicture(selectedTeam);
@@ -853,15 +856,21 @@
   }
 
   function getQualDataForTeam(teamNumber) {
-    const storedQual = localStorage.getItem("scoutingData");
-    const qualData = storedQual ? JSON.parse(storedQual) : [];
-    return qualData
-      .filter(
-        (row) =>
-          String(row.Team).replace(/\D/g, "") ===
-          String(teamNumber).replace(/\D/g, ""),
-      )
-      .sort((a, b) => a.Match - b.Match);
+    const storedQual = localStorage.getItem("retrieveQual");
+    const qualData = storedQual ? JSON.parse(storedQual) : {};
+    
+    const teamKey = String(teamNumber).replace(/\D/g, "");
+    const teamMatches = qualData[teamKey];
+    
+    if (!teamMatches) return [];
+    
+    return Object.values(teamMatches).sort((a, b) => a.Match - b.Match);
+  }
+
+  function getPitDataForTeam(teamNumber) {
+    const stored = localStorage.getItem("retrievePit");
+    const pitScouting = stored ? JSON.parse(stored) : {};
+    return pitScouting[String(teamNumber)] ?? null;
   }
   // ─── Grid Building ────────────────────────────────────────────────────────────
 
@@ -1636,8 +1645,8 @@
     const stored = localStorage.getItem("data");
     teamViewData = stored ? JSON.parse(stored) : [];
     teamQualData = getQualDataForTeam(selectedTeam);
+    teamPitData = getPitDataForTeam(selectedTeam);
 
-    console.log(teamQualData);
     allTeams = await loadTeamNumbers();
 
     if (allTeams.length > 0) {
@@ -1732,6 +1741,67 @@
             {/each}
           </div>
         {/each}
+      </div>
+    </div>
+  {/if}
+
+  {#if teamPitData}
+    <div class="pit-section">
+      <h2 class="section-title">Pit Scouting</h2>
+
+      <div class="pit-grid">
+        <div class="pit-card">
+          <div class="pit-card-header">Robot Info</div>
+          {#each [
+            ["Frame Size", teamPitData.framesize],
+            ["Starting Height", teamPitData.startingHeight],
+            ["Full Extension Height", teamPitData.fullExtensionHeight],
+            ["Balls in Hopper", teamPitData.quantityBallsHopper],
+          ] as [label, value]}
+            {#if value}
+              <div class="qual-row">
+                <span class="qual-label">{label}</span>
+                <span class="qual-value">{value}</span>
+              </div>
+            {/if}
+          {/each}
+        </div>
+
+        <div class="pit-card">
+          <div class="pit-card-header">Performance</div>
+          {#each [
+            ["Avg Intake Speed", teamPitData.avgIntakeSpeed],
+            ["Avg Shoot Speed", teamPitData.avgShootSpeed],
+            ["Accuracy", teamPitData.accuracy],
+            ["Climb Levels", teamPitData.climbLevels],
+          ] as [label, value]}
+            {#if value}
+              <div class="qual-row">
+                <span class="qual-label">{label}</span>
+                <span class="qual-value">{value}</span>
+              </div>
+            {/if}
+          {/each}
+        </div>
+
+        <div class="pit-card">
+          <div class="pit-card-header">Capabilities</div>
+          {#each [
+            ["Over Bump", teamPitData.overBump],
+            ["Through Trench", teamPitData.throughTrench],
+            ["Climb During Auto", teamPitData.climbDuringAuto],
+            ["Can Use HP", teamPitData.canUseHP],
+            ["Can Use Depot", teamPitData.canUseDepot],
+            ["Can Feed", teamPitData.canFeed],
+          ] as [label, value]}
+            {#if value}
+              <div class="qual-row">
+                <span class="qual-label">{label}</span>
+                <span class="qual-value">{value === "Y" ? "✓ Yes" : value === "N" ? "✗ No" : value}</span>
+              </div>
+            {/if}
+          {/each}
+        </div>
       </div>
     </div>
   {/if}
@@ -2509,4 +2579,43 @@
     height: 350px;
     border-radius: 6px;
   }
+
+  .pit-section {
+  width: 80vw;
+  margin-top: 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.pit-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  width: 100%;
+}
+
+.pit-card {
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+  border: 2px solid var(--frc-190-red);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.pit-card-header {
+  background: var(--frc-190-red);
+  color: white;
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 8px 14px;
+  letter-spacing: 0.5px;
+}
+
+@media (max-width: 1024px) {
+  .pit-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 700px) {
+  .pit-grid { grid-template-columns: 1fr; }
+}
 </style>
