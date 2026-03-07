@@ -185,9 +185,27 @@ app.get("/getRatings", async (req, res) => {
     res.send(fileData);
 });
 
+
+
+
+// TEMPORARY. ONLY FOR PINE TREE
+app.get("/getMatchData", async (req, res) => {
+    const eventCode = req.query.eventCode;
+    if (!eventCode) return res.sendStatus(403);
+
+    console.log("matches requested, eventCode: " + eventCode);
+    let result = await database.readJSONFile("matches");
+    console.log(result);
+    res.send(result);
+});
+
+
+
 app.get("/winnerOfGompeiMadness", async (req, res) => {
     let winner = req.body.winner;
 });
+
+
 
 
 ////////////// POST Methods \\\\\\\\\\\\\\
