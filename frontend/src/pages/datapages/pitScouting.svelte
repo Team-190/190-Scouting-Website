@@ -91,11 +91,11 @@
         try {
             const apiFormDataWithImage = {
                 ...apiFormData,
-                ...(formData.robotPicture && {
-                    robotPicturePreview: formData.robotPicturePreview,
-                })
+                ...(formData.robotPicture
+                    ? { robotPicturePreview: formData.robotPicturePreview }
+                    : { robotPicturePreview: "" })
             };
-
+            
             for (let i = 0; i < existing.length; i++) {
                 const isLast = i === existing.length - 1;
                 let response = await postPitScouting(
@@ -118,6 +118,8 @@
             } else {
                 submitMessage = `Some entries failed to submit and were saved locally.`;
                 submitError = true;
+                clearForm();
+                setTimeout(() => { submitMessage = ""; }, 3000);
             }
         } catch (error) {
             console.error("Submission error:", error);
