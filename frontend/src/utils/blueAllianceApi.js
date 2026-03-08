@@ -57,8 +57,8 @@ export async function fetchMatchAlliances(eventCode) {
         blue: (match.alliances.blue.team_keys ?? []).map((k) =>
           k.replace("frc", ""),
         ),
-        redScore: match.score_breakdown.red.hubScore.totalCount ?? null,
-        blueScore: match.score_breakdown.blue.hubScore.totalCount ?? null,
+        redScore: match.score_breakdown?.red?.hubScore?.totalCount ?? null,
+        blueScore: match.score_breakdown?.blue?.hubScore?.totalCount ?? null,
       };
     });
     return result;
@@ -100,34 +100,35 @@ export async function fetchWinners(eventCode) {
 }
 
 export async function fetchMatchScores(eventCode, match, teamNumber) {
-    let tbaScore = null;
-    try {
-        const response = await fetch(`https://www.thebluealliance.com/api/v3/event/${eventCode}/matches`, {
-            headers: { "X-TBA-Auth-Key": TBA_API_KEY }
-        });
+  let tbaScore = null;
+  try {
+    const response = await fetch(
+      `https://www.thebluealliance.com/api/v3/event/${eventCode}/matches`,
+      {
+        headers: { "X-TBA-Auth-Key": TBA_API_KEY },
+      },
+    );
 
-        if (!response.ok) {
-            console.warn(`TBA fetch failed:`, response.status);
-            return null;
-        }
-
-        const allMatches = await response.json();
-        const matchKey = `${eventCode}_qm${match.Match}`;
-        const alliance = match.DriveStation.startsWith("red") ? "red" : "blue";
-        const tbaMatch = allMatches.find(m => m.key === matchKey);
-
-        if (!tbaMatch) {
-            console.warn(`Match ${matchKey} not found in event data`);
-            return null;
-        }
-
-
-        tbaScore = tbaMatch.alliances[alliance].score;
-
-    } catch (error) {
-        console.error(`Error fetching match scores:`, error);
+    if (!response.ok) {
+      console.warn(`TBA fetch failed:`, response.status);
+      return null;
     }
-    return tbaScore;
+
+    const allMatches = await response.json();
+    const matchKey = `${eventCode}_qm${match.Match}`;
+    const alliance = match.DriveStation.startsWith("red") ? "red" : "blue";
+    const tbaMatch = allMatches.find((m) => m.key === matchKey);
+
+    if (!tbaMatch) {
+      console.warn(`Match ${matchKey} not found in event data`);
+      return null;
+    }
+
+    tbaScore = tbaMatch.alliances[alliance].score;
+  } catch (error) {
+    console.error(`Error fetching match scores:`, error);
+  }
+  return tbaScore;
 }
 /**
  * Fetches alliances for an event and returns whether they have been posted.

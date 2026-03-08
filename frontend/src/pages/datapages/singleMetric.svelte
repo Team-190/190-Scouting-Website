@@ -51,6 +51,8 @@
     ["NearRedZoneTime", "Near Red Zone Time"],
     ["NearNeutralZoneTime", "Near Neutral Zone Time"],
     ["FarNeutralZoneTime", "Far Neutral Zone Time"],
+    ["NearFar", "Near/Far"],
+    ["TrenchTraversal", "Trench Traversal"],
   ]);
 
   const EFS_DISPLAY = "EFS (Estimated Fuel Score)";

@@ -55,6 +55,8 @@
     ["NearRedZoneTime", "Near Red Zone Time"],
     ["NearNeutralZoneTime", "Near Neutral Zone Time"],
     ["FarNeutralZoneTime", "Far Neutral Zone Time"],
+    ["NearFar", "Near/Far"],
+    ["TrenchTraversal", "Trench Traversal"],
   ]);
 
   const EXCLUDED_FIELDS = [
@@ -595,12 +597,6 @@
       { key: "neutralPercentage", label: "Neutral Zone %" },
       { key: "redPercentage", label: "Red Zone %" },
       { key: "bluePercentage", label: "Blue Zone %" },
-      { key: "nearBluePercentage", label: "Near Blue Zone %" },
-      { key: "nearRedPercentage", label: "Near Red Zone %" },
-      { key: "farBluePercentage", label: "Far Blue Zone %" },
-      { key: "farRedPercentage", label: "Far Red Zone %" },
-      { key: "farNeutralPercentage", label: "Far Neutral Zone %" },
-      { key: "nearNeutralPercentage", label: "Near Neutral Zone %" },
     ];
 
     const qLabels = matches.map((_, i) => `Q${i + 1}`);
