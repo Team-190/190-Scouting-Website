@@ -814,12 +814,18 @@
     }
   }
 
-  function setZoneValue(zoneName: string, value: number | null) {
+  function setZoneValue(
+    zoneName: string,
+    value: number | null,
+    time: number | null,
+  ) {
     const el = document.querySelector(
       `[data-zone="${zoneName}"]`,
     ) as HTMLElement;
+    const zoneTime = document.querySelector(`.${zoneName}Time`);
+    zoneTime.textContent = (time != null ? String(time) : "—") + " seconds";
     if (!el) return;
-    el.textContent = value != null ? String(value) : "—";
+    el.textContent = (value != null ? String(value) : "—") + " %";
     const cell = el.closest(".zone-cell") as HTMLElement;
     if (cell) {
       const intensity = value != null ? Math.min(value / 50, 1) : 0;
@@ -836,12 +842,36 @@
     const match = dropdown.value;
     const nearFarData = getNearFarByMatch(teamStr);
     const d = nearFarData[Number(match)] ?? {};
-    setZoneValue("nearBluePercentage", d.nearBluePercentage ?? null);
-    setZoneValue("nearNeutralPercentage", d.nearNeutralPercentage ?? null);
-    setZoneValue("nearRedPercentage", d.nearRedPercentage ?? null);
-    setZoneValue("farBluePercentage", d.farBluePercentage ?? null);
-    setZoneValue("farNeutralPercentage", d.farNeutralPercentage ?? null);
-    setZoneValue("farRedPercentage", d.farRedPercentage ?? null);
+    setZoneValue(
+      "nearBluePercentage",
+      d.nearBluePercentage ?? null,
+      Math.round(d.total * d.nearBluePercentage)/100
+    );
+    setZoneValue(
+      "nearNeutralPercentage",
+      d.nearNeutralPercentage ?? null,
+      Math.round(d.total * d.nearNeutralPercentage)/100
+    );
+    setZoneValue(
+      "nearRedPercentage",
+      d.nearRedPercentage ?? null,
+      Math.round(d.total * d.nearRedPercentage)/100
+    );
+    setZoneValue(
+      "farBluePercentage",
+      d.farBluePercentage ?? null,
+      Math.round(d.total * d.farBluePercentage)/100
+    );
+    setZoneValue(
+      "farNeutralPercentage",
+      d.farNeutralPercentage ?? null,
+      Math.round(d.total * d.farNeutralPercentage)/100
+    );
+    setZoneValue(
+      "farRedPercentage",
+      d.farRedPercentage ?? null,
+      Math.round(d.total * d.farRedPercentage)/100
+    );
     console.log("Selected Match:", match, "Near/Far Data:", d);
   }
   function onColorblindChange(e: Event) {
@@ -1812,34 +1842,34 @@
             <div class="zone-cell far-red-zone">
               <span class="zone-name">Red</span>
               <span class="zone-value" data-zone="farRedPercentage">—</span>
-              <span class="zone-unit">%</span>
+              <span class="farRedPercentageTime">—</span>
             </div>
             <div class="zone-cell far-neutral-zone">
               <span class="zone-name">Neutral</span>
               <span class="zone-value" data-zone="farNeutralPercentage">—</span>
-              <span class="zone-unit">%</span>
+              <span class="farNeutralPercentageTime">—</span>
             </div>
             <div class="zone-cell far-blue-zone">
               <span class="zone-name">Blue</span>
               <span class="zone-value" data-zone="farBluePercentage">—</span>
-              <span class="zone-unit">%</span>
+              <span class="farBluePercentageTime">—</span>
             </div>
 
             <div class="zone-cell near-red-zone">
               <span class="zone-name">Red</span>
               <span class="zone-value" data-zone="nearRedPercentage">—</span>
-              <span class="zone-unit">%</span>
+              <span class="nearRedPercentageTime">—</span>
             </div>
             <div class="zone-cell near-neutral-zone">
               <span class="zone-name">Neutral</span>
               <span class="zone-value" data-zone="nearNeutralPercentage">—</span
               >
-              <span class="zone-unit">%</span>
+              <span class="nearNeutralPercentageTime">—</span>
             </div>
             <div class="zone-cell near-blue-zone">
               <span class="zone-name">Blue</span>
               <span class="zone-value" data-zone="nearBluePercentage">—</span>
-              <span class="zone-unit">%</span>
+              <span class="nearBluePercentageTime">—</span>
             </div>
           </div>
         </div>
@@ -2014,12 +2044,7 @@
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
     line-height: 1;
   }
-  .zone-unit {
-    font-size: 0.7rem;
-    color: rgba(255, 255, 255, 0.6);
-    font-weight: 600;
-    margin-top: 1px;
-  }
+  
   .map-legend {
     display: flex;
     gap: 24px;
