@@ -47,14 +47,6 @@
     ["Strategy", "Strategy"],
     ["EstimatedPoints", "EFS (Estimated Fuel Scored)"],
     // ["BallsPerSecond", "BPS (Balls Per Second)"],
-    ["RecordType", "Record Type"],
-    ["Time", "Time"],
-    ["FarBlueZoneTime", "Far Blue Zone Time"],
-    ["FarRedZoneTime", "Far Red Zone Time"],
-    ["NearBlueZoneTime", "Near Blue Zone Time"],
-    ["NearRedZoneTime", "Near Red Zone Time"],
-    ["NearNeutralZoneTime", "Near Neutral Zone Time"],
-    ["FarNeutralZoneTime", "Far Neutral Zone Time"],
     ["NearFar", "Near/Far"],
     ["TrenchTraversal", "Trench Traversal"],
   ]);
@@ -69,6 +61,13 @@
     "Time",
     "Mode",
     "DriveStation",
+    "NearFar",
+    "NearNeutralZoneTime",
+    "NearRedZoneTime",
+    "NearBlueZoneTime",
+    "FarNeutralZoneTime",
+    "FarRedZoneTime",
+    "FarBlueZoneTime",
   ];
 
   const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime"];
@@ -585,47 +584,47 @@
     return byMatch;
   }
 
-  function makeNearFarRows(rowData, matches) {
-    let teamNumber = String(selectedTeam).replace(/\D/g, "");
-    let byMatch = getNearFarByMatch(teamNumber);
+  // function makeNearFarRows(rowData, matches) {
+  //   let teamNumber = String(selectedTeam).replace(/\D/g, "");
+  //   let byMatch = getNearFarByMatch(teamNumber);
 
-    if (!Object.keys(byMatch).length) return rowData;
+  //   if (!Object.keys(byMatch).length) return rowData;
 
-    let nearFarMetrics = [
-      { key: "nearPercentage", label: "Near Zone %" },
-      { key: "farPercentage", label: "Far Zone %" },
-      { key: "neutralPercentage", label: "Neutral Zone %" },
-      { key: "redPercentage", label: "Red Zone %" },
-      { key: "bluePercentage", label: "Blue Zone %" },
-    ];
+  //   let nearFarMetrics = [
+  //     { key: "nearPercentage", label: "Near Zone %" },
+  //     { key: "farPercentage", label: "Far Zone %" },
+  //     { key: "neutralPercentage", label: "Neutral Zone %" },
+  //     { key: "redPercentage", label: "Red Zone %" },
+  //     { key: "bluePercentage", label: "Blue Zone %" },
+  //   ];
 
-    const qLabels = matches.map((_, i) => `Q${i + 1}`);
+  //   const qLabels = matches.map((_, i) => `Q${i + 1}`);
 
-    const newRows = nearFarMetrics.map(({ key, label }) => {
-      let row = {
-        metric: label,
-        mean: null,
-        median: null,
-        percentile: null,
-      };
+  //   const newRows = nearFarMetrics.map(({ key, label }) => {
+  //     let row = {
+  //       metric: label,
+  //       mean: null,
+  //       median: null,
+  //       percentile: null,
+  //     };
 
-      const values: number[] = [];
+  //     const values: number[] = [];
 
-      qLabels.forEach((q, i) => {
-        const matchNum = matches[i]?.Match;
-        const v = byMatch[matchNum]?.[key] ?? null;
-        row[q] = v;
-        if (v !== null) values.push(v);
-      });
+  //     qLabels.forEach((q, i) => {
+  //       const matchNum = matches[i]?.Match;
+  //       const v = byMatch[matchNum]?.[key] ?? null;
+  //       row[q] = v;
+  //       if (v !== null) values.push(v);
+  //     });
 
-      row.mean = Number(mean(values).toFixed(2));
-      row.median = Number(median(values).toFixed(2));
+  //     row.mean = Number(mean(values).toFixed(2));
+  //     row.median = Number(median(values).toFixed(2));
 
-      return row;
-    });
+  //     return row;
+  //   });
 
-    return [...rowData, ...newRows];
-  }
+  //   return [...rowData, ...newRows];
+  // }
 
   function fetchGraceRating(team) {
     if (!garceData || garceData[team] === undefined)
@@ -638,10 +637,10 @@
     robotPicturePreview = null;
     if (!eventCode || !teamNumber) return;
     try {
-        const res = await fetchPitScoutingImage(eventCode, teamNumber);
-        if (!res.ok) return;
-        const data = await res.text();
-        robotPicturePreview = data ?? null;
+      const res = await fetchPitScoutingImage(eventCode, teamNumber);
+      if (!res.ok) return;
+      const data = await res.text();
+      robotPicturePreview = data ?? null;
     } catch (e) {
       console.error("Error fetching robot picture:", e);
       robotPicturePreview = null;
@@ -675,9 +674,12 @@
 
     // Zone time fields should NOT be summed — take last valid value instead
     const ZONE_TIME_FIELDS = new Set([
-      "NearBlueZoneTime", "FarBlueZoneTime",
-      "NearNeutralZoneTime", "FarNeutralZoneTime",
-      "NearRedZoneTime", "FarRedZoneTime",
+      "NearBlueZoneTime",
+      "FarBlueZoneTime",
+      "NearNeutralZoneTime",
+      "FarNeutralZoneTime",
+      "NearRedZoneTime",
+      "FarRedZoneTime",
     ]);
 
     return Object.keys(grouped)
@@ -1027,8 +1029,6 @@
                   ? 20
                   : 0;
       }
-
-      makeNearFarRows(rowData, matches);
     });
 
     // ── Column Definitions ──
@@ -1231,8 +1231,6 @@
           params.value != null ? params.value.toString() : "",
       },
     ];
-
-    rowData = makeNearFarRows(rowData, matches);
     gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT;
 
     if (gridInstance) gridInstance.destroy();
@@ -1450,7 +1448,7 @@
             })),
             {
               value: Math.round(overallAverage),
-              itemStyle: { color: "#000000" }, 
+              itemStyle: { color: "#000000" },
             },
           ],
           type: "bar",
@@ -1732,76 +1730,6 @@
     </div>
   {/if}
 
-  <div class="map-section">
-    <h2 class="section-title">Map</h2>
-
-    <div class="map-controls">
-      <label for="match-dropdown">Match:</label>
-      <select
-        name="match-dropdown"
-        class="match-dropdown"
-        on:change={onMatchChange}
-      ></select>
-    </div>
-
-    <div class="map-wrapper">
-      <div class="map-container">
-        <img
-          class="field-img"
-          src={new URL("../../images/FieldImage.png", import.meta.url).href}
-          alt="FRC Field"
-        />
-        <div class="zone-grid">
-          <div class="row-label far-label">FAR</div>
-          <div class="row-label near-label">NEAR</div>
-
-          <div class="zone-cell far-red-zone">
-            <span class="zone-name">Red</span>
-            <span class="zone-value" data-zone="farRedPercentage">—</span>
-            <span class="zone-unit">%</span>
-          </div>
-          <div class="zone-cell far-neutral-zone">
-            <span class="zone-name">Neutral</span>
-            <span class="zone-value" data-zone="farNeutralPercentage">—</span>
-            <span class="zone-unit">%</span>
-          </div>
-          <div class="zone-cell far-blue-zone">
-            <span class="zone-name">Blue</span>
-            <span class="zone-value" data-zone="farBluePercentage">—</span>
-            <span class="zone-unit">%</span>
-          </div>
-
-          <div class="zone-cell near-red-zone">
-            <span class="zone-name">Red</span>
-            <span class="zone-value" data-zone="nearRedPercentage">—</span>
-            <span class="zone-unit">%</span>
-          </div>
-          <div class="zone-cell near-neutral-zone">
-            <span class="zone-name">Neutral</span>
-            <span class="zone-value" data-zone="nearNeutralPercentage">—</span>
-            <span class="zone-unit">%</span>
-          </div>
-          <div class="zone-cell near-blue-zone">
-            <span class="zone-name">Blue</span>
-            <span class="zone-value" data-zone="nearBluePercentage">—</span>
-            <span class="zone-unit">%</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="map-legend">
-        <div class="legend-item">
-          <span class="legend-swatch red-swatch"></span> Red Alliance Zone
-        </div>
-        <div class="legend-item">
-          <span class="legend-swatch neutral-swatch"></span> Neutral Zone
-        </div>
-        <div class="legend-item">
-          <span class="legend-swatch blue-swatch"></span> Blue Alliance Zone
-        </div>
-      </div>
-    </div>
-  </div>
   <div class="avoidance-section">
     <h2 class="section-title">Scores When Avoiding Defense</h2>
     <div class="avoidance-chart-wrapper">
@@ -1857,6 +1785,77 @@
           {/if}
         </div>
       {/each}
+    </div>
+    <div class="map-section">
+      <h2 class="section-title">Map</h2>
+
+      <div class="map-controls">
+        <label for="match-dropdown">Match:</label>
+        <select
+          name="match-dropdown"
+          class="match-dropdown"
+          on:change={onMatchChange}
+        ></select>
+      </div>
+
+      <div class="map-wrapper">
+        <div class="map-container">
+          <img
+            class="field-img"
+            src={new URL("../../images/FieldImage.png", import.meta.url).href}
+            alt="FRC Field"
+          />
+          <div class="zone-grid">
+            <div class="row-label far-label">FAR</div>
+            <div class="row-label near-label">NEAR</div>
+
+            <div class="zone-cell far-red-zone">
+              <span class="zone-name">Red</span>
+              <span class="zone-value" data-zone="farRedPercentage">—</span>
+              <span class="zone-unit">%</span>
+            </div>
+            <div class="zone-cell far-neutral-zone">
+              <span class="zone-name">Neutral</span>
+              <span class="zone-value" data-zone="farNeutralPercentage">—</span>
+              <span class="zone-unit">%</span>
+            </div>
+            <div class="zone-cell far-blue-zone">
+              <span class="zone-name">Blue</span>
+              <span class="zone-value" data-zone="farBluePercentage">—</span>
+              <span class="zone-unit">%</span>
+            </div>
+
+            <div class="zone-cell near-red-zone">
+              <span class="zone-name">Red</span>
+              <span class="zone-value" data-zone="nearRedPercentage">—</span>
+              <span class="zone-unit">%</span>
+            </div>
+            <div class="zone-cell near-neutral-zone">
+              <span class="zone-name">Neutral</span>
+              <span class="zone-value" data-zone="nearNeutralPercentage">—</span
+              >
+              <span class="zone-unit">%</span>
+            </div>
+            <div class="zone-cell near-blue-zone">
+              <span class="zone-name">Blue</span>
+              <span class="zone-value" data-zone="nearBluePercentage">—</span>
+              <span class="zone-unit">%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="map-legend">
+          <div class="legend-item">
+            <span class="legend-swatch red-swatch"></span> Red Alliance Zone
+          </div>
+          <div class="legend-item">
+            <span class="legend-swatch neutral-swatch"></span> Neutral Zone
+          </div>
+          <div class="legend-item">
+            <span class="legend-swatch blue-swatch"></span> Blue Alliance Zone
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
