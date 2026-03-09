@@ -814,6 +814,17 @@
     }
   }
 
+  function secondsToMinSec(totalSeconds) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = Math.floor(totalSeconds % 60); 
+
+  const formattedMinutes = String(minutes).padStart(2, '0');
+  const formattedSeconds = String(seconds).padStart(2, '0');
+
+  return `${formattedMinutes}:${formattedSeconds}`;
+}
+
+
   function setZoneValue(
     zoneName: string,
     value: number | null,
@@ -823,7 +834,7 @@
       `[data-zone="${zoneName}"]`,
     ) as HTMLElement;
     const zoneTime = document.querySelector(`.${zoneName}Time`);
-    zoneTime.textContent = (time != null ? String(time) : "—") + " seconds";
+    zoneTime.textContent = (time != null ? secondsToMinSec(time) : "—");
     if (!el) return;
     el.textContent = (value != null ? String(value) : "—") + " %";
     const cell = el.closest(".zone-cell") as HTMLElement;
