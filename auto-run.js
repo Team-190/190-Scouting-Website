@@ -1,6 +1,5 @@
 // THIS IS A SCRIPT FOR THE SERVER TO AUTOMATICALLY PULL FROM GITHUB AND RESTART
 
-
 const { exec, spawn } = require('child_process');
 
 // Configuration
