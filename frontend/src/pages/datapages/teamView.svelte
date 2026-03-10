@@ -47,14 +47,8 @@
     ["Strategy", "Strategy"],
     ["EstimatedPoints", "EFS (Estimated Fuel Scored)"],
     // ["BallsPerSecond", "BPS (Balls Per Second)"],
-    ["RecordType", "Record Type"],
-    ["Time", "Time"],
-    ["FarBlueZoneTime", "Far Blue Zone Time"],
-    ["FarRedZoneTime", "Far Red Zone Time"],
-    ["NearBlueZoneTime", "Near Blue Zone Time"],
-    ["NearRedZoneTime", "Near Red Zone Time"],
-    ["NearNeutralZoneTime", "Near Neutral Zone Time"],
-    ["FarNeutralZoneTime", "Far Neutral Zone Time"],
+    ["NearFar", "Near/Far"],
+    ["TrenchTraversal", "Trench Traversal"],
   ]);
 
   const EXCLUDED_FIELDS = [
@@ -67,6 +61,13 @@
     "Time",
     "Mode",
     "DriveStation",
+    "NearFar",
+    "NearNeutralZoneTime",
+    "NearRedZoneTime",
+    "NearBlueZoneTime",
+    "FarNeutralZoneTime",
+    "FarRedZoneTime",
+    "FarBlueZoneTime",
   ];
 
   const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime"];
@@ -584,53 +585,47 @@
     return byMatch;
   }
 
-  function makeNearFarRows(rowData, matches) {
-    let teamNumber = String(selectedTeam).replace(/\D/g, "");
-    let byMatch = getNearFarByMatch(teamNumber);
+  // function makeNearFarRows(rowData, matches) {
+  //   let teamNumber = String(selectedTeam).replace(/\D/g, "");
+  //   let byMatch = getNearFarByMatch(teamNumber);
 
-    if (!Object.keys(byMatch).length) return rowData;
+  //   if (!Object.keys(byMatch).length) return rowData;
 
-    let nearFarMetrics = [
-      { key: "nearPercentage", label: "Near Zone %" },
-      { key: "farPercentage", label: "Far Zone %" },
-      { key: "neutralPercentage", label: "Neutral Zone %" },
-      { key: "redPercentage", label: "Red Zone %" },
-      { key: "bluePercentage", label: "Blue Zone %" },
-      { key: "nearBluePercentage", label: "Near Blue Zone %" },
-      { key: "nearRedPercentage", label: "Near Red Zone %" },
-      { key: "farBluePercentage", label: "Far Blue Zone %" },
-      { key: "farRedPercentage", label: "Far Red Zone %" },
-      { key: "farNeutralPercentage", label: "Far Neutral Zone %" },
-      { key: "nearNeutralPercentage", label: "Near Neutral Zone %" },
-    ];
+  //   let nearFarMetrics = [
+  //     { key: "nearPercentage", label: "Near Zone %" },
+  //     { key: "farPercentage", label: "Far Zone %" },
+  //     { key: "neutralPercentage", label: "Neutral Zone %" },
+  //     { key: "redPercentage", label: "Red Zone %" },
+  //     { key: "bluePercentage", label: "Blue Zone %" },
+  //   ];
 
-    const qLabels = matches.map((_, i) => `Q${i + 1}`);
+  //   const qLabels = matches.map((_, i) => `Q${i + 1}`);
 
-    const newRows = nearFarMetrics.map(({ key, label }) => {
-      let row = {
-        metric: label,
-        mean: null,
-        median: null,
-        percentile: null,
-      };
+  //   const newRows = nearFarMetrics.map(({ key, label }) => {
+  //     let row = {
+  //       metric: label,
+  //       mean: null,
+  //       median: null,
+  //       percentile: null,
+  //     };
 
-      const values: number[] = [];
+  //     const values: number[] = [];
 
-      qLabels.forEach((q, i) => {
-        const matchNum = matches[i]?.Match;
-        const v = byMatch[matchNum]?.[key] ?? null;
-        row[q] = v;
-        if (v !== null) values.push(v);
-      });
+  //     qLabels.forEach((q, i) => {
+  //       const matchNum = matches[i]?.Match;
+  //       const v = byMatch[matchNum]?.[key] ?? null;
+  //       row[q] = v;
+  //       if (v !== null) values.push(v);
+  //     });
 
-      row.mean = Number(mean(values).toFixed(2));
-      row.median = Number(median(values).toFixed(2));
+  //     row.mean = Number(mean(values).toFixed(2));
+  //     row.median = Number(median(values).toFixed(2));
 
-      return row;
-    });
+  //     return row;
+  //   });
 
-    return [...rowData, ...newRows];
-  }
+  //   return [...rowData, ...newRows];
+  // }
 
   function fetchGraceRating(team) {
     if (!garceData || garceData[team] === undefined)
@@ -643,10 +638,10 @@
     robotPicturePreview = null;
     if (!eventCode || !teamNumber) return;
     try {
-        const res = await fetchPitScoutingImage(eventCode, teamNumber);
-        if (!res.ok) return;
-        const data = await res.text();
-        robotPicturePreview = data ?? null;
+      const res = await fetchPitScoutingImage(eventCode, teamNumber);
+      if (!res.ok) return;
+      const data = await res.text();
+      robotPicturePreview = data ?? null;
     } catch (e) {
       console.error("Error fetching robot picture:", e);
       robotPicturePreview = null;
@@ -680,9 +675,12 @@
 
     // Zone time fields should NOT be summed — take last valid value instead
     const ZONE_TIME_FIELDS = new Set([
-      "NearBlueZoneTime", "FarBlueZoneTime",
-      "NearNeutralZoneTime", "FarNeutralZoneTime",
-      "NearRedZoneTime", "FarRedZoneTime",
+      "NearBlueZoneTime",
+      "FarBlueZoneTime",
+      "NearNeutralZoneTime",
+      "FarNeutralZoneTime",
+      "NearRedZoneTime",
+      "FarRedZoneTime",
     ]);
 
     return Object.keys(grouped)
@@ -819,12 +817,29 @@
     }
   }
 
-  function setZoneValue(zoneName: string, value: number | null) {
+  function secondsToMinSec(totalSeconds) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = Math.floor(totalSeconds % 60); 
+
+  const formattedMinutes = String(minutes).padStart(2, '0');
+  const formattedSeconds = String(seconds).padStart(2, '0');
+
+  return `${formattedMinutes}:${formattedSeconds}`;
+}
+
+
+  function setZoneValue(
+    zoneName: string,
+    value: number | null,
+    time: number | null,
+  ) {
     const el = document.querySelector(
       `[data-zone="${zoneName}"]`,
     ) as HTMLElement;
+    const zoneTime = document.querySelector(`.${zoneName}Time`);
+    zoneTime.textContent = (time != null ? secondsToMinSec(time) : "—");
     if (!el) return;
-    el.textContent = value != null ? String(value) : "—";
+    el.textContent = (value != null ? String(value) : "—") + " %";
     const cell = el.closest(".zone-cell") as HTMLElement;
     if (cell) {
       const intensity = value != null ? Math.min(value / 50, 1) : 0;
@@ -841,12 +856,36 @@
     const match = dropdown.value;
     const nearFarData = getNearFarByMatch(teamStr);
     const d = nearFarData[Number(match)] ?? {};
-    setZoneValue("nearBluePercentage", d.nearBluePercentage ?? null);
-    setZoneValue("nearNeutralPercentage", d.nearNeutralPercentage ?? null);
-    setZoneValue("nearRedPercentage", d.nearRedPercentage ?? null);
-    setZoneValue("farBluePercentage", d.farBluePercentage ?? null);
-    setZoneValue("farNeutralPercentage", d.farNeutralPercentage ?? null);
-    setZoneValue("farRedPercentage", d.farRedPercentage ?? null);
+    setZoneValue(
+      "nearBluePercentage",
+      d.nearBluePercentage ?? null,
+      Math.round(d.total * d.nearBluePercentage)/100
+    );
+    setZoneValue(
+      "nearNeutralPercentage",
+      d.nearNeutralPercentage ?? null,
+      Math.round(d.total * d.nearNeutralPercentage)/100
+    );
+    setZoneValue(
+      "nearRedPercentage",
+      d.nearRedPercentage ?? null,
+      Math.round(d.total * d.nearRedPercentage)/100
+    );
+    setZoneValue(
+      "farBluePercentage",
+      d.farBluePercentage ?? null,
+      Math.round(d.total * d.farBluePercentage)/100
+    );
+    setZoneValue(
+      "farNeutralPercentage",
+      d.farNeutralPercentage ?? null,
+      Math.round(d.total * d.farNeutralPercentage)/100
+    );
+    setZoneValue(
+      "farRedPercentage",
+      d.farRedPercentage ?? null,
+      Math.round(d.total * d.farRedPercentage)/100
+    );
     console.log("Selected Match:", match, "Near/Far Data:", d);
   }
   function onColorblindChange(e: Event) {
@@ -1040,8 +1079,6 @@
                   ? 20
                   : 0;
       }
-
-      makeNearFarRows(rowData, matches);
     });
 
     // ── Column Definitions ──
@@ -1244,8 +1281,6 @@
           params.value != null ? params.value.toString() : "",
       },
     ];
-
-    rowData = makeNearFarRows(rowData, matches);
     gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT;
 
     if (gridInstance) gridInstance.destroy();
@@ -1463,7 +1498,7 @@
             })),
             {
               value: Math.round(overallAverage),
-              itemStyle: { color: "#000000" }, 
+              itemStyle: { color: "#000000" },
             },
           ],
           type: "bar",
@@ -1932,6 +1967,77 @@
         </div>
       {/each}
     </div>
+    <div class="map-section">
+      <h2 class="section-title">Map</h2>
+
+      <div class="map-controls">
+        <label for="match-dropdown">Match:</label>
+        <select
+          name="match-dropdown"
+          class="match-dropdown"
+          on:change={onMatchChange}
+        ></select>
+      </div>
+
+      <div class="map-wrapper">
+        <div class="map-container">
+          <img
+            class="field-img"
+            src={new URL("../../images/FieldImage.png", import.meta.url).href}
+            alt="FRC Field"
+          />
+          <div class="zone-grid">
+            <div class="row-label far-label">FAR</div>
+            <div class="row-label near-label">NEAR</div>
+
+            <div class="zone-cell far-red-zone">
+              <span class="zone-name">Red</span>
+              <span class="zone-value" data-zone="farRedPercentage">—</span>
+              <span class="farRedPercentageTime">—</span>
+            </div>
+            <div class="zone-cell far-neutral-zone">
+              <span class="zone-name">Neutral</span>
+              <span class="zone-value" data-zone="farNeutralPercentage">—</span>
+              <span class="farNeutralPercentageTime">—</span>
+            </div>
+            <div class="zone-cell far-blue-zone">
+              <span class="zone-name">Blue</span>
+              <span class="zone-value" data-zone="farBluePercentage">—</span>
+              <span class="farBluePercentageTime">—</span>
+            </div>
+
+            <div class="zone-cell near-red-zone">
+              <span class="zone-name">Red</span>
+              <span class="zone-value" data-zone="nearRedPercentage">—</span>
+              <span class="nearRedPercentageTime">—</span>
+            </div>
+            <div class="zone-cell near-neutral-zone">
+              <span class="zone-name">Neutral</span>
+              <span class="zone-value" data-zone="nearNeutralPercentage">—</span
+              >
+              <span class="nearNeutralPercentageTime">—</span>
+            </div>
+            <div class="zone-cell near-blue-zone">
+              <span class="zone-name">Blue</span>
+              <span class="zone-value" data-zone="nearBluePercentage">—</span>
+              <span class="nearBluePercentageTime">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="map-legend">
+          <div class="legend-item">
+            <span class="legend-swatch red-swatch"></span> Red Alliance Zone
+          </div>
+          <div class="legend-item">
+            <span class="legend-swatch neutral-swatch"></span> Neutral Zone
+          </div>
+          <div class="legend-item">
+            <span class="legend-swatch blue-swatch"></span> Blue Alliance Zone
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2089,12 +2195,7 @@
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
     line-height: 1;
   }
-  .zone-unit {
-    font-size: 0.7rem;
-    color: rgba(255, 255, 255, 0.6);
-    font-weight: 600;
-    margin-top: 1px;
-  }
+  
   .map-legend {
     display: flex;
     gap: 24px;
