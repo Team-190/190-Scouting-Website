@@ -4,7 +4,7 @@
 const { exec, spawn } = require('child_process');
 
 // Configuration
-const BRANCH = 'main'; // Change this to 'main' or your specific branch
+const BRANCH = 'predev'; // Change this to 'main' or your specific branch
 const POLL_INTERVAL_MS = 30000; // Check every 30 seconds
 
 let currentProcess = null;
