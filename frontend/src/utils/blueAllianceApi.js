@@ -1,4 +1,8 @@
 const TBA_API_KEY = import.meta.env.VITE_AUTH_KEY;
+const VITE_TESTING = import.meta.env.VITE_TESTING || 1;
+const VITE_BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT || 8000;
+const SERVER = !parseInt(VITE_TESTING) ? import.meta.env.VITE_SERVER_IP : "localhost";
+
 
 export async function fetchTeams(eventCode) {
   const apiUrl = `https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/simple`;
@@ -31,21 +35,28 @@ export async function fetchTeams(eventCode) {
   }
 }
 
+
 export async function fetchMatchAlliances(eventCode) {
   if (!eventCode) {
     return {};
   }
   try {
-    const res = await fetch(
-      `https://www.thebluealliance.com/api/v3/event/${eventCode}/matches`,
-      {
-        headers: { "X-TBA-Auth-Key": TBA_API_KEY },
-      },
-    );
+    // const res = await fetch(
+    //   `https://www.thebluealliance.com/api/v3/event/${eventCode}/matches`,
+    //   {
+    //     headers: { "X-TBA-Auth-Key": TBA_API_KEY },
+    //   },
+    // );
+
+    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getMatchData?eventCode=` + eventCode;
+    let res = await fetch(route);
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}`);
     }
     const data = await res.json();
+
+    console.log(data);
+
     const result = {};
     data.forEach((match) => {
       if (match.comp_level !== "qm") return;

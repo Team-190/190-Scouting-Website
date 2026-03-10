@@ -1,6 +1,7 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { postPitScouting, fetchAvailableTeams } from "../../utils/api";
+    import { postPitScouting } from "../../utils/api";
+    import { fetchTeams } from "../../utils/blueAllianceApi";
 
     const boolFields = ["overBump", "throughTrench", "climbDuringAuto", "canUseHP", "canUseDepot", "canFeed"] as const;
     const plainFields = ["climbLevels", "quantityBallsHopper", "avgIntakeSpeed", "avgShootSpeed", "accuracy", "framesize", "startingHeight", "fullExtensionHeight"] as const;
@@ -28,8 +29,8 @@
     let allTeams = [];
 
     onMount(async () => {
-        const { data } = await (await fetchAvailableTeams(eventCode)).json();
-        allTeams = data;
+        const { _teamNumbers } = await fetchTeams(eventCode);
+        allTeams = _teamNumbers;
     });
 
     function handleInput(field, event) {
@@ -91,11 +92,11 @@
         try {
             const apiFormDataWithImage = {
                 ...apiFormData,
-                ...(formData.robotPicture && {
-                    robotPicturePreview: formData.robotPicturePreview,
-                })
+                ...(formData.robotPicture
+                    ? { robotPicturePreview: formData.robotPicturePreview }
+                    : { robotPicturePreview: "" })
             };
-
+            
             for (let i = 0; i < existing.length; i++) {
                 const isLast = i === existing.length - 1;
                 let response = await postPitScouting(
@@ -118,6 +119,8 @@
             } else {
                 submitMessage = `Some entries failed to submit and were saved locally.`;
                 submitError = true;
+                clearForm();
+                setTimeout(() => { submitMessage = ""; }, 3000);
             }
         } catch (error) {
             console.error("Submission error:", error);
