@@ -139,6 +139,7 @@
   let charts = [];
   let chartTypes = ["bar", "line", "pie", "scatter", "radar"];
   let showDropdown = false;
+  let isLoading = false;
 
   // Six grid DOM nodes / instances (3 red, 3 blue)
   let domNode, domNode2, domNode3;
@@ -929,9 +930,14 @@
 
   // ─── Event Handlers ───────────────────────────────────────────────────────────
 
-  function onMatchChange(e: Event) {
-    selectedMatch = (e.target as HTMLSelectElement).value;
-    loadMatchData(selectedMatch);
+  async function onMatchChange(e: Event) {
+    isLoading = true;
+    try {
+      selectedMatch = (e.target as HTMLSelectElement).value;
+      await loadMatchData(selectedMatch);
+    } finally {
+      isLoading = false;
+    }
   }
 
   function onColorblindChange(e: Event) {
@@ -1387,31 +1393,42 @@
   // ─── Mount ────────────────────────────────────────────────────────────────────
 
   onMount(async () => {
-    const stored = localStorage.getItem("data");
-    teamViewData = stored ? JSON.parse(stored) : [];
-    eventCode = localStorage.getItem("eventCode") || "";
+    isLoading = true;
+    try {
+      const stored = localStorage.getItem("data");
+      teamViewData = stored ? JSON.parse(stored) : [];
+      eventCode = localStorage.getItem("eventCode") || "";
 
-    if (eventCode) {
-      fetchGracePage(eventCode)
-        .then((r) => r.json())
-        .then((d) => {
-          garceData = d;
-        })
-        .catch((e) => console.error("Failed to fetch grace data:", e));
+      if (eventCode) {
+        fetchGracePage(eventCode)
+          .then((r) => r.json())
+          .then((d) => {
+            garceData = d;
+          })
+          .catch((e) => console.error("Failed to fetch grace data:", e));
 
-      teamOPRs = await fetchEventOPRs(eventCode);
-      allMatches = await fetchEventMatches(eventCode);
-    }
+        teamOPRs = await fetchEventOPRs(eventCode);
+        allMatches = await fetchEventMatches(eventCode);
+      }
 
-    if (allMatches?.length) {
-      selectedMatch = allMatches[0].key;
-      await tick();
-      await loadMatchData(selectedMatch);
+      if (allMatches?.length) {
+        selectedMatch = allMatches[0].key;
+        await tick();
+        await loadMatchData(selectedMatch);
+      }
+    } finally {
+      isLoading = false;
     }
   });
 </script>
 
 <!-- ─── Template ──────────────────────────────────────────────────────────────── -->
+
+{#if isLoading}
+  <div class="loading-spinner-overlay">
+      <div class="loading-spinner"></div>
+  </div>
+{/if}
 
 <div class="page-wrapper">
   <div class="header-section">
@@ -1574,6 +1591,34 @@
     --frc-190-red: #c81b00;
     --wpi-gray: #a9b0b7;
     --frc-190-black: #4d4d4d;
+  }
+
+  .loading-spinner-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+  }
+
+  .loading-spinner {
+      border: 8px solid rgba(255, 255, 255, 0.3);
+      border-left-color: var(--frc-190-red);
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+      to {
+          transform: rotate(360deg);
+      }
   }
 
   :global(html),

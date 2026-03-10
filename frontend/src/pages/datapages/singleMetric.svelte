@@ -1646,6 +1646,12 @@
 
 <!-- ─── Template ──────────────────────────────────────────────────────────────── -->
 
+{#if loading || efsLoading}
+  <div class="loading-spinner-overlay">
+      <div class="loading-spinner"></div>
+  </div>
+{/if}
+
 <div class="page-wrapper">
   <div class="header-section">
     <h1>Event View</h1>
@@ -1654,7 +1660,7 @@
 
   <div class="controls">
     {#if loading}
-      Loading team data...
+      <span style="color: transparent;">Loading team data...</span>
     {:else if error}
       {error}
     {:else}
@@ -1872,6 +1878,34 @@
     --frc-190-red: #c81b00;
     --wpi-gray: #a9b0b7;
     --frc-190-black: #4d4d4d;
+  }
+
+  .loading-spinner-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+  }
+
+  .loading-spinner {
+      border: 8px solid rgba(255, 255, 255, 0.3);
+      border-left-color: var(--frc-190-red);
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+      to {
+          transform: rotate(360deg);
+      }
   }
 
   :global(html),
