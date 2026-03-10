@@ -7,7 +7,7 @@ const path = require('path');
 
 // Configuration
 const BRANCH = 'predev'; // Change this to 'main' or your specific branch
-const POLL_INTERVAL_MS = 30000; // Check every 30 seconds
+const POLL_INTERVAL_MS = 10000; // Check every 10 seconds
 
 let backendProcess = null;
 let frontendProcess = null;

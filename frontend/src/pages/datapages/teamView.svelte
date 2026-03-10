@@ -1,8 +1,8 @@
 <script lang="ts">
   import {
-    AllCommunityModule,
-    createGrid,
-    ModuleRegistry,
+      AllCommunityModule,
+      createGrid,
+      ModuleRegistry,
   } from "ag-grid-community";
   import "ag-grid-community/styles/ag-grid.css";
   import "ag-grid-community/styles/ag-theme-quartz.css";
@@ -15,8 +15,8 @@
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
   import { fetchGracePage, fetchPitScoutingImage } from "../../utils/api.js";
   import {
-    fetchMatchAlliances,
-    fetchMatchScores,
+      fetchMatchAlliances,
+      fetchMatchScores,
   } from "../../utils/blueAllianceApi";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
@@ -1867,33 +1867,33 @@
           <div class="zone-cell far-red-zone">
             <span class="zone-name">Red</span>
             <span class="zone-value" data-zone="farRedPercentage">—</span>
-            <span class="zone-unit">%</span>
+              <span class="farRedPercentageTime">—</span>
           </div>
           <div class="zone-cell far-neutral-zone">
             <span class="zone-name">Neutral</span>
             <span class="zone-value" data-zone="farNeutralPercentage">—</span>
-            <span class="zone-unit">%</span>
+            <span class="farNeutralPercentageTime">—</span>
           </div>
           <div class="zone-cell far-blue-zone">
             <span class="zone-name">Blue</span>
             <span class="zone-value" data-zone="farBluePercentage">—</span>
-            <span class="zone-unit">%</span>
+            <span class="farBluePercentageTime">—</span>
           </div>
 
           <div class="zone-cell near-red-zone">
             <span class="zone-name">Red</span>
             <span class="zone-value" data-zone="nearRedPercentage">—</span>
-            <span class="zone-unit">%</span>
+            <span class="nearRedPercentageTime">—</span>
           </div>
           <div class="zone-cell near-neutral-zone">
             <span class="zone-name">Neutral</span>
             <span class="zone-value" data-zone="nearNeutralPercentage">—</span>
-            <span class="zone-unit">%</span>
+            <span class="nearNeutralPercentageTime">—</span>
           </div>
           <div class="zone-cell near-blue-zone">
             <span class="zone-name">Blue</span>
             <span class="zone-value" data-zone="nearBluePercentage">—</span>
-            <span class="zone-unit">%</span>
+            <span class="nearBluePercentageTime">—</span>
           </div>
         </div>
       </div>
@@ -1966,77 +1966,6 @@
           {/if}
         </div>
       {/each}
-    </div>
-    <div class="map-section">
-      <h2 class="section-title">Map</h2>
-
-      <div class="map-controls">
-        <label for="match-dropdown">Match:</label>
-        <select
-          name="match-dropdown"
-          class="match-dropdown"
-          on:change={onMatchChange}
-        ></select>
-      </div>
-
-      <div class="map-wrapper">
-        <div class="map-container">
-          <img
-            class="field-img"
-            src={new URL("../../images/FieldImage.png", import.meta.url).href}
-            alt="FRC Field"
-          />
-          <div class="zone-grid">
-            <div class="row-label far-label">FAR</div>
-            <div class="row-label near-label">NEAR</div>
-
-            <div class="zone-cell far-red-zone">
-              <span class="zone-name">Red</span>
-              <span class="zone-value" data-zone="farRedPercentage">—</span>
-              <span class="farRedPercentageTime">—</span>
-            </div>
-            <div class="zone-cell far-neutral-zone">
-              <span class="zone-name">Neutral</span>
-              <span class="zone-value" data-zone="farNeutralPercentage">—</span>
-              <span class="farNeutralPercentageTime">—</span>
-            </div>
-            <div class="zone-cell far-blue-zone">
-              <span class="zone-name">Blue</span>
-              <span class="zone-value" data-zone="farBluePercentage">—</span>
-              <span class="farBluePercentageTime">—</span>
-            </div>
-
-            <div class="zone-cell near-red-zone">
-              <span class="zone-name">Red</span>
-              <span class="zone-value" data-zone="nearRedPercentage">—</span>
-              <span class="nearRedPercentageTime">—</span>
-            </div>
-            <div class="zone-cell near-neutral-zone">
-              <span class="zone-name">Neutral</span>
-              <span class="zone-value" data-zone="nearNeutralPercentage">—</span
-              >
-              <span class="nearNeutralPercentageTime">—</span>
-            </div>
-            <div class="zone-cell near-blue-zone">
-              <span class="zone-name">Blue</span>
-              <span class="zone-value" data-zone="nearBluePercentage">—</span>
-              <span class="nearBluePercentageTime">—</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="map-legend">
-          <div class="legend-item">
-            <span class="legend-swatch red-swatch"></span> Red Alliance Zone
-          </div>
-          <div class="legend-item">
-            <span class="legend-swatch neutral-swatch"></span> Neutral Zone
-          </div>
-          <div class="legend-item">
-            <span class="legend-swatch blue-swatch"></span> Blue Alliance Zone
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 </div>
