@@ -1861,9 +1861,6 @@
           alt="FRC Field"
         />
         <div class="zone-grid">
-          <div class="row-label far-label">FAR</div>
-          <div class="row-label near-label">NEAR</div>
-
           <div class="zone-cell far-red-zone">
             <span class="zone-name">Red</span>
             <span class="zone-value" data-zone="farRedPercentage">—</span>
@@ -2025,7 +2022,7 @@
     position: absolute;
     inset: 0;
     display: grid;
-    grid-template-columns: 52px 1fr 1fr 1fr;
+    grid-template-columns: 0fr 1fr 1fr 1fr;
     grid-template-rows: 1fr 1fr;
     gap: 4px;
     padding: 8px;
