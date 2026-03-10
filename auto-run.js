@@ -26,8 +26,9 @@ function startDevServer() {
 
     // Spawn them directly from Node instead of using the batch file.
     // This gives us complete control over their Process IDs so we can kill them easily!
-    backendProcess = spawn(/^win/.test(process.platform) ? 'npm.cmd' : 'npm', ['run', 'start'], { cwd: path.join(__dirname, 'backend') });
-    frontendProcess = spawn(/^win/.test(process.platform) ? 'npm.cmd' : 'npm', ['run', 'dev'], { cwd: path.join(__dirname, 'frontend') });
+    const npmCmd = /^win/.test(process.platform) ? 'npm.cmd' : 'npm';
+    backendProcess = spawn(npmCmd, ['run', 'start'], { cwd: path.join(__dirname, 'backend'), shell: true });
+    frontendProcess = spawn(npmCmd, ['run', 'dev'], { cwd: path.join(__dirname, 'frontend'), shell: true });
 
     backendProcess.stdout.on('data', (data) => process.stdout.write(`[BACKEND] ${data}`));
     backendProcess.stderr.on('data', (data) => process.stderr.write(`[BACKEND ERR] ${data}`));
