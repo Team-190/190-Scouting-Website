@@ -9,9 +9,9 @@ const POLL_INTERVAL_MS = 30000; // Check every 30 seconds
 let currentProcess = null;
 
 function startDevServer() {
-    console.log('🚀 Starting run-dev.bat...');
+    console.log('============================STARTING SERVER...============================');
     // We use spawn with shell: true to properly execute the .bat file
-    currentProcess = spawn('run-dev.bat', [], { shell: true });
+    currentProcess = spawn('run-dev.bat', [], { shell: true, cwd: __dirname });
 
     currentProcess.stdout.on('data', (data) => process.stdout.write(data));
     currentProcess.stderr.on('data', (data) => process.stderr.write(data));
@@ -22,32 +22,31 @@ function startDevServer() {
 }
 
 function restartServer() {
-    if (currentProcess) {
-        console.log('🛑 Stopping current dev server...');
-        // On Windows, killing a .bat file requires taskkill to kill the whole process tree (Svelte/Vite/Node)
-        exec(`taskkill /pid ${currentProcess.pid} /T /F`, (err) => {
-            if (err) {
-                console.error("Failed to kill process:", err);
-            }
+    console.log('============================STOPPING SERVER TO APPLY UPDATES...============================');
+    // On Windows, run-dev.bat spawns separate command windows named "Backend" and "Frontend"
+    // We kill them by window title so we don't end up with hundreds of orphaned windows
+    exec(`taskkill /FI "WINDOWTITLE eq Backend*" /T /F`, () => {
+        exec(`taskkill /FI "WINDOWTITLE eq Frontend*" /T /F`, () => {
             startDevServer();
         });
-    } else {
-        startDevServer();
-    }
+    });
 }
 
 function checkForUpdates() {
-    console.log(`\n⏳ Checking GitHub for updates on branch '${BRANCH}'...`);
+    console.log('============================CHECKING FOR UPDATES...============================');
+        
+    // Ensure we are explicitly running in the folder where the script exists
+    const repoPath = __dirname;
     
     // Fetch the latest details from the remote
-    exec(`git fetch origin ${BRANCH}`, (fetchErr) => {
+    exec(`cd /d "${repoPath}" && git fetch origin ${BRANCH}`, (fetchErr) => {
         if (fetchErr) {
             console.error('⚠️ Error fetching from git:', fetchErr.message);
             return;
         }
 
         // Compare local HEAD to the remote branch
-        exec(`git rev-parse HEAD && git rev-parse origin/${BRANCH}`, (parseErr, stdout) => {
+        exec(`cd /d "${repoPath}" && git rev-parse HEAD && git rev-parse origin/${BRANCH}`, (parseErr, stdout) => {
             if (parseErr) {
                 console.error('⚠️ Error parsing git hashes:', parseErr.message);
                 return;
@@ -58,8 +57,8 @@ function checkForUpdates() {
             const remoteHash = hashes[1];
 
             if (localHash !== remoteHash) {
-                console.log(`✨ New commit detected! Pulling changes...`);
-                exec(`git pull origin ${BRANCH}`, (pullErr, pullStdout) => {
+                console.log('============================NEW COMMIT FOUND...============================');
+                exec(`cd /d "${repoPath}" && git pull origin ${BRANCH}`, (pullErr, pullStdout) => {
                     if (pullErr) {
                         console.error('⚠️ Error pulling changes:', pullErr.message);
                         return;
