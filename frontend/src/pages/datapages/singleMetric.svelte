@@ -13,7 +13,7 @@
   import * as pieGraph from "../../pages/graphcode/pie.js";
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
-  import { fetchMatchAlliances } from "../../utils/blueAllianceApi";
+  import { fetchMatchAlliances } from "../../utils/externalApi.js";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 

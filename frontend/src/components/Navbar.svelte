@@ -5,7 +5,7 @@
   import {
     fetchAlliancesAvailable,
     fetchElimsHaveStarted,
-  } from "../utils/blueAllianceApi";
+  } from "../utils/externalApi";
 
   let isMenuOpen = false;
   let alliancesAvailable = false;

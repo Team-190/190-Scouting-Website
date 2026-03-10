@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { postGracePage, fetchGracePage } from "../../utils/api";
-  import { fetchTeams } from "../../utils/blueAllianceApi";
+  import { fetchTeams } from "../../utils/externalApi";
 
   //Variables
   let selectedTeam = "Select a team";

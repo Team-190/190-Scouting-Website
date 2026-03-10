@@ -17,14 +17,13 @@
   import {
     fetchMatchAlliances,
     fetchMatchScores,
-  } from "../../utils/blueAllianceApi";
+    fetchOPR,
+  } from "../../utils/externalApi.js";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
   // ─── Constants ────────────────────────────────────────────────────────────────
 
-  const TBA_API_KEY = import.meta.env.VITE_AUTH_KEY;
-  const TBA_BASE_URL = "https://www.thebluealliance.com/api/v3";
   const ROW_HEIGHT = 25;
   const HEADER_HEIGHT = 32;
 
@@ -204,10 +203,6 @@
       }
     }
     return hasData;
-  }
-
-  function fetchTBALink(match) {
-    return `https://www.thebluealliance.com/match/${eventCode}_qm${String(match)}`;
   }
 
   // ─── Color Helpers ────────────────────────────────────────────────────────────
@@ -410,15 +405,13 @@
     }
   }
 
-  async function fetchTeamOPR(teamNumber: string) {
+  async function OPRSort(teamNumber: string) {
     if (!eventCode || !teamNumber) {
       teamOPR = null;
       return;
     }
     try {
-      const res = await fetch(`${TBA_BASE_URL}/event/${eventCode}/oprs`, {
-        headers: { "X-TBA-Auth-Key": TBA_API_KEY },
-      });
+      const res = await fetchOPR(eventCode);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       teamOPR = data.oprs?.[`frc${teamNumber}`] ?? null;
@@ -784,7 +777,7 @@
   async function onTeamChange() {
     const teamStr = String(selectedTeam);
     await loadTeamData(teamStr);
-    fetchTeamOPR(teamStr);
+    OPRSort(teamStr);
     populateMatchDropdown(selectedTeam);
     teamQualData = getQualDataForTeam(selectedTeam);
     teamPitData = getPitDataForTeam(selectedTeam);
@@ -1276,7 +1269,8 @@
           cell.style.textDecoration = "underline";
           const onClick = (e) => {
             e.stopPropagation();
-            window.open(fetchTBALink(matchNum), "_blank");
+            const TBA_LINK = `https://www.thebluealliance.com/match/${eventCode}_qm${String(matchNum)}`;
+            window.open(TBA_LINK, "_blank");
           };
           cell.removeEventListener("click", onClick);
           cell.addEventListener("click", onClick);
@@ -1655,7 +1649,7 @@
       await loadTeamData(selectedTeam);
     }
 
-    await fetchTeamOPR(String(selectedTeam));
+    await OPRSort(String(selectedTeam));
     await tick();
     populateMatchDropdown(selectedTeam);
     onMatchChange();

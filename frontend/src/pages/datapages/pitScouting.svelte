@@ -1,7 +1,7 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import { postPitScouting } from "../../utils/api";
-    import { fetchTeams } from "../../utils/blueAllianceApi";
+    import { fetchTeams } from "../../utils/externalApi";
 
     const boolFields = ["overBump", "throughTrench", "climbDuringAuto", "canUseHP", "canUseDepot", "canFeed"] as const;
     const plainFields = ["climbLevels", "quantityBallsHopper", "avgIntakeSpeed", "avgShootSpeed", "accuracy", "framesize", "startingHeight", "fullExtensionHeight"] as const;

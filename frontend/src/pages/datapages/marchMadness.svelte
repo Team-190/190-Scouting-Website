@@ -1,6 +1,6 @@
 <script>
     import { onMount } from "svelte";
-    import { fetchAlliances as fetchAlliancesFromAPI, fetchElimsHaveStarted } from "../../utils/blueAllianceApi";
+    import { fetchAlliances as fetchAlliancesFromAPI, fetchElimsHaveStarted } from "../../utils/externalApi";
 
     let Name = "";
     let winners = [];
