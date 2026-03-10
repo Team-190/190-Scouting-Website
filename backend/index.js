@@ -23,7 +23,6 @@ const VITE_TESTING = process.env.VITE_TESTING || 1;
 const SERVER = !parseInt(VITE_TESTING) ? process.env.VITE_SERVER_IP : "localhost";
 const DIR = process.env.DIR || "./test/public";
 
-// Change later to be correct directory for Svelte files
 const publicDir = path.join(__dirname, DIR);
 
 console.log(DIR);
@@ -40,7 +39,7 @@ app.use(
         resave: false,
         saveUninitialized: false,
         cookie: {
-            maxAge: 1000 * 60 * 60,  // 1 hour
+            maxAge: 1000 * 60 * 60,
         }
     })
 );
@@ -56,8 +55,6 @@ app.use(cors({
 }))
 
 app.use((req, res, next) => {
-    // if (!req.session.username) res.redirect("/login");
-
     res.renderHtml = (filename) => {
         res.sendFile(path.join(publicDir, filename));
     };
@@ -95,27 +92,47 @@ app.get("/getAvailableTeams", async (req, res) => {
 app.get("/getQualitativeScouting", async (req, res) => {
     const eventCode = req.query.eventCode;
     if (!eventCode) return res.sendStatus(403);
+
+    let localCounts = {};
+    try {
+        if (req.query.localCounts) localCounts = JSON.parse(decodeURIComponent(req.query.localCounts));
+    } catch(e) {}
+
     let result = await database.readJSONFile("qualitativeScoutingData");
-    result = result[eventCode];
-    res.send(result);
+    result = result[eventCode] || {};
+
+    let filtered = {};
+    for (let team in result) {
+        let backendCount = Object.keys(result[team]).length;
+        if (!localCounts[team] || localCounts[team] < backendCount) {
+            filtered[team] = result[team];
+        }
+    }
+
+    res.send(filtered);
 });
 
 app.get("/getPitScouting", async (req, res) => {
     const eventCode = req.query.eventCode;
     if (!eventCode) return res.sendStatus(403);
+
+    let localTeams = [];
+    try {
+        if (req.query.localTeams) localTeams = JSON.parse(decodeURIComponent(req.query.localTeams));
+    } catch(e) {}
+
     let result = await database.readJSONFile("pitScoutingData");
-    result = result[eventCode];
+    result = result[eventCode] || {};
 
-    if (!result) return res.send({});
-
-    const stripped = Object.fromEntries(
-        Object.entries(result).map(([team, data]) => {
+    let filtered = {};
+    for (const [team, data] of Object.entries(result)) {
+        if (!localTeams.includes(team)) {
             const { robotPicturePreview, ...rest } = data;
-            return [team, rest];
-        })
-    );
+            filtered[team] = rest;
+        }
+    }
 
-    res.send(stripped);
+    res.send(filtered);
 });
 
 app.get("/getPitScoutingImage", async (req, res) => {
@@ -136,11 +153,9 @@ app.get("/getPitScoutingImage", async (req, res) => {
 
 app.get("/getAllData", async (req, res) => {
     const eventCode = req.query.eventCode;
+    const lastId = parseInt(req.query.lastId || "0");
     if (!eventCode) return res.sendStatus(403);
-
-    console.log("alldata requested, eventCode: " + eventCode);
-    let result = await database.getAllData(eventCode);
-    console.log(result);
+    let result = await database.getAllData(eventCode, lastId);
     res.send(result);
 });
 
@@ -154,7 +169,7 @@ app.get("/getSingleMetric", async (req, res) => {
     let teams = {};
 
     for (let datapoint of result) {
-        let strippedTeam = datapoint.Team.replace(/\s+/g, ""); // Removes all whitespace
+        let strippedTeam = datapoint.Team.replace(/\s+/g, "");
         let match = datapoint.Match;
 
         if (!teams[strippedTeam]) {
@@ -169,7 +184,6 @@ app.get("/getSingleMetric", async (req, res) => {
     }
 
 
-    //await fs.writeFile('teams.json', JSON.stringify(teams, null, 2));
     console.log(Object.keys(teams))
     for (let thinger of Object.keys(teams)) {
         console.log(teams[thinger])
@@ -209,9 +223,6 @@ app.get("/winnerOfGompeiMadness", async (req, res) => {
 
 
 ////////////// POST Methods \\\\\\\\\\\\\\
-////////////// POST Methods \\\\\\\\\\\\\\
-////////////// POST Methods \\\\\\\\\\\\\\
-
 
 app.post("/postEventCode", async (req, res) => {
     eventCode = req.body.eventCode;
@@ -226,16 +237,6 @@ app.post("/postEventCode", async (req, res) => {
 });
 
 app.post("/postRatings", async (req, res) => {
-    // json file fileData {
-    //   "2026mabil": {
-    //     "190":  {1: 4, 2: 3},
-    //     "1323": {1: 5}
-    //   },
-    //   "2026mabos": {
-    //     "190":  {1: 1, 2: 2},
-    //     "1323": {1: 4}
-    //   }
-    // }
 
     let event = req.body.event;
     let rating = req.body.rating;
@@ -267,17 +268,6 @@ app.post("/postRatings", async (req, res) => {
 });
 
 app.post("/postPitScouting", async (req, res) => {
-    // json file fileData {
-    //   "2026mabil": {
-    //     "190":  {data},
-    //     "1323": {data}
-    //   },
-    //   "2026mabos": {
-    //     "190":  {data},
-    //     "1323": {data}
-    //   }
-    // }
-
     let event = req.body.event;
     let team = req.body.team;
     let formData = req.body.formData;

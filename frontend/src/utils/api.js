@@ -14,8 +14,8 @@ export function fetchAvailableTeams(eventCode) {
     return data;
 }
 
-export function fetchAllData(eventCode) {
-    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getAllData?eventCode=` + eventCode;
+export function fetchAllData(eventCode, lastId = 0) {
+    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getAllData?eventCode=${eventCode}&lastId=${lastId}`;
     let data = fetch(route);
     return data;
 }
@@ -26,14 +26,14 @@ export function fetchSingleMetric(eventCode) {
     return data;
 }
 
-export function fetchQualitativeScouting(eventCode) {
-    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getQualitativeScouting?eventCode=` + eventCode;
+export function fetchQualitativeScouting(eventCode, localCounts = {}) {
+    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getQualitativeScouting?eventCode=${eventCode}&localCounts=${encodeURIComponent(JSON.stringify(localCounts))}`;
     let data = fetch(route);
     return data;
 }
 
-export function fetchPitScouting(eventCode) {
-    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getPitScouting?eventCode=` + eventCode;
+export function fetchPitScouting(eventCode, localTeams = []) {
+    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getPitScouting?eventCode=${eventCode}&localTeams=${encodeURIComponent(JSON.stringify(localTeams))}`;
     let data = fetch(route);
     return data;
 }

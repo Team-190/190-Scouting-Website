@@ -49,10 +49,13 @@ async function getAvailableTeams(eventCode) {
 }
 
 // Gets the data of all the teams in an event, summing up numeric fields
-async function getAllData(eventCode) {
+async function getAllData(eventCode, lastId = 0) {
     try {
         await sql.connect(config);
-        const query = `SELECT * FROM [${eventCode}].[dbo].[Activities]`;
+        let query = `SELECT * FROM [${eventCode}].[dbo].[Activities]`;
+        if (lastId > 0) {
+            query += ` WHERE ID > ${lastId}`;
+        }
         const result = await sql.query(query);
 
         const rows = result.recordset;
