@@ -1,35 +1,56 @@
 // THIS IS A SCRIPT FOR THE SERVER TO AUTOMATICALLY PULL FROM GITHUB AND RESTART
 
-const { exec, spawn } = require('child_process');
+const { exec, spawn, execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 
 // Configuration
 const BRANCH = 'predev'; // Change this to 'main' or your specific branch
 const POLL_INTERVAL_MS = 30000; // Check every 30 seconds
 
-let currentProcess = null;
+let backendProcess = null;
+let frontendProcess = null;
 
 function startDevServer() {
-    console.log('============================STARTING SERVER...============================');
-    // We use spawn with shell: true to properly execute the .bat file
-    currentProcess = spawn('run-dev.bat', [], { shell: true, cwd: __dirname });
+    console.log('============================STARTING SERVERS...============================');
+    
+    // Check and install dependencies automatically just like the batch file did
+    if (!fs.existsSync(path.join(__dirname, 'backend', 'node_modules'))) {
+        console.log('Installing backend dependencies...');
+        execSync('npm install', { cwd: path.join(__dirname, 'backend'), stdio: 'inherit' });
+    }
+    if (!fs.existsSync(path.join(__dirname, 'frontend', 'node_modules'))) {
+        console.log('Installing frontend dependencies...');
+        execSync('npm install', { cwd: path.join(__dirname, 'frontend'), stdio: 'inherit' });
+    }
 
-    currentProcess.stdout.on('data', (data) => process.stdout.write(data));
-    currentProcess.stderr.on('data', (data) => process.stderr.write(data));
+    // Spawn them directly from Node instead of using the batch file.
+    // This gives us complete control over their Process IDs so we can kill them easily!
+    backendProcess = spawn(/^win/.test(process.platform) ? 'npm.cmd' : 'npm', ['run', 'start'], { cwd: path.join(__dirname, 'backend') });
+    frontendProcess = spawn(/^win/.test(process.platform) ? 'npm.cmd' : 'npm', ['run', 'dev'], { cwd: path.join(__dirname, 'frontend') });
 
-    currentProcess.on('close', (code) => {
-        console.log(`❌ run-dev.bat exited with code ${code}`);
-    });
+    backendProcess.stdout.on('data', (data) => process.stdout.write(`[BACKEND] ${data}`));
+    backendProcess.stderr.on('data', (data) => process.stderr.write(`[BACKEND ERR] ${data}`));
+
+    frontendProcess.stdout.on('data', (data) => process.stdout.write(`[FRONTEND] ${data}`));
+    frontendProcess.stderr.on('data', (data) => process.stderr.write(`[FRONTEND ERR] ${data}`));
 }
 
 function restartServer() {
-    console.log('============================STOPPING SERVER TO APPLY UPDATES...============================');
-    // On Windows, run-dev.bat spawns separate command windows named "Backend" and "Frontend"
-    // We kill them by window title so we don't end up with hundreds of orphaned windows
-    exec(`taskkill /FI "WINDOWTITLE eq Backend*" /T /F`, () => {
-        exec(`taskkill /FI "WINDOWTITLE eq Frontend*" /T /F`, () => {
-            startDevServer();
-        });
-    });
+    console.log('============================STOPPING SERVERS TO APPLY UPDATES...============================');
+    
+    // Force kill the specific process trees we spawned
+    if (backendProcess) {
+        exec(`taskkill /pid ${backendProcess.pid} /T /F`, () => {});
+    }
+    if (frontendProcess) {
+        exec(`taskkill /pid ${frontendProcess.pid} /T /F`, () => {});
+    }
+    
+    // Wait 3 seconds to let ports (like localhost:5173 / backend port) fully close before restarting
+    setTimeout(() => {
+        startDevServer();
+    }, 3000);
 }
 
 function checkForUpdates() {
