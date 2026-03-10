@@ -130,7 +130,7 @@
         onkeydown={(e) => e.key === "Enter" && cacheAllData()}
     >
         <div class="circle">
-            <span class="label">Populate Local Storage</span>
+            <span class="label">Populate Local Storage2</span>
         </div>
     </div>
 
