@@ -12,13 +12,16 @@
   import * as pieGraph from "../../pages/graphcode/pie.js";
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
-  import { fetchGracePage } from "../../utils/api";
+  import { fetchGracePage } from "../../utils/api.js";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
   // ─── Constants ────────────────────────────────────────────────────────────────
 
   const TBA_API_KEY = import.meta.env.VITE_AUTH_KEY;
+  const VITE_BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT || 8000;
+  const VITE_TESTING = import.meta.env.VITE_TESTING || 1;
+  const SERVER = !parseInt(VITE_TESTING) ? import.meta.env.VITE_SERVER_IP : "localhost";
   const TBA_BASE_URL = "https://www.thebluealliance.com/api/v3";
   const ROW_HEIGHT = 25;
   const HEADER_HEIGHT = 32;
@@ -445,11 +448,21 @@
 
   async function fetchEventMatches(code) {
     try {
-      const res = await fetch(`${TBA_BASE_URL}/event/${code}/matches`, {
-        headers: { "X-TBA-Auth-Key": TBA_API_KEY },
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      // const res = await fetch(`${TBA_BASE_URL}/event/${code}/matches`, {
+      //   headers: { "X-TBA-Auth-Key": TBA_API_KEY },
+      // });
+      // if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      // const matches = await res.json();
+
+      const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getMatchData?eventCode=` + eventCode;
+      let res = await fetch(route);
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
       const matches = await res.json();
+
+      console.log(matches);
+
       return matches
         .filter((m) => ["qm", "ef", "qf", "sf", "f"].includes(m.comp_level))
         .sort((a, b) => {
