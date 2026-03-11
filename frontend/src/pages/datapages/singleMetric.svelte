@@ -45,7 +45,6 @@
     ["Strategy", "Strategy"],
     ["OPR", "OPR (Offensive Power Rating)"],
     ["EFS", "EFS (Estimated Fuel Score)"],
-    ["NearFar", "Near/Far"],
     ["TrenchTraversal", "Trench Traversal"],
   ]);
 
