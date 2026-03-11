@@ -45,7 +45,6 @@
     ["Strategy", "Strategy"],
     ["OPR", "OPR (Offensive Power Rating)"],
     ["EFS", "EFS (Estimated Fuel Score)"],
-    ["TrenchTraversal", "Trench Traversal"],
   ]);
 
   const EFS_DISPLAY = "EFS (Estimated Fuel Score)";
