@@ -36,6 +36,7 @@
     ["DefenseTime", "Defense Time"],
     ["AutoClimb", "Auto Climb"],
     ["AttemptClimb", "Climb Attempt"],
+    ["TrenchTraversal", "Times Under Trench"],
     ["BumpTraversal", "Times Over Bump"],
     ["StartingLocation", "Starting Location"],
     ["MatchEvent", "Match Event"],
@@ -46,9 +47,7 @@
     ["LadderLocation", "Ladder Location"],
     ["Strategy", "Strategy"],
     ["EstimatedPoints", "EFS (Estimated Fuel Scored)"],
-    // ["BallsPerSecond", "BPS (Balls Per Second)"],
     ["NearFar", "Near/Far"],
-    ["TrenchTraversal", "Trench Traversal"],
   ]);
 
   const EXCLUDED_FIELDS = [

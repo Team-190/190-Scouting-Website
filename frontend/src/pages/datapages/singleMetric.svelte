@@ -46,7 +46,6 @@
     ["OPR", "OPR (Offensive Power Rating)"],
     ["EFS", "EFS (Estimated Fuel Score)"],
     ["NearFar", "Near/Far"],
-    ["TrenchTraversal", "Trench Traversal"],
   ]);
 
   const EFS_DISPLAY = "EFS (Estimated Fuel Score)";
@@ -590,11 +589,11 @@
       };
     }
 
-    // Find max match count
-    const maxMatchCount = availableTeams.reduce(
+    // Show at least 12 matches
+    const maxMatchCount = Math.max(12, availableTeams.reduce(
       (max, team) => Math.max(max, (teamData[team] ?? []).length),
       0,
-    );
+    ));
     if (!maxMatchCount) return;
 
     const qLabels = Array.from(
@@ -708,7 +707,7 @@
       makePercentileColumn(hideStats),
     ];
 
-    gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT;
+    gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT + 6;
     applyGrid(columnDefs);
     updateAllCharts();
   }
@@ -734,10 +733,10 @@
     const alliances = await fetchMatchAlliances(eventCode);
     const data = JSON.parse(await fetchAllMetricData());
 
-    const maxMatchCount = availableTeams.reduce(
+    const maxMatchCount = Math.max(12, availableTeams.reduce(
       (max, team) => Math.max(max, (teamData[team] ?? []).length),
       0,
-    );
+    ));
     const qLabels = Array.from(
       { length: maxMatchCount },
       (_, i) => `Q${i + 1}`,
@@ -914,7 +913,7 @@
       makePercentileColumn(false),
     ];
 
-    gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT;
+    gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT + 6;
     applyGrid(columnDefs);
     updateAllCharts();
     efsLoading = false;
@@ -993,7 +992,7 @@
       makePercentileColumn(false),
     ];
 
-    gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT;
+    gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT + 6;
     applyGrid(columnDefs);
   }
 
