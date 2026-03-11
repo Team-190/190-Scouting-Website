@@ -64,14 +64,14 @@ function checkForUpdates() {
     // Fetch the latest details from the remote
     exec(`cd /d "${repoPath}" && git fetch origin ${BRANCH}`, (fetchErr) => {
         if (fetchErr) {
-            console.error('⚠️ Error fetching from git:', fetchErr.message);
+            console.error('Error fetching from git:', fetchErr.message);
             return;
         }
 
         // Compare local HEAD to the remote branch
         exec(`cd /d "${repoPath}" && git rev-parse HEAD && git rev-parse origin/${BRANCH}`, (parseErr, stdout) => {
             if (parseErr) {
-                console.error('⚠️ Error parsing git hashes:', parseErr.message);
+                console.error('Error parsing git hashes:', parseErr.message);
                 return;
             }
 
@@ -83,7 +83,7 @@ function checkForUpdates() {
                 console.log('============================NEW COMMIT FOUND...============================');
                 exec(`cd /d "${repoPath}" && git pull origin ${BRANCH}`, (pullErr, pullStdout) => {
                     if (pullErr) {
-                        console.error('⚠️ Error pulling changes:', pullErr.message);
+                        console.error('Error pulling changes:', pullErr.message);
                         return;
                     }
                     console.log(pullStdout);
@@ -92,7 +92,7 @@ function checkForUpdates() {
                     restartServer();
                 });
             } else {
-                console.log('✅ Up to date.');
+                console.log('Up to date.');
             }
         });
     });

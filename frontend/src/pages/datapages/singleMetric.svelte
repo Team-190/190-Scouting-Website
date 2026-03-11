@@ -161,6 +161,7 @@
   let charts = [];
   let chartTypes = ["bar", "line", "pie", "scatter", "radar"];
   let showDropdown = false;
+  let autoOnly = false;
 
   // ─── Math Helpers ─────────────────────────────────────────────────────────────
 
@@ -378,7 +379,7 @@
   // ─── Data Loading ─────────────────────────────────────────────────────────────
 
   async function fetchAllMetricData() {
-    return localStorage.getItem("data");
+    return localStorage.getItem(autoOnly ? "autoData" : "data");
   }
 
   async function estimateTeamPoints(
@@ -1246,6 +1247,39 @@
     buildGrid();
   }
 
+  async function onAutoOnlyChange() {
+    loading = true;
+    error = "";
+    try {
+      const raw = await fetchAllMetricData();
+      processTeamData(JSON.parse(raw));
+
+      if (!availableTeams.length) {
+        error = "No team data found.";
+        loading = false;
+        return;
+      }
+
+      metrics = computeMetrics();
+      if (!metrics.length) {
+        error = "No metrics found.";
+        loading = false;
+        return;
+      }
+
+      if (!metrics.includes(selectedMetric)) {
+        selectedMetric = metrics[0];
+      }
+      dataMetric = resolveDataKey(selectedMetric);
+      loading = false;
+      buildGrid();
+    } catch (e) {
+      error = e.message;
+      loading = false;
+      console.error("Error switching data mode:", e);
+    }
+  }
+
   // ─── Chart Management ─────────────────────────────────────────────────────────
 
   function addChart(type) {
@@ -1686,6 +1720,17 @@
           {/each}
         </select>
       </div>
+      <div class="auto-only-toggle">
+        <label for="auto-only-checkbox">
+          <input
+            type="checkbox"
+            id="auto-only-checkbox"
+            bind:checked={autoOnly}
+            on:change={onAutoOnlyChange}
+          />
+          Auto Only
+        </label>
+      </div>
       {#if efsLoading}
         <span style="color: #ffcc00; font-size: 14px; font-weight: 600;">
         </span>
@@ -2025,6 +2070,26 @@
     font-weight: 600;
     color: #fff;
   }
+
+  .auto-only-toggle {
+    display: flex;
+    align-items: center;
+  }
+  .auto-only-toggle label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    color: #fff;
+  }
+  .auto-only-toggle input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--frc-190-red);
+    cursor: pointer;
+  }
+
   select {
     margin-left: 10px;
     padding: 8px 15px;

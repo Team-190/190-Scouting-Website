@@ -41,13 +41,6 @@ export async function fetchMatchAlliances(eventCode) {
     return {};
   }
   try {
-    // const res = await fetch(
-    //   `https://www.thebluealliance.com/api/v3/event/${eventCode}/matches`,
-    //   {
-    //     headers: { "X-TBA-Auth-Key": TBA_API_KEY },
-    //   },
-    // );
-
     const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getMatchData?eventCode=` + eventCode;
     let res = await fetch(route);
     if (!res.ok) {

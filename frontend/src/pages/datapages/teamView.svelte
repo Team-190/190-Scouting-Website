@@ -139,6 +139,7 @@
   let avoidanceChartEl;
   let avoidanceChartInstance;
   let isLoading = false;
+  let autoOnly = false;
 
   fetchGracePage(eventCode)
     .then((res) => res.json())
@@ -585,48 +586,6 @@
     return byMatch;
   }
 
-  // function makeNearFarRows(rowData, matches) {
-  //   let teamNumber = String(selectedTeam).replace(/\D/g, "");
-  //   let byMatch = getNearFarByMatch(teamNumber);
-
-  //   if (!Object.keys(byMatch).length) return rowData;
-
-  //   let nearFarMetrics = [
-  //     { key: "nearPercentage", label: "Near Zone %" },
-  //     { key: "farPercentage", label: "Far Zone %" },
-  //     { key: "neutralPercentage", label: "Neutral Zone %" },
-  //     { key: "redPercentage", label: "Red Zone %" },
-  //     { key: "bluePercentage", label: "Blue Zone %" },
-  //   ];
-
-  //   const qLabels = matches.map((_, i) => `Q${i + 1}`);
-
-  //   const newRows = nearFarMetrics.map(({ key, label }) => {
-  //     let row = {
-  //       metric: label,
-  //       mean: null,
-  //       median: null,
-  //       percentile: null,
-  //     };
-
-  //     const values: number[] = [];
-
-  //     qLabels.forEach((q, i) => {
-  //       const matchNum = matches[i]?.Match;
-  //       const v = byMatch[matchNum]?.[key] ?? null;
-  //       row[q] = v;
-  //       if (v !== null) values.push(v);
-  //     });
-
-  //     row.mean = Number(mean(values).toFixed(2));
-  //     row.median = Number(median(values).toFixed(2));
-
-  //     return row;
-  //   });
-
-  //   return [...rowData, ...newRows];
-  // }
-
   function fetchGraceRating(team) {
     if (!garceData || garceData[team] === undefined)
       return rating[rating.length - 1];
@@ -792,6 +751,24 @@
       const graceEl = document.getElementById("grace-rating") as HTMLImageElement;
       if (graceEl) graceEl.src = fetchGraceRating(selectedTeam);
       fetchRobotPicture(selectedTeam);
+    } finally {
+      isLoading = false;
+    }
+  }
+
+  async function onAutoOnlyChange() {
+    isLoading = true;
+    try {
+      const stored = localStorage.getItem(autoOnly ? "autoData" : "data");
+      teamViewData = stored ? JSON.parse(stored) : [];
+      cache = {};
+      allTeams = await loadTeamNumbers();
+      if (selectedTeam) {
+        await loadTeamData(String(selectedTeam));
+        await tick();
+        populateMatchDropdown(selectedTeam);
+        onMatchChange();
+      }
     } finally {
       isLoading = false;
     }
@@ -1684,7 +1661,7 @@
   onMount(async () => {
     isLoading = true;
     try {
-      const stored = localStorage.getItem("data");
+      const stored = localStorage.getItem(autoOnly ? "autoData" : "data");
       teamViewData = stored ? JSON.parse(stored) : [];
       teamQualData = getQualDataForTeam(selectedTeam);
       teamPitData = getPitDataForTeam(selectedTeam);
@@ -1750,6 +1727,17 @@
           <option value={key}>{mode.name}</option>
         {/each}
       </select>
+    </div>
+    <div class="auto-only-toggle">
+      <label for="auto-only-checkbox">
+        <input
+          type="checkbox"
+          id="auto-only-checkbox"
+          bind:checked={autoOnly}
+          on:change={onAutoOnlyChange}
+        />
+        Auto Only
+      </label>
     </div>
     <div>
       <img
@@ -2310,6 +2298,25 @@
   .top-controls label {
     font-weight: 600;
     color: #fff;
+  }
+
+  .auto-only-toggle {
+    display: flex;
+    align-items: center;
+  }
+  .auto-only-toggle label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    color: #fff;
+  }
+  .auto-only-toggle input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--frc-190-red);
+    cursor: pointer;
   }
 
   select {

@@ -1,6 +1,6 @@
 <script>
     import { onMount, tick } from "svelte";
-    import { fetchAllData, fetchEvents, fetchPitScouting, fetchQualitativeScouting } from "../utils/api";
+    import { fetchAllData, fetchAutoData, fetchEvents, fetchPitScouting, fetchQualitativeScouting } from "../utils/api";
 
     let eventCode = localStorage.getItem("eventCode");
     let isLoading = false;
@@ -31,6 +31,7 @@
         await withLoading(async () => {
             if (localStorage.getItem("eventCode") !== eventCode) {
                 localStorage.removeItem("data");
+                localStorage.removeItem("autoData");
                 localStorage.removeItem("retrievePit");
                 localStorage.removeItem("retrieveQual");
             }
@@ -54,6 +55,31 @@
             }
             const combinedData = Array.from(dataMap.values());
             localStorage.setItem("data", JSON.stringify(combinedData));
+
+
+            
+            // Fetch and cache auto-only data
+            const localAutoData = JSON.parse(localStorage.getItem("autoData") || "[]");
+            const autoLastId = localAutoData.reduce((max, row) => Math.max(max, row.ID || row.id || row.Id || 0), 0);
+
+            const autoRes = await fetchAutoData(eventCode, autoLastId);
+            const autoText = await autoRes.text();
+            const autoJson = autoText ? JSON.parse(autoText) : {};
+            const newAutoData = autoJson.data || [];
+
+            const autoMap = new Map();
+            for (const row of localAutoData) {
+                const key = `${row.Team || row.team}_${row.Match || row.match}`;
+                autoMap.set(key, row);
+            }
+            for (const row of newAutoData) {
+                const key = `${row.Team || row.team}_${row.Match || row.match}`;
+                autoMap.set(key, row);
+            }
+            const combinedAutoData = Array.from(autoMap.values());
+            localStorage.setItem("autoData", JSON.stringify(combinedAutoData));
+
+
 
             const localPitStr = localStorage.getItem("retrievePit");
             const localPit = localPitStr ? JSON.parse(localPitStr) : {};
