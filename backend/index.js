@@ -159,14 +159,6 @@ app.get("/getAllData", async (req, res) => {
     res.send(result);
 });
 
-app.get("/getAutoData", async (req, res) => {
-    const eventCode = req.query.eventCode;
-    const lastId = parseInt(req.query.lastId || "0");
-    if (!eventCode) return res.sendStatus(403);
-    let result = await database.getAutoData(eventCode, lastId);
-    res.send(result);
-});
-
 app.get("/getSingleMetric", async (req, res) => {
     const eventCode = req.query.eventCode;
     if (!eventCode) return res.sendStatus(403);

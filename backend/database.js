@@ -49,6 +49,7 @@ async function getAvailableTeams(eventCode) {
 }
 
 // Gets the data of all the teams in an event, summing up numeric fields
+// Returns each metric as [autoOnlyValue, fullMatchValue]
 async function getAllData(eventCode, lastId = 0) {
     try {
         await sql.connect(config);
@@ -57,176 +58,14 @@ async function getAllData(eventCode, lastId = 0) {
             query += ` WHERE ID > ${lastId}`;
         }
         const result = await sql.query(query);
-
         const rows = result.recordset;
-        // grouped will hold the "base" row for each team+match key (preferring EndMatch)
-        const grouped = {};
-        // sums will hold the accumulated numeric values
-        const sums = {};
-        // endAutoOverrides will hold specific fields from EndAuto rows
-        const endAutoOverrides = {};
-
-        // Zone time fields that should ONLY come from EndMatch rows (averaged)
-        const ZONE_TIME_FIELDS = ['NearBlueZoneTime', 'FarBlueZoneTime', 'NearNeutralZoneTime', 'FarNeutralZoneTime', 'NearRedZoneTime', 'FarRedZoneTime'];
-        // Case-insensitive lookup set for skipping zone times in the sum loop
-        const ZONE_TIME_FIELDS_LOWER = new Set(ZONE_TIME_FIELDS.map(f => f.toLowerCase()));
-        // Collect zone time values from EndMatch rows into arrays for averaging
-        const endMatchZoneTimes = {};
-
-        for (const row of rows) {
-            const team = row.Team || row.team;
-            const match = row.Match || row.match;
-            const scouter = row.ScouterName || row.scouterName
-
-            if (!team || !match) continue;
-
-            const uniqueKey = `${team}_${match}`;
-
-            if (!sums[uniqueKey]) {
-                sums[uniqueKey] = {};
-            }
-
-            if (!sums[uniqueKey][scouter]) {
-                sums[uniqueKey][scouter] = {};
-            }
-
-            // Determine base row: prioritize RecordType = 'EndMatch'
-            const currentBase = grouped[uniqueKey];
-            const isEndMatch = row.RecordType === 'EndMatch';
-
-            // If no base yet, or we found an EndMatch and the current base isn't one (or we want to update the EndMatch)
-            if (!currentBase || isEndMatch || (currentBase.RecordType !== 'EndMatch')) {
-                grouped[uniqueKey] = row;
-            }
-
-            // Capture EndAuto specific fields
-            if (row.RecordType === 'EndAuto') {
-                if (!endAutoOverrides[uniqueKey]) endAutoOverrides[uniqueKey] = {};
-                // Ignore -1 and nulls for overrides
-                if (row['AutoClimb'] !== -1 && row['AutoClimb'] != null) {
-                    endAutoOverrides[uniqueKey]['AutoClimb'] = row['AutoClimb'];
-                }
-                if (row['StartingLocation'] !== -1 && row['StartingLocation'] != null) {
-                    endAutoOverrides[uniqueKey]['StartingLocation'] = row['StartingLocation'];
-                }
-            }
-
-            // Collect zone time values from EndMatch rows only (for averaging later)
-            if (row.RecordType === 'EndMatch') {
-                if (!endMatchZoneTimes[uniqueKey]) {
-                    endMatchZoneTimes[uniqueKey] = {};
-                    for (const field of ZONE_TIME_FIELDS) {
-                        endMatchZoneTimes[uniqueKey][field] = [];
-                    }
-                }
-                for (const field of ZONE_TIME_FIELDS) {
-                    const val = row[field];
-                    if (val !== -1 && val != null && typeof val === 'number') {
-                        endMatchZoneTimes[uniqueKey][field].push(val);
-                    }
-                }
-            }
-
-            for (const metric of Object.keys(row)) {
-                // Skip zone time fields (case-insensitive) — these come only from EndMatch rows
-                if (ZONE_TIME_FIELDS_LOWER.has(metric.toLowerCase())) {
-                    continue;
-                }
-
-                // Skip identifiers and non-summable fields
-                if (['id', 'Id', 'ID', 'Team', 'team', 'Match', 'match', 'RecordType', 'ScouterName', 'ScouterError', 'Time', 'time', 'Mode', 'DriveStation'].includes(metric)) {
-                    continue;
-                }
-                
-                // Exclude AutoClimb and StartingLocation from sums as they are taken from EndAuto specifically
-                if (['AutoClimb', 'StartingLocation'].includes(metric)) continue;
-
-                const val = row[metric];
-                // Ignore -1 and nulls for sums
-                if (typeof val === 'number' && val !== -1) {
-                    sums[uniqueKey][scouter][metric] = (sums[uniqueKey][scouter][metric] || 0) + val;
-                }
-            }
-        }
-
-        // for each team match in the data
-        const finalData = Object.keys(grouped).map(key => {
-            const baseObj = { ...grouped[key] };
-
-            let keySums = {}
-
-            // for each scouter who reported on the event match
-            let scouterCount = 0;
-            for (const scouter of Object.keys(sums[key])) {
-                // for each metric the scouter reported
-                for (const metric of Object.keys(sums[key][scouter])) {
-                    if (!keySums[metric]) {
-                        keySums[metric] = 0;
-                    }
-
-                    keySums[metric] += sums[key][scouter][metric];
-                }
-                scouterCount++;
-            }
-
-            for (const item of Object.keys(keySums)) {
-                keySums[item] /= scouterCount;
-            }
-
-            for (const field of Object.keys(keySums)) {
-                baseObj[field] = keySums[field];
-            }
-            
-            // Apply EndAuto overrides
-            if (endAutoOverrides[key]) {
-                if (endAutoOverrides[key]['AutoClimb'] !== undefined) baseObj['AutoClimb'] = endAutoOverrides[key]['AutoClimb'];
-                if (endAutoOverrides[key]['StartingLocation'] !== undefined) baseObj['StartingLocation'] = endAutoOverrides[key]['StartingLocation'];
-            }
-
-            // Apply zone times: average only from EndMatch rows
-            if (endMatchZoneTimes[key]) {
-                for (const field of ZONE_TIME_FIELDS) {
-                    const values = endMatchZoneTimes[key][field];
-                    if (values && values.length > 0) {
-                        baseObj[field] = values.reduce((a, b) => a + b, 0) / values.length;
-                    } else {
-                        baseObj[field] = 0;
-                    }
-                }
-            }
-            
-            return baseObj;
-        });
-
-        return { data: finalData, error: null };
-    } catch (err) {
-        console.error("allMetricData error:", err);
-        return { data: null, error: err };
-    }
-}
-
-
-// Auto-only data: identical to getAllData but uses EndAuto as the cutoff instead of EndMatch
-async function getAutoData(eventCode, lastId = 0) {
-    try {
-        await sql.connect(config);
-        let query = `SELECT * FROM [${eventCode}].[dbo].[Activities]`;
-        if (lastId > 0) {
-            query += ` WHERE ID > ${lastId}`;
-        }
-        const result = await sql.query(query);
-
-        const rows = result.recordset;
-        const grouped = {};
-        const sums = {};
-        const endAutoOverrides = {};
 
         const ZONE_TIME_FIELDS = ['NearBlueZoneTime', 'FarBlueZoneTime', 'NearNeutralZoneTime', 'FarNeutralZoneTime', 'NearRedZoneTime', 'FarRedZoneTime'];
         const ZONE_TIME_FIELDS_LOWER = new Set(ZONE_TIME_FIELDS.map(f => f.toLowerCase()));
-        const endAutoZoneTimes = {};
+        const METADATA_FIELDS = ['id', 'Id', 'ID', 'Team', 'team', 'Match', 'match', 'RecordType', 'ScouterName', 'ScouterError', 'Time', 'time', 'Mode', 'DriveStation'];
+        const OVERRIDE_FIELDS = ['AutoClimb', 'StartingLocation'];
 
-        // Build a set of IDs that come AFTER EndAuto for each team+match+scouter
-        // so we can exclude teleop rows
+        // ── Build EndAuto ID cutoffs for auto-only filtering ──
         const endAutoIds = {}; // uniqueKey -> { scouter -> EndAuto row ID }
         for (const row of rows) {
             const team = row.Team || row.team;
@@ -241,107 +80,171 @@ async function getAutoData(eventCode, lastId = 0) {
             }
         }
 
+        // ── Accumulators for FULL match ──
+        const fullGrouped = {};
+        const fullSums = {};
+        const fullEndAutoOverrides = {};
+        const fullMatchEventCounts = {};
+        const fullMatchEventDetails = {};
+        const fullEndAutoTimes = {};
+        const fullEndMatchZoneTimes = {};
+
+        // ── Accumulators for AUTO only ──
+        const autoGrouped = {};
+        const autoSums = {};
+        const autoEndAutoOverrides = {};
+        const autoMatchEventCounts = {};
+        const autoMatchEventDetails = {};
+        const autoEndAutoTimes = {};
+        const autoEndAutoZoneTimes = {};
+
         for (const row of rows) {
             const team = row.Team || row.team;
             const match = row.Match || row.match;
             const scouter = row.ScouterName || row.scouterName;
-
             if (!team || !match) continue;
 
             const uniqueKey = `${team}_${match}`;
             const rowId = row.ID || row.Id || row.id || 0;
 
-            // Skip rows that come AFTER the EndAuto row for this team+match+scouter
-            if (endAutoIds[uniqueKey] && endAutoIds[uniqueKey][scouter] !== undefined) {
-                if (rowId > endAutoIds[uniqueKey][scouter]) continue;
+            // ────── FULL MATCH processing (all rows) ──────
+
+            // Count Match_Event rows and collect details
+            if (row.RecordType === 'Match_Event') {
+                fullMatchEventCounts[uniqueKey] = (fullMatchEventCounts[uniqueKey] || 0) + 1;
+                if (!fullMatchEventDetails[uniqueKey]) fullMatchEventDetails[uniqueKey] = [];
+                fullMatchEventDetails[uniqueKey].push({
+                    type: (row.MatchEvent && row.MatchEvent !== '-') ? row.MatchEvent : 'Unknown',
+                    time: row.Time || null
+                });
             }
 
-            // Also skip EndMatch rows entirely — we only want auto data
-            if (row.RecordType === 'EndMatch') continue;
-
-            if (!sums[uniqueKey]) sums[uniqueKey] = {};
-            if (!sums[uniqueKey][scouter]) sums[uniqueKey][scouter] = {};
-
-            // Determine base row: prioritize RecordType = 'EndAuto'
-            const currentBase = grouped[uniqueKey];
-            const isEndAuto = row.RecordType === 'EndAuto';
-
-            if (!currentBase || isEndAuto || (currentBase.RecordType !== 'EndAuto')) {
-                grouped[uniqueKey] = row;
-            }
-
-            // Capture EndAuto specific fields
             if (row.RecordType === 'EndAuto') {
-                if (!endAutoOverrides[uniqueKey]) endAutoOverrides[uniqueKey] = {};
-                if (row['AutoClimb'] !== -1 && row['AutoClimb'] != null) {
-                    endAutoOverrides[uniqueKey]['AutoClimb'] = row['AutoClimb'];
-                }
-                if (row['StartingLocation'] !== -1 && row['StartingLocation'] != null) {
-                    endAutoOverrides[uniqueKey]['StartingLocation'] = row['StartingLocation'];
-                }
+                if (!fullEndAutoTimes[uniqueKey]) fullEndAutoTimes[uniqueKey] = row.Time || null;
             }
 
-            // Collect zone time values from EndAuto rows only (for averaging later)
+            if (!fullSums[uniqueKey]) fullSums[uniqueKey] = {};
+            if (!fullSums[uniqueKey][scouter]) fullSums[uniqueKey][scouter] = {};
+
+            const fullCurrentBase = fullGrouped[uniqueKey];
+            const isEndMatch = row.RecordType === 'EndMatch';
+            if (!fullCurrentBase || isEndMatch || (fullCurrentBase.RecordType !== 'EndMatch')) {
+                fullGrouped[uniqueKey] = row;
+            }
+
             if (row.RecordType === 'EndAuto') {
-                if (!endAutoZoneTimes[uniqueKey]) {
-                    endAutoZoneTimes[uniqueKey] = {};
-                    for (const field of ZONE_TIME_FIELDS) {
-                        endAutoZoneTimes[uniqueKey][field] = [];
-                    }
+                if (!fullEndAutoOverrides[uniqueKey]) fullEndAutoOverrides[uniqueKey] = {};
+                if (row['AutoClimb'] !== -1 && row['AutoClimb'] != null) fullEndAutoOverrides[uniqueKey]['AutoClimb'] = row['AutoClimb'];
+                if (row['StartingLocation'] !== -1 && row['StartingLocation'] != null) fullEndAutoOverrides[uniqueKey]['StartingLocation'] = row['StartingLocation'];
+            }
+
+            if (row.RecordType === 'EndMatch') {
+                if (!fullEndMatchZoneTimes[uniqueKey]) {
+                    fullEndMatchZoneTimes[uniqueKey] = {};
+                    for (const field of ZONE_TIME_FIELDS) fullEndMatchZoneTimes[uniqueKey][field] = [];
                 }
                 for (const field of ZONE_TIME_FIELDS) {
                     const val = row[field];
-                    if (val !== -1 && val != null && typeof val === 'number') {
-                        endAutoZoneTimes[uniqueKey][field].push(val);
-                    }
+                    if (val !== -1 && val != null && typeof val === 'number') fullEndMatchZoneTimes[uniqueKey][field].push(val);
                 }
             }
 
             for (const metric of Object.keys(row)) {
                 if (ZONE_TIME_FIELDS_LOWER.has(metric.toLowerCase())) continue;
-
-                if (['id', 'Id', 'ID', 'Team', 'team', 'Match', 'match', 'RecordType', 'ScouterName', 'ScouterError', 'Time', 'time', 'Mode', 'DriveStation'].includes(metric)) continue;
-
-                if (['AutoClimb', 'StartingLocation'].includes(metric)) continue;
-
+                if (METADATA_FIELDS.includes(metric)) continue;
+                if (OVERRIDE_FIELDS.includes(metric)) continue;
                 const val = row[metric];
                 if (typeof val === 'number' && val !== -1) {
-                    sums[uniqueKey][scouter][metric] = (sums[uniqueKey][scouter][metric] || 0) + val;
+                    fullSums[uniqueKey][scouter][metric] = (fullSums[uniqueKey][scouter][metric] || 0) + val;
+                }
+            }
+
+            // ────── AUTO ONLY processing (skip rows after EndAuto, skip EndMatch) ──────
+
+            if (row.RecordType === 'EndMatch') continue; // skip EndMatch for auto
+
+            // Skip rows that come AFTER the EndAuto row for this team+match+scouter
+            const isAfterEndAuto = endAutoIds[uniqueKey] && endAutoIds[uniqueKey][scouter] !== undefined && rowId > endAutoIds[uniqueKey][scouter];
+            if (isAfterEndAuto) continue;
+
+            if (row.RecordType === 'Match_Event') {
+                autoMatchEventCounts[uniqueKey] = (autoMatchEventCounts[uniqueKey] || 0) + 1;
+                if (!autoMatchEventDetails[uniqueKey]) autoMatchEventDetails[uniqueKey] = [];
+                autoMatchEventDetails[uniqueKey].push({
+                    type: (row.MatchEvent && row.MatchEvent !== '-') ? row.MatchEvent : 'Unknown',
+                    time: row.Time || null
+                });
+            }
+
+            if (row.RecordType === 'EndAuto') {
+                if (!autoEndAutoTimes[uniqueKey]) autoEndAutoTimes[uniqueKey] = row.Time || null;
+            }
+
+            if (!autoSums[uniqueKey]) autoSums[uniqueKey] = {};
+            if (!autoSums[uniqueKey][scouter]) autoSums[uniqueKey][scouter] = {};
+
+            const autoCurrentBase = autoGrouped[uniqueKey];
+            const isEndAuto = row.RecordType === 'EndAuto';
+            if (!autoCurrentBase || isEndAuto || (autoCurrentBase.RecordType !== 'EndAuto')) {
+                autoGrouped[uniqueKey] = row;
+            }
+
+            if (row.RecordType === 'EndAuto') {
+                if (!autoEndAutoOverrides[uniqueKey]) autoEndAutoOverrides[uniqueKey] = {};
+                if (row['AutoClimb'] !== -1 && row['AutoClimb'] != null) autoEndAutoOverrides[uniqueKey]['AutoClimb'] = row['AutoClimb'];
+                if (row['StartingLocation'] !== -1 && row['StartingLocation'] != null) autoEndAutoOverrides[uniqueKey]['StartingLocation'] = row['StartingLocation'];
+
+                if (!autoEndAutoZoneTimes[uniqueKey]) {
+                    autoEndAutoZoneTimes[uniqueKey] = {};
+                    for (const field of ZONE_TIME_FIELDS) autoEndAutoZoneTimes[uniqueKey][field] = [];
+                }
+                for (const field of ZONE_TIME_FIELDS) {
+                    const val = row[field];
+                    if (val !== -1 && val != null && typeof val === 'number') autoEndAutoZoneTimes[uniqueKey][field].push(val);
+                }
+            }
+
+            for (const metric of Object.keys(row)) {
+                if (ZONE_TIME_FIELDS_LOWER.has(metric.toLowerCase())) continue;
+                if (METADATA_FIELDS.includes(metric)) continue;
+                if (OVERRIDE_FIELDS.includes(metric)) continue;
+                const val = row[metric];
+                if (typeof val === 'number' && val !== -1) {
+                    autoSums[uniqueKey][scouter][metric] = (autoSums[uniqueKey][scouter][metric] || 0) + val;
                 }
             }
         }
 
-        const finalData = Object.keys(grouped).map(key => {
+        // ── Helper: assemble a final row from accumulators ──
+        function assembleRow(key, grouped, sums, endAutoOverrides, zoneTimes, zoneTimeFields, matchEventCounts, matchEventDetails, endAutoTimes) {
             const baseObj = { ...grouped[key] };
             let keySums = {};
             let scouterCount = 0;
 
-            for (const scouter of Object.keys(sums[key])) {
+            for (const scouter of Object.keys(sums[key] || {})) {
                 for (const metric of Object.keys(sums[key][scouter])) {
                     if (!keySums[metric]) keySums[metric] = 0;
                     keySums[metric] += sums[key][scouter][metric];
                 }
                 scouterCount++;
             }
-
-            for (const item of Object.keys(keySums)) {
-                keySums[item] /= scouterCount;
+            if (scouterCount > 0) {
+                for (const item of Object.keys(keySums)) {
+                    keySums[item] /= scouterCount;
+                }
             }
-
             for (const field of Object.keys(keySums)) {
                 baseObj[field] = keySums[field];
             }
 
-            // Apply EndAuto overrides
             if (endAutoOverrides[key]) {
                 if (endAutoOverrides[key]['AutoClimb'] !== undefined) baseObj['AutoClimb'] = endAutoOverrides[key]['AutoClimb'];
                 if (endAutoOverrides[key]['StartingLocation'] !== undefined) baseObj['StartingLocation'] = endAutoOverrides[key]['StartingLocation'];
             }
 
-            // Apply zone times: average only from EndAuto rows
-            if (endAutoZoneTimes[key]) {
-                for (const field of ZONE_TIME_FIELDS) {
-                    const values = endAutoZoneTimes[key][field];
+            if (zoneTimes[key]) {
+                for (const field of zoneTimeFields) {
+                    const values = zoneTimes[key][field];
                     if (values && values.length > 0) {
                         baseObj[field] = values.reduce((a, b) => a + b, 0) / values.length;
                     } else {
@@ -350,12 +253,71 @@ async function getAutoData(eventCode, lastId = 0) {
                 }
             }
 
-            return baseObj;
-        });
+            baseObj['MatchEventCount'] = matchEventCounts[key] || 0;
 
-        return { data: finalData, error: null };
+            if (matchEventDetails[key] && matchEventDetails[key].length > 0) {
+                const endAutoTime = endAutoTimes[key] ? new Date(endAutoTimes[key]).getTime() : null;
+                baseObj['MatchEventDetails'] = matchEventDetails[key].map(evt => {
+                    let matchTime = null;
+                    if (evt.time && endAutoTime) {
+                        const evtTime = new Date(evt.time).getTime();
+                        matchTime = ((evtTime - endAutoTime) / 1000) + 20;
+                    }
+                    return { type: evt.type, matchTime };
+                });
+            } else {
+                baseObj['MatchEventDetails'] = [];
+            }
+
+            return baseObj;
+        }
+
+        // ── Build full-match rows ──
+        const fullRows = {};
+        for (const key of Object.keys(fullGrouped)) {
+            fullRows[key] = assembleRow(key, fullGrouped, fullSums, fullEndAutoOverrides, fullEndMatchZoneTimes, ZONE_TIME_FIELDS, fullMatchEventCounts, fullMatchEventDetails, fullEndAutoTimes);
+        }
+
+        // ── Build auto-only rows ──
+        const autoRows = {};
+        for (const key of Object.keys(autoGrouped)) {
+            autoRows[key] = assembleRow(key, autoGrouped, autoSums, autoEndAutoOverrides, autoEndAutoZoneTimes, ZONE_TIME_FIELDS, autoMatchEventCounts, autoMatchEventDetails, autoEndAutoTimes);
+        }
+
+        // ── Merge: each metric becomes [autoValue, fullValue] ──
+        const allKeys = new Set([...Object.keys(fullRows), ...Object.keys(autoRows)]);
+        const mergedData = [];
+
+        for (const key of allKeys) {
+            const full = fullRows[key];
+            const auto = autoRows[key] || {};
+
+            if (!full) continue; // shouldn't happen, but guard
+
+            const merged = {};
+            // Metadata fields stay as single values
+            for (const field of [...METADATA_FIELDS, 'MatchEvent', 'NearFar']) {
+                if (full[field] !== undefined) merged[field] = full[field];
+            }
+
+            // Merge all other fields as [autoValue, fullValue]
+            const allMetricKeys = new Set([...Object.keys(full), ...Object.keys(auto)]);
+            for (const metric of allMetricKeys) {
+                if (merged[metric] !== undefined) continue; // already set as metadata
+                if (METADATA_FIELDS.includes(metric)) continue;
+                if (['MatchEvent', 'NearFar'].includes(metric)) continue;
+
+                const fullVal = full[metric] !== undefined ? full[metric] : null;
+                const autoVal = auto[metric] !== undefined ? auto[metric] : null;
+                merged[metric] = [autoVal, fullVal];
+            }
+
+            mergedData.push(merged);
+        }
+
+        return { data: mergedData, error: null };
     } catch (err) {
-        console.error("getAutoData error:", err);
+        console.error("allMetricData error:", err);
         return { data: null, error: err };
     }
 }
@@ -394,7 +356,6 @@ module.exports = {
     sql,
     getEvents,
     getAllData,
-    getAutoData,
     getAvailableTeams,
     readJSONFile,
     writeJSONFile

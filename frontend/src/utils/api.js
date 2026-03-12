@@ -20,12 +20,6 @@ export function fetchAllData(eventCode, lastId = 0) {
     return data;
 }
 
-export function fetchAutoData(eventCode, lastId = 0) {
-    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getAutoData?eventCode=${eventCode}&lastId=${lastId}`;
-    let data = fetch(route);
-    return data;
-}
-
 export function fetchSingleMetric(eventCode) {
     const route = `http://${SERVER}:${VITE_BACKEND_PORT}/singleMetric?eventCode=` + eventCode;
     let data = fetch(route);

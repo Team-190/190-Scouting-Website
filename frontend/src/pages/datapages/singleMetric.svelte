@@ -36,7 +36,6 @@
     ["BumpTraversal", "Times Over Bump"],
     ["TrenchTraversal", "Times Under Trench"],
     ["StartingLocation", "Starting Location"],
-    ["MatchEvent", "Match Event"],
     ["FuelIntakingTime", "Fuel Intaking Time"],
     ["FuelShootingTime", "Fuel Shooting Time"],
     ["FeedingTime", "Feeding Time"],
@@ -45,11 +44,12 @@
     ["Strategy", "Strategy"],
     ["OPR", "OPR (Offensive Power Rating)"],
     ["EFS", "EFS (Estimated Fuel Score)"],
+    ["MatchEventCount", "Match Events"],
   ]);
 
   const EFS_DISPLAY = "EFS (Estimated Fuel Score)";
 
-  const INVERTED_METRICS = new Set(["TimeOfClimb", "ClimbTime"]);
+  const INVERTED_METRICS = new Set(["TimeOfClimb", "ClimbTime", "MatchEventCount"]);
   const BOOLEAN_METRICS = new Set(["AutoClimb", "AttemptClimb"]);
   const CLIMBSTATE_METRIC = "EndState";
   const OPR_DISPLAY = "OPR (Offensive Power Rating)";
@@ -71,6 +71,8 @@
     "NearNeutralZoneTime",
     "FarNeutralZoneTime",
     "NearFar",
+    "MatchEvent",
+    "MatchEventDetails",
   ]);
 
   // Metrics excluded from radar chart
@@ -376,10 +378,39 @@
       : lerpColor(mode.mid, mode.above, (t - 0.5) * 2);
   }
 
+  // ─── Value Extraction ─────────────────────────────────────────────────────────
+
+  const METADATA_KEYS = new Set([
+    "id", "Id", "ID", "Team", "team", "Match", "match",
+    "RecordType", "ScouterName", "ScouterError", "Time", "time",
+    "Mode", "DriveStation", "MatchEvent", "NearFar",
+  ]);
+
+  function extractValues(data: any[], useAuto: boolean): any[] {
+    const idx = useAuto ? 0 : 1;
+    return data.map((row) => {
+      const flat: any = {};
+      for (const key of Object.keys(row)) {
+        const val = row[key];
+        if (METADATA_KEYS.has(key)) {
+          flat[key] = val;
+        } else if (Array.isArray(val) && val.length === 2) {
+          flat[key] = val[idx];
+        } else {
+          flat[key] = val;
+        }
+      }
+      return flat;
+    });
+  }
+
   // ─── Data Loading ─────────────────────────────────────────────────────────────
 
   async function fetchAllMetricData() {
-    return localStorage.getItem(autoOnly ? "autoData" : "data");
+    const stored = localStorage.getItem("data");
+    if (!stored) return null;
+    const parsed = JSON.parse(stored);
+    return JSON.stringify(extractValues(parsed, autoOnly));
   }
 
   async function estimateTeamPoints(
@@ -628,6 +659,10 @@
             }
           } else {
             row[label] = normalizeValue(v);
+          }
+          // Store match event details for tooltip on MatchEventCount metric
+          if (dataMetric === "MatchEventCount" && r.MatchEventDetails) {
+            row[`${label}_details`] = r.MatchEventDetails;
           }
         });
 
@@ -1119,6 +1154,22 @@
         if (num === -1) return "False";
         return num.toFixed(2);
       },
+      tooltipValueGetter: (params) => {
+        if (dataMetric !== "MatchEventCount") return null;
+        const details = params.data?.[`${q}_details`];
+        if (!details || !details.length) return null;
+        return details
+          .map((evt) => {
+            if (evt.matchTime == null) return `${evt.type}`;
+            const secs = Math.round(evt.matchTime);
+            const mins = Math.floor(Math.abs(secs) / 60);
+            const rem = Math.abs(secs) % 60;
+            const timeStr = `${mins}:${rem.toString().padStart(2, "0")}`;
+            const phase = secs <= 20 ? "Auto" : "Teleop";
+            return `${evt.type} @ ${timeStr} (${phase})`;
+          })
+          .join("\n");
+      },
     };
   }
 
@@ -1220,6 +1271,8 @@
         columnDefs,
         rowHeight: ROW_HEIGHT,
         headerHeight: HEADER_HEIGHT,
+        tooltipShowDelay: 200,
+        popupParent: document.body,
         defaultColDef: {
           resizable: false,
           sortable: false,
@@ -2008,6 +2061,18 @@
     border: 3px solid var(--frc-190-red);
     border-radius: 8px;
     overflow: hidden;
+  }
+  :global(.ag-tooltip) {
+    white-space: pre-line;
+    max-width: 400px;
+    font-size: 14px;
+    padding: 8px 12px;
+    background: #222;
+    color: #fff;
+    border: 1px solid #555;
+    border-radius: 4px;
+    z-index: 99999;
+    pointer-events: none;
   }
   :global(.ag-body-viewport) {
     overflow-y: scroll !important;

@@ -39,7 +39,6 @@
     ["TrenchTraversal", "Times Under Trench"],
     ["BumpTraversal", "Times Over Bump"],
     ["StartingLocation", "Starting Location"],
-    ["MatchEvent", "Match Event"],
     ["FuelIntakingTime", "Fuel Intaking Time"],
     ["FuelShootingTime", "Fuel Shooting Time"],
     ["FeedingTime", "Feeding Time"],
@@ -48,6 +47,7 @@
     ["Strategy", "Strategy"],
     ["EstimatedPoints", "EFS (Estimated Fuel Scored)"],
     ["NearFar", "Near/Far"],
+    ["MatchEventCount", "Match Events"],
   ]);
 
   const EXCLUDED_FIELDS = [
@@ -67,9 +67,11 @@
     "FarNeutralZoneTime",
     "FarRedZoneTime",
     "FarBlueZoneTime",
+    "MatchEvent",
+    "MatchEventDetails",
   ];
 
-  const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime"];
+  const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime", "MatchEventCount"];
   const BOOLEAN_METRICS = ["AutoClimb"];
   const CLIMBSTATE_METRIC = "EndState";
 
@@ -177,6 +179,38 @@
     `rgb(${c1.map((v, i) => Math.round(v + (c2[i] - v) * t)).join(",")})`;
 
   // ─── Value Helpers ────────────────────────────────────────────────────────────
+
+  // Metadata fields that are stored as single values (not [auto, full] arrays)
+  const METADATA_KEYS = new Set([
+    "id", "Id", "ID", "Team", "team", "Match", "match",
+    "RecordType", "ScouterName", "ScouterError", "Time", "time",
+    "Mode", "DriveStation", "MatchEvent", "NearFar",
+  ]);
+
+  /**
+   * Extract values from merged data format.
+   * Metric fields are stored as [autoValue, fullMatchValue].
+   * @param data - array of merged row objects
+   * @param useAuto - if true, extract index 0 (auto); if false, extract index 1 (full)
+   * @returns flat array of row objects with single values per metric
+   */
+  function extractValues(data: any[], useAuto: boolean): any[] {
+    const idx = useAuto ? 0 : 1;
+    return data.map((row) => {
+      const flat: any = {};
+      for (const key of Object.keys(row)) {
+        const val = row[key];
+        if (METADATA_KEYS.has(key)) {
+          flat[key] = val;
+        } else if (Array.isArray(val) && val.length === 2) {
+          flat[key] = val[idx];
+        } else {
+          flat[key] = val;
+        }
+      }
+      return flat;
+    });
+  }
 
   function isNumeric(n) {
     if (n === null || n === undefined || n === "" || typeof n === "boolean")
@@ -759,8 +793,9 @@
   async function onAutoOnlyChange() {
     isLoading = true;
     try {
-      const stored = localStorage.getItem(autoOnly ? "autoData" : "data");
-      teamViewData = stored ? JSON.parse(stored) : [];
+      const stored = localStorage.getItem("data");
+      const parsed = stored ? JSON.parse(stored) : [];
+      teamViewData = extractValues(parsed, autoOnly);
       cache = {};
       allTeams = await loadTeamNumbers();
       if (selectedTeam) {
@@ -1006,6 +1041,10 @@
         } else {
           row[q] = normalizeValue(val);
         }
+        // Store match event details for tooltip on MatchEventCount row
+        if (metric === "MatchEventCount" && matches[i]?.MatchEventDetails) {
+          row[`${q}_details`] = matches[i].MatchEventDetails;
+        }
       });
 
       if (isNumericMetric && !isBooleanMetric && !isClimbStateMetric) {
@@ -1220,6 +1259,22 @@
         cellClass: "cell-center",
         cellStyle: qCellStyle,
         valueFormatter: qValueFormatter,
+        tooltipValueGetter: (params) => {
+        if (params.data.metric !== "MatchEventCount") return null;
+        const details = params.data?.[`${q}_details`];
+        if (!details || !details.length) return null;
+        return details
+          .map((evt) => {
+            if (evt.matchTime == null) return `${evt.type}`;
+            const secs = Math.round(evt.matchTime);
+            const mins = Math.floor(Math.abs(secs) / 60);
+            const rem = Math.abs(secs) % 60;
+            const timeStr = `${mins}:${rem.toString().padStart(2, "0")}`;
+            const phase = secs <= 20 ? "Auto" : "Teleop";
+            return `${evt.type} @ ${timeStr} (${phase})`;
+          })
+          .join("\n");
+        },
       })),
       {
         headerName: "Mean",
@@ -1272,6 +1327,8 @@
       rowHeight: ROW_HEIGHT,
       headerHeight: HEADER_HEIGHT,
       domLayout: "autoHeight",
+      tooltipShowDelay: 200,
+      popupParent: document.body,
       defaultColDef: {
         resizable: false,
         sortable: false,
@@ -1661,8 +1718,9 @@
   onMount(async () => {
     isLoading = true;
     try {
-      const stored = localStorage.getItem(autoOnly ? "autoData" : "data");
-      teamViewData = stored ? JSON.parse(stored) : [];
+      const stored = localStorage.getItem("data");
+      const parsed = stored ? JSON.parse(stored) : [];
+      teamViewData = extractValues(parsed, autoOnly);
       teamQualData = getQualDataForTeam(selectedTeam);
       teamPitData = getPitDataForTeam(selectedTeam);
 
@@ -2239,6 +2297,18 @@
     border: 3px solid var(--frc-190-red);
     border-radius: 8px;
     overflow: hidden;
+  }
+  :global(.ag-tooltip) {
+    white-space: pre-line;
+    max-width: 400px;
+    font-size: 14px;
+    padding: 8px 12px;
+    background: #222;
+    color: #fff;
+    border: 1px solid #555;
+    border-radius: 4px;
+    z-index: 99999;
+    pointer-events: none;
   }
   :global(.ag-body-viewport) {
     overflow-y: scroll !important;
