@@ -199,6 +199,15 @@ app.get("/getRatings", async (req, res) => {
     res.send(fileData);
 });
 
+app.get("/getHPRatings", async (req, res) => {
+    const eventCode = req.query.eventCode;
+    if (!eventCode) return res.sendStatus(403);
+
+    let fileData = await database.readJSONFile("HPRatings");
+    fileData = fileData[eventCode];
+    res.send(fileData);
+});
+
 
 
 
@@ -242,6 +251,37 @@ app.post("/postRatings", async (req, res) => {
     let rating = req.body.rating;
     let team = req.body.team;
     let file = "driverRatings";
+    if (rating == null || team == null || event == null) {
+        console.log("One or more fields could not be retrieved");
+        console.log(`${rating} ${team} ${event}`);
+        res.sendStatus(400);
+    }
+    else {
+
+        let fileData = await database.readJSONFile(file);
+        console.log(fileData)
+        fileData[event] ||= {};
+
+        if (fileData[event][team]) {
+            let nextRating = Object.keys(fileData[event][team]).length;
+
+            fileData[event][team][nextRating] = rating;
+        } else {
+            fileData[event][team] = { 0: rating };
+        }
+
+        database.writeJSONFile(file, fileData);
+
+        res.sendStatus(200);
+    }
+});
+
+app.post("/postHPRatings", async (req, res) => {
+
+    let event = req.body.event;
+    let rating = req.body.rating;
+    let team = req.body.team;
+    let file = "HPRatings";
     if (rating == null || team == null || event == null) {
         console.log("One or more fields could not be retrieved");
         console.log(`${rating} ${team} ${event}`);

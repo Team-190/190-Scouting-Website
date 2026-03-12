@@ -1,10 +1,10 @@
 <script>
   import { goto } from "@mateothegreat/svelte5-router";
-  import logo from "../images/frc190_Logo.png";
   import { onMount } from "svelte";
+  import logo from "../images/frc190_Logo.png";
   import {
-    fetchAlliancesAvailable,
-    fetchElimsHaveStarted,
+      fetchAlliancesAvailable,
+      fetchElimsHaveStarted,
   } from "../utils/externalApi";
 
   let isMenuOpen = false;
@@ -71,6 +71,7 @@
       <button on:click={() => navigate("/teamView")}>Team View</button>
       <button on:click={() => navigate("/pitScouting")}>Pit Scouting</button>
       <button on:click={() => navigate("/gracePage")}>Grace Page</button>
+      <button on:click={() => navigate("/ananthPage")}>Ananth Page</button>
       <button on:click={() => navigate("/matchPreview")}>Match Preview</button>
       <button on:click={() => navigate("/qualPage")}
         >Qualitative Scouting</button

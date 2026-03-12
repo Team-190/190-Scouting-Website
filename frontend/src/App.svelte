@@ -3,14 +3,15 @@
 
   import Navbar from "./components/Navbar.svelte";
   import Home from "./pages/Home.svelte";
-  import PickLists from "./pages/datapages/pickLists.svelte";
-  import SingleMetric from "./pages/datapages/singleMetric.svelte";
-  import TeamView from "./pages/datapages/teamView.svelte";
-  import PitScouting from "./pages/datapages/pitScouting.svelte";
+  import AnanthPage from "./pages/datapages/ananthPage.svelte";
   import GracePage from "./pages/datapages/gracePage.svelte";
   import MarchMadness from "./pages/datapages/marchMadness.svelte";
   import MatchPreview from "./pages/datapages/matchPreview.svelte";
+  import PickLists from "./pages/datapages/pickLists.svelte";
+  import PitScouting from "./pages/datapages/pitScouting.svelte";
   import QualPage from "./pages/datapages/qualPage.svelte";
+  import SingleMetric from "./pages/datapages/singleMetric.svelte";
+  import TeamView from "./pages/datapages/teamView.svelte";
 
   const routes = [
     { path: "/", component: Home },
@@ -19,6 +20,7 @@
     { path: "/teamView", component: TeamView },
     { path: "/pitScouting", component: PitScouting },
     { path: "/gracePage", component: GracePage },
+    { path: "/ananthPage", component: AnanthPage },
     { path: "/marchMadness", component: MarchMadness },
     { path: "/matchPreview", component: MatchPreview },
     { path: "/qualPage", component: QualPage },

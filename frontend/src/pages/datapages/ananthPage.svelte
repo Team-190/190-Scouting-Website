@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { fetchGracePage, postGracePage } from "../../utils/api";
+  import { fetchAnanthPage, postAnanthPage } from "../../utils/api";
   import { fetchTeams } from "../../utils/externalApi";
 
   //Variables
@@ -8,17 +8,16 @@
   let tableData = [];
   let isSubmitting = false;
   const rating = [
-    new URL("../../images/GraceRatings/DNP.png", import.meta.url).href,
-    new URL("../../images/GraceRatings/ProbNo.png", import.meta.url).href,
-    new URL("../../images/GraceRatings/NeutralBad.jpg", import.meta.url).href,
-    new URL("../../images/GraceRatings/NeutralGood.png", import.meta.url).href,
-    new URL("../../images/GraceRatings/PrettyGood.gif", import.meta.url).href,
-    new URL("../../images/GraceRatings/AHHHHH.png", import.meta.url).href,
-    new URL("../../images/GraceRatings/FIRSTpick.gif", import.meta.url).href,
-    new URL("../../images/GraceRatings/horse.png", import.meta.url).href,
+    new URL("../../images/AnanthRatings/DNP.png", import.meta.url).href,
+    new URL("../../images/AnanthRatings/ProbNo.png", import.meta.url).href,
+    new URL("../../images/AnanthRatings/NeutralBad.jpg", import.meta.url).href,
+    new URL("../../images/AnanthRatings/NeutralGood.png", import.meta.url).href,
+    new URL("../../images/AnanthRatings/PrettyGood.gif", import.meta.url).href,
+    new URL("../../images/AnanthRatings/AHHHHH.png", import.meta.url).href,
+    new URL("../../images/AnanthRatings/FIRSTpick.gif", import.meta.url).href,
+    new URL("../../images/AnanthRatings/horse.png", import.meta.url).href,
   ];
   let eventCode = localStorage.getItem("eventCode");
-  // eventCode = "2025mawor";
 
   let originalTitle = "";
   let teams = new Map();
@@ -26,10 +25,7 @@
 
   onMount(async () => {
     originalTitle = document.title;
-    document.title = "GARCE PAGE";
-    // for (let i = 0; i < allTeams.length; i++){
-    //   teamNames.push(await fetchTeams(allTeams[i]));
-    // }
+    document.title = "ANANTH PAGE";
 
     const result = await fetchTeams(eventCode);
     teams = result._teams;
@@ -49,7 +45,7 @@
         name: teams.get(teamNumber),
         rating: rating[7],
       }));
-      fetchGracePage(eventCode)
+      fetchAnanthPage(eventCode)
         .then((res) => {
           if (!res.ok) throw new Error("Network response was not ok");
           return res.json();
@@ -87,7 +83,7 @@
     }
 
     try {
-      await postGracePage(eventCode, Number(selectedTeam), i);
+      await postAnanthPage(eventCode, Number(selectedTeam), i);
 
       const existingIndex = tableData.findIndex(
         (row) => row.team == selectedTeam,

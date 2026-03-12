@@ -50,6 +50,11 @@ export function fetchGracePage(eventCode) {
     return data;
 }
 
+export function fetchAnanthPage(eventCode) {
+    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getHPRatings?eventCode=${eventCode}`;
+    let data = fetch(route);
+    return data;
+}
 
 ////////////// POST Methods \\\\\\\\\\\\\\
 ////////////// POST Methods \\\\\\\\\\\\\\
@@ -78,6 +83,26 @@ export async function postEventCode(eventCode) {
 
 export async function postGracePage(event, team, rating) {
     const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/postRatings`, {
+        method: 'POST',
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({event, team, rating})
+    });
+
+    if (!response.ok) {
+        // Handle HTTP errors, e.g., 404, 500 status codes
+        const errorText = await response.text();
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+    }
+
+    const result = await response.text(); // or response.json() if the server responds with JSON
+    console.log('Success:', result);
+    return result;
+}
+
+export async function postAnanthPage(event, team, rating) {
+    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/postHPRatings`, {
         method: 'POST',
         headers: {
             "Content-Type": "application/json"

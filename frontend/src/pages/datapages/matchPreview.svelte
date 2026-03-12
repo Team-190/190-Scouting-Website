@@ -1,18 +1,18 @@
 <script lang="ts">
-  import { onMount, tick } from "svelte";
   import {
-    createGrid,
-    ModuleRegistry,
-    AllCommunityModule,
+      AllCommunityModule,
+      createGrid,
+      ModuleRegistry,
   } from "ag-grid-community";
   import "ag-grid-community/styles/ag-grid.css";
   import "ag-grid-community/styles/ag-theme-quartz.css";
+  import { onMount, tick } from "svelte";
   import * as barGraph from "../../pages/graphcode/bar.js";
   import * as lineGraph from "../../pages/graphcode/line.js";
   import * as pieGraph from "../../pages/graphcode/pie.js";
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
-  import { fetchGracePage } from "../../utils/api.js";
+  import { fetchAnanthPage, fetchGracePage } from "../../utils/api.js";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -109,15 +109,26 @@
     },
   };
 
-  const rating = [
-    new URL("../../images/DNP.png", import.meta.url).href,
-    new URL("../../images/ProbNo.png", import.meta.url).href,
-    new URL("../../images/NeutralBad.jpg", import.meta.url).href,
-    new URL("../../images/NeutralGood.png", import.meta.url).href,
-    new URL("../../images/PrettyGood.gif", import.meta.url).href,
-    new URL("../../images/AHHHHH.png", import.meta.url).href,
-    new URL("../../images/FIRSTpick.gif", import.meta.url).href,
-    new URL("../../images/horse.png", import.meta.url).href,
+  const GraceRating = [
+    new URL("../../images/GraceRatings/DNP.png", import.meta.url).href,
+    new URL("../../images/GraceRatings/ProbNo.png", import.meta.url).href,
+    new URL("../../images/GraceRatings/NeutralBad.jpg", import.meta.url).href,
+    new URL("../../images/GraceRatings/NeutralGood.png", import.meta.url).href,
+    new URL("../../images/GraceRatings/PrettyGood.gif", import.meta.url).href,
+    new URL("../../images/GraceRatings/AHHHHH.png", import.meta.url).href,
+    new URL("../../images/GraceRatings/FIRSTpick.gif", import.meta.url).href,
+    new URL("../../images/GraceRatings/horse.png", import.meta.url).href,
+  ];
+
+  const AnanthRating = [
+    new URL("../../images/AnanthRatings/DNP.png", import.meta.url).href,
+    new URL("../../images/AnanthRatings/ProbNo.png", import.meta.url).href,
+    new URL("../../images/AnanthRatings/NeutralBad.jpg", import.meta.url).href,
+    new URL("../../images/AnanthRatings/NeutralGood.png", import.meta.url).href,
+    new URL("../../images/AnanthRatings/PrettyGood.gif", import.meta.url).href,
+    new URL("../../images/AnanthRatings/AHHHHH.png", import.meta.url).href,
+    new URL("../../images/AnanthRatings/FIRSTpick.gif", import.meta.url).href,
+    new URL("../../images/AnanthRatings/horse.png", import.meta.url).href,
   ];
 
   const ELIM_LEVEL_ORDER = { qm: 0, ef: 1, qf: 2, sf: 3, f: 4 };
@@ -129,6 +140,7 @@
   let gridHeight = 400;
   let teamViewData = null;
   let garceData;
+  let ananthData;
   let cache = {};
   let allMatches = [];
   let selectedMatch = "1";
@@ -456,6 +468,13 @@
     if (!garceData || garceData === "" || garceData[team] === undefined)
       return 7;
     const entry = garceData[team];
+    return entry[Object.keys(entry)[Object.keys(entry).length - 1]];
+  }
+  
+  function fetchAnanthRating(team) {
+    if (!ananthData || ananthData === "" || ananthData[team] === undefined)
+      return 7;
+    const entry = ananthData[team];
     return entry[Object.keys(entry)[Object.keys(entry).length - 1]];
   }
 
@@ -1440,6 +1459,13 @@
             garceData = d;
           })
           .catch((e) => console.error("Failed to fetch grace data:", e));
+          
+        fetchAnanthPage(eventCode)
+          .then((r) => r.json())
+          .then((d) => {
+            ananthData = d;
+          })
+          .catch((e) => console.error("Failed to fetch ananth data:", e));
 
         teamOPRs = await fetchEventOPRs(eventCode);
         allMatches = await fetchEventMatches(eventCode);
@@ -1536,8 +1562,13 @@
               </span>
             {/if}
             <img
-              src={rating[fetchGraceRating(team)]}
+              src={GraceRating[fetchGraceRating(team)]}
               alt="Grace Rating"
+              style="width: 60px;"
+            />
+            <img
+              src={AnanthRating[fetchAnanthRating(team)]}
+              alt="Ananth Rating"
               style="width: 60px;"
             />
           </h3>
@@ -1588,8 +1619,13 @@
               </span>
             {/if}
             <img
-              src={rating[fetchGraceRating(team)]}
+              src={GraceRating[fetchGraceRating(team)]}
               alt="Grace Rating"
+              style="width: 60px;"
+            />
+            <img
+              src={AnanthRating[fetchAnanthRating(team)]}
+              alt="Ananth Rating"
               style="width: 60px;"
             />
           </h3>
