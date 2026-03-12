@@ -36,7 +36,6 @@
     ["BumpTraversal", "Times Over Bump"],
     ["TrenchTraversal", "Times Under Trench"],
     ["StartingLocation", "Starting Location"],
-    ["MatchEvent", "Match Event"],
     ["FuelIntakingTime", "Fuel Intaking Time"],
     ["FuelShootingTime", "Fuel Shooting Time"],
     ["FeedingTime", "Feeding Time"],
@@ -45,17 +44,12 @@
     ["Strategy", "Strategy"],
     ["OPR", "OPR (Offensive Power Rating)"],
     ["EFS", "EFS (Estimated Fuel Score)"],
-    ["FarBlueZoneTime", "Far Blue Zone Time"],
-    ["FarRedZoneTime", "Far Red Zone Time"],
-    ["NearBlueZoneTime", "Near Blue Zone Time"],
-    ["NearRedZoneTime", "Near Red Zone Time"],
-    ["NearNeutralZoneTime", "Near Neutral Zone Time"],
-    ["FarNeutralZoneTime", "Far Neutral Zone Time"],
+    ["MatchEventCount", "Match Events"],
   ]);
 
   const EFS_DISPLAY = "EFS (Estimated Fuel Score)";
 
-  const INVERTED_METRICS = new Set(["TimeOfClimb", "ClimbTime"]);
+  const INVERTED_METRICS = new Set(["TimeOfClimb", "ClimbTime", "MatchEventCount"]);
   const BOOLEAN_METRICS = new Set(["AutoClimb", "AttemptClimb"]);
   const CLIMBSTATE_METRIC = "EndState";
   const OPR_DISPLAY = "OPR (Offensive Power Rating)";
@@ -77,6 +71,8 @@
     "NearNeutralZoneTime",
     "FarNeutralZoneTime",
     "NearFar",
+    "MatchEvent",
+    "MatchEventDetails",
   ]);
 
   // Metrics excluded from radar chart
@@ -167,6 +163,7 @@
   let charts = [];
   let chartTypes = ["bar", "line", "pie", "scatter", "radar"];
   let showDropdown = false;
+  let autoOnly = false;
 
   // ─── Math Helpers ─────────────────────────────────────────────────────────────
 
@@ -381,10 +378,39 @@
       : lerpColor(mode.mid, mode.above, (t - 0.5) * 2);
   }
 
+  // ─── Value Extraction ─────────────────────────────────────────────────────────
+
+  const METADATA_KEYS = new Set([
+    "id", "Id", "ID", "Team", "team", "Match", "match",
+    "RecordType", "ScouterName", "ScouterError", "Time", "time",
+    "Mode", "DriveStation", "MatchEvent", "NearFar",
+  ]);
+
+  function extractValues(data: any[], useAuto: boolean): any[] {
+    const idx = useAuto ? 0 : 1;
+    return data.map((row) => {
+      const flat: any = {};
+      for (const key of Object.keys(row)) {
+        const val = row[key];
+        if (METADATA_KEYS.has(key)) {
+          flat[key] = val;
+        } else if (Array.isArray(val) && val.length === 2) {
+          flat[key] = val[idx];
+        } else {
+          flat[key] = val;
+        }
+      }
+      return flat;
+    });
+  }
+
   // ─── Data Loading ─────────────────────────────────────────────────────────────
 
   async function fetchAllMetricData() {
-    return localStorage.getItem("data");
+    const stored = localStorage.getItem("data");
+    if (!stored) return null;
+    const parsed = JSON.parse(stored);
+    return JSON.stringify(extractValues(parsed, autoOnly));
   }
 
   async function estimateTeamPoints(
@@ -594,11 +620,11 @@
       };
     }
 
-    // Find max match count
-    const maxMatchCount = availableTeams.reduce(
+    // Show at least 12 matches
+    const maxMatchCount = Math.max(12, availableTeams.reduce(
       (max, team) => Math.max(max, (teamData[team] ?? []).length),
       0,
-    );
+    ));
     if (!maxMatchCount) return;
 
     const qLabels = Array.from(
@@ -633,6 +659,10 @@
             }
           } else {
             row[label] = normalizeValue(v);
+          }
+          // Store match event details for tooltip on MatchEventCount metric
+          if (dataMetric === "MatchEventCount" && r.MatchEventDetails) {
+            row[`${label}_details`] = r.MatchEventDetails;
           }
         });
 
@@ -712,7 +742,7 @@
       makePercentileColumn(hideStats),
     ];
 
-    gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT;
+    gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT + 6;
     applyGrid(columnDefs);
     updateAllCharts();
   }
@@ -738,10 +768,10 @@
     const alliances = await fetchMatchAlliances(eventCode);
     const data = JSON.parse(await fetchAllMetricData());
 
-    const maxMatchCount = availableTeams.reduce(
+    const maxMatchCount = Math.max(12, availableTeams.reduce(
       (max, team) => Math.max(max, (teamData[team] ?? []).length),
       0,
-    );
+    ));
     const qLabels = Array.from(
       { length: maxMatchCount },
       (_, i) => `Q${i + 1}`,
@@ -918,7 +948,7 @@
       makePercentileColumn(false),
     ];
 
-    gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT;
+    gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT + 6;
     applyGrid(columnDefs);
     updateAllCharts();
     efsLoading = false;
@@ -997,7 +1027,7 @@
       makePercentileColumn(false),
     ];
 
-    gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT;
+    gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT + 6;
     applyGrid(columnDefs);
   }
 
@@ -1124,6 +1154,22 @@
         if (num === -1) return "False";
         return num.toFixed(2);
       },
+      tooltipValueGetter: (params) => {
+        if (dataMetric !== "MatchEventCount") return null;
+        const details = params.data?.[`${q}_details`];
+        if (!details || !details.length) return null;
+        return details
+          .map((evt) => {
+            if (evt.matchTime == null) return `${evt.type}`;
+            const secs = Math.round(evt.matchTime);
+            const mins = Math.floor(Math.abs(secs) / 60);
+            const rem = Math.abs(secs) % 60;
+            const timeStr = `${mins}:${rem.toString().padStart(2, "0")}`;
+            const phase = secs <= 20 ? "Auto" : "Teleop";
+            return `${evt.type} @ ${timeStr} (${phase})`;
+          })
+          .join("\n");
+      },
     };
   }
 
@@ -1225,6 +1271,8 @@
         columnDefs,
         rowHeight: ROW_HEIGHT,
         headerHeight: HEADER_HEIGHT,
+        tooltipShowDelay: 200,
+        popupParent: document.body,
         defaultColDef: {
           resizable: false,
           sortable: false,
@@ -1250,6 +1298,39 @@
     colorblindMode = e.target.value;
     localStorage.setItem("colorblindMode", colorblindMode);
     buildGrid();
+  }
+
+  async function onAutoOnlyChange() {
+    loading = true;
+    error = "";
+    try {
+      const raw = await fetchAllMetricData();
+      processTeamData(JSON.parse(raw));
+
+      if (!availableTeams.length) {
+        error = "No team data found.";
+        loading = false;
+        return;
+      }
+
+      metrics = computeMetrics();
+      if (!metrics.length) {
+        error = "No metrics found.";
+        loading = false;
+        return;
+      }
+
+      if (!metrics.includes(selectedMetric)) {
+        selectedMetric = metrics[0];
+      }
+      dataMetric = resolveDataKey(selectedMetric);
+      loading = false;
+      buildGrid();
+    } catch (e) {
+      error = e.message;
+      loading = false;
+      console.error("Error switching data mode:", e);
+    }
   }
 
   // ─── Chart Management ─────────────────────────────────────────────────────────
@@ -1650,6 +1731,12 @@
 
 <!-- ─── Template ──────────────────────────────────────────────────────────────── -->
 
+{#if loading || efsLoading}
+  <div class="loading-spinner-overlay">
+      <div class="loading-spinner"></div>
+  </div>
+{/if}
+
 <div class="page-wrapper">
   <div class="header-section">
     <h1>Event View</h1>
@@ -1658,7 +1745,7 @@
 
   <div class="controls">
     {#if loading}
-      Loading team data...
+      <span style="color: transparent;">Loading team data...</span>
     {:else if error}
       {error}
     {:else}
@@ -1685,6 +1772,17 @@
             <option value={key}>{mode.name}</option>
           {/each}
         </select>
+      </div>
+      <div class="auto-only-toggle">
+        <label for="auto-only-checkbox">
+          <input
+            type="checkbox"
+            id="auto-only-checkbox"
+            bind:checked={autoOnly}
+            on:change={onAutoOnlyChange}
+          />
+          Auto Only
+        </label>
       </div>
       {#if efsLoading}
         <span style="color: #ffcc00; font-size: 14px; font-weight: 600;">
@@ -1878,6 +1976,34 @@
     --frc-190-black: #4d4d4d;
   }
 
+  .loading-spinner-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+  }
+
+  .loading-spinner {
+      border: 8px solid rgba(255, 255, 255, 0.3);
+      border-left-color: var(--frc-190-red);
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+      to {
+          transform: rotate(360deg);
+      }
+  }
+
   :global(html),
   :global(body) {
     margin: 0;
@@ -1935,6 +2061,18 @@
     border: 3px solid var(--frc-190-red);
     border-radius: 8px;
     overflow: hidden;
+  }
+  :global(.ag-tooltip) {
+    white-space: pre-line;
+    max-width: 400px;
+    font-size: 14px;
+    padding: 8px 12px;
+    background: #222;
+    color: #fff;
+    border: 1px solid #555;
+    border-radius: 4px;
+    z-index: 99999;
+    pointer-events: none;
   }
   :global(.ag-body-viewport) {
     overflow-y: scroll !important;
@@ -1997,6 +2135,26 @@
     font-weight: 600;
     color: #fff;
   }
+
+  .auto-only-toggle {
+    display: flex;
+    align-items: center;
+  }
+  .auto-only-toggle label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    color: #fff;
+  }
+  .auto-only-toggle input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--frc-190-red);
+    cursor: pointer;
+  }
+
   select {
     margin-left: 10px;
     padding: 8px 15px;

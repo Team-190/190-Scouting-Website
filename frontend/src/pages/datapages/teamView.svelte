@@ -1,8 +1,8 @@
 <script lang="ts">
   import {
-    AllCommunityModule,
-    createGrid,
-    ModuleRegistry,
+      AllCommunityModule,
+      createGrid,
+      ModuleRegistry,
   } from "ag-grid-community";
   import "ag-grid-community/styles/ag-grid.css";
   import "ag-grid-community/styles/ag-theme-quartz.css";
@@ -35,9 +35,9 @@
     ["DefenseTime", "Defense Time"],
     ["AutoClimb", "Auto Climb"],
     ["AttemptClimb", "Climb Attempt"],
+    ["TrenchTraversal", "Times Under Trench"],
     ["BumpTraversal", "Times Over Bump"],
     ["StartingLocation", "Starting Location"],
-    ["MatchEvent", "Match Event"],
     ["FuelIntakingTime", "Fuel Intaking Time"],
     ["FuelShootingTime", "Fuel Shooting Time"],
     ["FeedingTime", "Feeding Time"],
@@ -45,15 +45,8 @@
     ["LadderLocation", "Ladder Location"],
     ["Strategy", "Strategy"],
     ["EstimatedPoints", "EFS (Estimated Fuel Scored)"],
-    // ["BallsPerSecond", "BPS (Balls Per Second)"],
-    ["RecordType", "Record Type"],
-    ["Time", "Time"],
-    ["FarBlueZoneTime", "Far Blue Zone Time"],
-    ["FarRedZoneTime", "Far Red Zone Time"],
-    ["NearBlueZoneTime", "Near Blue Zone Time"],
-    ["NearRedZoneTime", "Near Red Zone Time"],
-    ["NearNeutralZoneTime", "Near Neutral Zone Time"],
-    ["FarNeutralZoneTime", "Far Neutral Zone Time"],
+    ["NearFar", "Near/Far"],
+    ["MatchEventCount", "Match Events"],
   ]);
 
   const EXCLUDED_FIELDS = [
@@ -66,9 +59,18 @@
     "Time",
     "Mode",
     "DriveStation",
+    "NearFar",
+    "NearNeutralZoneTime",
+    "NearRedZoneTime",
+    "NearBlueZoneTime",
+    "FarNeutralZoneTime",
+    "FarRedZoneTime",
+    "FarBlueZoneTime",
+    "MatchEvent",
+    "MatchEventDetails",
   ];
 
-  const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime"];
+  const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime", "MatchEventCount"];
   const BOOLEAN_METRICS = ["AutoClimb"];
   const CLIMBSTATE_METRIC = "EndState";
 
@@ -137,6 +139,8 @@
   let teamPitData = [];
   let avoidanceChartEl;
   let avoidanceChartInstance;
+  let isLoading = false;
+  let autoOnly = false;
 
   fetchGracePage(eventCode)
     .then((res) => res.json())
@@ -174,6 +178,38 @@
     `rgb(${c1.map((v, i) => Math.round(v + (c2[i] - v) * t)).join(",")})`;
 
   // ─── Value Helpers ────────────────────────────────────────────────────────────
+
+  // Metadata fields that are stored as single values (not [auto, full] arrays)
+  const METADATA_KEYS = new Set([
+    "id", "Id", "ID", "Team", "team", "Match", "match",
+    "RecordType", "ScouterName", "ScouterError", "Time", "time",
+    "Mode", "DriveStation", "MatchEvent", "NearFar",
+  ]);
+
+  /**
+   * Extract values from merged data format.
+   * Metric fields are stored as [autoValue, fullMatchValue].
+   * @param data - array of merged row objects
+   * @param useAuto - if true, extract index 0 (auto); if false, extract index 1 (full)
+   * @returns flat array of row objects with single values per metric
+   */
+  function extractValues(data: any[], useAuto: boolean): any[] {
+    const idx = useAuto ? 0 : 1;
+    return data.map((row) => {
+      const flat: any = {};
+      for (const key of Object.keys(row)) {
+        const val = row[key];
+        if (METADATA_KEYS.has(key)) {
+          flat[key] = val;
+        } else if (Array.isArray(val) && val.length === 2) {
+          flat[key] = val[idx];
+        } else {
+          flat[key] = val;
+        }
+      }
+      return flat;
+    });
+  }
 
   function isNumeric(n) {
     if (n === null || n === undefined || n === "" || typeof n === "boolean")
@@ -405,20 +441,14 @@
     }
   }
 
-  async function OPRSort(teamNumber: string) {
+  async function fetchTeamOPR(teamNumber) {
     if (!eventCode || !teamNumber) {
-      teamOPR = null;
-      return;
+        teamOPR = null;
+        return;
     }
-    try {
-      const res = await fetchOPR(eventCode);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      teamOPR = data.oprs?.[`frc${teamNumber}`] ?? null;
-    } catch (e) {
-      console.error("Error fetching OPR:", e);
-      teamOPR = null;
-    }
+
+    const { oprs } = await fetchOPR(eventCode);
+    teamOPR = oprs[`frc${teamNumber}`] ?? null;
   }
 
   async function estimateTeamPoints(
@@ -577,54 +607,6 @@
     return byMatch;
   }
 
-  function makeNearFarRows(rowData, matches) {
-    let teamNumber = String(selectedTeam).replace(/\D/g, "");
-    let byMatch = getNearFarByMatch(teamNumber);
-
-    if (!Object.keys(byMatch).length) return rowData;
-
-    let nearFarMetrics = [
-      { key: "nearPercentage", label: "Near Zone %" },
-      { key: "farPercentage", label: "Far Zone %" },
-      { key: "neutralPercentage", label: "Neutral Zone %" },
-      { key: "redPercentage", label: "Red Zone %" },
-      { key: "bluePercentage", label: "Blue Zone %" },
-      { key: "nearBluePercentage", label: "Near Blue Zone %" },
-      { key: "nearRedPercentage", label: "Near Red Zone %" },
-      { key: "farBluePercentage", label: "Far Blue Zone %" },
-      { key: "farRedPercentage", label: "Far Red Zone %" },
-      { key: "farNeutralPercentage", label: "Far Neutral Zone %" },
-      { key: "nearNeutralPercentage", label: "Near Neutral Zone %" },
-    ];
-
-    const qLabels = matches.map((_, i) => `Q${i + 1}`);
-
-    const newRows = nearFarMetrics.map(({ key, label }) => {
-      let row = {
-        metric: label,
-        mean: null,
-        median: null,
-        percentile: null,
-      };
-
-      const values: number[] = [];
-
-      qLabels.forEach((q, i) => {
-        const matchNum = matches[i]?.Match;
-        const v = byMatch[matchNum]?.[key] ?? null;
-        row[q] = v;
-        if (v !== null) values.push(v);
-      });
-
-      row.mean = Number(mean(values).toFixed(2));
-      row.median = Number(median(values).toFixed(2));
-
-      return row;
-    });
-
-    return [...rowData, ...newRows];
-  }
-
   function fetchGraceRating(team) {
     if (!garceData || garceData[team] === undefined)
       return rating[rating.length - 1];
@@ -636,10 +618,10 @@
     robotPicturePreview = null;
     if (!eventCode || !teamNumber) return;
     try {
-        const res = await fetchPitScoutingImage(eventCode, teamNumber);
-        if (!res.ok) return;
-        const data = await res.text();
-        robotPicturePreview = data ?? null;
+      const res = await fetchPitScoutingImage(eventCode, teamNumber);
+      if (!res.ok) return;
+      const data = await res.text();
+      robotPicturePreview = data ?? null;
     } catch (e) {
       console.error("Error fetching robot picture:", e);
       robotPicturePreview = null;
@@ -673,9 +655,12 @@
 
     // Zone time fields should NOT be summed — take last valid value instead
     const ZONE_TIME_FIELDS = new Set([
-      "NearBlueZoneTime", "FarBlueZoneTime",
-      "NearNeutralZoneTime", "FarNeutralZoneTime",
-      "NearRedZoneTime", "FarRedZoneTime",
+      "NearBlueZoneTime",
+      "FarBlueZoneTime",
+      "NearNeutralZoneTime",
+      "FarNeutralZoneTime",
+      "NearRedZoneTime",
+      "FarRedZoneTime",
     ]);
 
     return Object.keys(grouped)
@@ -775,16 +760,40 @@
   // ─── Event Handlers ───────────────────────────────────────────────────────────
 
   async function onTeamChange() {
-    const teamStr = String(selectedTeam);
-    await loadTeamData(teamStr);
-    OPRSort(teamStr);
-    populateMatchDropdown(selectedTeam);
-    teamQualData = getQualDataForTeam(selectedTeam);
-    teamPitData = getPitDataForTeam(selectedTeam);
-    console.log("stored", teamPitData);
-    const graceEl = document.getElementById("grace-rating") as HTMLImageElement;
-    if (graceEl) graceEl.src = fetchGraceRating(selectedTeam);
-    fetchRobotPicture(selectedTeam);
+    isLoading = true;
+    try {
+      const teamStr = String(selectedTeam);
+      await loadTeamData(teamStr);
+      fetchTeamOPR(teamStr);
+      populateMatchDropdown(selectedTeam);
+      teamQualData = getQualDataForTeam(selectedTeam);
+      teamPitData = getPitDataForTeam(selectedTeam);
+      console.log("stored", teamPitData);
+      const graceEl = document.getElementById("grace-rating") as HTMLImageElement;
+      if (graceEl) graceEl.src = fetchGraceRating(selectedTeam);
+      fetchRobotPicture(selectedTeam);
+    } finally {
+      isLoading = false;
+    }
+  }
+
+  async function onAutoOnlyChange() {
+    isLoading = true;
+    try {
+      const stored = localStorage.getItem("data");
+      const parsed = stored ? JSON.parse(stored) : [];
+      teamViewData = extractValues(parsed, autoOnly);
+      cache = {};
+      allTeams = await loadTeamNumbers();
+      if (selectedTeam) {
+        await loadTeamData(String(selectedTeam));
+        await tick();
+        populateMatchDropdown(selectedTeam);
+        onMatchChange();
+      }
+    } finally {
+      isLoading = false;
+    }
   }
 
   async function populateMatchDropdown(teamNumber) {
@@ -812,12 +821,29 @@
     }
   }
 
-  function setZoneValue(zoneName: string, value: number | null) {
+  function secondsToMinSec(totalSeconds) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = Math.floor(totalSeconds % 60); 
+
+  const formattedMinutes = String(minutes).padStart(2, '0');
+  const formattedSeconds = String(seconds).padStart(2, '0');
+
+  return `${formattedMinutes}:${formattedSeconds}`;
+}
+
+
+  function setZoneValue(
+    zoneName: string,
+    value: number | null,
+    time: number | null,
+  ) {
     const el = document.querySelector(
       `[data-zone="${zoneName}"]`,
     ) as HTMLElement;
+    const zoneTime = document.querySelector(`.${zoneName}Time`);
+    zoneTime.textContent = (time != null ? secondsToMinSec(time) : "—");
     if (!el) return;
-    el.textContent = value != null ? String(value) : "—";
+    el.textContent = (value != null ? String(value) : "—") + " %";
     const cell = el.closest(".zone-cell") as HTMLElement;
     if (cell) {
       const intensity = value != null ? Math.min(value / 50, 1) : 0;
@@ -834,12 +860,36 @@
     const match = dropdown.value;
     const nearFarData = getNearFarByMatch(teamStr);
     const d = nearFarData[Number(match)] ?? {};
-    setZoneValue("nearBluePercentage", d.nearBluePercentage ?? null);
-    setZoneValue("nearNeutralPercentage", d.nearNeutralPercentage ?? null);
-    setZoneValue("nearRedPercentage", d.nearRedPercentage ?? null);
-    setZoneValue("farBluePercentage", d.farBluePercentage ?? null);
-    setZoneValue("farNeutralPercentage", d.farNeutralPercentage ?? null);
-    setZoneValue("farRedPercentage", d.farRedPercentage ?? null);
+    setZoneValue(
+      "nearBluePercentage",
+      d.nearBluePercentage ?? null,
+      Math.round(d.total * d.nearBluePercentage)/100
+    );
+    setZoneValue(
+      "nearNeutralPercentage",
+      d.nearNeutralPercentage ?? null,
+      Math.round(d.total * d.nearNeutralPercentage)/100
+    );
+    setZoneValue(
+      "nearRedPercentage",
+      d.nearRedPercentage ?? null,
+      Math.round(d.total * d.nearRedPercentage)/100
+    );
+    setZoneValue(
+      "farBluePercentage",
+      d.farBluePercentage ?? null,
+      Math.round(d.total * d.farBluePercentage)/100
+    );
+    setZoneValue(
+      "farNeutralPercentage",
+      d.farNeutralPercentage ?? null,
+      Math.round(d.total * d.farNeutralPercentage)/100
+    );
+    setZoneValue(
+      "farRedPercentage",
+      d.farRedPercentage ?? null,
+      Math.round(d.total * d.farRedPercentage)/100
+    );
     console.log("Selected Match:", match, "Near/Far Data:", d);
   }
   function onColorblindChange(e: Event) {
@@ -978,6 +1028,10 @@
         } else {
           row[q] = normalizeValue(val);
         }
+        // Store match event details for tooltip on MatchEventCount row
+        if (metric === "MatchEventCount" && matches[i]?.MatchEventDetails) {
+          row[`${q}_details`] = matches[i].MatchEventDetails;
+        }
       });
 
       if (isNumericMetric && !isBooleanMetric && !isClimbStateMetric) {
@@ -1033,8 +1087,6 @@
                   ? 20
                   : 0;
       }
-
-      makeNearFarRows(rowData, matches);
     });
 
     // ── Column Definitions ──
@@ -1194,6 +1246,22 @@
         cellClass: "cell-center",
         cellStyle: qCellStyle,
         valueFormatter: qValueFormatter,
+        tooltipValueGetter: (params) => {
+        if (params.data.metric !== "MatchEventCount") return null;
+        const details = params.data?.[`${q}_details`];
+        if (!details || !details.length) return null;
+        return details
+          .map((evt) => {
+            if (evt.matchTime == null) return `${evt.type}`;
+            const secs = Math.round(evt.matchTime);
+            const mins = Math.floor(Math.abs(secs) / 60);
+            const rem = Math.abs(secs) % 60;
+            const timeStr = `${mins}:${rem.toString().padStart(2, "0")}`;
+            const phase = secs <= 20 ? "Auto" : "Teleop";
+            return `${evt.type} @ ${timeStr} (${phase})`;
+          })
+          .join("\n");
+        },
       })),
       {
         headerName: "Mean",
@@ -1237,8 +1305,6 @@
           params.value != null ? params.value.toString() : "",
       },
     ];
-
-    rowData = makeNearFarRows(rowData, matches);
     gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT;
 
     if (gridInstance) gridInstance.destroy();
@@ -1248,6 +1314,8 @@
       rowHeight: ROW_HEIGHT,
       headerHeight: HEADER_HEIGHT,
       domLayout: "autoHeight",
+      tooltipShowDelay: 200,
+      popupParent: document.body,
       defaultColDef: {
         resizable: false,
         sortable: false,
@@ -1457,7 +1525,7 @@
             })),
             {
               value: Math.round(overallAverage),
-              itemStyle: { color: "#000000" }, 
+              itemStyle: { color: "#000000" },
             },
           ],
           type: "bar",
@@ -1636,27 +1704,39 @@
   // ─── Mount ────────────────────────────────────────────────────────────────────
 
   onMount(async () => {
-    const stored = localStorage.getItem("data");
-    teamViewData = stored ? JSON.parse(stored) : [];
-    teamQualData = getQualDataForTeam(selectedTeam);
-    teamPitData = getPitDataForTeam(selectedTeam);
+    isLoading = true;
+    try {
+      const stored = localStorage.getItem("data");
+      const parsed = stored ? JSON.parse(stored) : [];
+      teamViewData = extractValues(parsed, autoOnly);
+      teamQualData = getQualDataForTeam(selectedTeam);
+      teamPitData = getPitDataForTeam(selectedTeam);
 
-    allTeams = await loadTeamNumbers();
+      allTeams = await loadTeamNumbers();
 
-    if (allTeams.length > 0) {
-      selectedTeam =
-        allTeams.find((t) => t.toString() === "190") ?? allTeams[0];
-      await loadTeamData(selectedTeam);
+      if (allTeams.length > 0) {
+        selectedTeam =
+          allTeams.find((t) => t.toString() === "190") ?? allTeams[0];
+        await loadTeamData(selectedTeam);
+      }
+
+      await fetchTeamOPR(String(selectedTeam));
+      await tick();
+      populateMatchDropdown(selectedTeam);
+      onMatchChange();
+    } finally {
+      isLoading = false;
     }
-
-    await OPRSort(String(selectedTeam));
-    await tick();
-    populateMatchDropdown(selectedTeam);
-    onMatchChange();
   });
 </script>
 
 <!-- ─── Template ──────────────────────────────────────────────────────────────── -->
+
+{#if isLoading}
+  <div class="loading-spinner-overlay">
+      <div class="loading-spinner"></div>
+  </div>
+{/if}
 
 <div class="page-wrapper">
   <div class="header-section">
@@ -1693,6 +1773,17 @@
           <option value={key}>{mode.name}</option>
         {/each}
       </select>
+    </div>
+    <div class="auto-only-toggle">
+      <label for="auto-only-checkbox">
+        <input
+          type="checkbox"
+          id="auto-only-checkbox"
+          bind:checked={autoOnly}
+          on:change={onAutoOnlyChange}
+        />
+        Auto Only
+      </label>
     </div>
     <div>
       <img
@@ -1820,39 +1911,36 @@
           alt="FRC Field"
         />
         <div class="zone-grid">
-          <div class="row-label far-label">FAR</div>
-          <div class="row-label near-label">NEAR</div>
-
           <div class="zone-cell far-red-zone">
             <span class="zone-name">Red</span>
             <span class="zone-value" data-zone="farRedPercentage">—</span>
-            <span class="zone-unit">%</span>
+              <span class="farRedPercentageTime">—</span>
           </div>
           <div class="zone-cell far-neutral-zone">
             <span class="zone-name">Neutral</span>
             <span class="zone-value" data-zone="farNeutralPercentage">—</span>
-            <span class="zone-unit">%</span>
+            <span class="farNeutralPercentageTime">—</span>
           </div>
           <div class="zone-cell far-blue-zone">
             <span class="zone-name">Blue</span>
             <span class="zone-value" data-zone="farBluePercentage">—</span>
-            <span class="zone-unit">%</span>
+            <span class="farBluePercentageTime">—</span>
           </div>
 
           <div class="zone-cell near-red-zone">
             <span class="zone-name">Red</span>
             <span class="zone-value" data-zone="nearRedPercentage">—</span>
-            <span class="zone-unit">%</span>
+            <span class="nearRedPercentageTime">—</span>
           </div>
           <div class="zone-cell near-neutral-zone">
             <span class="zone-name">Neutral</span>
             <span class="zone-value" data-zone="nearNeutralPercentage">—</span>
-            <span class="zone-unit">%</span>
+            <span class="nearNeutralPercentageTime">—</span>
           </div>
           <div class="zone-cell near-blue-zone">
             <span class="zone-name">Blue</span>
             <span class="zone-value" data-zone="nearBluePercentage">—</span>
-            <span class="zone-unit">%</span>
+            <span class="nearBluePercentageTime">—</span>
           </div>
         </div>
       </div>
@@ -1886,8 +1974,6 @@
       {#if showDropdown}
         <ul class="dropdown">
           {#each chartTypes as type}
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
             <li
               on:click={() => {
                 addChart(type);
@@ -1938,6 +2024,34 @@
     --frc-190-black: #4d4d4d;
   }
 
+  .loading-spinner-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+  }
+
+  .loading-spinner {
+      border: 8px solid rgba(255, 255, 255, 0.3);
+      border-left-color: var(--frc-190-red);
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+      to {
+          transform: rotate(360deg);
+      }
+  }
+
   /* ── Map Section ── */
   .map-section {
     width: 80vw;
@@ -1984,7 +2098,7 @@
     position: absolute;
     inset: 0;
     display: grid;
-    grid-template-columns: 52px 1fr 1fr 1fr;
+    grid-template-columns: 0fr 1fr 1fr 1fr;
     grid-template-rows: 1fr 1fr;
     gap: 4px;
     padding: 8px;
@@ -2083,12 +2197,7 @@
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
     line-height: 1;
   }
-  .zone-unit {
-    font-size: 0.7rem;
-    color: rgba(255, 255, 255, 0.6);
-    font-weight: 600;
-    margin-top: 1px;
-  }
+  
   .map-legend {
     display: flex;
     gap: 24px;
@@ -2177,6 +2286,18 @@
     border-radius: 8px;
     overflow: hidden;
   }
+  :global(.ag-tooltip) {
+    white-space: pre-line;
+    max-width: 400px;
+    font-size: 14px;
+    padding: 8px 12px;
+    background: #222;
+    color: #fff;
+    border: 1px solid #555;
+    border-radius: 4px;
+    z-index: 99999;
+    pointer-events: none;
+  }
   :global(.ag-body-viewport) {
     overflow-y: scroll !important;
     overflow-x: auto !important;
@@ -2235,6 +2356,25 @@
   .top-controls label {
     font-weight: 600;
     color: #fff;
+  }
+
+  .auto-only-toggle {
+    display: flex;
+    align-items: center;
+  }
+  .auto-only-toggle label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    color: #fff;
+  }
+  .auto-only-toggle input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--frc-190-red);
+    cursor: pointer;
   }
 
   select {

@@ -63,14 +63,6 @@
             if (rowIndex !== -1) {
               tableData[rowIndex].rating = rating[savedRatingIndex];
             }
-            // tableData = [
-            //   ...tableData,
-            //   {
-            //     team: team,
-            //     name: teams.get(parseInt(team)),
-            //     rating: rating[data[team][Object.keys(data[team]).length - 1]],
-            //   },
-            // ];
           }
         })
     } catch (err) {

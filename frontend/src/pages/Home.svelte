@@ -1,155 +1,152 @@
 <script>
-    import { onMount } from "svelte";
+    import { onMount, tick } from "svelte";
     import { fetchAllData, fetchEvents, fetchPitScouting, fetchQualitativeScouting } from "../utils/api";
 
     let eventCode = localStorage.getItem("eventCode");
+    let isLoading = false;
+    let notification = null;
 
-    async function cacheAllData() {
-        localStorage.clear();
-        console.log("Getting all data from storage for event " + eventCode);
-        
-        const dataRes = await fetchAllData(eventCode);
-        const dataText = await dataRes.text();
-        const dataJson = dataText ? JSON.parse(dataText) : {};
-        const data = JSON.stringify(dataJson.data || []);
-
-        const pitRes = await fetchPitScouting(eventCode);
-        const pitText = await pitRes.text();
-        const pitScouting = pitText ? JSON.stringify(JSON.parse(pitText)) : "{}";
-
-        const qualRes = await fetchQualitativeScouting(eventCode);
-        const qualText = await qualRes.text();
-        const qualitativeScouting = qualText ? JSON.stringify(JSON.parse(qualText)) : "{}";
-
-        console.log(data);
-        localStorage.setItem("data", data);
-        localStorage.setItem("retrievePit", pitScouting);
-        localStorage.setItem("retrieveQual", qualitativeScouting);
-
-        localStorage.setItem(
-            "timestamp",
-            new Date(Date.now()).toLocaleString(),
-        );
-        localStorage.setItem("eventCode", eventCode);
+    function showNotification(message, type = "success", duration = 3000) {
+        notification = { message, type };
+        setTimeout(() => {
+            notification = null;
+        }, duration);
     }
 
-    let years = [];
-    let months = [
-        { value: 1, label: "January" },
-        { value: 2, label: "February" },
-        { value: 3, label: "March" },
-        { value: 4, label: "April" },
-        { value: 5, label: "May" },
-        { value: 6, label: "June" },
-        { value: 7, label: "July" },
-        { value: 8, label: "August" },
-        { value: 9, label: "September" },
-        { value: 10, label: "October" },
-        { value: 11, label: "November" },
-        { value: 12, label: "December" },
-    ];
+    async function withLoading(task, successMessage, errorMessage) {
+        isLoading = true;
+        await tick();
+        try {
+            await task();
+            showNotification(successMessage);
+        } catch (e) {
+            showNotification(errorMessage, "error");
+            console.error(errorMessage, e);
+        } finally {
+            isLoading = false;
+        }
+    }
 
-    let selectedYear = new Date().getFullYear();
-    let selectedMonth = new Date().getMonth() + 1;
-    let selected_event = "";
-    let showEventSelector = true;
+    async function cacheAllData() {
+        await withLoading(async () => {
+            if (localStorage.getItem("eventCode") !== eventCode) {
+                localStorage.removeItem("data");
+                localStorage.removeItem("retrievePit");
+                localStorage.removeItem("retrieveQual");
+            }
 
-    const TBA_KEY = import.meta.env.VITE_AUTH_KEY;
+            const localData = JSON.parse(localStorage.getItem("data") || "[]");
+            const lastId = localData.reduce((max, row) => Math.max(max, row.ID || row.id || row.Id || 0), 0);
 
-    let allEvents = [];
-    let events = [];
+            const dataRes = await fetchAllData(eventCode, lastId);
+            const dataText = await dataRes.text();
+            const dataJson = dataText ? JSON.parse(dataText) : {};
+            const newData = dataJson.data || [];
+
+            const dataMap = new Map();
+            for (const row of localData) {
+                const key = `${row.Team || row.team}_${row.Match || row.match}`;
+                dataMap.set(key, row);
+            }
+            for (const row of newData) {
+                const key = `${row.Team || row.team}_${row.Match || row.match}`;
+                dataMap.set(key, row);
+            }
+            const combinedData = Array.from(dataMap.values());
+            localStorage.setItem("data", JSON.stringify(combinedData));
+
+            const localPitStr = localStorage.getItem("retrievePit");
+            const localPit = localPitStr ? JSON.parse(localPitStr) : {};
+            const pitTeams = Object.keys(localPit);
+
+            const pitRes = await fetchPitScouting(eventCode, pitTeams);
+            const pitText = await pitRes.text();
+            const newPitData = pitText ? JSON.parse(pitText) : {};
+            
+            const combinedPit = { ...localPit, ...newPitData };
+            localStorage.setItem("retrievePit", JSON.stringify(combinedPit));
+
+            const localQualStr = localStorage.getItem("retrieveQual");
+            const localQual = localQualStr ? JSON.parse(localQualStr) : {};
+            const qualCounts = {};
+            for (let team in localQual) {
+                qualCounts[team] = Object.keys(localQual[team]).length;
+            }
+
+            const qualRes = await fetchQualitativeScouting(eventCode, qualCounts);
+            const qualText = await qualRes.text();
+            const newQualData = qualText ? JSON.parse(qualText) : {};
+            
+            const combinedQual = { ...localQual };
+            for (let team in newQualData) {
+                combinedQual[team] = { ...(combinedQual[team] || {}), ...newQualData[team] };
+            }
+            localStorage.setItem("retrieveQual", JSON.stringify(combinedQual));
+
+            localStorage.setItem("timestamp", new Date(Date.now()).toLocaleString());
+            localStorage.setItem("eventCode", eventCode);
+        }, "Data loaded successfully!", "Failed to load data.");
+    }
+
     let dbEvents = [];
 
-    onMount(async () => {
-        const currentYear = new Date().getFullYear();
-        years = Array.from({ length: currentYear - 2014 }, (_, i) => 2015 + i);
-        await loadDbEvents();
-    });
-
     async function loadDbEvents() {
-        try {
+        await withLoading(async () => {
             const res = await fetchEvents();
             if (res.ok) {
                 dbEvents = await res.json();
+            } else {
+                throw new Error("Failed to fetch events");
             }
-        } catch (e) {
-            console.error("Failed to load events from backend", e);
-        }
+        }, "Events loaded successfully!", "Failed to load events from backend.");
     }
 
-    async function loadEventsForYear() {
-        try {
-            const res = await fetch(
-                `https://www.thebluealliance.com/api/v3/events/${selectedYear}`,
-                { headers: { "X-TBA-Auth-Key": TBA_KEY } },
-            );
-            allEvents = res.ok ? await res.json() : [];
-        } catch {
-            allEvents = [];
-        }
-    }
-
-    function filterEvents() {
-        events = allEvents.filter((evt) => {
-            const [, month] = evt.start_date.split("-").map(Number);
-            return month === selectedMonth;
-        });
-    }
-
-    async function handleSubmit() {
-        if (!selected_event) {
-            alert("Please select an event before submitting.");
-            return;
-        }
-    }
-
-    function toggleEventSelector() {
-        showEventSelector = !showEventSelector;
-    }
-
-    $: selectedYear && loadEventsForYear().then(filterEvents);
-    $: selectedMonth && filterEvents();
-    $: {
-        if (eventCode) {
-            localStorage.setItem("eventCode", eventCode);
-            window.dispatchEvent(new StorageEvent("storage", {
-                key: "eventCode",
-                newValue: eventCode,
-                storageArea: localStorage,
-            }));
-        }
-    }
+    onMount(async () => {
+        await loadDbEvents();
+    });
 </script>
 
+{#if notification}
+    <div class="banner banner-{notification.type}" onclick={() => notification = null}>
+        {notification.message}
+    </div>
+{/if}
+
+{#if isLoading}
+    <div class="loading-spinner-overlay">
+        <div class="loading-spinner"></div>
+    </div>
+{/if}
+
 <div class="container">
-    <div
-        class="button-wrapper"
-        onclick={cacheAllData}
-        role="button"
-        tabindex="0"
-        onkeydown={(e) => e.key === "Enter" && cacheAllData()}
-    >
-        <div class="circle">
-            <span class="label">Populate Local Storage</span>
+    <div class="button-container">
+        <div
+            class="button-wrapper"
+            onclick={cacheAllData}
+            role="button"
+            tabindex="0"
+            onkeydown={(e) => e.key === "Enter" && cacheAllData()}
+        >
+            <div class="circle">
+                <span class="label">Populate Local Storage</span>
+            </div>
         </div>
     </div>
 
-    {#if showEventSelector}
-        <div class="event-selector-panel">
-            <h2>Event Selector</h2>
+    <div class="event-selector-panel">
+        <h2>Event Selector</h2>
 
-            <select class="select" bind:value={eventCode}>
-                {#each dbEvents as event}
-                    <option value={event.eventCode}>{event.name}</option>
-                {/each}
-            </select>
+        <select class="select" bind:value={eventCode}>
+            {#each dbEvents as event}
+                <option value={event.eventCode}>{event.name}</option>
+            {/each}
+        </select>
 
-            <p class="selected-event">
-                You selected: {dbEvents.find((e) => e.eventCode === eventCode)
-                    ?.name || eventCode}
-            </p>
-        </div>
-    {/if}
+        <p class="selected-event">
+            You selected: {dbEvents.find((e) => e.eventCode === eventCode)
+                ?.name || eventCode}
+        </p>
+    </div>
 </div>
 
 <style>
@@ -220,5 +217,63 @@
 
     .select {
         height: 22px;
+    }
+
+    .loading-spinner-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+
+    .loading-spinner {
+        border: 8px solid rgba(255, 255, 255, 0.3);
+        border-left-color: var(--frc-190-red);
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    .banner {
+        position: fixed;
+        top: 400px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 1rem 2rem;
+        border-radius: 8px;
+        color: white;
+        font-weight: bold;
+        z-index: 10000;
+        cursor: pointer;
+        transition: top 0.3s ease-in-out;
+    }
+
+    .banner-success {
+        background-color: #4CAF50; /* Green */
+    }
+
+    .banner-error {
+        background-color: #f44336; /* Red */
+    }
+
+    .button-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 2rem;
     }
 </style>
