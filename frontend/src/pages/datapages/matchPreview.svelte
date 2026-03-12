@@ -36,7 +36,6 @@
     ["AttemptClimb", "Climb Attempt"],
     ["BumpTraversal", "Times Over Bump"],
     ["StartingLocation", "Starting Location"],
-    ["MatchEvent", "Match Event"],
     ["FuelIntakingTime", "Fuel Intaking Time"],
     ["FuelShootingTime", "Fuel Shooting Time"],
     ["FeedingTime", "Feeding Time"],
@@ -45,12 +44,7 @@
     ["Strategy", "Strategy"],
     ["TrenchTraversal", "Trench Traversal"],
     ["RecordType", "Record Type"],
-    ["FarBlueZoneTime", "Far Blue Zone Time"],
-    ["FarRedZoneTime", "Far Red Zone Time"],
-    ["NearBlueZoneTime", "Near Blue Zone Time"],
-    ["NearRedZoneTime", "Near Red Zone Time"],
-    ["NearNeutralZoneTime", "Near Neutral Zone Time"],
-    ["FarNeutralZoneTime", "Far Neutral Zone Time"],
+    ["MatchEventCount", "Match Events"]
   ]);
 
   const EXCLUDED_FIELDS = new Set([
@@ -70,9 +64,18 @@
     "record_type",
     "scouter_name",
     "scouter_error",
+    "FarBlueZoneTime",
+    "FarRedZoneTime",
+    "NearBlueZoneTime",
+    "NearRedZoneTime",
+    "NearNeutralZoneTime",
+    "FarNeutralZoneTime",
+    "MatchEvent",
+    "NearFar",
+    "MatchEventDetails"
   ]);
 
-  const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime"];
+  const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime", "MatchEventCount"];
   const BOOLEAN_METRICS = ["AutoClimb", "AttemptClimb"];
   const CLIMBSTATE_METRIC = "EndState";
 
