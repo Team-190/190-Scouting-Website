@@ -140,6 +140,7 @@
   let chartTypes = ["bar", "line", "pie", "scatter", "radar"];
   let showDropdown = false;
   let isLoading = false;
+  let autoOnly = false;
 
   // Six grid DOM nodes / instances (3 red, 3 blue)
   let domNode, domNode2, domNode3;
@@ -174,6 +175,38 @@
     `rgb(${c1.map((v, i) => Math.round(v + (c2[i] - v) * t)).join(",")})`;
 
   // ─── Value Helpers ────────────────────────────────────────────────────────────
+
+  // Metadata fields that are stored as single values (not [auto, full] arrays)
+  const METADATA_KEYS = new Set([
+    "id", "Id", "ID", "Team", "team", "Match", "match",
+    "RecordType", "ScouterName", "ScouterError", "Time", "time",
+    "Mode", "DriveStation", "MatchEvent", "NearFar",
+  ]);
+
+  /**
+   * Extract values from merged data format.
+   * Metric fields are stored as [autoValue, fullMatchValue].
+   * @param data - array of merged row objects
+   * @param useAuto - if true, extract index 0 (auto); if false, extract index 1 (full)
+   * @returns flat array of row objects with single values per metric
+   */
+  function extractValues(data: any[], useAuto: boolean): any[] {
+    const idx = useAuto ? 0 : 1;
+    return data.map((row) => {
+      const flat: any = {};
+      for (const key of Object.keys(row)) {
+        const val = row[key];
+        if (METADATA_KEYS.has(key)) {
+          flat[key] = val;
+        } else if (Array.isArray(val) && val.length === 2) {
+          flat[key] = val[idx];
+        } else {
+          flat[key] = val;
+        }
+      }
+      return flat;
+    });
+  }
 
   function isNumeric(n) {
     if (n === null || n === undefined || n === "" || typeof n === "boolean")
@@ -1396,7 +1429,8 @@
     isLoading = true;
     try {
       const stored = localStorage.getItem("data");
-      teamViewData = stored ? JSON.parse(stored) : [];
+      const parsed = stored ? JSON.parse(stored) : [];
+      teamViewData = extractValues(parsed, autoOnly);
       eventCode = localStorage.getItem("eventCode") || "";
 
       if (eventCode) {
