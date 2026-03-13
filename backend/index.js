@@ -231,7 +231,7 @@ app.get("/getHPRatings", validateEventCode, async (req, res) => {
 ////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
 ////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
 
-app.get("/getMatchData", validateEventCode, async (req, res) => {
+app.get("/getMatchAlliances", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
     console.log("matches requested, eventCode: " + eventCode);
     
@@ -245,21 +245,8 @@ app.get("/getMatchData", validateEventCode, async (req, res) => {
         raw = await database.readJSONFile("matches");
     }
 
-    const result = Object.fromEntries(
-        raw
-            .filter((match) => match.comp_level === "qm")
-            .map((match) => [
-                match.match_number,
-                {
-                    red: (match.alliances.red.team_keys ?? []).map((k) => k.replace("frc", "")),
-                    blue: (match.alliances.blue.team_keys ?? []).map((k) => k.replace("frc", "")),
-                    redScore: match.score_breakdown?.red?.hubScore?.totalCount ?? null,
-                    blueScore: match.score_breakdown?.blue?.hubScore?.totalCount ?? null,
-                },
-            ])
-    );
-    
-    res.send(result);
+    // Return the full raw array so matchPreview can use comp_level, key, etc.
+    res.send(raw);
 });
 
 app.get("/getTeams", validateEventCode, async (req, res) => {

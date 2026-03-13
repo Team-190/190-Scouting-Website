@@ -1,5 +1,5 @@
-// @ts-nocheck
-const TBA_API_KEY = process.env.TBA_AUTH_KEY;
+require('dotenv').config({ path: require('path').resolve(__dirname, '../.env'), override: true });
+const TBA_API_KEY = process.env.VITE_AUTH_KEY;
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 

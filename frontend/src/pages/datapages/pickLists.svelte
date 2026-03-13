@@ -212,31 +212,34 @@
     // ─── DATA FETCHING ───────────────────────────────────────────────────────────
 
     async function getTeams() {
-        if (!eventCode) {
-            alert("Please select an event first.");
-            return;
-        }
-        try {
-            const [{ _teams, _teamNumbers }, { _teamRanks }] = await Promise.all([
-                fetchTeams(eventCode),
-                fetchTeamStatuses(eventCode),
-            ]);
-
-            _teamNumbers.sort((a, b) => {
-                const rankA = _teamRanks.get(a);
-                const rankB = _teamRanks.get(b);
-                if (rankA != null && rankB != null) return rankA - rankB;
-                if (rankA != null) return -1;
-                if (rankB != null) return 1;
-                return a - b;
-            });
-
-            teamsStore.set({ _teams, _teamNumbers, _teamRanks });
-        } catch (err) {
-            console.error(err);
-            alert("Failed to fetch teams for this event.");
-        }
+    if (!eventCode) {
+        alert("Please select an event first.");
+        return;
     }
+    try {
+        const [{ _teams, _teamNumbers }, teamRanksRaw] = await Promise.all([
+            fetchTeams(eventCode),
+            fetchTeamStatuses(eventCode),
+        ]);
+
+        const teamsMap = new Map(Object.entries(_teams).map(([k, v]) => [Number(k), v]));
+        const _teamRanks = new Map(Object.entries(teamRanksRaw).map(([k, v]) => [Number(k), v]));
+
+        _teamNumbers.sort((a, b) => {
+            const rankA = _teamRanks.get(a);
+            const rankB = _teamRanks.get(b);
+            if (rankA != null && rankB != null) return rankA - rankB;
+            if (rankA != null) return -1;
+            if (rankB != null) return 1;
+            return a - b;
+        });
+
+        teamsStore.set({ _teams: teamsMap, _teamNumbers, _teamRanks });
+    } catch (err) {
+        console.error(err);
+        alert("Failed to fetch teams for this event.");
+    }
+}
 
     async function populateAllianceCaptains() {
         if (!eventCode) {

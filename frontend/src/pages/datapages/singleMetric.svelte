@@ -271,16 +271,17 @@
   async function estimateTeamPoints(
     teamStr: string,
     matchNumber: number,
-    preloadedAlliances?: Record<number, any>,
+    preloadedAlliances?: any[],  // now an array
     preloadedData?: any[],
   ): Promise<number | null> {
-    const alliances = preloadedAlliances ?? (await fetchMatchAlliances(eventCode));
+    const allMatches = preloadedAlliances ?? await fetchMatchAlliances(eventCode);
+    const tbaMatch = allMatches.find(
+      (m) => m.comp_level === "qm" && m.match_number === matchNumber
+    );
     const data = preloadedData ?? JSON.parse(await fetchAllMetricData());
-    const alliance = alliances[matchNumber];
-    if (!data || !alliance) return null;
+    if (!data || !tbaMatch) return null;
 
     const teamStrClean = String(teamStr).replace(/\D/g, "");
-
     const teamRows = data.filter((row) => {
       if (row.RecordType === "Match_Event") return false;
       return String(row.Team || row.team || "").replace(/\D/g, "") === teamStrClean
@@ -288,10 +289,16 @@
     });
     if (!teamRows.length) return null;
 
-    const onRed = alliance.red.map((t) => t.replace(/\D/g, "")).includes(teamStrClean);
-    const allianceScore = onRed ? alliance.redScore : alliance.blueScore;
-    const allianceTeams = (onRed ? alliance.red : alliance.blue).map((t) => t.replace(/\D/g, ""));
-
+    const redKeys = tbaMatch.alliances.red.team_keys.map((k) => k.replace("frc", ""));
+    const onRed = redKeys.includes(teamStrClean);
+    const allianceScore = onRed
+      ? tbaMatch.alliances.red.score
+      : tbaMatch.alliances.blue.score;
+    const allianceTeams = (onRed
+      ? tbaMatch.alliances.red.team_keys
+      : tbaMatch.alliances.blue.team_keys
+    ).map((k) => k.replace("frc", ""));
+    
     const sumShootingTime = (rows) =>
       rows.reduce((sum, row) => {
         const v = row.FuelShootingTime;
@@ -488,7 +495,7 @@
       [{ msg: "Fetching match alliances from TBA…" }],
     );
 
-    const alliances = await (await fetchMatchAlliances(eventCode)).json();
+    const alliances = await fetchMatchAlliances(eventCode);
     const data = JSON.parse(await fetchAllMetricData());
     const maxMatchCount = getMaxMatchCount();
     const qLabels = Array.from({ length: maxMatchCount }, (_, i) => `Q${i + 1}`);

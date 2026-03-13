@@ -19,7 +19,7 @@
     document.title = "GARCE PAGE";
 
     const result = await fetchTeams(eventCode);
-    teams = result._teams;
+    teams = new Map(Object.entries(result._teams).map(([k, v]) => [Number(k), v]));
     allTeams = result._teamNumbers;
 
     addPastData();

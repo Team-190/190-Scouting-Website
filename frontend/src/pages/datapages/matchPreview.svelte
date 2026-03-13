@@ -276,10 +276,9 @@
    */
   async function fetchEventMatches(code: string): Promise<any[]> {
     try {
-      const res = await fetchMatchAlliances(code);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const matches = await res.json();
-      return matches
+      const data = await fetchMatchAlliances(code);
+      if (!data || !data.length) throw new Error("No alliance data");
+      return data
         .filter((m) => ["qm", "ef", "qf", "sf", "f"].includes(m.comp_level))
         .sort((a, b) => {
           const levelDiff = ELIM_LEVEL_ORDER[a.comp_level] - ELIM_LEVEL_ORDER[b.comp_level];

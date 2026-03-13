@@ -15,11 +15,10 @@
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
   import { fetchAnanthPage,
-           fetchGracePage,
-           fetchPitScoutingImage,
-           fetchMatchAlliances,
-           fetchMatchScores,
-           fetchOPR 
+         fetchGracePage,
+         fetchPitScoutingImage,
+         fetchMatchAlliances,
+         fetchOPR,
   } from "../../utils/api.js";
   
   import {
@@ -271,10 +270,16 @@
    * Estimates a team's fuel-scored points for a match by proportional
    * shooting-time weighting against the known alliance score.
    */
+  function findMatchAlliance(allMatches: any[], matchNumber: number) {
+  return allMatches.find(
+    (m) => m.comp_level === "qm" && m.match_number === matchNumber
+  );
+}
+
   async function estimateTeamPoints(teamStr: string, matchNumber: number): Promise<number | null> {
-    const alliances = await fetchMatchAlliances(eventCode);
-    const alliance  = alliances[matchNumber];
-    if (!teamViewData || !alliance) return null;
+    const allMatches = await fetchMatchAlliances(eventCode);
+    const tbaMatch = findMatchAlliance(allMatches, matchNumber);
+    if (!teamViewData || !tbaMatch) return null;
 
     const teamStrClean = String(teamStr).replace(/\D/g, "");
     const teamRows = teamViewData.filter((row) => {
@@ -284,9 +289,15 @@
     });
     if (!teamRows.length) return null;
 
-    const onRed       = alliance.red.map((t) => t.replace(/\D/g, "")).includes(teamStrClean);
-    const allianceScore = onRed ? alliance.redScore : alliance.blueScore;
-    const allianceTeams = (onRed ? alliance.red : alliance.blue).map((t) => t.replace(/\D/g, ""));
+    const redKeys = tbaMatch.alliances.red.team_keys.map((k) => k.replace("frc", ""));
+    const onRed = redKeys.includes(teamStrClean);
+    const allianceScore = onRed
+      ? tbaMatch.alliances.red.score
+      : tbaMatch.alliances.blue.score;
+    const allianceTeams = (onRed
+      ? tbaMatch.alliances.red.team_keys
+      : tbaMatch.alliances.blue.team_keys
+    ).map((k) => k.replace("frc", ""));
 
     const sumShootingTime = (rows: any[]) =>
       rows.reduce((sum, row) => {
@@ -295,7 +306,7 @@
       }, 0);
 
     const teamShootingTime = sumShootingTime(teamRows);
-    const allianceRows     = teamViewData.filter((row) => {
+    const allianceRows = teamViewData.filter((row) => {
       if (row.RecordType === "Match_Event") return false;
       return Number(row.Match) === matchNumber
         && allianceTeams.includes(String(row.Team || row.team || "").replace(/\D/g, ""));
@@ -955,17 +966,23 @@
 
   async function compareWithMean() {
     const teamNumber = Number(String(selectedTeam).replace(/\D/g, ""));
-    const teamData   = cache[teamNumber];
+    const teamData = cache[teamNumber];
+    const allMatches = await fetchMatchAlliances(eventCode);
+
+    const getScore = (match) => {
+      const tbaMatch = findMatchAlliance(allMatches, match.Match);
+      if (!tbaMatch) return null;
+      const alliance = match.DriveStation?.startsWith("red") ? "red" : "blue";
+      return tbaMatch.alliances[alliance].score ?? null;
+    };
 
     const avoidanceMatches = teamData.filter(
       (match) => match.Avoidance && match.Avoidance !== "Select"
         && match.Avoidance !== "None" && match.Avoidance !== -1,
     );
 
-    const [avoidanceScores, allScores] = await Promise.all([
-      Promise.all(avoidanceMatches.map((match) => fetchMatchScores(eventCode, match, teamNumber))),
-      Promise.all(teamData.map((match) => fetchMatchScores(eventCode, match, teamNumber))),
-    ]);
+    const avoidanceScores = avoidanceMatches.map(getScore);
+    const allScores = teamData.map(getScore);
 
     const validAllScores = allScores.filter((s) => s !== null) as number[];
     const overallAverage = validAllScores.length

@@ -61,7 +61,7 @@ export function fetchAnanthPage(eventCode) {
 ////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
 
 export async function fetchMatchAlliances(eventCode) {
-    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/getMatchData?eventCode=${eventCode}`);
+    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/getMatchAlliances?eventCode=${eventCode}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
 }

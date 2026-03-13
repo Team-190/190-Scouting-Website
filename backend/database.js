@@ -347,7 +347,7 @@ async function writeJSONFile(filename, data) {
         if (err) {
             console.error("Error writing to file", err);
         } else {
-            console.log("Data written to " + fullPath + ".json successfully");
+            console.log("Data written to " + fullPath + " successfully");
         }
     });
 }
