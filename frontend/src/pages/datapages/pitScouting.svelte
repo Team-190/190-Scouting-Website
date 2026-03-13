@@ -31,7 +31,12 @@
 
     onMount(async () => {
         const { _teamNumbers } = await fetchTeams(eventCode);
-        allTeams = _teamNumbers;
+        
+        // Filter out teams already in pit scouting local storage
+        const pitScouting = JSON.parse(localStorage.getItem("retrievePit") || "{}");
+        const scoutedTeams = new Set(Object.keys(pitScouting).map(key => Number(key)));
+        
+        allTeams = _teamNumbers.filter(team => !scoutedTeams.has(team));
     });
 
     function handleInput(field, event) {
@@ -106,6 +111,12 @@
                     isLast ? apiFormDataWithImage : existing[i]
                 );
                 if (response.ok) {
+                    // Update retrievePit with the successfully posted data
+                    const pitData = JSON.parse(localStorage.getItem("retrievePit") || "{}");
+                    const teamNum = isLast ? selectedTeam : existing[i].teamNumber;
+                    pitData[teamNum] = isLast ? apiFormDataWithImage : existing[i];
+                    localStorage.setItem("retrievePit", JSON.stringify(pitData));
+
                     existing.splice(i, 1);
                     i--;
                     localStorage.setItem("pitScouting", JSON.stringify(existing));

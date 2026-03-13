@@ -1115,11 +1115,7 @@
     if (teamQualData && selectedAutoPathMatch !== null) {
       const match = teamQualData.find((m) => m.Match === selectedAutoPathMatch);
       if (match) {
-        const allianceColors: Record<string, string> = {
-          Red: "#ff6b6b",
-          Blue: "#4d9aff"
-        };
-        const color = allianceColors[match.Alliance] || "#FFFFFF";
+        const color = "#FFFFFF";
         
         if (match.AutoPath && Array.isArray(match.AutoPath)) {
           match.AutoPath.forEach((path: any[]) => {
@@ -1282,12 +1278,8 @@
       </div>
       <div class="path-legend">
         <div class="legend-item">
-          <div class="legend-color" style="background: #ff6b6b;"></div>
-          <span>Red Alliance</span>
-        </div>
-        <div class="legend-item">
-          <div class="legend-color" style="background: #4d9aff;"></div>
-          <span>Blue Alliance</span>
+          <div class="legend-color" style="background: #FFFFFF;"></div>
+          <span>Autonomous Path</span>
         </div>
       </div>
     </div>
