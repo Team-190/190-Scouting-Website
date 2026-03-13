@@ -342,7 +342,11 @@ async function readJSONFile(filename) {
 }
 
 async function writeJSONFile(filename, data) {
-    const fullPath = `./data/${filename}.json`;
+    const fullPath = `./${filename}.json`;
+    // Create directory if it doesn't exist
+    if (!fs.existsSync('./')) {
+        fs.mkdirSync('./', { recursive: true });
+    }
     fs.writeFile(fullPath, JSON.stringify(data, null, 4), "utf8", (err) => {
         if (err) {
             console.error("Error writing to file", err);
