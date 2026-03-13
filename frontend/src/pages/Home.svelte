@@ -98,13 +98,25 @@
                 const eventsFromDb = await res.json();
                 
                 // Fetch event details from Blue Alliance for each event code
+                // Only fetch for valid TBA event codes (format: YYYY[event-code])
                 const eventsWithNames = await Promise.all(
                     eventsFromDb.map(async (event) => {
-                        const details = await fetchEventDetails(event.eventCode);
-                        return {
-                            ...event,
-                            name: details.name || event.eventCode,
-                        };
+                        // Check if event code looks like a real TBA event code
+                        const isTbaEventCode = /^\d{4}[a-z0-9]+$/.test(event.eventCode);
+                        
+                        if (isTbaEventCode) {
+                            const details = await fetchEventDetails(event.eventCode);
+                            return {
+                                ...event,
+                                name: details.name || event.eventCode,
+                            };
+                        } else {
+                            // Use eventCode as name for non-TBA event codes
+                            return {
+                                ...event,
+                                name: event.name || event.eventCode,
+                            };
+                        }
                     })
                 );
                 
