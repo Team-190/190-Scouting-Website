@@ -256,14 +256,14 @@
 
   /** Returns the most recent grace rating index for a team, defaulting to 7 (horse). */
   function fetchGraceRating(team: string): number {
-    if (!graceData || graceData[team] === undefined) return 7;
+    if (!graceData || graceData[team] === undefined) return GraceRating[GraceRating.length - 1];
     const entry = graceData[team];
     return entry[Object.keys(entry)[Object.keys(entry).length - 1]];
   }
 
   /** Returns the most recent ananth rating index for a team, defaulting to 5 (horse). */
   function fetchAnanthRating(team: string): number {
-    if (!ananthData || ananthData[team] === undefined) return 5;
+    if (!ananthData || ananthData[team] === undefined) return AnanthRating[AnanthRating.length - 1];
     const entry = ananthData[team];
     return entry[Object.keys(entry)[Object.keys(entry).length - 1]];
   }
