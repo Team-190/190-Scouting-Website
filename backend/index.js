@@ -62,6 +62,7 @@ async function postRatingHelper(req, res, filename) {
     database.writeJSONFile(filename, fileData);
     res.sendStatus(200);
 }
+
 const VITE_BACKEND_PORT = process.env.VITE_BACKEND_PORT || 8000;
 const VITE_FRONTEND_PORT = process.env.VITE_FRONTEND_PORT || 5173;
 const VITE_TESTING = process.env.VITE_TESTING || 1;
@@ -97,7 +98,7 @@ app.use(cors({
     ],
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type"],
-}))
+}));
 
 app.use((req, res, next) => {
     res.renderHtml = (filename) => {
@@ -112,8 +113,6 @@ app.get("/", async (req, res) => {
 
 app.get("/login", (req, res) => {
     res.renderHtml("login.html");
-
-    test.test();
 });
 
 app.get("/getEvents", async (req, res) => {
@@ -175,9 +174,9 @@ app.get("/getPitScouting", validateEventCode, async (req, res) => {
     res.send(filtered);
 });
 
-app.get("/getPitScoutingImage", async (req, res) => {
+app.get("/getPitScoutingImage", validateEventCode, async (req, res) => {
     const { eventCode, teamNumber } = req.query;
-    if (!eventCode || !teamNumber) return res.sendStatus(403);
+    if (!teamNumber) return res.sendStatus(403);
 
     try {
         let data = await getEventData("pitScoutingData", eventCode);
@@ -198,31 +197,20 @@ app.get("/getAllData", validateEventCode, async (req, res) => {
 
 app.get("/getSingleMetric", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
-
     console.log("single metric data requested, eventCode: " + eventCode);
+
     let result = await database.getAllData(eventCode);
-    result = result.data
+    result = result.data;
     let teams = {};
 
     for (let datapoint of result) {
         let strippedTeam = datapoint.Team.replace(/\s+/g, "");
         let match = datapoint.Match;
 
-        if (!teams[strippedTeam]) {
-            teams[strippedTeam] = {};
-        }
-
-        if (!teams[strippedTeam][match]) {
-            teams[strippedTeam][match] = [];
-        }
+        if (!teams[strippedTeam]) teams[strippedTeam] = {};
+        if (!teams[strippedTeam][match]) teams[strippedTeam][match] = [];
 
         teams[strippedTeam][match].push(datapoint);
-    }
-
-
-    console.log(Object.keys(teams))
-    for (let thinger of Object.keys(teams)) {
-        console.log(teams[thinger])
     }
 });
 
@@ -239,14 +227,12 @@ app.get("/getHPRatings", validateEventCode, async (req, res) => {
 });
 
 
-
 ////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
 ////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
 ////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
 
-app.get("/getMatchData", async (req, res) => {
+app.get("/getMatchData", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
-    if (!eventCode) return res.sendStatus(403);
     console.log("matches requested, eventCode: " + eventCode);
     
     let raw;
@@ -276,9 +262,8 @@ app.get("/getMatchData", async (req, res) => {
     res.send(result);
 });
 
-app.get("/getTeams", async (req, res) => {
+app.get("/getTeams", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
-    if (!eventCode) return res.sendStatus(403);
     console.log("teams requested, eventCode: " + eventCode);
 
     let raw;
@@ -299,9 +284,8 @@ app.get("/getTeams", async (req, res) => {
     res.send(result);
 });
 
-app.get("/fetchEventDetails", async (req, res) => {
+app.get("/fetchEventDetails", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
-    if (!eventCode) return res.sendStatus(403);
     console.log("event details requested, eventCode: " + eventCode);
 
     let raw;
@@ -323,9 +307,8 @@ app.get("/fetchEventDetails", async (req, res) => {
     res.send(result);
 });
 
-app.get("/fetchTeamStatuses", async (req, res) => {
+app.get("/fetchTeamStatuses", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
-    if (!eventCode) return res.sendStatus(403);
     console.log("team statuses requested, eventCode: " + eventCode);
 
     let raw;
@@ -348,9 +331,8 @@ app.get("/fetchTeamStatuses", async (req, res) => {
     res.send(result);
 });
 
-app.get("/fetchOPR", async (req, res) => {
+app.get("/fetchOPR", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
-    if (!eventCode) return res.sendStatus(403);
     console.log("OPR requested, eventCode: " + eventCode);
 
     let raw;
@@ -372,9 +354,8 @@ app.get("/fetchOPR", async (req, res) => {
     res.send(result);
 });
 
-app.get("/fetchAlliances", async (req, res) => {
+app.get("/fetchAlliances", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
-    if (!eventCode) return res.sendStatus(403);
     console.log("alliances requested, eventCode: " + eventCode);
 
     let raw;
@@ -387,18 +368,13 @@ app.get("/fetchAlliances", async (req, res) => {
         raw = await database.readJSONFile("alliances");
     }
 
-    // fetchAlliancesAvailable logic
     const available = Array.isArray(raw) && raw.length > 0 && raw[0]?.picks?.length > 0;
-
-    // fetchElimsHaveStarted is handled by /fetchMatchAlliances, but alliances
-    // being available is a reasonable proxy — kept separate if needed
 
     res.send({ alliances: raw, available });
 });
 
-app.get("/fetchEventEpas", async (req, res) => {
+app.get("/fetchEventEpas", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
-    if (!eventCode) return res.sendStatus(403);
     console.log("EPAs requested, eventCode: " + eventCode);
 
     let raw;
@@ -414,9 +390,8 @@ app.get("/fetchEventEpas", async (req, res) => {
     res.send(raw);
 });
 
-app.get("/fetchElimsHaveStarted", async (req, res) => {
+app.get("/fetchElimsHaveStarted", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
-    if (!eventCode) return res.sendStatus(403);
     console.log("elims check requested, eventCode: " + eventCode);
 
     let raw;
@@ -473,8 +448,7 @@ app.post("/postEventCode", async (req, res) => {
     if (!eventCode) {
         console.log("Event code could not be retrieved");
         res.sendStatus(400);
-    }
-    else {
+    } else {
         console.log(`Event code retrieved, ${eventCode}`);
         res.sendStatus(200);
     }
@@ -488,50 +462,46 @@ app.post("/postHPRatings", (req, res) => {
     postRatingHelper(req, res, "HPRatings");
 });
 
-app.post("/postPitScouting", async (req, res) => {
+app.post("/postPitScouting", validateEventCode, async (req, res) => {
     let event = req.body.event;
     let team = req.body.team;
     let formData = req.body.formData;
-    let file = "pitScoutingData";
-    if (!formData || !team || !event) {
+
+    if (!formData || !team) {
         console.log("One or more fields could not be retrieved");
         console.log(`${formData} ${team} ${event}`);
-        res.sendStatus(400);
+        return res.sendStatus(400);
     }
-    else {
-        console.log(formData)
-        let fileData = await database.readJSONFile(file);
-        fileData[event] ||= {};
-        fileData[event][team] = formData;
 
-        database.writeJSONFile(file, fileData);
+    console.log(formData);
+    let fileData = await database.readJSONFile("pitScoutingData");
+    fileData[event] ||= {};
+    fileData[event][team] = formData;
 
-        res.sendStatus(200);
-    }
+    database.writeJSONFile("pitScoutingData", fileData);
+    res.sendStatus(200);
 });
 
-app.post("/postQualitativeScouting", async (req, res) => {
+app.post("/postQualitativeScouting", validateEventCode, async (req, res) => {
     let event = req.body.event;
     let match = req.body.match;
     let team = req.body.team;
     let formData = req.body.formData;
-    let file = "qualitativeScoutingData";
-    if (formData == null || team == null || event == null || match == null) {
+
+    if (formData == null || team == null || match == null) {
         console.log("One or more fields could not be retrieved");
         console.log(`${formData} ${team} ${event} ${match}`);
-        res.sendStatus(400);
+        return res.sendStatus(400);
     }
-    else {
-        console.log(formData)
-        let fileData = await database.readJSONFile(file);
-        fileData[event] ||= {};
-        fileData[event][team] ||= {};
-        fileData[event][team][match] = formData;
 
-        database.writeJSONFile(file, fileData);
+    console.log(formData);
+    let fileData = await database.readJSONFile("qualitativeScoutingData");
+    fileData[event] ||= {};
+    fileData[event][team] ||= {};
+    fileData[event][team][match] = formData;
 
-        res.sendStatus(200);
-    }
+    database.writeJSONFile("qualitativeScoutingData", fileData);
+    res.sendStatus(200);
 });
 
 app.post("/postGompeiMadnessBracket", async (req, res) => {
