@@ -231,6 +231,13 @@
       for (let i = 0; i < existing.length; i++) {
         const response = await postQualitativeScouting(eventCode, existing[i].Team, existing[i].Match, existing[i]);
         if (response.ok) {
+          // Update retrieveQual with the successfully posted data
+          const qualData = JSON.parse(localStorage.getItem("retrieveQual") || "{}");
+          const teamKey = String(existing[i].Team).replace(/\D/g, "");
+          if (!qualData[teamKey]) qualData[teamKey] = {};
+          qualData[teamKey][existing[i].Match] = existing[i];
+          localStorage.setItem("retrieveQual", JSON.stringify(qualData));
+
           existing.splice(i, 1);
           i--;
           localStorage.setItem("scoutingData", JSON.stringify(existing));

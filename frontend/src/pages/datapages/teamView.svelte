@@ -68,6 +68,7 @@
   let showDropdown    = false;
   let eventCode       = getEventCode();
   let robotPicturePreview: string | null = null;
+  let showImageModal   = false;
   let teamQualData: any[] = [];
   let teamPitData: any    = null;
   let avoidanceChartEl: HTMLElement;
@@ -1134,11 +1135,7 @@
     if (teamQualData && selectedAutoPathMatch !== null) {
       const match = teamQualData.find((m) => m.Match === selectedAutoPathMatch);
       if (match) {
-        const allianceColors: Record<string, string> = {
-          Red: "#ff6b6b",
-          Blue: "#4d9aff"
-        };
-        const color = allianceColors[match.Alliance] || "#FFFFFF";
+        const color = "#FFFFFF";
         
         if (match.AutoPath && Array.isArray(match.AutoPath)) {
           match.AutoPath.forEach((path: any[]) => {
@@ -1212,6 +1209,7 @@
       teamPitData  = getPitDataForTeam(selectedTeam);
 
       await fetchTeamOPR(String(selectedTeam));
+      await fetchRobotPicture(selectedTeam);
       await tick();
       populateMatchDropdown(selectedTeam);
       onMatchChange();
@@ -1271,12 +1269,26 @@
 
   <div class="robot-pic-display">
     {#if robotPicturePreview}
-      <img src={robotPicturePreview} alt="Robot {selectedTeam}"
-        style="height: 600px; width: auto; border-radius: 6px; border: 2px solid var(--frc-190-red); object-fit: contain;" />
+      <img 
+        src={robotPicturePreview} 
+        alt="Robot {selectedTeam}"
+        style="height: 300px; width: auto; border-radius: 6px; border: 2px solid var(--frc-190-red); object-fit: contain; cursor: pointer;"
+        on:click={() => showImageModal = true}
+      />
     {:else}
       <span style="color: #888; font-size: 12px;">No photo</span>
     {/if}
   </div>
+
+  <!-- Image Modal -->
+  {#if showImageModal && robotPicturePreview}
+    <div class="modal-overlay" on:click={() => showImageModal = false} role="button" tabindex="0">
+      <div class="modal-content" on:click|stopPropagation>
+        <button class="modal-close-btn" on:click={() => showImageModal = false}>×</button>
+        <img src={robotPicturePreview} alt="Robot {selectedTeam} - Enlarged" class="modal-image" />
+      </div>
+    </div>
+  {/if}
 
   <div class="grid-container ag-theme-quartz" bind:this={domNode}></div>
 
@@ -1301,12 +1313,8 @@
       </div>
       <div class="path-legend">
         <div class="legend-item">
-          <div class="legend-color" style="background: #ff6b6b;"></div>
-          <span>Red Alliance</span>
-        </div>
-        <div class="legend-item">
-          <div class="legend-color" style="background: #4d9aff;"></div>
-          <span>Blue Alliance</span>
+          <div class="legend-color" style="background: #FFFFFF;"></div>
+          <span>Autonomous Path</span>
         </div>
       </div>
     </div>
@@ -1495,6 +1503,14 @@
   .loading-spinner-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 9999; }
   .loading-spinner { border: 8px solid rgba(255,255,255,0.3); border-left-color: var(--frc-190-red); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Image Modal ── */
+  .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 10000; cursor: pointer; }
+  .modal-content { position: relative; display: flex; align-items: center; justify-content: center; max-width: 95vw; max-height: 95vh; cursor: default; }
+  .modal-image { max-width: 95vw; max-height: 95vh; object-fit: contain; border-radius: 8px; box-shadow: 0 8px 40px rgba(0,0,0,0.7); }
+  .modal-close-btn { position: absolute; top: 15px; right: 15px; width: 45px; height: 45px; border-radius: 50%; border: none; background: var(--frc-190-red); color: white; font-size: 32px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10001; transition: background 0.3s ease, transform 0.2s ease; padding: 0; font-weight: 300; line-height: 1; }
+  .modal-close-btn:hover { background: #e02200; transform: scale(1.1); }
+  .modal-close-btn:active { transform: scale(0.95); }
 
   /* ── Map Section ── */
   .map-section { width: 80vw; margin-top: 30px; display: flex; flex-direction: column; align-items: center; }
