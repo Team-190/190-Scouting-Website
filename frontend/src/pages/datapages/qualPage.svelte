@@ -30,19 +30,14 @@
       hint: "How efficient is their intake? Do they chase nearby balls decisively, or do they look indecisive and waste time?",
     },
     {
-      id: "strongestAspect",
-      label: "Strongest Aspect",
-      hint: "What is the strongest aspect of this robot on the field?",
-    },
-    {
-      id: "mechanicalNotes",
-      label: "Mechanical Construction Notes",
-      hint: "Do they decapitate themselves? Brown out? Does their intake break? Note any mechanical issues observed.",
-    },
-    {
       id: "matchEvents",
       label: "Match Events",
       hint: "Explain any notable match events — penalties, disabled robot, fouls, surprising plays, etc.",
+    },
+    {
+      id: "otherNotes",
+      label: "Other Notes",
+      hint: "Any additional observations or notes about this team.",
     },
   ];
 
@@ -255,6 +250,8 @@
     teamNumber = "";
     scouterName = "";
     teleopAnswers = {};
+    matchNumber += 1;
+    
     TELEOP_QUESTIONS.forEach((q) => { teleopAnswers[q.id] = ""; });
   }
 

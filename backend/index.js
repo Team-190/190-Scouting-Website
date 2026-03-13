@@ -17,6 +17,51 @@ const cors = require("cors");
 require('dotenv').config({ path: path.resolve(__dirname, '../.env'), override: true });
 
 const app = express();
+
+// ─── HELPER FUNCTIONS ───────────────────────────────────────────────────────
+
+/**
+ * Middleware to validate eventCode parameter
+ */
+const validateEventCode = (req, res, next) => {
+    const eventCode = req.query.eventCode || req.body.event;
+    if (!eventCode) return res.sendStatus(403);
+    next();
+};
+
+/**
+ * Helper to read JSON file and get event-scoped data
+ */
+async function getEventData(filename, eventCode) {
+    let data = await database.readJSONFile(filename);
+    return data[eventCode] || {};
+}
+
+/**
+ * Helper to post rating data (generic for driver/HP ratings)
+ */
+async function postRatingHelper(req, res, filename) {
+    const { event, rating, team } = req.body;
+    
+    if (rating == null || team == null || event == null) {
+        console.log("One or more fields could not be retrieved");
+        console.log(`${rating} ${team} ${event}`);
+        return res.sendStatus(400);
+    }
+
+    let fileData = await database.readJSONFile(filename);
+    fileData[event] ||= {};
+
+    if (fileData[event][team]) {
+        let nextRating = Object.keys(fileData[event][team]).length;
+        fileData[event][team][nextRating] = rating;
+    } else {
+        fileData[event][team] = { 0: rating };
+    }
+
+    database.writeJSONFile(filename, fileData);
+    res.sendStatus(200);
+}
 const VITE_BACKEND_PORT = process.env.VITE_BACKEND_PORT || 8000;
 const VITE_FRONTEND_PORT = process.env.VITE_FRONTEND_PORT || 5173;
 const VITE_TESTING = process.env.VITE_TESTING || 1;
@@ -82,24 +127,21 @@ app.get("/getEvents", async (req, res) => {
     }
 });
 
-app.get("/getAvailableTeams", async (req, res) => {
+app.get("/getAvailableTeams", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
-    if (!eventCode) return res.sendStatus(403);
     let result = await database.getAvailableTeams(eventCode);
     res.send(result);
 });
 
-app.get("/getQualitativeScouting", async (req, res) => {
+app.get("/getQualitativeScouting", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
-    if (!eventCode) return res.sendStatus(403);
 
     let localCounts = {};
     try {
         if (req.query.localCounts) localCounts = JSON.parse(decodeURIComponent(req.query.localCounts));
     } catch(e) {}
 
-    let result = await database.readJSONFile("qualitativeScoutingData");
-    result = result[eventCode] || {};
+    let result = await getEventData("qualitativeScoutingData", eventCode);
 
     let filtered = {};
     for (let team in result) {
@@ -112,17 +154,15 @@ app.get("/getQualitativeScouting", async (req, res) => {
     res.send(filtered);
 });
 
-app.get("/getPitScouting", async (req, res) => {
+app.get("/getPitScouting", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
-    if (!eventCode) return res.sendStatus(403);
 
     let localTeams = [];
     try {
         if (req.query.localTeams) localTeams = JSON.parse(decodeURIComponent(req.query.localTeams));
     } catch(e) {}
 
-    let result = await database.readJSONFile("pitScoutingData");
-    result = result[eventCode] || {};
+    let result = await getEventData("pitScoutingData", eventCode);
 
     let filtered = {};
     for (const [team, data] of Object.entries(result)) {
@@ -136,32 +176,28 @@ app.get("/getPitScouting", async (req, res) => {
 });
 
 app.get("/getPitScoutingImage", async (req, res) => {
-    const eventCode = req.query.eventCode;
-    const teamNumber = req.query.teamNumber;
+    const { eventCode, teamNumber } = req.query;
     if (!eventCode || !teamNumber) return res.sendStatus(403);
 
-    let result = await database.readJSONFile("pitScoutingData");
-
     try {
-        result = result[eventCode][teamNumber]["robotPicturePreview"];
+        let data = await getEventData("pitScoutingData", eventCode);
+        const result = data[teamNumber]?.["robotPicturePreview"];
+        if (!result) return res.sendStatus(404);
+        res.send(result);
     } catch (e) {
         return res.sendStatus(404);
     }
-
-    res.send(result);
 });
 
-app.get("/getAllData", async (req, res) => {
+app.get("/getAllData", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
     const lastId = parseInt(req.query.lastId || "0");
-    if (!eventCode) return res.sendStatus(403);
     let result = await database.getAllData(eventCode, lastId);
     res.send(result);
 });
 
-app.get("/getSingleMetric", async (req, res) => {
+app.get("/getSingleMetric", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
-    if (!eventCode) return res.sendStatus(403);
 
     console.log("single metric data requested, eventCode: " + eventCode);
     let result = await database.getAllData(eventCode);
@@ -190,21 +226,15 @@ app.get("/getSingleMetric", async (req, res) => {
     }
 });
 
-app.get("/getRatings", async (req, res) => {
+app.get("/getRatings", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
-    if (!eventCode) return res.sendStatus(403);
-
-    let fileData = await database.readJSONFile("driverRatings");
-    fileData = fileData[eventCode];
+    let fileData = await getEventData("driverRatings", eventCode);
     res.send(fileData);
 });
 
-app.get("/getHPRatings", async (req, res) => {
+app.get("/getHPRatings", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
-    if (!eventCode) return res.sendStatus(403);
-
-    let fileData = await database.readJSONFile("HPRatings");
-    fileData = fileData[eventCode];
+    let fileData = await getEventData("HPRatings", eventCode);
     res.send(fileData);
 });
 
@@ -450,66 +480,12 @@ app.post("/postEventCode", async (req, res) => {
     }
 });
 
-app.post("/postRatings", async (req, res) => {
-
-    let event = req.body.event;
-    let rating = req.body.rating;
-    let team = req.body.team;
-    let file = "driverRatings";
-    if (rating == null || team == null || event == null) {
-        console.log("One or more fields could not be retrieved");
-        console.log(`${rating} ${team} ${event}`);
-        res.sendStatus(400);
-    }
-    else {
-
-        let fileData = await database.readJSONFile(file);
-        console.log(fileData)
-        fileData[event] ||= {};
-
-        if (fileData[event][team]) {
-            let nextRating = Object.keys(fileData[event][team]).length;
-
-            fileData[event][team][nextRating] = rating;
-        } else {
-            fileData[event][team] = { 0: rating };
-        }
-
-        database.writeJSONFile(file, fileData);
-
-        res.sendStatus(200);
-    }
+app.post("/postRatings", (req, res) => {
+    postRatingHelper(req, res, "driverRatings");
 });
 
-app.post("/postHPRatings", async (req, res) => {
-
-    let event = req.body.event;
-    let rating = req.body.rating;
-    let team = req.body.team;
-    let file = "HPRatings";
-    if (rating == null || team == null || event == null) {
-        console.log("One or more fields could not be retrieved");
-        console.log(`${rating} ${team} ${event}`);
-        res.sendStatus(400);
-    }
-    else {
-
-        let fileData = await database.readJSONFile(file);
-        console.log(fileData)
-        fileData[event] ||= {};
-
-        if (fileData[event][team]) {
-            let nextRating = Object.keys(fileData[event][team]).length;
-
-            fileData[event][team][nextRating] = rating;
-        } else {
-            fileData[event][team] = { 0: rating };
-        }
-
-        database.writeJSONFile(file, fileData);
-
-        res.sendStatus(200);
-    }
+app.post("/postHPRatings", (req, res) => {
+    postRatingHelper(req, res, "HPRatings");
 });
 
 app.post("/postPitScouting", async (req, res) => {

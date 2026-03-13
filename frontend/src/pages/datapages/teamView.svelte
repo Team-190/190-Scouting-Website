@@ -8,6 +8,7 @@
   import "ag-grid-community/styles/ag-theme-quartz.css";
   import { onMount, tick } from "svelte";
   import { v4 as uuidv4 } from "uuid";
+  import fieldImageSrc from "../../images/FieldImage.png";
   import * as barGraph from "../../pages/graphcode/bar.js";
   import * as lineGraph from "../../pages/graphcode/line.js";
   import * as pieGraph from "../../pages/graphcode/pie.js";
@@ -74,6 +75,12 @@
   let avoidanceChartInstance: any = null;
   let isLoading       = false;
   let autoOnly        = false;
+
+  // Auto path canvas state
+  let autoPathCanvasEl: HTMLElement;
+  let autoPathCtx: any = null;
+  let fieldImg: any = null;
+  let selectedAutoPathMatch: number | null = null;
 
   // ─── Value Helpers ────────────────────────────────────────────────────────────
 
@@ -911,6 +918,17 @@
     charts.forEach((c) => { if (c.instance) updateChartDataset(c); });
   }
 
+  $: if (teamQualData && teamQualData.length > 0) {
+    if (selectedAutoPathMatch === null) {
+      selectedAutoPathMatch = teamQualData[0].Match;
+    }
+    redrawAutoPathCanvas();
+  }
+
+  $: if (selectedAutoPathMatch !== null) {
+    redrawAutoPathCanvas();
+  }
+
   function updateChartDataset(chart: any) {
     if (!chart.instance) return;
     const teamData = cache[selectedTeam] || [];
@@ -1039,6 +1057,111 @@
     };
   }
 
+  // ─── Auto Path Canvas Helpers ─────────────────────────────────────────────────
+
+  /**
+   * Initialize canvas for drawing auto paths
+   */
+  function initAutoPathCanvas(canvas: HTMLCanvasElement) {
+    autoPathCanvasEl = canvas;
+    autoPathCtx = canvas.getContext("2d");
+    
+    // Load field image
+    fieldImg = new Image();
+    fieldImg.src = fieldImageSrc;
+    fieldImg.onload = () => redrawAutoPathCanvas();
+    
+    redrawAutoPathCanvas();
+    return {
+      destroy() { autoPathCtx = null; autoPathCanvasEl = null; }
+    };
+  }
+
+  /**
+   * Draw auto path on the canvas for the selected match only
+   */
+  function redrawAutoPathCanvas() {
+    if (!autoPathCtx || !autoPathCanvasEl) return;
+    
+    const W = autoPathCanvasEl.width;
+    const H = autoPathCanvasEl.height;
+    
+    autoPathCtx.clearRect(0, 0, W, H);
+
+    // Field image background (same crop as qualPage)
+    if (fieldImg && fieldImg.complete && fieldImg.naturalWidth > 0) {
+      const imgW = fieldImg.naturalWidth;
+      const imgH = fieldImg.naturalHeight;
+      const cropPct = 0.15;
+      const sx = imgW * cropPct;
+      const sw = imgW * (1 - 2 * cropPct);
+      const srcAspect = sw / imgH;
+      const dstAspect = W / H;
+      let finalSx = sx, finalSy = 0, finalSw = sw, finalSh = imgH;
+      const verticalBias = 0.6;
+      
+      if (dstAspect > srcAspect) {
+        const needed = sw / dstAspect;
+        finalSy = (imgH - needed) * verticalBias;
+        finalSh = needed;
+      } else {
+        const needed = imgH * dstAspect;
+        finalSx = sx + (sw - needed) / 2;
+        finalSw = needed;
+      }
+      
+      autoPathCtx.drawImage(fieldImg, finalSx, finalSy, finalSw, finalSh, 0, 0, W, H);
+    }
+
+    // Draw only the selected match's path
+    if (teamQualData && selectedAutoPathMatch !== null) {
+      const match = teamQualData.find((m) => m.Match === selectedAutoPathMatch);
+      if (match) {
+        const allianceColors: Record<string, string> = {
+          Red: "#ff6b6b",
+          Blue: "#4d9aff"
+        };
+        const color = allianceColors[match.Alliance] || "#FFFFFF";
+        
+        if (match.AutoPath && Array.isArray(match.AutoPath)) {
+          match.AutoPath.forEach((path: any[]) => {
+            if (!Array.isArray(path) || path.length < 2) return;
+            
+            autoPathCtx.beginPath();
+            autoPathCtx.moveTo(path[0].x, path[0].y);
+            
+            for (let i = 1; i < path.length; i++) {
+              autoPathCtx.lineTo(path[i].x, path[i].y);
+            }
+            
+            autoPathCtx.strokeStyle = color;
+            autoPathCtx.lineWidth = 3;
+            autoPathCtx.lineCap = "round";
+            autoPathCtx.lineJoin = "round";
+            autoPathCtx.stroke();
+            
+            // Draw arrow at end of path
+            if (path.length >= 2) {
+              const last = path[path.length - 1];
+              const prev = path[path.length - 2];
+              const angle = Math.atan2(last.y - prev.y, last.x - prev.x);
+              const sz = 12;
+              
+              autoPathCtx.beginPath();
+              autoPathCtx.moveTo(last.x, last.y);
+              autoPathCtx.lineTo(last.x - sz * Math.cos(angle - Math.PI / 6), last.y - sz * Math.sin(angle - Math.PI / 6));
+              autoPathCtx.moveTo(last.x, last.y);
+              autoPathCtx.lineTo(last.x - sz * Math.cos(angle + Math.PI / 6), last.y - sz * Math.sin(angle + Math.PI / 6));
+              autoPathCtx.strokeStyle = color;
+              autoPathCtx.lineWidth = 3;
+              autoPathCtx.stroke();
+            }
+          });
+        }
+      }
+    }
+  }
+
   // ─── Mount ────────────────────────────────────────────────────────────────────
 
   onMount(async () => {
@@ -1141,6 +1264,36 @@
   <div class="grid-container ag-theme-quartz" bind:this={domNode}></div>
 
   {#if teamQualData.length > 0}
+    <div class="auto-path-section">
+      <h2 class="section-title">Autonomous Paths</h2>
+      <div class="auto-path-controls">
+        <label for="auto-path-match">Match:</label>
+        <select id="auto-path-match" bind:value={selectedAutoPathMatch}>
+          {#each teamQualData as match}
+            <option value={match.Match}>Match {match.Match}</option>
+          {/each}
+        </select>
+      </div>
+      <div class="auto-path-wrapper">
+        <canvas
+          use:initAutoPathCanvas
+          width={1200}
+          height={600}
+          class="auto-path-canvas"
+        ></canvas>
+      </div>
+      <div class="path-legend">
+        <div class="legend-item">
+          <div class="legend-color" style="background: #ff6b6b;"></div>
+          <span>Red Alliance</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background: #4d9aff;"></div>
+          <span>Blue Alliance</span>
+        </div>
+      </div>
+    </div>
+
     <div class="qual-section">
       <h2 class="section-title">Qualitative Scouting Notes</h2>
       <div class="qual-grid">
@@ -1152,9 +1305,8 @@
               ["Defense Effectiveness", row.defenseEffectiveness],
               ["Defense Avoidance",     row.defenseAvoidance],
               ["Intake Efficiency",     row.intakeEfficiency],
-              ["Strongest Aspect",      row.strongestAspect],
-              ["Mechanical Notes",      row.mechanicalNotes],
               ["Match Events",          row.matchEvents],
+              ["Notes",           row.otherNotes],
             ] as [label, value]}
               {#if value}
                 <div class="qual-row">
@@ -1418,6 +1570,52 @@
   @media (max-width: 700px)  { .charts-grid { grid-template-columns: 1fr; } }
 
   .qual-section { width: 80vw; margin-top: 30px; display: flex; flex-direction: column; align-items: center; }
+  .auto-path-section { width: 80vw; margin-top: 30px; display: flex; flex-direction: column; align-items: center; }
+  .auto-path-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    color: white;
+    font-weight: 600;
+  }
+  .auto-path-controls select {
+    margin-left: 0;
+    padding: 8px 12px;
+  }
+  .auto-path-wrapper {
+    position: relative;
+    border: 2px solid var(--frc-190-red);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #111;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    user-select: none;
+    -webkit-user-select: none;
+    max-width: 100%;
+    width: 100%;
+  }
+  .auto-path-canvas { display: block; width: 100%; height: auto; }
+  .path-legend {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 16px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: rgba(255,255,255,0.85);
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  .legend-color {
+    width: 18px;
+    height: 18px;
+    border-radius: 4px;
+  }
   .qual-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; width: 100%; }
   .qual-card { background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); border: 2px solid var(--frc-190-red); border-radius: 8px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
   .qual-card-header { background: var(--frc-190-red); color: white; font-weight: 700; font-size: 1rem; padding: 8px 14px; letter-spacing: 0.5px; }

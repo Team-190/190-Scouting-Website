@@ -17,9 +17,6 @@
   onMount(async () => {
     originalTitle = document.title;
     document.title = "GARCE PAGE";
-    // for (let i = 0; i < allTeams.length; i++){
-    //   teamNames.push(await fetchTeams(allTeams[i]));
-    // }
 
     const result = await fetchTeams(eventCode);
     teams = result._teams;
