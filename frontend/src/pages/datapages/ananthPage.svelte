@@ -34,7 +34,7 @@
       tableData = allTeams.map((teamNumber) => ({
         team: teamNumber,
         name: teams.get(teamNumber),
-        rating: rating[7],
+        rating: rating[rating.length - 1],
       }));
       fetchAnanthPage(eventCode)
         .then((res) => {

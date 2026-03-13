@@ -37,8 +37,8 @@
 
   // ─── Constants ────────────────────────────────────────────────────────────────
 
-  const GraceRating = getGraceRatings();
   const AnanthRating = getAnanthRatings();
+  const GraceRating = getGraceRatings();
 
   // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -254,18 +254,18 @@
 
   // ─── Rating Helpers ───────────────────────────────────────────────────────────
 
-  /** Returns the most recent grace rating index for a team, defaulting to 7 (horse). */
-  function fetchGraceRating(team: string): number {
+  /** Returns the src URL for the most recent grace rating image, defaulting to horse. */
+  function fetchGraceRating(team: number): string {
     if (!graceData || graceData[team] === undefined) return GraceRating[GraceRating.length - 1];
     const entry = graceData[team];
-    return entry[Object.keys(entry)[Object.keys(entry).length - 1]];
+    return GraceRating[entry[Object.keys(entry)[Object.keys(entry).length - 1]]];
   }
 
-  /** Returns the most recent ananth rating index for a team, defaulting to 5 (horse). */
-  function fetchAnanthRating(team: string): number {
+  /** Returns the src URL for the most recent ananth rating image, defaulting to horse. */
+  function fetchAnanthRating(team: number): string {
     if (!ananthData || ananthData[team] === undefined) return AnanthRating[AnanthRating.length - 1];
     const entry = ananthData[team];
-    return entry[Object.keys(entry)[Object.keys(entry).length - 1]];
+    return AnanthRating[entry[Object.keys(entry)[Object.keys(entry).length - 1]]];
   }
 
   // ─── Match Fetching ───────────────────────────────────────────────────────────
@@ -845,8 +845,8 @@
                 OPR: {teamOPRs[team].toFixed(2)}
               </span>
             {/if}
-            <img src={GraceRating[fetchGraceRating(team)]}  alt="Grace Rating"  style="width: 60px;" />
-            <img src={AnanthRating[fetchAnanthRating(team)]} alt="Ananth Rating" style="width: 60px;" />
+            <img src={fetchGraceRating(team)}  alt="Grace Rating"  style="width: 60px;" />
+            <img src={fetchAnanthRating(team)} alt="Ananth Rating" style="width: 60px;" />
           </h3>
           {#if i === 0}
             <div class="grid-container ag-theme-quartz" bind:this={domNode}      style="height: {gridHeight}px;"></div>
@@ -873,8 +873,8 @@
                 OPR: {teamOPRs[team].toFixed(2)}
               </span>
             {/if}
-            <img src={GraceRating[fetchGraceRating(team)]}  alt="Grace Rating"  style="width: 60px;" />
-            <img src={AnanthRating[fetchAnanthRating(team)]} alt="Ananth Rating" style="width: 60px;" />
+            <img src={fetchGraceRating(team)}  alt="Grace Rating"  style="width: 60px;" />
+            <img src={fetchAnanthRating(team)} alt="Ananth Rating" style="width: 60px;" />
           </h3>
           {#if i === 0}
             <div class="grid-container ag-theme-quartz" bind:this={domNodeRight} style="height: {gridHeight}px;"></div>
