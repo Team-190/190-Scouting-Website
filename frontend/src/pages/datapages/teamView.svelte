@@ -19,95 +19,39 @@
       fetchMatchScores,
       fetchOPR,
   } from "../../utils/externalApi.js";
+  import {
+      BOOLEAN_METRICS,
+      CLIMBSTATE_METRIC,
+      COLOR_MODES,
+      EXCLUDED_FIELDS,
+      getAnanthRatings,
+      getColorblindMode,
+      getEventCode,
+      getGraceRatings,
+      HEADER_HEIGHT,
+      INVERTED_METRICS,
+      lerpColor,
+      mean,
+      median,
+      METADATA_KEYS,
+      METRIC_DISPLAY_NAMES,
+      percentile,
+      ROW_HEIGHT,
+      sd,
+      ZONE_TIME_FIELDS,
+  } from "../../utils/pageUtils.js";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
   // ─── Constants ────────────────────────────────────────────────────────────────
 
-  const ROW_HEIGHT = 25;
-  const HEADER_HEIGHT = 32;
-
-  const METRIC_DISPLAY_NAMES = new Map([
-    ["TimeOfClimb",    "Match Climb Time"],
-    ["Defense",        "Defense Strategy"],
-    ["Avoidance",      "Avoidance Strategy"],
-    ["ClimbTime",      "Climb Time"],
-    ["DefenseTime",    "Defense Time"],
-    ["AutoClimb",      "Auto Climb"],
-    ["AttemptClimb",   "Climb Attempt"],
-    ["TrenchTraversal","Times Under Trench"],
-    ["BumpTraversal",  "Times Over Bump"],
-    ["StartingLocation","Starting Location"],
-    ["FuelIntakingTime","Fuel Intaking Time"],
-    ["FuelShootingTime","Fuel Shooting Time"],
-    ["FeedingTime",    "Feeding Time"],
-    ["EndState",       "Climb State"],
-    ["LadderLocation", "Ladder Location"],
-    ["Strategy",       "Strategy"],
-    ["EstimatedPoints","EFS (Estimated Fuel Scored)"],
-    ["NearFar",        "Near/Far"],
-    ["MatchEventCount","Match Events"],
-  ]);
-
-  const EXCLUDED_FIELDS = new Set([
-    "Match", "Team", "Id", "RecordType", "ScouterName", "ScouterError",
-    "Time", "Mode", "DriveStation", "NearFar",
-    "NearNeutralZoneTime", "NearRedZoneTime", "NearBlueZoneTime",
-    "FarNeutralZoneTime", "FarRedZoneTime", "FarBlueZoneTime",
-    "MatchEvent", "MatchEventDetails",
-  ]);
-
-  const INVERTED_METRICS  = ["TimeOfClimb", "ClimbTime", "MatchEventCount"];
-  const BOOLEAN_METRICS   = ["AutoClimb"];
-  const CLIMBSTATE_METRIC = "EndState";
-
-  // Metadata fields stored as single values (not [auto, full] arrays)
-  const METADATA_KEYS = new Set([
-    "id", "Id", "ID", "Team", "team", "Match", "match",
-    "RecordType", "ScouterName", "ScouterError", "Time", "time",
-    "Mode", "DriveStation", "MatchEvent", "NearFar",
-  ]);
-
-  const ZONE_TIME_FIELDS = new Set([
-    "NearBlueZoneTime", "FarBlueZoneTime",
-    "NearNeutralZoneTime", "FarNeutralZoneTime",
-    "NearRedZoneTime", "FarRedZoneTime",
-  ]);
-
-  const COLOR_MODES = {
-    normal:       { name: "Gradient",                      below: [255, 0, 0],   above: [0, 255, 0],   mid: [255, 255, 0] },
-    protanopia:   { name: "Protanopia (Red-blind)",        below: [0, 114, 178], above: [240, 228, 66], mid: [120, 171, 121] },
-    deuteranopia: { name: "Deuteranopia (Green-blind)",    below: [213, 94, 0],  above: [86, 180, 233], mid: [150, 137, 117] },
-    tritanopia:   { name: "Tritanopia (Blue-yellow blind)",below: [220, 20, 60], above: [0, 128, 0],   mid: [110, 74, 30] },
-    alex:         { name: "Alex Coloring",                 below: [234, 67, 53], above: [66, 133, 244], mid: [251, 188, 4] },
-  };
-
-  const GraceRating = [
-    new URL("../../images/GraceRatings/DNP.png", import.meta.url).href,
-    new URL("../../images/GraceRatings/ProbNo.png", import.meta.url).href,
-    new URL("../../images/GraceRatings/NeutralBad.jpg", import.meta.url).href,
-    new URL("../../images/GraceRatings/NeutralGood.png", import.meta.url).href,
-    new URL("../../images/GraceRatings/PrettyGood.gif", import.meta.url).href,
-    new URL("../../images/GraceRatings/AHHHHH.png", import.meta.url).href,
-    new URL("../../images/GraceRatings/FIRSTpick.gif", import.meta.url).href,
-    new URL("../../images/GraceRatings/horse.png", import.meta.url).href,
-  ];
-
-  const AnanthRating = [
-    new URL("../../images/AnanthRatings/DNP.png", import.meta.url).href,
-    new URL("../../images/AnanthRatings/ProbNo.png", import.meta.url).href,
-    new URL("../../images/AnanthRatings/NeutralBad.jpg", import.meta.url).href,
-    new URL("../../images/AnanthRatings/NeutralGood.png", import.meta.url).href,
-    new URL("../../images/AnanthRatings/PrettyGood.gif", import.meta.url).href,
-    new URL("../../images/AnanthRatings/AHHHHH.png", import.meta.url).href,
-    new URL("../../images/AnanthRatings/FIRSTpick.gif", import.meta.url).href,
-    new URL("../../images/AnanthRatings/horse.png", import.meta.url).href,
-  ];
+  const AnanthRating = getAnanthRatings();
+  const GraceRating = getGraceRatings();
 
   // ─── State ────────────────────────────────────────────────────────────────────
 
   let domNode: HTMLElement;
-  let colorblindMode  = localStorage.getItem("colorblindMode") || "normal";
+  let colorblindMode  = getColorblindMode();
   let gridHeight      = 400;
   let gridInstance: any = null;
   let teamViewData: any[] | null = null;
@@ -120,7 +64,7 @@
   let charts: any[] = [];
   let chartTypes      = ["bar", "line", "pie", "scatter", "radar"];
   let showDropdown    = false;
-  let eventCode       = localStorage.getItem("eventCode") || "";
+  let eventCode       = getEventCode();
   let robotPicturePreview: string | null = null;
   let teamQualData: any[] = [];
   let teamPitData: any    = null;
@@ -128,31 +72,6 @@
   let avoidanceChartInstance: any = null;
   let isLoading       = false;
   let autoOnly        = false;
-
-  // ─── Math Helpers ─────────────────────────────────────────────────────────────
-
-  const mean = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / arr.length;
-
-  const median = (arr: number[]) => {
-    const sorted = [...arr].sort((a, b) => a - b);
-    const mid    = Math.floor(sorted.length / 2);
-    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-  };
-
-  const sd = (arr: number[], mu: number) =>
-    Math.sqrt(arr.reduce((s, v) => s + (v - mu) ** 2, 0) / arr.length);
-
-  const percentile = (arr: number[], p: number) => {
-    if (!arr?.length) return 0;
-    const sorted = [...arr].sort((a, b) => a - b);
-    const idx    = (p / 100) * (sorted.length - 1);
-    const lo     = Math.floor(idx);
-    const hi     = Math.ceil(idx);
-    return lo === hi ? sorted[lo] : sorted[lo] * (1 - (idx - lo)) + sorted[hi] * (idx - lo);
-  };
-
-  const lerpColor = (c1: number[], c2: number[], t: number) =>
-    `rgb(${c1.map((v, i) => Math.round(v + (c2[i] - v) * t)).join(",")})`;
 
   // ─── Value Helpers ────────────────────────────────────────────────────────────
 

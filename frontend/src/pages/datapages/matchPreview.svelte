@@ -14,6 +14,25 @@
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
   import { fetchAnanthPage, fetchGracePage } from "../../utils/api.js";
   import { fetchOPR } from "../../utils/externalApi.js";
+  import {
+      BOOLEAN_METRICS,
+      CLIMBSTATE_METRIC,
+      COLOR_MODES,
+      ELIM_LEVEL_ORDER,
+      EXCLUDED_FIELDS,
+      getAnanthRatings,
+      getGraceRatings,
+      HEADER_HEIGHT,
+      INVERTED_METRICS,
+      lerpColor,
+      mean,
+      median,
+      METADATA_KEYS,
+      METRIC_DISPLAY_NAMES,
+      percentile,
+      ROW_HEIGHT,
+      sd,
+  } from "../../utils/pageUtils.js";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -22,81 +41,9 @@
   const VITE_BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT || 8000;
   const VITE_TESTING = import.meta.env.VITE_TESTING || 1;
   const SERVER = !parseInt(VITE_TESTING) ? import.meta.env.VITE_SERVER_IP : "localhost";
-  const ROW_HEIGHT = 25;
-  const HEADER_HEIGHT = 32;
 
-  const METRIC_DISPLAY_NAMES = new Map([
-    ["TimeOfClimb", "Match Climb Time"],
-    ["Defense", "Defense Strategy"],
-    ["Avoidance", "Avoidance Strategy"],
-    ["ClimbTime", "Climb Time"],
-    ["DefenseTime", "Defense Time"],
-    ["AutoClimb", "Auto Climb"],
-    ["AttemptClimb", "Climb Attempt"],
-    ["BumpTraversal", "Times Over Bump"],
-    ["StartingLocation", "Starting Location"],
-    ["FuelIntakingTime", "Fuel Intaking Time"],
-    ["FuelShootingTime", "Fuel Shooting Time"],
-    ["FeedingTime", "Feeding Time"],
-    ["EndState", "Climb State"],
-    ["LadderLocation", "Ladder Location"],
-    ["Strategy", "Strategy"],
-    ["TrenchTraversal", "Trench Traversal"],
-    ["RecordType", "Record Type"],
-    ["MatchEventCount", "Match Events"],
-  ]);
-
-  const EXCLUDED_FIELDS = new Set([
-    "Match", "Team", "Id", "RecordType", "ScouterName", "ScouterError",
-    "Time", "Mode", "DriveStation", "match", "team", "id", "created_at",
-    "record_type", "scouter_name", "scouter_error", "FarBlueZoneTime",
-    "FarRedZoneTime", "NearBlueZoneTime", "NearRedZoneTime",
-    "NearNeutralZoneTime", "FarNeutralZoneTime", "MatchEvent", "NearFar",
-    "MatchEventDetails",
-  ]);
-
-  const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime", "MatchEventCount"];
-  const BOOLEAN_METRICS  = ["AutoClimb", "AttemptClimb"];
-  const CLIMBSTATE_METRIC = "EndState";
-
-  // Metadata fields stored as single values (not [auto, full] arrays)
-  const METADATA_KEYS = new Set([
-    "id", "Id", "ID", "Team", "team", "Match", "match",
-    "RecordType", "ScouterName", "ScouterError", "Time", "time",
-    "Mode", "DriveStation", "MatchEvent", "NearFar",
-  ]);
-
-  const COLOR_MODES = {
-    normal:       { name: "Normal",                         below: [255, 0, 0],   above: [0, 255, 0],   mid: [255, 255, 0] },
-    protanopia:   { name: "Protanopia (Red-blind)",         below: [0, 114, 178], above: [240, 228, 66], mid: [120, 171, 121] },
-    deuteranopia: { name: "Deuteranopia (Green-blind)",     below: [213, 94, 0],  above: [86, 180, 233], mid: [150, 137, 117] },
-    tritanopia:   { name: "Tritanopia (Blue-yellow blind)", below: [220, 20, 60], above: [0, 128, 0],   mid: [110, 74, 30] },
-    alex:         { name: "Alex Coloring",                  below: [255, 0, 0],   above: [0, 0, 255],   mid: [255, 255, 0] },
-  };
-
-  const ELIM_LEVEL_ORDER = { qm: 0, ef: 1, qf: 2, sf: 3, f: 4 };
-
-  const GraceRating = [
-    new URL("../../images/GraceRatings/DNP.png", import.meta.url).href,
-    new URL("../../images/GraceRatings/ProbNo.png", import.meta.url).href,
-    new URL("../../images/GraceRatings/NeutralBad.jpg", import.meta.url).href,
-    new URL("../../images/GraceRatings/NeutralGood.png", import.meta.url).href,
-    new URL("../../images/GraceRatings/PrettyGood.gif", import.meta.url).href,
-    new URL("../../images/GraceRatings/AHHHHH.png", import.meta.url).href,
-    new URL("../../images/GraceRatings/FIRSTpick.gif", import.meta.url).href,
-    new URL("../../images/GraceRatings/horse.png", import.meta.url).href,
-  ];
-
-  const AnanthRating = [
-    new URL("../../images/AnanthRatings/DNP.png", import.meta.url).href,
-    new URL("../../images/AnanthRatings/ProbNo.png", import.meta.url).href,
-    new URL("../../images/AnanthRatings/NeutralBad.jpg", import.meta.url).href,
-    new URL("../../images/AnanthRatings/NeutralGood.png", import.meta.url).href,
-    new URL("../../images/AnanthRatings/PrettyGood.gif", import.meta.url).href,
-    new URL("../../images/AnanthRatings/AHHHHH.png", import.meta.url).href,
-    new URL("../../images/AnanthRatings/FIRSTpick.gif", import.meta.url).href,
-    new URL("../../images/AnanthRatings/horse.png", import.meta.url).href,
-  ];
+  const GraceRating = getGraceRatings();
+  const AnanthRating = getAnanthRatings();
 
   // ─── State ────────────────────────────────────────────────────────────────────
 
@@ -130,30 +77,6 @@
   let domNodeRight, domNode4, domNode5;
   let gridInstance, gridInstance2, gridInstance3;
   let gridInstanceRight, gridInstance4, gridInstance5;
-
-  // ─── Math Helpers ─────────────────────────────────────────────────────────────
-
-  const mean = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / arr.length;
-
-  const median = (arr: number[]) => {
-    const s = [...arr].sort((a, b) => a - b);
-    const m = Math.floor(s.length / 2);
-    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-  };
-
-  const sd = (arr: number[], mu: number) =>
-    Math.sqrt(arr.reduce((s, v) => s + (v - mu) ** 2, 0) / arr.length);
-
-  const percentile = (arr: number[], p: number) => {
-    if (!arr.length) return 0;
-    const sorted = [...arr].sort((a, b) => a - b);
-    const idx = (p / 100) * (sorted.length - 1);
-    const lo = Math.floor(idx);
-    return sorted[lo] * (1 - (idx % 1)) + sorted[Math.ceil(idx)] * (idx % 1);
-  };
-
-  const lerpColor = (c1: number[], c2: number[], t: number) =>
-    `rgb(${c1.map((v, i) => Math.round(v + (c2[i] - v) * t)).join(",")})`;
 
   // ─── Value Helpers ────────────────────────────────────────────────────────────
 

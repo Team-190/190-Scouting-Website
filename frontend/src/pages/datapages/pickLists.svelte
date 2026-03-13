@@ -9,6 +9,7 @@
         fetchTeams,
         fetchTeamStatuses,
     } from "../../utils/externalApi";
+    import { loadFromStorage, saveToStorage } from "../../utils/pageUtils";
 
     // ─── CONSTANTS ──────────────────────────────────────────────────────────────
 
@@ -117,35 +118,6 @@
     /** Creates 8 empty alliance slots. */
     function makeEmptyAlliances() {
         return Array.from({ length: 8 }, (_, i) => ({ id: i + 1, teams: [] }));
-    }
-
-    /**
-     * Loads JSON data from sessionStorage first, falling back to localStorage.
-     * Returns `fallback` if nothing is found or parsing fails.
-     */
-    function loadFromStorage(key, fallback) {
-        for (const storage of [sessionStorage, localStorage]) {
-            const raw = storage.getItem(key);
-            if (raw) {
-                try {
-                    return JSON.parse(raw);
-                } catch (e) {
-                    console.error(`Failed to parse ${key} from storage`, e);
-                }
-            }
-        }
-        return fallback;
-    }
-
-    /** Saves a value to both sessionStorage and localStorage as JSON. */
-    function saveToStorage(key, value) {
-        try {
-            const serialized = JSON.stringify(value);
-            sessionStorage.setItem(key, serialized);
-            localStorage.setItem(key, serialized);
-        } catch (e) {
-            console.error(`Failed to save ${key} to storage`, e);
-        }
     }
 
     /**

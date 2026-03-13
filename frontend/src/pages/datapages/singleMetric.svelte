@@ -14,40 +14,28 @@
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
   import { fetchMatchAlliances, fetchOPR } from "../../utils/externalApi.js";
+  import {
+      COLOR_MODES,
+      getColorblindMode,
+      getEventCode,
+      HEADER_HEIGHT,
+      lerpColor,
+      mean,
+      median,
+      METADATA_KEYS,
+      METRIC_DISPLAY_NAMES,
+      percentile,
+      ROW_HEIGHT,
+      sd
+  } from "../../utils/pageUtils.js";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
   // ─── Constants ────────────────────────────────────────────────────────────────
 
-  const ROW_HEIGHT = 25;
-  const HEADER_HEIGHT = 32;
   const HIGHLIGHTED_TEAM_KEY = "singleMetric_highlightedTeam";
   const OPR_DISPLAY = "OPR (Offensive Power Rating)";
   const EFS_DISPLAY = "EFS (Estimated Fuel Score)";
-
-  const METRIC_DISPLAY_NAMES = new Map([
-    ["TimeOfClimb", "Match Climb Time"],
-    ["Defense", "Defense Strategy"],
-    ["Avoidance", "Avoidance Strategy"],
-    ["ClimbTime", "Climb Time"],
-    ["DefenseTime", "Defense Time"],
-    ["AutoClimb", "Auto Climb"],
-    ["AttemptClimb", "Climb Attempt"],
-    ["BumpTraversal", "Times Over Bump"],
-    ["TrenchTraversal", "Times Under Trench"],
-    ["StartingLocation", "Starting Location"],
-    ["FuelIntakingTime", "Fuel Intaking Time"],
-    ["FuelShootingTime", "Fuel Shooting Time"],
-    ["FeedingTime", "Feeding Time"],
-    ["EndState", "Climb State"],
-    ["LadderLocation", "Ladder Location"],
-    ["Strategy", "Strategy"],
-    ["OPR", OPR_DISPLAY],
-    ["EFS", EFS_DISPLAY],
-    ["MatchEventCount", "Match Events"],
-  ]);
-
-  const INVERTED_METRICS = new Set(["TimeOfClimb", "ClimbTime", "MatchEventCount"]);
   const BOOLEAN_METRICS = new Set(["AutoClimb", "AttemptClimb"]);
   const CLIMBSTATE_METRIC = "EndState";
 
@@ -58,24 +46,12 @@
     "FarNeutralZoneTime", "NearFar", "MatchEvent", "MatchEventDetails",
   ]);
 
+  const INVERTED_METRICS = new Set(["TimeOfClimb", "ClimbTime", "MatchEventCount"]);
+
   const RADAR_EXCLUDED = new Set([
     "Time", "Drive Station", "Strategy", "Avoidance", "LadderLocation",
     "Id", "StartingLocation",
   ]);
-
-  const METADATA_KEYS = new Set([
-    "id", "Id", "ID", "Team", "team", "Match", "match",
-    "RecordType", "ScouterName", "ScouterError", "Time", "time",
-    "Mode", "DriveStation", "MatchEvent", "NearFar",
-  ]);
-
-  const COLOR_MODES = {
-    normal:      { name: "Gradient",                    below: [255, 0, 0],   above: [0, 255, 0],   mid: [255, 255, 0] },
-    protanopia:  { name: "Protanopia (Red-blind)",      below: [0, 114, 178], above: [240, 228, 66], mid: [120, 171, 121] },
-    deuteranopia:{ name: "Deuteranopia (Green-blind)",  below: [213, 94, 0],  above: [86, 180, 233], mid: [150, 137, 117] },
-    tritanopia:  { name: "Tritanopia (Blue-yellow blind)", below: [220, 20, 60], above: [0, 128, 0], mid: [110, 74, 30] },
-    alex:        { name: "Alex Coloring",               below: [255, 0, 0],   above: [0, 0, 255],   mid: [255, 255, 0] },
-  };
 
   const QUINTILE_COLORS = { 0: "#000000", 20: "#FF0000", 40: "#FFFF00", 60: "#00FF00", 80: "#0000FF" };
   const QUARTILE_COLORS = { 0: "#FF0000", 25: "#FFFF00", 50: "#00FF00", 75: "#0000FF" };
@@ -91,8 +67,8 @@
   let metrics: string[] = [];
   let selectedMetric = "";
   let dataMetric = "";
-  let colorblindMode = localStorage.getItem("colorblindMode") || "normal";
-  let eventCode = localStorage.getItem("eventCode");
+  let colorblindMode = getColorblindMode();
+  let eventCode = getEventCode();
 
   /** Map of "frc254" → OPR value, populated from fetchOPR */
   let teamOPRs: Record<string, number> = {};
@@ -106,30 +82,6 @@
   let chartTypes = ["bar", "line", "pie", "scatter", "radar"];
   let showDropdown = false;
   let autoOnly = false;
-
-  // ─── Math Helpers ─────────────────────────────────────────────────────────────
-
-  const mean = (arr: number[]) => arr.reduce((a, b) => a + b, 0) / arr.length;
-
-  const median = (arr: number[]) => {
-    const sorted = [...arr].sort((a, b) => a - b);
-    const mid = Math.floor(sorted.length / 2);
-    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-  };
-
-  const sd = (arr: number[], mu: number) =>
-    Math.sqrt(arr.reduce((s, v) => s + (v - mu) ** 2, 0) / arr.length);
-
-  const percentile = (arr: number[], p: number) => {
-    if (!arr.length) return 0;
-    const sorted = [...arr].sort((a, b) => a - b);
-    const index = (p / 100) * (sorted.length - 1);
-    const lower = Math.floor(index);
-    return sorted[lower] * (1 - (index % 1)) + sorted[Math.ceil(index)] * (index % 1);
-  };
-
-  const lerpColor = (c1: number[], c2: number[], t: number) =>
-    `rgb(${c1.map((v, i) => Math.round(v + (c2[i] - v) * t)).join(",")})`;
 
   // ─── Value Helpers ────────────────────────────────────────────────────────────
 

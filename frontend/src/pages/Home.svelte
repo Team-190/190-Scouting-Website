@@ -1,6 +1,7 @@
 <script>
     import { onMount, tick } from "svelte";
     import { fetchAllData, fetchEvents, fetchPitScouting, fetchQualitativeScouting } from "../utils/api";
+    import { fetchEventDetails } from "../utils/externalApi";
 
     let eventCode = localStorage.getItem("eventCode");
     let isLoading = false;
@@ -94,7 +95,20 @@
         await withLoading(async () => {
             const res = await fetchEvents();
             if (res.ok) {
-                dbEvents = await res.json();
+                const eventsFromDb = await res.json();
+                
+                // Fetch event details from Blue Alliance for each event code
+                const eventsWithNames = await Promise.all(
+                    eventsFromDb.map(async (event) => {
+                        const details = await fetchEventDetails(event.eventCode);
+                        return {
+                            ...event,
+                            name: details.name || event.eventCode,
+                        };
+                    })
+                );
+                
+                dbEvents = eventsWithNames;
             } else {
                 throw new Error("Failed to fetch events");
             }

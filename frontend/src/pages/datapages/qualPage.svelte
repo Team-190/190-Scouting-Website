@@ -1,13 +1,12 @@
 <script>
   import fieldImageSrc from "../../images/FieldImage.png";
   import { postQualitativeScouting } from "../../utils/api";
+  import { getEventCode, MATCH_NUMBERS } from "../../utils/pageUtils";
 
   // ─── Constants ────────────────────────────────────────────────────────────────
 
   const ROBOT_COLORS = "#FFFFFF";
-  const eventCode = localStorage.getItem("eventCode");
-
-  const MATCH_NUMBERS = Array.from({ length: 100 }, (_, i) => i + 1);
+  const eventCode = getEventCode();
 
   const TELEOP_QUESTIONS = [
     {

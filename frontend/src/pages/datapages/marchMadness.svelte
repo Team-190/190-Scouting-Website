@@ -1,6 +1,7 @@
 <script>
     import { onMount } from "svelte";
     import { fetchAlliances as fetchAlliancesFromAPI, fetchElimsHaveStarted } from "../../utils/externalApi";
+    import { getEventCode } from "../../utils/pageUtils";
 
     let Name = "";
     let winners = [];
@@ -196,7 +197,7 @@
     }
 
     onMount(() => {
-        eventCode = localStorage.getItem("eventCode") || "";
+        eventCode = getEventCode();
         if (eventCode) {
             fetchAlliances(eventCode).then(() => checkElimsStarted());
         } else {

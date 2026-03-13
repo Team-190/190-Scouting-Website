@@ -2,6 +2,7 @@
     import { onMount } from "svelte";
     import { postPitScouting } from "../../utils/api";
     import { fetchTeams } from "../../utils/externalApi";
+    import { getEventCode } from "../../utils/pageUtils";
 
     const boolFields = ["overBump", "throughTrench", "climbDuringAuto", "canUseHP", "canUseDepot", "canFeed"] as const;
     const plainFields = ["climbLevels", "quantityBallsHopper", "avgIntakeSpeed", "avgShootSpeed", "accuracy", "framesize", "startingHeight", "fullExtensionHeight"] as const;
@@ -23,7 +24,7 @@
 
     let fileInputNode;
 
-    const eventCode = localStorage.getItem("eventCode");
+    const eventCode = getEventCode();
 
     let selectedTeam = "Select a team";
     let allTeams = [];

@@ -19,6 +19,32 @@ async function tbaFetch(url) {
 // ─── THE BLUE ALLIANCE ──────────────────────────────────────────────────────
 
 /**
+ * Fetches event details from The Blue Alliance API.
+ *
+ * @param {string} eventCode - TBA event code (e.g. "2024casj")
+ * @returns {Promise<{name: string, short_name: string, location: string}>}
+ */
+export async function fetchEventDetails(eventCode) {
+  try {
+    const response = await tbaFetch(
+      `https://www.thebluealliance.com/api/v3/event/${eventCode}`
+    );
+
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+    const data = await response.json();
+    return {
+      name: data.name,
+      short_name: data.short_name,
+      location: data.location,
+    };
+  } catch (error) {
+    console.error(`Failed to fetch event details for ${eventCode}:`, error);
+    return { name: eventCode, short_name: eventCode, location: "" };
+  }
+}
+
+/**
  * Fetches the list of teams attending an event.
  *
  * @param {string} eventCode - TBA event code (e.g. "2024casj")

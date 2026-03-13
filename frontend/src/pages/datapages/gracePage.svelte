@@ -2,23 +2,14 @@
   import { onDestroy, onMount } from "svelte";
   import { fetchGracePage, postGracePage } from "../../utils/api";
   import { fetchTeams } from "../../utils/externalApi";
+  import { getEventCode, getGraceRatings } from "../../utils/pageUtils";
 
   //Variables
   let selectedTeam = "Select a team";
   let tableData = [];
   let isSubmitting = false;
-  const rating = [
-    new URL("../../images/GraceRatings/DNP.png", import.meta.url).href,
-    new URL("../../images/GraceRatings/ProbNo.png", import.meta.url).href,
-    new URL("../../images/GraceRatings/NeutralBad.jpg", import.meta.url).href,
-    new URL("../../images/GraceRatings/NeutralGood.png", import.meta.url).href,
-    new URL("../../images/GraceRatings/PrettyGood.gif", import.meta.url).href,
-    new URL("../../images/GraceRatings/AHHHHH.png", import.meta.url).href,
-    new URL("../../images/GraceRatings/FIRSTpick.gif", import.meta.url).href,
-    new URL("../../images/GraceRatings/horse.png", import.meta.url).href,
-  ];
-  let eventCode = localStorage.getItem("eventCode");
-  // eventCode = "2025mawor";
+  const rating = getGraceRatings();
+  let eventCode = getEventCode();
 
   let originalTitle = "";
   let teams = new Map();
