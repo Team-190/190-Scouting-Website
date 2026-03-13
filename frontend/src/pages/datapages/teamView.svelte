@@ -1150,9 +1150,8 @@
               ["Defense Effectiveness", row.defenseEffectiveness],
               ["Defense Avoidance",     row.defenseAvoidance],
               ["Intake Efficiency",     row.intakeEfficiency],
-              ["Strongest Aspect",      row.strongestAspect],
-              ["Mechanical Notes",      row.mechanicalNotes],
               ["Match Events",          row.matchEvents],
+              ["Notes",           row.otherNotes],
             ] as [label, value]}
               {#if value}
                 <div class="qual-row">
