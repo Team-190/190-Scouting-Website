@@ -2,6 +2,7 @@
     import { onMount } from "svelte";
     import { postPitScouting } from "../../utils/api";
     import { fetchTeams } from "../../utils/externalApi";
+    import { compressImage, formatBytes, getBase64Size } from "../../utils/imageCompression";
     import { getEventCode } from "../../utils/pageUtils";
 
     const boolFields = ["overBump", "throughTrench", "climbDuringAuto", "canUseHP", "canUseDepot", "canFeed"] as const;
@@ -17,6 +18,8 @@
     };
 
     let formData = structuredClone(defaultFormData);
+    let imageCompressionStatus = ""; // "compressing", "success", "done"
+    let imageSize = ""; // Display compressed image size
 
     let submitting = false;
     let submitMessage = "";
@@ -53,18 +56,32 @@
         const file = event.target.files[0];
         if (file) {
             formData.robotPicture = file;
-            // Create preview
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                formData.robotPicturePreview = e.target.result;
-                formData = formData; // Force reactivity
-            };
-            reader.readAsDataURL(file);
+            imageCompressionStatus = "compressing";
+            imageSize = "";
+            
+            // Compress the image
+            compressImage(file)
+                .then((compressedDataUrl) => {
+                    formData.robotPicturePreview = compressedDataUrl;
+                    const sizeInBytes = getBase64Size(compressedDataUrl);
+                    imageSize = formatBytes(sizeInBytes);
+                    imageCompressionStatus = "done";
+                    formData = formData; // Force reactivity
+                })
+                .catch((error) => {
+                    console.error("Image compression failed:", error);
+                    imageCompressionStatus = "error";
+                    submitMessage = "Failed to compress image. Please try another file.";
+                    submitError = true;
+                    setTimeout(() => { submitMessage = ""; }, 3000);
+                });
         }
     }
 
     function clearForm() {
         formData = structuredClone(defaultFormData);
+        imageCompressionStatus = "";
+        imageSize = "";
 
         // Reset file input safely via bind:this
         if (fileInputNode) fileInputNode.value = "";
@@ -474,13 +491,26 @@
                         for="robot-picture"
                         class="file-upload-label {formData.robotPicture
                             ? 'has-file'
-                            : ''}"
+                            : ''} {imageCompressionStatus === 'compressing' ? 'compressing' : ''}"
                     >
-                        <div class="upload-icon">📷</div>
+                        <div class="upload-icon">
+                            {#if imageCompressionStatus === 'compressing'}
+                                <span class="compress-spinner">⏳</span>
+                            {:else}
+                                📷
+                            {/if}
+                        </div>
                         <div class="upload-text">
-                            {formData.robotPicture
-                                ? formData.robotPicture.name
-                                : "Click to upload photo"}
+                            {#if imageCompressionStatus === 'compressing'}
+                                Compressing image...
+                            {:else if formData.robotPicture}
+                                {formData.robotPicture.name}
+                                {#if imageSize}
+                                    <div class="size-info">Compressed: {imageSize}</div>
+                                {/if}
+                            {:else}
+                                Click to upload photo
+                            {/if}
                         </div>
                     </label>
                     <input
@@ -732,6 +762,12 @@
         background: rgba(200, 27, 0, 0.05);
     }
 
+    .file-upload-label.compressing {
+        opacity: 0.7;
+        border-color: #ffa500;
+        background: rgba(255, 165, 0, 0.05);
+    }
+
     input[type="file"] {
         position: absolute;
         width: 0;
@@ -748,6 +784,27 @@
     .upload-text {
         font-size: 0.9rem;
         color: #666;
+    }
+
+    .size-info {
+        font-size: 0.8rem;
+        color: #999;
+        margin-top: 5px;
+        font-weight: 500;
+    }
+
+    .compress-spinner {
+        display: inline-block;
+        animation: bounce 1.5s infinite;
+    }
+
+    @keyframes bounce {
+        0%, 100% {
+            transform: translateY(0);
+        }
+        50% {
+            transform: translateY(-5px);
+        }
     }
 
     .image-preview {
