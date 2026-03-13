@@ -19,6 +19,7 @@
          fetchPitScoutingImage,
          fetchMatchAlliances,
          fetchOPR,
+         fetchTeams,
   } from "../../utils/api.js";
   
   import {
@@ -81,6 +82,7 @@
   let autoPathCtx: any = null;
   let fieldImg: any = null;
   let selectedAutoPathMatch: number | null = null;
+  let teamsMap: Map<number, string> = new Map();
 
   // ─── Value Helpers ────────────────────────────────────────────────────────────
 
@@ -1198,7 +1200,18 @@
           .catch((e) => console.error("Failed to fetch ananth data:", e));
       }
 
-      allTeams = await loadTeamNumbers();
+      allTeams = [];
+
+      // Fetch teams from teams.json
+      if (eventCode) {
+        try {
+          const result = await fetchTeams(eventCode);
+          teamsMap = new Map(Object.entries(result._teams).map(([k, v]) => [Number(k), v]));
+          allTeams = result._teamNumbers;
+        } catch (e) {
+          console.error("Failed to fetch teams:", e);
+        }
+      }
 
       if (allTeams.length > 0) {
         selectedTeam = allTeams.find((t) => t.toString() === "190") ?? allTeams[0];
@@ -1265,7 +1278,12 @@
     <div>
       <img src="" alt="" id="ananth-rating" style="height: 50px; width: auto; border-radius: 6px;" />
     </div>
+
   </div>
+
+  {#if selectedTeam}
+    <p class="team-name-display">{teamsMap.get(selectedTeam) ? `${teamsMap.get(selectedTeam)}` : ''}</p>
+  {/if}
 
   <div class="robot-pic-display">
     {#if robotPicturePreview}
@@ -1579,6 +1597,8 @@
   .section-title { color: var(--frc-190-red); font-size: 1.8rem; font-weight: 700; margin-bottom: 20px; text-shadow: 1px 1px 3px rgba(0,0,0,0.2); }
   .dropdown-container { position: relative; margin-bottom: 20px; }
   .robot-pic-display { display: flex; justify-content: center; width: 100%; margin-bottom: 20px; }
+
+  .team-name-display { color: var(--frc-190-red); font-size: 1.8rem; font-weight: 700; text-align: center; margin-bottom: 15px; text-shadow: 1px 1px 2px rgba(0,0,0,0.3); }
 
   .plus-btn { width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2rem; font-weight: 600; border: 2px solid var(--frc-190-red); background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); color: white; cursor: pointer; padding: 0; transition: all 0.3s ease; }
   .plus-btn:hover { background: linear-gradient(135deg, var(--frc-190-red) 0%, #e02200 100%); transform: scale(1.05); }
