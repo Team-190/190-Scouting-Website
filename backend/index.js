@@ -236,13 +236,24 @@ app.get("/getMatchAlliances", validateEventCode, async (req, res) => {
     console.log("matches requested, eventCode: " + eventCode);
     
     let raw;
-    try {
-        const response = await externalAPI.fetchMatchAlliances(eventCode);
-        raw = await response.json();
-        database.writeJSONFile("matches", raw);
-    } catch (e) {
-        console.error("TBA fetch failed, falling back to cache:", e);
-        raw = await database.readJSONFile("matches");
+    let fileData = await database.readJSONFile("matches");
+    
+    // Check if data exists for this eventCode
+    if (fileData[eventCode]) {
+        console.log("Matches found in cache for eventCode: " + eventCode);
+        raw = fileData[eventCode];
+    } else {
+        try {
+            console.log("Fetching matches from Blue Alliance for eventCode: " + eventCode);
+            const response = await externalAPI.fetchMatchAlliances(eventCode);
+            raw = await response.json();
+            // Store matches organized by eventCode
+            fileData[eventCode] = raw;
+            database.writeJSONFile("matches", fileData);
+        } catch (e) {
+            console.error("TBA fetch failed:", e);
+            raw = [];
+        }
     }
 
     // Return the full raw array so matchPreview can use comp_level, key, etc.
@@ -254,13 +265,24 @@ app.get("/getTeams", validateEventCode, async (req, res) => {
     console.log("teams requested, eventCode: " + eventCode);
 
     let raw;
-    try {
-        const response = await externalAPI.fetchTeams(eventCode);
-        raw = await response.json();
-        database.writeJSONFile("teams", raw);
-    } catch (e) {
-        console.error("TBA fetch failed, falling back to cache:", e);
-        raw = await database.readJSONFile("teams");
+    let fileData = await database.readJSONFile("teams");
+    
+    // Check if data exists for this eventCode
+    if (fileData[eventCode]) {
+        console.log("Teams found in cache for eventCode: " + eventCode);
+        raw = fileData[eventCode];
+    } else {
+        try {
+            console.log("Fetching teams from Blue Alliance for eventCode: " + eventCode);
+            const response = await externalAPI.fetchTeams(eventCode);
+            raw = await response.json();
+            // Store teams organized by eventCode
+            fileData[eventCode] = raw;
+            database.writeJSONFile("teams", fileData);
+        } catch (e) {
+            console.error("TBA fetch failed:", e);
+            raw = [];
+        }
     }
 
     const result = {
@@ -276,13 +298,24 @@ app.get("/fetchEventDetails", validateEventCode, async (req, res) => {
     console.log("event details requested, eventCode: " + eventCode);
 
     let raw;
-    try {
-        const response = await externalAPI.fetchEventDetails(eventCode);
-        raw = await response.json();
-        database.writeJSONFile("eventDetails", raw);
-    } catch (e) {
-        console.error("TBA fetch failed, falling back to cache:", e);
-        raw = await database.readJSONFile("eventDetails");
+    let fileData = await database.readJSONFile("eventDetails");
+    
+    // Check if data exists for this eventCode
+    if (fileData[eventCode]) {
+        console.log("Event details found in cache for eventCode: " + eventCode);
+        raw = fileData[eventCode];
+    } else {
+        try {
+            console.log("Fetching event details from Blue Alliance for eventCode: " + eventCode);
+            const response = await externalAPI.fetchEventDetails(eventCode);
+            raw = await response.json();
+            // Store event details organized by eventCode
+            fileData[eventCode] = raw;
+            database.writeJSONFile("eventDetails", fileData);
+        } catch (e) {
+            console.error("TBA fetch failed:", e);
+            raw = {};
+        }
     }
 
     const result = {
@@ -299,13 +332,23 @@ app.get("/fetchTeamStatuses", validateEventCode, async (req, res) => {
     console.log("team statuses requested, eventCode: " + eventCode);
 
     let raw;
-    try {
-        const response = await externalAPI.fetchTeamStatuses(eventCode);
-        raw = await response.json();
-        database.writeJSONFile("teamStatuses", raw);
-    } catch (e) {
-        console.error("TBA fetch failed, falling back to cache:", e);
-        raw = await database.readJSONFile("teamStatuses");
+    let fileData = await database.readJSONFile("teamStatuses");
+    
+    // Check if data exists for this eventCode
+    if (fileData[eventCode]) {
+        console.log("Team statuses found in cache for eventCode: " + eventCode);
+        raw = fileData[eventCode];
+    } else {
+        try {
+            console.log("Fetching team statuses from Blue Alliance for eventCode: " + eventCode);
+            const response = await externalAPI.fetchTeamStatuses(eventCode);
+            raw = await response.json();
+            fileData[eventCode] = raw;
+            database.writeJSONFile("teamStatuses", fileData);
+        } catch (e) {
+            console.error("TBA fetch failed:", e);
+            raw = {};
+        }
     }
 
     const result = Object.fromEntries(
@@ -323,13 +366,23 @@ app.get("/fetchOPR", validateEventCode, async (req, res) => {
     console.log("OPR requested, eventCode: " + eventCode);
 
     let raw;
-    try {
-        const response = await externalAPI.fetchOPR(eventCode);
-        raw = await response.json();
-        database.writeJSONFile("oprs", raw);
-    } catch (e) {
-        console.error("TBA fetch failed, falling back to cache:", e);
-        raw = await database.readJSONFile("oprs");
+    let fileData = await database.readJSONFile("oprs");
+    
+    // Check if data exists for this eventCode
+    if (fileData[eventCode]) {
+        console.log("OPR found in cache for eventCode: " + eventCode);
+        raw = fileData[eventCode];
+    } else {
+        try {
+            console.log("Fetching OPR from Blue Alliance for eventCode: " + eventCode);
+            const response = await externalAPI.fetchOPR(eventCode);
+            raw = await response.json();
+            fileData[eventCode] = raw;
+            database.writeJSONFile("oprs", fileData);
+        } catch (e) {
+            console.error("TBA fetch failed:", e);
+            raw = {};
+        }
     }
 
     const result = {
@@ -346,13 +399,23 @@ app.get("/fetchAlliances", validateEventCode, async (req, res) => {
     console.log("alliances requested, eventCode: " + eventCode);
 
     let raw;
-    try {
-        const response = await externalAPI.fetchAlliances(eventCode);
-        raw = await response.json();
-        database.writeJSONFile("alliances", raw);
-    } catch (e) {
-        console.error("TBA fetch failed, falling back to cache:", e);
-        raw = await database.readJSONFile("alliances");
+    let fileData = await database.readJSONFile("alliances");
+    
+    // Check if data exists for this eventCode
+    if (fileData[eventCode]) {
+        console.log("Alliances found in cache for eventCode: " + eventCode);
+        raw = fileData[eventCode];
+    } else {
+        try {
+            console.log("Fetching alliances from Blue Alliance for eventCode: " + eventCode);
+            const response = await externalAPI.fetchAlliances(eventCode);
+            raw = await response.json();
+            fileData[eventCode] = raw;
+            database.writeJSONFile("alliances", fileData);
+        } catch (e) {
+            console.error("TBA fetch failed:", e);
+            raw = [];
+        }
     }
 
     const available = Array.isArray(raw) && raw.length > 0 && raw[0]?.picks?.length > 0;
@@ -365,13 +428,23 @@ app.get("/fetchEventEpas", validateEventCode, async (req, res) => {
     console.log("EPAs requested, eventCode: " + eventCode);
 
     let raw;
-    try {
-        const response = await externalAPI.fetchEventEpas(eventCode);
-        raw = await response.json();
-        database.writeJSONFile("epas", raw);
-    } catch (e) {
-        console.error("Statbotics fetch failed, falling back to cache:", e);
-        raw = await database.readJSONFile("epas");
+    let fileData = await database.readJSONFile("epas");
+    
+    // Check if data exists for this eventCode
+    if (fileData[eventCode]) {
+        console.log("EPAs found in cache for eventCode: " + eventCode);
+        raw = fileData[eventCode];
+    } else {
+        try {
+            console.log("Fetching EPAs from Statbotics for eventCode: " + eventCode);
+            const response = await externalAPI.fetchEventEpas(eventCode);
+            raw = await response.json();
+            fileData[eventCode] = raw;
+            database.writeJSONFile("epas", fileData);
+        } catch (e) {
+            console.error("Statbotics fetch failed:", e);
+            raw = {};
+        }
     }
 
     res.send(raw);
@@ -382,12 +455,23 @@ app.get("/fetchElimsHaveStarted", validateEventCode, async (req, res) => {
     console.log("elims check requested, eventCode: " + eventCode);
 
     let raw;
-    try {
-        const response = await externalAPI.fetchMatchAlliances(eventCode);
-        raw = await response.json();
-    } catch (e) {
-        console.error("TBA fetch failed, falling back to cache:", e);
-        raw = await database.readJSONFile("matches");
+    let fileData = await database.readJSONFile("matches");
+    
+    // Check if data exists for this eventCode
+    if (fileData[eventCode]) {
+        console.log("Matches found in cache for eventCode: " + eventCode);
+        raw = fileData[eventCode];
+    } else {
+        try {
+            console.log("Fetching matches from Blue Alliance for eventCode: " + eventCode);
+            const response = await externalAPI.fetchMatchAlliances(eventCode);
+            raw = await response.json();
+            fileData[eventCode] = raw;
+            database.writeJSONFile("matches", fileData);
+        } catch (e) {
+            console.error("TBA fetch failed:", e);
+            raw = [];
+        }
     }
 
     const result = raw.some(
@@ -405,12 +489,23 @@ app.get("/fetchMatchScores", async (req, res) => {
     console.log("match scores requested, eventCode: " + eventCode);
 
     let raw;
-    try {
-        const response = await externalAPI.fetchMatchAlliances(eventCode);
-        raw = await response.json();
-    } catch (e) {
-        console.error("TBA fetch failed, falling back to cache:", e);
-        raw = await database.readJSONFile("matches");
+    let fileData = await database.readJSONFile("matches");
+    
+    // Check if data exists for this eventCode
+    if (fileData[eventCode]) {
+        console.log("Matches found in cache for eventCode: " + eventCode);
+        raw = fileData[eventCode];
+    } else {
+        try {
+            console.log("Fetching matches from Blue Alliance for eventCode: " + eventCode);
+            const response = await externalAPI.fetchMatchAlliances(eventCode);
+            raw = await response.json();
+            fileData[eventCode] = raw;
+            database.writeJSONFile("matches", fileData);
+        } catch (e) {
+            console.error("TBA fetch failed:", e);
+            raw = [];
+        }
     }
 
     const matchKey = `${eventCode}_qm${matchNumber}`;

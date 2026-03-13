@@ -1,6 +1,6 @@
 <script>
     import { onMount, tick } from "svelte";
-    import { fetchAllData, fetchEvents, fetchPitScouting, fetchQualitativeScouting, fetchEventDetails } from "../utils/api";
+    import { fetchAllData, fetchEvents, fetchPitScouting, fetchQualitativeScouting, fetchEventDetails, postPitScouting, postQualitativeScouting } from "../utils/api";
 
     let eventCode = localStorage.getItem("eventCode");
     let isLoading = false;
@@ -29,12 +29,6 @@
 
     async function cacheAllData() {
         await withLoading(async () => {
-            if (localStorage.getItem("eventCode") !== eventCode) {
-                localStorage.removeItem("data");
-                localStorage.removeItem("retrievePit");
-                localStorage.removeItem("retrieveQual");
-            }
-
             const localData = JSON.parse(localStorage.getItem("data") || "[]");
             const lastId = localData.reduce((max, row) => Math.max(max, row.ID || row.id || row.Id || 0), 0);
 
@@ -66,6 +60,15 @@
             const combinedPit = { ...localPit, ...newPitData };
             localStorage.setItem("retrievePit", JSON.stringify(combinedPit));
 
+            // Save pit scouting data to backend
+            for (const [teamNum, pitData] of Object.entries(combinedPit)) {
+                try {
+                    await postPitScouting(eventCode, teamNum, pitData);
+                } catch (e) {
+                    console.warn(`Failed to save pit data for team ${teamNum}:`, e);
+                }
+            }
+
             const localQualStr = localStorage.getItem("retrieveQual");
             const localQual = localQualStr ? JSON.parse(localQualStr) : {};
             const qualCounts = {};
@@ -82,6 +85,17 @@
                 combinedQual[team] = { ...(combinedQual[team] || {}), ...newQualData[team] };
             }
             localStorage.setItem("retrieveQual", JSON.stringify(combinedQual));
+
+            // Save qualitative scouting data to backend
+            for (const [teamNum, matchData] of Object.entries(combinedQual)) {
+                for (const [matchNum, qualData] of Object.entries(matchData)) {
+                    try {
+                        await postQualitativeScouting(eventCode, teamNum, matchNum, qualData);
+                    } catch (e) {
+                        console.warn(`Failed to save qual data for team ${teamNum} match ${matchNum}:`, e);
+                    }
+                }
+            }
 
             localStorage.setItem("timestamp", new Date(Date.now()).toLocaleString());
             localStorage.setItem("eventCode", eventCode);
@@ -129,6 +143,21 @@
     onMount(async () => {
         await loadDbEvents();
     });
+
+    // Reactive statement to handle event code changes
+    $: if (eventCode && typeof window !== 'undefined') {
+        // Check if eventCode has changed
+        const previousEventCode = localStorage.getItem("eventCode");
+        if (previousEventCode && previousEventCode !== eventCode) {
+            // Clear data when switching events
+            localStorage.removeItem("data");
+            localStorage.removeItem("retrievePit");
+            localStorage.removeItem("retrieveQual");
+        }
+        localStorage.setItem("eventCode", eventCode);
+        // Automatically cache data when event changes
+        cacheAllData();
+    }
 </script>
 
 {#if notification}
