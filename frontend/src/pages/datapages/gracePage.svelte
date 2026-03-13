@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { fetchGracePage, postGracePage } from "../../utils/api";
-  import { fetchTeams } from "../../utils/externalApi";
+  import { fetchGracePage, postGracePage, fetchTeams } from "../../utils/api";
   import { getEventCode, getGraceRatings } from "../../utils/pageUtils";
 
   //Variables

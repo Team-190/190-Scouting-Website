@@ -12,8 +12,7 @@
   import * as pieGraph from "../../pages/graphcode/pie.js";
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
-  import { fetchAnanthPage, fetchGracePage } from "../../utils/api.js";
-  import { fetchOPR } from "../../utils/externalApi.js";
+  import { fetchAnanthPage, fetchGracePage, fetchMatchAlliances, fetchOPR } from "../../utils/api.js";
   import {
       BOOLEAN_METRICS,
       CLIMBSTATE_METRIC,
@@ -37,10 +36,6 @@
   ModuleRegistry.registerModules([AllCommunityModule]);
 
   // ─── Constants ────────────────────────────────────────────────────────────────
-
-  const VITE_BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT || 8000;
-  const VITE_TESTING = import.meta.env.VITE_TESTING || 1;
-  const SERVER = !parseInt(VITE_TESTING) ? import.meta.env.VITE_SERVER_IP : "localhost";
 
   const GraceRating = getGraceRatings();
   const AnanthRating = getAnanthRatings();
@@ -281,9 +276,7 @@
    */
   async function fetchEventMatches(code: string): Promise<any[]> {
     try {
-      const res = await fetch(
-        `http://${SERVER}:${VITE_BACKEND_PORT}/getMatchData?eventCode=${code}`,
-      );
+      const res = await fetchMatchAlliances(code);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const matches = await res.json();
       return matches

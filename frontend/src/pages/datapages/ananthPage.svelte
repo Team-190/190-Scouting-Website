@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { fetchAnanthPage, postAnanthPage } from "../../utils/api";
-  import { fetchTeams } from "../../utils/externalApi";
+  import { fetchAnanthPage, postAnanthPage, fetchTeams } from "../../utils/api";
   import { getAnanthRatings, getEventCode } from "../../utils/pageUtils";
 
   //Variables

@@ -10,8 +10,8 @@
 
 const express = require("express");
 const path = require("path");
-const test = require("./test/test.js")
 const database = require("./database.js");
+const externalAPI = require("./externalApi.js");
 const session = require("express-session");
 const cors = require("cors");
 require('dotenv').config({ path: path.resolve(__dirname, '../.env'), override: true });
@@ -210,27 +210,232 @@ app.get("/getHPRatings", async (req, res) => {
 
 
 
+////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
+////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
+////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
 
-// TEMPORARY. ONLY FOR PINE TREE
 app.get("/getMatchData", async (req, res) => {
     const eventCode = req.query.eventCode;
     if (!eventCode) return res.sendStatus(403);
-
     console.log("matches requested, eventCode: " + eventCode);
-    let result = await database.readJSONFile("matches");
-    console.log(result);
+    
+    let raw;
+    try {
+        const response = await externalAPI.fetchMatchAlliances(eventCode);
+        raw = await response.json();
+        database.writeJSONFile("matches", raw);
+    } catch (e) {
+        console.error("TBA fetch failed, falling back to cache:", e);
+        raw = await database.readJSONFile("matches");
+    }
+
+    const result = Object.fromEntries(
+        raw
+            .filter((match) => match.comp_level === "qm")
+            .map((match) => [
+                match.match_number,
+                {
+                    red: (match.alliances.red.team_keys ?? []).map((k) => k.replace("frc", "")),
+                    blue: (match.alliances.blue.team_keys ?? []).map((k) => k.replace("frc", "")),
+                    redScore: match.score_breakdown?.red?.hubScore?.totalCount ?? null,
+                    blueScore: match.score_breakdown?.blue?.hubScore?.totalCount ?? null,
+                },
+            ])
+    );
+    
     res.send(result);
 });
 
+app.get("/getTeams", async (req, res) => {
+    const eventCode = req.query.eventCode;
+    if (!eventCode) return res.sendStatus(403);
+    console.log("teams requested, eventCode: " + eventCode);
 
+    let raw;
+    try {
+        const response = await externalAPI.fetchTeams(eventCode);
+        raw = await response.json();
+        database.writeJSONFile("teams", raw);
+    } catch (e) {
+        console.error("TBA fetch failed, falling back to cache:", e);
+        raw = await database.readJSONFile("teams");
+    }
 
-app.get("/winnerOfGompeiMadness", async (req, res) => {
-    let winner = req.body.winner;
+    const result = {
+        _teams: Object.fromEntries(raw.map((team) => [team.team_number, team.nickname])),
+        _teamNumbers: raw.map((t) => t.team_number).sort((a, b) => a - b),
+    };
+
+    res.send(result);
+});
+
+app.get("/fetchEventDetails", async (req, res) => {
+    const eventCode = req.query.eventCode;
+    if (!eventCode) return res.sendStatus(403);
+    console.log("event details requested, eventCode: " + eventCode);
+
+    let raw;
+    try {
+        const response = await externalAPI.fetchEventDetails(eventCode);
+        raw = await response.json();
+        database.writeJSONFile("eventDetails", raw);
+    } catch (e) {
+        console.error("TBA fetch failed, falling back to cache:", e);
+        raw = await database.readJSONFile("eventDetails");
+    }
+
+    const result = {
+        name: raw.name,
+        short_name: raw.short_name,
+        location: raw.location,
+    };
+
+    res.send(result);
+});
+
+app.get("/fetchTeamStatuses", async (req, res) => {
+    const eventCode = req.query.eventCode;
+    if (!eventCode) return res.sendStatus(403);
+    console.log("team statuses requested, eventCode: " + eventCode);
+
+    let raw;
+    try {
+        const response = await externalAPI.fetchTeamStatuses(eventCode);
+        raw = await response.json();
+        database.writeJSONFile("teamStatuses", raw);
+    } catch (e) {
+        console.error("TBA fetch failed, falling back to cache:", e);
+        raw = await database.readJSONFile("teamStatuses");
+    }
+
+    const result = Object.fromEntries(
+        Object.entries(raw).map(([teamKey, status]) => [
+            parseInt(teamKey.replace("frc", "")),
+            status?.qual?.ranking?.rank ?? null,
+        ])
+    );
+
+    res.send(result);
+});
+
+app.get("/fetchOPR", async (req, res) => {
+    const eventCode = req.query.eventCode;
+    if (!eventCode) return res.sendStatus(403);
+    console.log("OPR requested, eventCode: " + eventCode);
+
+    let raw;
+    try {
+        const response = await externalAPI.fetchOPR(eventCode);
+        raw = await response.json();
+        database.writeJSONFile("oprs", raw);
+    } catch (e) {
+        console.error("TBA fetch failed, falling back to cache:", e);
+        raw = await database.readJSONFile("oprs");
+    }
+
+    const result = {
+        oprs:  raw.oprs  ?? {},
+        dprs:  raw.dprs  ?? {},
+        ccwms: raw.ccwms ?? {},
+    };
+
+    res.send(result);
+});
+
+app.get("/fetchAlliances", async (req, res) => {
+    const eventCode = req.query.eventCode;
+    if (!eventCode) return res.sendStatus(403);
+    console.log("alliances requested, eventCode: " + eventCode);
+
+    let raw;
+    try {
+        const response = await externalAPI.fetchAlliances(eventCode);
+        raw = await response.json();
+        database.writeJSONFile("alliances", raw);
+    } catch (e) {
+        console.error("TBA fetch failed, falling back to cache:", e);
+        raw = await database.readJSONFile("alliances");
+    }
+
+    // fetchAlliancesAvailable logic
+    const available = Array.isArray(raw) && raw.length > 0 && raw[0]?.picks?.length > 0;
+
+    // fetchElimsHaveStarted is handled by /fetchMatchAlliances, but alliances
+    // being available is a reasonable proxy — kept separate if needed
+
+    res.send({ alliances: raw, available });
+});
+
+app.get("/fetchEventEpas", async (req, res) => {
+    const eventCode = req.query.eventCode;
+    if (!eventCode) return res.sendStatus(403);
+    console.log("EPAs requested, eventCode: " + eventCode);
+
+    let raw;
+    try {
+        const response = await externalAPI.fetchEventEpas(eventCode);
+        raw = await response.json();
+        database.writeJSONFile("epas", raw);
+    } catch (e) {
+        console.error("Statbotics fetch failed, falling back to cache:", e);
+        raw = await database.readJSONFile("epas");
+    }
+
+    res.send(raw);
+});
+
+app.get("/fetchElimsHaveStarted", async (req, res) => {
+    const eventCode = req.query.eventCode;
+    if (!eventCode) return res.sendStatus(403);
+    console.log("elims check requested, eventCode: " + eventCode);
+
+    let raw;
+    try {
+        const response = await externalAPI.fetchMatchAlliances(eventCode);
+        raw = await response.json();
+    } catch (e) {
+        console.error("TBA fetch failed, falling back to cache:", e);
+        raw = await database.readJSONFile("matches");
+    }
+
+    const result = raw.some(
+        (m) => ["sf", "ef", "f"].includes(m.comp_level)
+            && m.winning_alliance !== ""
+            && m.winning_alliance !== null
+    );
+
+    res.send({ elimsHaveStarted: result });
+});
+
+app.get("/fetchMatchScores", async (req, res) => {
+    const { eventCode, matchNumber, driveStation } = req.query;
+    if (!eventCode || !matchNumber || !driveStation) return res.sendStatus(403);
+    console.log("match scores requested, eventCode: " + eventCode);
+
+    let raw;
+    try {
+        const response = await externalAPI.fetchMatchAlliances(eventCode);
+        raw = await response.json();
+    } catch (e) {
+        console.error("TBA fetch failed, falling back to cache:", e);
+        raw = await database.readJSONFile("matches");
+    }
+
+    const matchKey = `${eventCode}_qm${matchNumber}`;
+    const alliance = driveStation.startsWith("red") ? "red" : "blue";
+    const tbaMatch = raw.find((m) => m.key === matchKey);
+
+    if (!tbaMatch) {
+        console.warn(`Match ${matchKey} not found in event data`);
+        return res.send({ score: null });
+    }
+
+    res.send({ score: tbaMatch.alliances[alliance].score });
 });
 
 
-
-
+////////////// POST Methods \\\\\\\\\\\\\\
+////////////// POST Methods \\\\\\\\\\\\\\
 ////////////// POST Methods \\\\\\\\\\\\\\
 
 app.post("/postEventCode", async (req, res) => {

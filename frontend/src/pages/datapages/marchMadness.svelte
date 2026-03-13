@@ -1,6 +1,6 @@
 <script>
     import { onMount } from "svelte";
-    import { fetchAlliances as fetchAlliancesFromAPI, fetchElimsHaveStarted } from "../../utils/externalApi";
+    import { fetchMatchAlliances, fetchElimsHaveStarted } from "../../utils/api";
     import { getEventCode } from "../../utils/pageUtils";
 
     let Name = "";
@@ -69,7 +69,7 @@
     async function fetchAlliances(code) {
         if (!code) return;
         try {
-            const data = await fetchAlliancesFromAPI(code);
+            const data = await fetchMatchAlliances(code);
             if (!data || !data.length) throw new Error("No alliance data");
 
             // TBA returns alliances sorted by seed (index 0 = Alliance 1)

@@ -5,7 +5,7 @@
   import {
       fetchAlliancesAvailable,
       fetchElimsHaveStarted,
-  } from "../utils/externalApi";
+  } from "../utils/api.js";
 
   let isMenuOpen = false;
   let alliancesAvailable = false;

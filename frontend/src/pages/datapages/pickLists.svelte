@@ -1,14 +1,14 @@
 <script>
-    import baseX from "base-x";
+    import baseX from "base-x"
     import pako from "pako";
     import { writable } from "svelte/store";
     import Team from "../../components/Team.svelte";
     import {
         fetchEventEpas,
         fetchOPR,
-        fetchTeams,
         fetchTeamStatuses,
-    } from "../../utils/externalApi";
+        fetchTeams,
+    } from "../../utils/api.js";
     import { loadFromStorage, saveToStorage } from "../../utils/pageUtils";
 
     // ─── CONSTANTS ──────────────────────────────────────────────────────────────

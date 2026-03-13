@@ -56,6 +56,76 @@ export function fetchAnanthPage(eventCode) {
     return data;
 }
 
+////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
+////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
+////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
+
+export async function fetchMatchAlliances(eventCode) {
+    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/getMatchData?eventCode=${eventCode}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+}
+
+export async function fetchTeams(eventCode) {
+    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/getTeams?eventCode=${eventCode}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+}
+
+export async function fetchEventDetails(eventCode) {
+    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/fetchEventDetails?eventCode=${eventCode}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+}
+
+export async function fetchTeamStatuses(eventCode) {
+    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/fetchTeamStatuses?eventCode=${eventCode}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+}
+
+export async function fetchOPR(eventCode) {
+    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/fetchOPR?eventCode=${eventCode}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+}
+
+export async function fetchAlliances(eventCode) {
+    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/fetchAlliances?eventCode=${eventCode}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+}
+
+export async function fetchAlliancesAvailable(eventCode) {
+    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/fetchAlliances?eventCode=${eventCode}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const { available } = await response.json();
+    return available;
+}
+
+export async function fetchEventEpas(eventCode) {
+    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/fetchEventEpas?eventCode=${eventCode}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+}
+
+export async function fetchElimsHaveStarted(eventCode) {
+    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/fetchElimsHaveStarted?eventCode=${eventCode}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const { elimsHaveStarted } = await response.json();
+    return elimsHaveStarted;
+}
+
+export async function fetchMatchScores(eventCode, match, teamNumber) {
+    const response = await fetch(
+        `http://${SERVER}:${VITE_BACKEND_PORT}/fetchMatchScores?eventCode=${eventCode}&matchNumber=${match.Match}&driveStation=${match.DriveStation}`
+    );
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const { score } = await response.json();
+    return score;
+}
+
+
 ////////////// POST Methods \\\\\\\\\\\\\\
 ////////////// POST Methods \\\\\\\\\\\\\\
 ////////////// POST Methods \\\\\\\\\\\\\\

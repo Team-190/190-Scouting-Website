@@ -1,7 +1,6 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { postPitScouting } from "../../utils/api";
-    import { fetchTeams } from "../../utils/externalApi";
+    import { postPitScouting, fetchTeams } from "../../utils/api";
     import { getEventCode } from "../../utils/pageUtils";
 
     const boolFields = ["overBump", "throughTrench", "climbDuringAuto", "canUseHP", "canUseDepot", "canFeed"] as const;

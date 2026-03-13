@@ -325,7 +325,7 @@ async function getAllData(eventCode, lastId = 0) {
 
 async function readJSONFile(filename) {
     try {
-        const fullPath = filename + ".json";
+        const fullPath = `./data/${filename}.json`;
         if (!fs.existsSync(fullPath)) {
             fs.writeFileSync(fullPath, "{}", "utf8");
         }
@@ -342,11 +342,12 @@ async function readJSONFile(filename) {
 }
 
 async function writeJSONFile(filename, data) {
-    fs.writeFile(filename+".json", JSON.stringify(data, null, 4), "utf8", (err) => {
+    const fullPath = `./data/${filename}.json`;
+    fs.writeFile(fullPath, JSON.stringify(data, null, 4), "utf8", (err) => {
         if (err) {
             console.error("Error writing to file", err);
         } else {
-            console.log("Data written to " + filename + ".json successfully");
+            console.log("Data written to " + fullPath + ".json successfully");
         }
     });
 }

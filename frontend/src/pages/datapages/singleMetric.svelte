@@ -13,7 +13,7 @@
   import * as pieGraph from "../../pages/graphcode/pie.js";
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
-  import { fetchMatchAlliances, fetchOPR } from "../../utils/externalApi.js";
+  import { fetchMatchAlliances, fetchOPR } from "../../utils/api.js";
   import {
       COLOR_MODES,
       getColorblindMode,
@@ -488,7 +488,7 @@
       [{ msg: "Fetching match alliances from TBA…" }],
     );
 
-    const alliances = await fetchMatchAlliances(eventCode);
+    const alliances = await (await fetchMatchAlliances(eventCode)).json();
     const data = JSON.parse(await fetchAllMetricData());
     const maxMatchCount = getMaxMatchCount();
     const qLabels = Array.from({ length: maxMatchCount }, (_, i) => `Q${i + 1}`);

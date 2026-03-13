@@ -4,3 +4,10 @@ package-lock.json
 driverRatings.json
 pitScoutingData.json
 qualitativeScoutingData.json
+HPRatings.json
+matches.json
+alliances.json
+eventDetails.json
+oprs.json
+teams.json
+teamStatuses.json
