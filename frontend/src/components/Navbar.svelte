@@ -37,9 +37,7 @@
 
   onMount(() => {
     checkAlliances();
-    // Re-check when the home page selects a new event (same-tab StorageEvent)
     window.addEventListener("storage", onStorageChange);
-    // Also poll every 30s in case alliances get posted while the app is open
     const interval = setInterval(checkAlliances, 30000);
     return () => {
       window.removeEventListener("storage", onStorageChange);
@@ -176,14 +174,8 @@
     width: auto;
   }
 
-  .nav-links {
-    display: flex;
-    gap: 1rem;
-    align-items: center;
-  }
-
   .menu-toggle {
-    display: none;
+    display: block;
     background: none;
     border: none;
     cursor: pointer;
@@ -227,16 +219,35 @@
     transform: translateY(-8px) rotate(-45deg);
   }
 
+  .nav-links {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: -1rem;
+    width: 200px;
+    background-color: #333;
+    flex-direction: column;
+    padding: 1rem;
+    box-shadow: -2px 5px 5px rgba(0, 0, 0, 0.2);
+    border-bottom-left-radius: 8px;
+  }
+
+  .nav-links.open {
+    display: flex;
+  }
+
   button:not(.menu-toggle):not(.madness-btn) {
     background: none;
     border: none;
     color: white;
     font-size: 1rem;
     cursor: pointer;
-    padding: 0.5rem 1rem;
+    padding: 0.75rem;
     border-radius: 4px;
     transition: background-color 0.2s;
     white-space: nowrap;
+    text-align: right;
+    width: 100%;
   }
 
   button:not(.menu-toggle):not(.madness-btn):hover {
@@ -276,7 +287,6 @@
     }
   }
 
-  /* ── Screen flash overlay ── */
   .flash-overlay {
     position: fixed;
     inset: 0;
@@ -294,8 +304,7 @@
       opacity: 0;
     }
   }
-
-  /* ── Shockwave rings ── */
+  
   .shockwave {
     position: absolute;
     inset: -4px;
@@ -490,54 +499,18 @@
     transform: translate(-50%, -50%);
   }
 
-  .sparkle:nth-child(1) {
-    top: -5%;
-    left: 50%;
-  }
-  .sparkle:nth-child(2) {
-    top: 5%;
-    left: 82%;
-  }
-  .sparkle:nth-child(3) {
-    top: 50%;
-    left: 108%;
-  }
-  .sparkle:nth-child(4) {
-    top: 95%;
-    left: 82%;
-  }
-  .sparkle:nth-child(5) {
-    top: 105%;
-    left: 50%;
-  }
-  .sparkle:nth-child(6) {
-    top: 95%;
-    left: 18%;
-  }
-  .sparkle:nth-child(7) {
-    top: 50%;
-    left: -8%;
-  }
-  .sparkle:nth-child(8) {
-    top: 5%;
-    left: 18%;
-  }
-  .sparkle:nth-child(9) {
-    top: -10%;
-    left: 30%;
-  }
-  .sparkle:nth-child(10) {
-    top: -10%;
-    left: 70%;
-  }
-  .sparkle:nth-child(11) {
-    top: 110%;
-    left: 30%;
-  }
-  .sparkle:nth-child(12) {
-    top: 110%;
-    left: 70%;
-  }
+  .sparkle:nth-child(1) { top: -5%;  left: 50%;  }
+  .sparkle:nth-child(2) { top: 5%;   left: 82%;  }
+  .sparkle:nth-child(3) { top: 50%;  left: 108%; }
+  .sparkle:nth-child(4) { top: 95%;  left: 82%;  }
+  .sparkle:nth-child(5) { top: 105%; left: 50%;  }
+  .sparkle:nth-child(6) { top: 95%;  left: 18%;  }
+  .sparkle:nth-child(7) { top: 50%;  left: -8%;  }
+  .sparkle:nth-child(8) { top: 5%;   left: 18%;  }
+  .sparkle:nth-child(9) { top: -10%; left: 30%;  }
+  .sparkle:nth-child(10){ top: -10%; left: 70%;  }
+  .sparkle:nth-child(11){ top: 110%; left: 30%;  }
+  .sparkle:nth-child(12){ top: 110%; left: 70%;  }
 
   @keyframes sparklePop {
     0% {
@@ -589,6 +562,8 @@
       transform 0.15s,
       box-shadow 0.15s;
     z-index: 1;
+    width: 100%;
+    text-align: center;
   }
 
   .madness-btn:hover {
@@ -600,15 +575,9 @@
   }
 
   @keyframes goldShimmer {
-    0% {
-      background-position: 0% 50%;
-    }
-    50% {
-      background-position: 100% 50%;
-    }
-    100% {
-      background-position: 0% 50%;
-    }
+    0%   { background-position: 0%   50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0%   50%; }
   }
 
   @keyframes glowPulse {
@@ -626,29 +595,13 @@
   }
 
   @keyframes btnWiggle {
-    0%,
-    85%,
-    100% {
-      transform: rotate(0deg) scale(1);
-    }
-    87% {
-      transform: rotate(-5deg) scale(1.08);
-    }
-    89% {
-      transform: rotate(5deg) scale(1.08);
-    }
-    91% {
-      transform: rotate(-4deg) scale(1.06);
-    }
-    93% {
-      transform: rotate(4deg) scale(1.06);
-    }
-    95% {
-      transform: rotate(-2deg) scale(1.03);
-    }
-    97% {
-      transform: rotate(2deg) scale(1.02);
-    }
+    0%,  85%, 100% { transform: rotate(0deg)  scale(1);    }
+    87%            { transform: rotate(-5deg) scale(1.08); }
+    89%            { transform: rotate(5deg)  scale(1.08); }
+    91%            { transform: rotate(-4deg) scale(1.06); }
+    93%            { transform: rotate(4deg)  scale(1.06); }
+    95%            { transform: rotate(-2deg) scale(1.03); }
+    97%            { transform: rotate(2deg)  scale(1.02); }
   }
 
   /* Double shine sweep */
@@ -674,53 +627,8 @@
   }
 
   @keyframes shineSweep {
-    0% {
-      left: -75%;
-    }
-    55% {
-      left: 125%;
-    }
-    100% {
-      left: 125%;
-    }
-  }
-
-  /* ── Responsive ── */
-  @media (max-width: 1220px) {
-    .brand-text {
-      font-size: 1.2rem;
-    }
-
-    .menu-toggle {
-      display: block;
-    }
-
-    .nav-links {
-      display: none;
-      position: absolute;
-      top: 100%;
-      right: -1rem;
-      width: 200px;
-      background-color: #333;
-      flex-direction: column;
-      padding: 1rem;
-      box-shadow: -2px 5px 5px rgba(0, 0, 0, 0.2);
-      border-bottom-left-radius: 8px;
-    }
-
-    .nav-links.open {
-      display: flex;
-    }
-
-    button:not(.menu-toggle):not(.madness-btn) {
-      text-align: right;
-      width: 100%;
-      padding: 0.75rem;
-    }
-
-    .madness-btn {
-      width: 100%;
-      text-align: center;
-    }
+    0%   { left: -75%;  }
+    55%  { left: 125%;  }
+    100% { left: 125%;  }
   }
 </style>
