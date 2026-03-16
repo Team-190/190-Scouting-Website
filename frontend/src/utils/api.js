@@ -1,57 +1,58 @@
 const VITE_TESTING = import.meta.env.VITE_TESTING || 1;
 const VITE_BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT || 8000;
 const SERVER = !parseInt(VITE_TESTING) ? import.meta.env.VITE_SERVER_IP : "localhost";
+const defaultAPILink = `http://${SERVER}:${VITE_BACKEND_PORT}`;
 
 export function fetchEvents() {
-    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getEvents`;
+    const route = `${defaultAPILink}/api/getEvents`;
     let data = fetch(route);
     return data;
 }
 
 export function fetchAvailableTeams(eventCode) {
-    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getAvailableTeams?eventCode=` + eventCode;
+    const route = `${defaultAPILink}/api/getAvailableTeams?eventCode=` + eventCode;
     let data = fetch(route);
     return data;
 }
 
 export function fetchAllData(eventCode, lastId = 0) {
-    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getAllData?eventCode=${eventCode}&lastId=${lastId}`;
+    const route = `${defaultAPILink}/api/getAllData?eventCode=${eventCode}&lastId=${lastId}`;
     let data = fetch(route);
     return data;
 }
 
 export function fetchSingleMetric(eventCode) {
-    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/singleMetric?eventCode=` + eventCode;
+    const route = `${defaultAPILink}/api/singleMetric?eventCode=` + eventCode;
     let data = fetch(route);
     return data;
 }
 
 export function fetchQualitativeScouting(eventCode, localCounts = {}) {
-    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getQualitativeScouting?eventCode=${eventCode}&localCounts=${encodeURIComponent(JSON.stringify(localCounts))}`;
+    const route = `${defaultAPILink}/api/getQualitativeScouting?eventCode=${eventCode}&localCounts=${encodeURIComponent(JSON.stringify(localCounts))}`;
     let data = fetch(route);
     return data;
 }
 
 export function fetchPitScouting(eventCode, localTeams = []) {
-    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getPitScouting?eventCode=${eventCode}&localTeams=${encodeURIComponent(JSON.stringify(localTeams))}`;
+    const route = `${defaultAPILink}/api/getPitScouting?eventCode=${eventCode}&localTeams=${encodeURIComponent(JSON.stringify(localTeams))}`;
     let data = fetch(route);
     return data;
 }
 
 export function fetchPitScoutingImage(eventCode, team) {
-    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getPitScoutingImage?eventCode=${eventCode}&teamNumber=${team}`;
+    const route = `${defaultAPILink}/api/getPitScoutingImage?eventCode=${eventCode}&teamNumber=${team}`;
     let data = fetch(route);
     return data;
 }
 
 export function fetchGracePage(eventCode) {
-    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getRatings?eventCode=${eventCode}`;
+    const route = `${defaultAPILink}/api/getRatings?eventCode=${eventCode}`;
     let data = fetch(route);
     return data;
 }
 
 export function fetchAnanthPage(eventCode) {
-    const route = `http://${SERVER}:${VITE_BACKEND_PORT}/getHPRatings?eventCode=${eventCode}`;
+    const route = `${defaultAPILink}/api/getHPRatings?eventCode=${eventCode}`;
     let data = fetch(route);
     return data;
 }
@@ -61,56 +62,56 @@ export function fetchAnanthPage(eventCode) {
 ////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
 
 export async function fetchMatchAlliances(eventCode) {
-    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/getMatchAlliances?eventCode=${eventCode}`);
+    const response = await fetch(`${defaultAPILink}/api/getMatchAlliances?eventCode=${eventCode}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
 }
 
 export async function fetchTeams(eventCode) {
-    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/getTeams?eventCode=${eventCode}`);
+    const response = await fetch(`${defaultAPILink}/api/getTeams?eventCode=${eventCode}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
 }
 
 export async function fetchEventDetails(eventCode) {
-    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/fetchEventDetails?eventCode=${eventCode}`);
+    const response = await fetch(`${defaultAPILink}/api/fetchEventDetails?eventCode=${eventCode}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
 }
 
 export async function fetchTeamStatuses(eventCode) {
-    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/fetchTeamStatuses?eventCode=${eventCode}`);
+    const response = await fetch(`${defaultAPILink}/api/fetchTeamStatuses?eventCode=${eventCode}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
 }
 
 export async function fetchOPR(eventCode) {
-    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/fetchOPR?eventCode=${eventCode}`);
+    const response = await fetch(`${defaultAPILink}/api/fetchOPR?eventCode=${eventCode}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
 }
 
 export async function fetchAlliances(eventCode) {
-    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/fetchAlliances?eventCode=${eventCode}`);
+    const response = await fetch(`${defaultAPILink}/api/fetchAlliances?eventCode=${eventCode}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
 }
 
 export async function fetchAlliancesAvailable(eventCode) {
-    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/fetchAlliances?eventCode=${eventCode}`);
+    const response = await fetch(`${defaultAPILink}/api/fetchAlliances?eventCode=${eventCode}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const { available } = await response.json();
     return available;
 }
 
 export async function fetchEventEpas(eventCode) {
-    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/fetchEventEpas?eventCode=${eventCode}`);
+    const response = await fetch(`${defaultAPILink}/api/fetchEventEpas?eventCode=${eventCode}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
 }
 
 export async function fetchElimsHaveStarted(eventCode) {
-    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/fetchElimsHaveStarted?eventCode=${eventCode}`);
+    const response = await fetch(`${defaultAPILink}/api/fetchElimsHaveStarted?eventCode=${eventCode}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const { elimsHaveStarted } = await response.json();
     return elimsHaveStarted;
@@ -118,7 +119,7 @@ export async function fetchElimsHaveStarted(eventCode) {
 
 export async function fetchMatchScores(eventCode, match, teamNumber) {
     const response = await fetch(
-        `http://${SERVER}:${VITE_BACKEND_PORT}/fetchMatchScores?eventCode=${eventCode}&matchNumber=${match.Match}&driveStation=${match.DriveStation}`
+        `${defaultAPILink}/api/fetchMatchScores?eventCode=${eventCode}&matchNumber=${match.Match}&driveStation=${match.DriveStation}`
     );
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const { score } = await response.json();
@@ -132,7 +133,7 @@ export async function fetchMatchScores(eventCode, match, teamNumber) {
 
 
 export async function postEventCode(eventCode) {
-    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/postEventCode`, {
+    const response = await fetch(`${defaultAPILink}/api/postEventCode`, {
         method: 'POST',
         headers: {
             "Content-Type": "application/json"
@@ -152,7 +153,7 @@ export async function postEventCode(eventCode) {
 }
 
 export async function postGracePage(event, team, rating) {
-    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/postRatings`, {
+    const response = await fetch(`${defaultAPILink}/api/postRatings`, {
         method: 'POST',
         headers: {
             "Content-Type": "application/json"
@@ -172,7 +173,7 @@ export async function postGracePage(event, team, rating) {
 }
 
 export async function postAnanthPage(event, team, rating) {
-    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/postHPRatings`, {
+    const response = await fetch(`${defaultAPILink}/api/postHPRatings`, {
         method: 'POST',
         headers: {
             "Content-Type": "application/json"
@@ -194,7 +195,7 @@ export async function postAnanthPage(event, team, rating) {
 
 export async function postPitScouting(event, team, formData) {
 
-    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/postPitScouting`, {
+    const response = await fetch(`${defaultAPILink}/api/postPitScouting`, {
         method: 'POST',
         headers: {
             "Content-Type": "application/json"
@@ -207,7 +208,7 @@ export async function postPitScouting(event, team, formData) {
 
 export async function postQualitativeScouting(event, team, match, formData) {
 
-    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/postQualitativeScouting`, {
+    const response = await fetch(`${defaultAPILink}/api/postQualitativeScouting`, {
         method: 'POST',
         headers: {
             "Content-Type": "application/json"
@@ -222,7 +223,7 @@ export async function postQualitativeScouting(event, team, match, formData) {
 export async function postGompeiMadnessBracket(bracket) {
     // data: { name: "guy", r1: [{matchNumber: 1 , winner: "a1"}, "a2", "a3", "a4"], r2: ["a1", "a2"], r3: ["a1"] }
 
-    const response = await fetch(`http://${SERVER}:${VITE_BACKEND_PORT}/postGompeiMadnessBracket`, {
+    const response = await fetch(`${defaultAPILink}/api/postGompeiMadnessBracket`, {
         method: 'POST',
         headers: {
             "Content-Type": "application/json"

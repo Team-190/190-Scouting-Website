@@ -1,5 +1,6 @@
 <script>
   import { Router } from "@mateothegreat/svelte5-router";
+  import { onMount } from "svelte";
 
   import Navbar from "./components/Navbar.svelte";
   import Home from "./pages/Home.svelte";
@@ -25,6 +26,14 @@
     { path: "/matchPreview", component: MatchPreview },
     { path: "/qualPage", component: QualPage },
   ];
+
+  onMount(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/service_worker.js')
+        .then(reg => console.log('SW registered', reg))
+        .catch(err => console.error('SW failed', err));
+    }
+  });
 </script>
 
 <!-- Navbar is fixed, so we need padding on main content -->
