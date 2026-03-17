@@ -44,6 +44,8 @@
       ZONE_TIME_FIELDS,
   } from "../../utils/pageUtils.js";
 
+  import {  getScoutingData } from '../../utils/indexedDB';
+
   ModuleRegistry.registerModules([AllCommunityModule]);
 
   // ─── Constants ────────────────────────────────────────────────────────────────
@@ -239,7 +241,7 @@
   // ─── Data Loading ─────────────────────────────────────────────────────────────
 
   async function loadTeamNumbers(): Promise<number[]> {
-    const storedData = localStorage.getItem("data");
+    const storedData = await getScoutingData();
     if (!storedData) return [];
     try {
       const parsed = JSON.parse(storedData);
@@ -591,7 +593,7 @@
   async function onAutoOnlyChange() {
     isLoading = true;
     try {
-      const stored = localStorage.getItem("data");
+      const stored = await getScoutingData();
       const parsed = stored ? JSON.parse(stored) : [];
       teamViewData = extractValues(parsed, autoOnly);
       cache = {};
@@ -1248,7 +1250,7 @@
   onMount(async () => {
     isLoading = true;
     try {
-      const stored = localStorage.getItem("data");
+      const stored = await getScoutingData();
       const parsed = stored ? JSON.parse(stored) : [];
       teamViewData = extractValues(parsed, autoOnly);
 
