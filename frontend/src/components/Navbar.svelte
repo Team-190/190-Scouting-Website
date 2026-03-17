@@ -2,22 +2,22 @@
   import { goto } from "@mateothegreat/svelte5-router";
   import { onMount } from "svelte";
   import logo from "../images/frc190_Logo.png";
+  import { isSidebarOpen } from "../stores/sidebarState.js";
   import {
       fetchAlliancesAvailable,
       fetchElimsHaveStarted,
   } from "../utils/api.js";
 
-  let isMenuOpen = false;
   let alliancesAvailable = false;
   let elimsStarted = false;
 
-  function toggleMenu() {
-    isMenuOpen = !isMenuOpen;
+  function toggleSidebar() {
+    isSidebarOpen.update((val) => !val);
   }
 
   function navigate(path) {
     goto(path);
-    isMenuOpen = false;
+    isSidebarOpen.set(false);
   }
 
   async function checkAlliances() {
@@ -46,34 +46,41 @@
   });
 </script>
 
-<nav class="navbar">
-  <div class="nav-container">
-    <div
-      class="nav-brand"
-      on:click={() => navigate("/")}
-      on:keydown={(e) => e.key === "Enter" && navigate("/")}
-      role="button"
-      tabindex="0"
-    >
+<nav class="navbar" class:collapsed={!$isSidebarOpen}>
+  <button class="toggle-btn" on:click={toggleSidebar} aria-label="Toggle sidebar">
+    <span class="toggle-icon" class:rotated={$isSidebarOpen}></span>
+  </button>
+
+  <div class="sidebar-content">
+    <div class="logo-section" on:click={() => navigate("/")} role="button" tabindex="0" on:keydown={(e) => e.key === "Enter" && navigate("/")}>
       <img src={logo} alt="FRC 190 Logo" class="logo" />
-      <span class="brand-text">Scouting App</span>
     </div>
 
-    <button class="menu-toggle" on:click={toggleMenu} aria-label="Toggle menu">
-      <span class="hamburger" class:open={isMenuOpen}></span>
-    </button>
-
-    <div class="nav-links" class:open={isMenuOpen}>
-      <button on:click={() => navigate("/pickLists")}>Pick Lists</button>
-      <button on:click={() => navigate("/singleMetric")}>Event View</button>
-      <button on:click={() => navigate("/teamView")}>Team View</button>
-      <button on:click={() => navigate("/pitScouting")}>Pit Scouting</button>
-      <button on:click={() => navigate("/gracePage")}>Grace Page</button>
-      <button on:click={() => navigate("/ananthPage")}>Ananth Page</button>
-      <button on:click={() => navigate("/matchPreview")}>Match Preview</button>
-      <button on:click={() => navigate("/qualPage")}
-        >Qualitative Scouting</button
-      >
+    <div class="nav-links" class:disabled={!$isSidebarOpen}>
+      <button on:click={() => navigate("/pickLists")} disabled={!$isSidebarOpen}>
+        <span class="label">Pick Lists</span>
+      </button>
+      <button on:click={() => navigate("/singleMetric")} disabled={!$isSidebarOpen}>
+        <span class="label">Event View</span>
+      </button>
+      <button on:click={() => navigate("/teamView")} disabled={!$isSidebarOpen}>
+        <span class="label">Team View</span>
+      </button>
+      <button on:click={() => navigate("/pitScouting")} disabled={!$isSidebarOpen}>
+        <span class="label">Pit Scouting</span>
+      </button>
+      <button on:click={() => navigate("/gracePage")} disabled={!$isSidebarOpen}>
+        <span class="label">Grace Page</span>
+      </button>
+      <button on:click={() => navigate("/ananthPage")} disabled={!$isSidebarOpen}>
+        <span class="label">Ananth Page</span>
+      </button>
+      <button on:click={() => navigate("/matchPreview")} disabled={!$isSidebarOpen}>
+        <span class="label">Match Preview</span>
+      </button>
+      <button on:click={() => navigate("/qualPage")} disabled={!$isSidebarOpen}>
+        <span class="label">Qual Scouting</span>
+      </button>
 
       {#if alliancesAvailable}
         <div class="madness-wrapper">
@@ -123,11 +130,11 @@
             >
               <span class="madness-shine"></span>
               <span class="madness-shine madness-shine-2"></span>
-              Gompei Madness
+              <span>Gompei Madness</span>
             </button>
           {:else}
-            <button on:click={() => navigate("/marchMadness")}>
-              Gompei Madness
+            <button class="madness-btn" on:click={() => navigate("/marchMadness")}>
+              <span>Gompei Madness</span>
             </button>
           {/if}
         </div>
@@ -141,32 +148,109 @@
     position: fixed;
     top: 0;
     left: 0;
-    width: 100%;
-    box-sizing: border-box;
-    z-index: 1000;
+    height: 100vh;
+    width: 250px;
     background-color: #333;
     color: white;
-    padding: 1rem;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-    overflow: visible;
-  }
-
-  .nav-container {
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.2);
+    transition: width 0.3s ease;
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin: 0 auto;
-    width: 100%;
-    position: relative;
+    flex-direction: column;
+    z-index: 1000;
+    overflow: hidden;
   }
 
-  .nav-brand {
-    font-size: 1.5rem;
-    font-weight: bold;
+  .navbar.collapsed {
+    width: 80px;
+  }
+
+  .toggle-btn {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    background: none;
+    border: none;
     cursor: pointer;
+    padding: 0.5rem;
+    z-index: 1001;
     display: flex;
     align-items: center;
-    gap: 1rem;
+    justify-content: center;
+    outline: none;
+  }
+
+  .toggle-btn:focus {
+    outline: none;
+  }
+
+  .toggle-btn:active {
+    outline: none;
+  }
+
+  .toggle-icon {
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: white;
+    position: relative;
+    transition: transform 0.3s ease;
+  }
+
+  .toggle-icon::before,
+  .toggle-icon::after {
+    content: "";
+    position: absolute;
+    width: 20px;
+    height: 2px;
+    background: white;
+    transition: transform 0.3s ease;
+  }
+
+  .toggle-icon::before {
+    top: -6px;
+  }
+  .toggle-icon::after {
+    bottom: -6px;
+  }
+
+  .toggle-icon.rotated {
+    background: white;
+  }
+  .toggle-icon.rotated::before {
+    transform: none;
+  }
+  .toggle-icon.rotated::after {
+    transform: none;
+  }
+
+  .sidebar-content {
+    display: flex;
+    flex-direction: column;
+    padding: 1rem 0;
+    margin-top: 2rem;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .logo-section {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    flex-direction: column;
+    gap: 0.5rem;
+    border-bottom: 1px solid #555;
+    margin-bottom: 1rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+  }
+
+  .logo-section:hover {
+    background-color: #555;
+  }
+
+  .logo-section:active {
+    background-color: #666;
   }
 
   .logo {
@@ -174,84 +258,69 @@
     width: auto;
   }
 
-  .menu-toggle {
-    display: block;
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 1rem;
-    z-index: 1001;
+  .logo-text {
+    text-align: center;
+    transition: opacity 0.3s ease;
   }
 
-  .hamburger {
-    display: block;
-    width: 24px;
-    height: 2px;
-    background: white;
-    position: relative;
-    transition: background 0.2s;
+  .brand-text {
+    font-size: 1.2rem;
+    font-weight: bold;
+    line-height: 1.2;
   }
 
-  .hamburger::before,
-  .hamburger::after {
-    content: "";
-    position: absolute;
-    width: 24px;
-    height: 2px;
-    background: white;
-    transition: transform 0.2s;
-  }
-
-  .hamburger::before {
-    top: -8px;
-  }
-  .hamburger::after {
-    bottom: -8px;
-  }
-
-  .hamburger.open {
-    background: transparent;
-  }
-  .hamburger.open::before {
-    transform: translateY(8px) rotate(45deg);
-  }
-  .hamburger.open::after {
-    transform: translateY(-8px) rotate(-45deg);
+  .brand-subtext {
+    font-size: 0.9rem;
+    color: #aaa;
   }
 
   .nav-links {
-    display: none;
-    position: absolute;
-    top: 100%;
-    right: -1rem;
-    width: 200px;
-    background-color: #333;
-    flex-direction: column;
-    padding: 1rem;
-    box-shadow: -2px 5px 5px rgba(0, 0, 0, 0.2);
-    border-bottom-left-radius: 8px;
-  }
-
-  .nav-links.open {
     display: flex;
+    flex-direction: column;
+    gap: 0;
+    flex: 1;
   }
 
-  button:not(.menu-toggle):not(.madness-btn) {
+  .nav-links button {
     background: none;
     border: none;
     color: white;
-    font-size: 1rem;
     cursor: pointer;
-    padding: 0.75rem;
-    border-radius: 4px;
-    transition: background-color 0.2s;
+    padding: 1rem;
+    transition: background-color 0.2s, opacity 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    font-size: 1rem;
     white-space: nowrap;
-    text-align: right;
-    width: 100%;
+    text-align: left;
+    font-family: inherit;
+    min-width: 0;
   }
 
-  button:not(.menu-toggle):not(.madness-btn):hover {
+  .label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 1;
+    min-width: 0;
+  }
+
+  .nav-links button:hover {
     background-color: #555;
+  }
+
+  .nav-links button:active {
+    background-color: #666;
+  }
+
+  .nav-links button:disabled {
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  .navbar.collapsed .nav-links button {
+    color: #777;
   }
 
   /* ── Madness wrapper ── */
@@ -259,7 +328,14 @@
     position: relative;
     display: flex;
     align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    margin-top: auto;
     animation: dropIn 0.8s cubic-bezier(0.22, 1.8, 0.36, 1) both;
+  }
+
+  .navbar.collapsed .madness-wrapper {
+    display: none;
   }
 
   @keyframes dropIn {
@@ -549,7 +625,7 @@
     font-size: 0.95rem;
     font-weight: 900;
     cursor: pointer;
-    padding: 0.5rem 1.1rem;
+    padding: 0.5rem 0.75rem;
     border-radius: 6px;
     white-space: nowrap;
     letter-spacing: 0.5px;
@@ -562,11 +638,17 @@
       transform 0.15s,
       box-shadow 0.15s;
     z-index: 1;
-    width: 100%;
     text-align: center;
   }
 
-  .madness-btn:hover {
+  .madness-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0;
+    pointer-events: none;
+    animation: none;
+  }
+
+  .madness-btn:not(:disabled):hover {
     transform: scale(1.1) rotate(-1deg);
     box-shadow:
       0 0 20px 6px rgba(255, 215, 0, 1),

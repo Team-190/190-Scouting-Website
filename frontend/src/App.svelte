@@ -1,5 +1,6 @@
 <script>
   import { Router } from "@mateothegreat/svelte5-router";
+  import { isSidebarOpen } from "./stores/sidebarState.js";
 
   import Navbar from "./components/Navbar.svelte";
   import Home from "./pages/Home.svelte";
@@ -29,18 +30,19 @@
 
 <!-- Navbar is fixed, so we need padding on main content -->
 <Navbar />
-<main class="page-content">
+<main class="page-content" class:sidebar-collapsed={!$isSidebarOpen}>
   <Router {routes} />
 </main>
 
 <style>
-  /* Ensure navbar doesn't cover content */
+  /* Adjust for sidebar navbar */
   .page-content {
-    padding-top: 20px; /* same as Navbar height */
+    margin-left: 0;
+    padding: 20px;
+    min-height: 100vh;
   }
 
   main {
-    max-width: 1200px;
-    margin: 0 auto;
+    max-width: 100%;
   }
 </style>
