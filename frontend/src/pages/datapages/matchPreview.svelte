@@ -32,6 +32,7 @@
       ROW_HEIGHT,
       sd,
   } from "../../utils/pageUtils.js";
+  import { getScoutingData } from '../../utils/indexedDB';
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -750,7 +751,7 @@
   onMount(async () => {
     isLoading = true;
     try {
-      const stored = localStorage.getItem("data");
+      const stored = await getScoutingData();
       const parsed = stored ? JSON.parse(stored) : [];
       teamViewData = extractValues(parsed, autoOnly);
       eventCode    = localStorage.getItem("eventCode") || "";

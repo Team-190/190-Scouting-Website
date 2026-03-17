@@ -92,7 +92,7 @@ app.use(cors({
     ],
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type"],
-}));
+}));    
 
 app.get("/", async (req, res) => {
     res.renderHtml("file.html");
