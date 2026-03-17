@@ -1,5 +1,6 @@
 <script>
   import { Router } from "@mateothegreat/svelte5-router";
+  import { onMount } from "svelte";
   import { isSidebarOpen } from "./stores/sidebarState.js";
 
   import Navbar from "./components/Navbar.svelte";
