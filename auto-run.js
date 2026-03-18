@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Configuration
-const BRANCH = 'predev';
+const BRANCH = 'main';
 const POLL_INTERVAL_MS = 10000; // Check every 10 seconds
 
 let backendProcess = null;
