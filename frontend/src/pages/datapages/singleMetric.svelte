@@ -265,7 +265,7 @@
   // ─── Data Loading ─────────────────────────────────────────────────────────────
 
   async function fetchAllMetricData(): Promise<string | null> {
-    const stored = await getScoutingData();
+    const stored = localStorage.getItem("data");;
     if (!stored) return null;
     return JSON.stringify(extractValues(JSON.parse(stored), autoOnly));
   }
