@@ -47,13 +47,15 @@ export async function setScoutingData(rows) {
 
 // Wipe all stored scouting data (call this when switching events)
 export async function clearScoutingData() {
+    console.log("x");
     const db = await openDB();
     return new Promise((resolve, reject) => {
+        console.log("a");
         const tx = db.transaction(STORE, 'readwrite');
         const store = tx.objectStore(STORE);
         const request = store.clear();
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {resolve(); console.log("success");};
+        request.onerror = () => {reject(request.error); console.error(request.error);};
     });
 }
 

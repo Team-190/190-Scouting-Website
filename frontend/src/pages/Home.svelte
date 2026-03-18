@@ -29,17 +29,16 @@
     }
 
     async function cacheAllData() {
-        console.log(await getScoutingData());
         await withLoading(async () => {
-            console.log(eventCode);
+            const y = await clearScoutingData();
+            console.log(y);
             const localData = await getScoutingData() || [];
             const lastId = await getLastId(localData);
-
+            
             const dataRes = await fetchAllData(eventCode, lastId);
             const dataText = await dataRes.text();
             const dataJson = dataText ? JSON.parse(dataText) : {};
             const newData = dataJson.data || [];
-            console.log(newData);
 
             const dataMap = new Map();
             for (const row of localData) {
@@ -51,7 +50,11 @@
                 dataMap.set(key, row);
             }
             const combinedData = Array.from(dataMap.values());
-            setScoutingData(combinedData);
+            const x = await setScoutingData(combinedData);
+            console.log(combinedData);
+
+            console.log(x)
+            console.log("m")
 
             const localPitStr = localStorage.getItem("retrievePit");
             const localPit = localPitStr ? JSON.parse(localPitStr) : {};
