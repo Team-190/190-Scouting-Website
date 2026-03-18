@@ -751,7 +751,7 @@
   onMount(async () => {
     isLoading = true;
     try {
-      const stored = await getScoutingData();
+      const stored = localStorage.getItem("data");;
       const parsed = stored ? JSON.parse(stored) : [];
       teamViewData = extractValues(parsed, autoOnly);
       eventCode    = localStorage.getItem("eventCode") || "";

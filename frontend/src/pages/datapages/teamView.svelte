@@ -241,7 +241,7 @@
   // ─── Data Loading ─────────────────────────────────────────────────────────────
 
   async function loadTeamNumbers(): Promise<number[]> {
-    const storedData = await getScoutingData();
+    const storedData = localStorage.getItem("data");;
     if (!storedData) return [];
     try {
       const parsed = JSON.parse(storedData);
@@ -593,7 +593,7 @@
   async function onAutoOnlyChange() {
     isLoading = true;
     try {
-      const stored = await getScoutingData();
+      const stored = localStorage.getItem("data");;
       const parsed = stored ? JSON.parse(stored) : [];
       teamViewData = extractValues(parsed, autoOnly);
       cache = {};
@@ -1250,7 +1250,7 @@
   onMount(async () => {
     isLoading = true;
     try {
-      const stored = await getScoutingData();
+      const stored = localStorage.getItem("data");;
       const parsed = stored ? JSON.parse(stored) : [];
       teamViewData = extractValues(parsed, autoOnly);
 
