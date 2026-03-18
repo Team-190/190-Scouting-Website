@@ -1354,12 +1354,13 @@
 
   <div class="robot-pic-display">
     {#if robotPicturePreview}
-      <img 
-        src={robotPicturePreview} 
-        alt="Robot {selectedTeam}"
-        style="height: 300px; width: auto; border-radius: 6px; border: 2px solid var(--frc-190-red); object-fit: contain; cursor: pointer;"
-        on:click={() => showImageModal = true}
-      />
+      <button class="robot-pic-btn" on:click={() => showImageModal = true} aria-label="Enlarge robot photo">
+        <img 
+          src={robotPicturePreview} 
+          alt="Robot {selectedTeam}"
+          style="height: 300px; width: auto; border-radius: 6px; border: 2px solid var(--frc-190-red); object-fit: contain;"
+        />
+      </button>
     {:else}
       <span style="color: #888; font-size: 12px;">No photo</span>
     {/if}
@@ -1367,8 +1368,8 @@
 
   <!-- Image Modal -->
   {#if showImageModal && robotPicturePreview}
-    <div class="modal-overlay" on:click={() => showImageModal = false} role="button" tabindex="0">
-      <div class="modal-content" on:click|stopPropagation>
+    <div class="modal-overlay" on:click={() => showImageModal = false} on:keydown={(e) => { if (e.key === 'Escape' || e.key === 'Enter') showImageModal = false; }} role="button" tabindex="0">
+      <div class="modal-content" on:click|stopPropagation on:keydown|stopPropagation role="dialog" aria-label="Enlarged robot photo" tabindex="-1">
         <button class="modal-close-btn" on:click={() => showImageModal = false}>×</button>
         <img src={robotPicturePreview} alt="Robot {selectedTeam} - Enlarged" class="modal-image" />
       </div>
@@ -1553,7 +1554,7 @@
       {#if showDropdown}
         <ul class="dropdown">
           {#each chartTypes as type}
-            <li on:click={() => { addChart(type); showDropdown = false; }}>{type}</li>
+            <li role="menuitem"><button class="dropdown-item-btn" on:click={() => { addChart(type); showDropdown = false; }}>{type}</button></li>
           {/each}
         </ul>
       {/if}
@@ -1664,6 +1665,7 @@
   .section-title { color: var(--frc-190-red); font-size: 1.8rem; font-weight: 700; margin-bottom: 20px; text-shadow: 1px 1px 3px rgba(0,0,0,0.2); }
   .dropdown-container { position: relative; margin-bottom: 20px; }
   .robot-pic-display { display: flex; justify-content: center; width: 100%; margin-bottom: 20px; }
+  .robot-pic-btn { all: unset; cursor: pointer; display: inline-block; }
 
   .team-name-display { color: var(--frc-190-red); font-size: 1.8rem; font-weight: 700; text-align: center; margin-bottom: 15px; text-shadow: 1px 1px 2px rgba(0,0,0,0.3); }
 
@@ -1671,8 +1673,9 @@
   .plus-btn:hover { background: linear-gradient(135deg, var(--frc-190-red) 0%, #e02200 100%); transform: scale(1.05); }
 
   .dropdown { position: absolute; top: 60px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); border: 2px solid var(--frc-190-red); border-radius: 8px; list-style: none; padding: 0; margin: 0; width: 150px; box-shadow: 0 4px 15px rgba(0,0,0,0.4); z-index: 10; overflow: hidden; }
-  .dropdown li { padding: 12px 15px; cursor: pointer; text-align: center; color: white; font-weight: 500; text-transform: capitalize; transition: background 0.2s ease; }
+  .dropdown li { padding: 0; cursor: pointer; text-align: center; color: white; font-weight: 500; text-transform: capitalize; transition: background 0.2s ease; }
   .dropdown li:hover { background: var(--frc-190-red); }
+  .dropdown-item-btn { all: unset; display: block; width: 100%; padding: 12px 15px; cursor: pointer; text-align: center; color: white; font-weight: 500; text-transform: capitalize; }
 
   .charts-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; width: 100%; }
   .chart-wrapper { position: relative; display: flex; flex-direction: column; align-items: stretch; width: 100%; background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); border: 2px solid var(--frc-190-red); border-radius: 8px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
