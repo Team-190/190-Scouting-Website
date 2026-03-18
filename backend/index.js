@@ -67,16 +67,10 @@ const VITE_BACKEND_PORT = process.env.VITE_BACKEND_PORT || 8000;
 const VITE_FRONTEND_PORT = process.env.VITE_FRONTEND_PORT || 5173;
 const VITE_TESTING = process.env.VITE_TESTING || 1;
 const SERVER = !parseInt(VITE_TESTING) ? process.env.VITE_SERVER_IP : "localhost";
-const DIR = process.env.DIR || "./test/public";
-
-const publicDir = path.join(__dirname, DIR);
-
-console.log(DIR);
 
 let eventCode = "";
 let bracket;
 
-app.use(express.static(publicDir));
 app.use(express.json());
 
 app.use(
@@ -98,14 +92,7 @@ app.use(cors({
     ],
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type"],
-}));
-
-app.use((req, res, next) => {
-    res.renderHtml = (filename) => {
-        res.sendFile(path.join(publicDir, filename));
-    };
-    next();
-});
+}));    
 
 app.get("/", async (req, res) => {
     res.renderHtml("file.html");
@@ -115,7 +102,7 @@ app.get("/login", (req, res) => {
     res.renderHtml("login.html");
 });
 
-app.get("/getEvents", async (req, res) => {
+app.get("/api/getEvents", async (req, res) => {
     try {
         const events = await database.getEvents();
         console.log("GOT EVENTS:\n" + JSON.stringify(events, null, 2));
@@ -126,13 +113,13 @@ app.get("/getEvents", async (req, res) => {
     }
 });
 
-app.get("/getAvailableTeams", validateEventCode, async (req, res) => {
+app.get("/api/getAvailableTeams", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
     let result = await database.getAvailableTeams(eventCode);
     res.send(result);
 });
 
-app.get("/getQualitativeScouting", validateEventCode, async (req, res) => {
+app.get("/api/getQualitativeScouting", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
 
     let localCounts = {};
@@ -153,7 +140,7 @@ app.get("/getQualitativeScouting", validateEventCode, async (req, res) => {
     res.send(filtered);
 });
 
-app.get("/getPitScouting", validateEventCode, async (req, res) => {
+app.get("/api/getPitScouting", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
 
     let localTeams = [];
@@ -174,7 +161,7 @@ app.get("/getPitScouting", validateEventCode, async (req, res) => {
     res.send(filtered);
 });
 
-app.get("/getPitScoutingImage", validateEventCode, async (req, res) => {
+app.get("/api/getPitScoutingImage", validateEventCode, async (req, res) => {
     const { eventCode, teamNumber } = req.query;
     if (!teamNumber) return res.sendStatus(403);
 
@@ -188,14 +175,14 @@ app.get("/getPitScoutingImage", validateEventCode, async (req, res) => {
     }
 });
 
-app.get("/getAllData", validateEventCode, async (req, res) => {
+app.get("/api/getAllData", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
     const lastId = parseInt(req.query.lastId || "0");
     let result = await database.getAllData(eventCode, lastId);
     res.send(result);
 });
 
-app.get("/getSingleMetric", validateEventCode, async (req, res) => {
+app.get("/api/getSingleMetric", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
     console.log("single metric data requested, eventCode: " + eventCode);
 
@@ -214,13 +201,13 @@ app.get("/getSingleMetric", validateEventCode, async (req, res) => {
     }
 });
 
-app.get("/getRatings", validateEventCode, async (req, res) => {
+app.get("/api/getRatings", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
     let fileData = await getEventData("driverRatings", eventCode);
     res.send(fileData);
 });
 
-app.get("/getHPRatings", validateEventCode, async (req, res) => {
+app.get("/api/getHPRatings", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
     let fileData = await getEventData("HPRatings", eventCode);
     res.send(fileData);
@@ -231,7 +218,7 @@ app.get("/getHPRatings", validateEventCode, async (req, res) => {
 ////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
 ////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
 
-app.get("/getMatchAlliances", validateEventCode, async (req, res) => {
+app.get("/api/getMatchAlliances", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
     console.log("matches requested, eventCode: " + eventCode);
     
@@ -260,7 +247,7 @@ app.get("/getMatchAlliances", validateEventCode, async (req, res) => {
     res.send(raw);
 });
 
-app.get("/getTeams", validateEventCode, async (req, res) => {
+app.get("/api/getTeams", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
     console.log("teams requested, eventCode: " + eventCode);
 
@@ -293,7 +280,7 @@ app.get("/getTeams", validateEventCode, async (req, res) => {
     res.send(result);
 });
 
-app.get("/fetchEventDetails", validateEventCode, async (req, res) => {
+app.get("/api/fetchEventDetails", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
     console.log("event details requested, eventCode: " + eventCode);
 
@@ -327,7 +314,7 @@ app.get("/fetchEventDetails", validateEventCode, async (req, res) => {
     res.send(result);
 });
 
-app.get("/fetchTeamStatuses", validateEventCode, async (req, res) => {
+app.get("/api/fetchTeamStatuses", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
     console.log("team statuses requested, eventCode: " + eventCode);
 
@@ -361,7 +348,7 @@ app.get("/fetchTeamStatuses", validateEventCode, async (req, res) => {
     res.send(result);
 });
 
-app.get("/fetchOPR", validateEventCode, async (req, res) => {
+app.get("/api/fetchOPR", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
     console.log("OPR requested, eventCode: " + eventCode);
 
@@ -394,7 +381,7 @@ app.get("/fetchOPR", validateEventCode, async (req, res) => {
     res.send(result);
 });
 
-app.get("/fetchAlliances", validateEventCode, async (req, res) => {
+app.get("/api/fetchAlliances", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
     console.log("alliances requested, eventCode: " + eventCode);
 
@@ -423,7 +410,7 @@ app.get("/fetchAlliances", validateEventCode, async (req, res) => {
     res.send({ alliances: raw, available });
 });
 
-app.get("/fetchEventEpas", validateEventCode, async (req, res) => {
+app.get("/api/fetchEventEpas", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
     console.log("EPAs requested, eventCode: " + eventCode);
 
@@ -450,7 +437,7 @@ app.get("/fetchEventEpas", validateEventCode, async (req, res) => {
     res.send(raw);
 });
 
-app.get("/fetchElimsHaveStarted", validateEventCode, async (req, res) => {
+app.get("/api/fetchElimsHaveStarted", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
     console.log("elims check requested, eventCode: " + eventCode);
 
@@ -483,7 +470,7 @@ app.get("/fetchElimsHaveStarted", validateEventCode, async (req, res) => {
     res.send({ elimsHaveStarted: result });
 });
 
-app.get("/fetchMatchScores", async (req, res) => {
+app.get("/api/fetchMatchScores", async (req, res) => {
     const { eventCode, matchNumber, driveStation } = req.query;
     if (!eventCode || !matchNumber || !driveStation) return res.sendStatus(403);
     console.log("match scores requested, eventCode: " + eventCode);
@@ -525,7 +512,7 @@ app.get("/fetchMatchScores", async (req, res) => {
 ////////////// POST Methods \\\\\\\\\\\\\\
 ////////////// POST Methods \\\\\\\\\\\\\\
 
-app.post("/postEventCode", async (req, res) => {
+app.post("/api/postEventCode", async (req, res) => {
     eventCode = req.body.eventCode;
     if (!eventCode) {
         console.log("Event code could not be retrieved");
@@ -536,15 +523,15 @@ app.post("/postEventCode", async (req, res) => {
     }
 });
 
-app.post("/postRatings", (req, res) => {
+app.post("/api/postRatings", (req, res) => {
     postRatingHelper(req, res, "driverRatings");
 });
 
-app.post("/postHPRatings", (req, res) => {
+app.post("/api/postHPRatings", (req, res) => {
     postRatingHelper(req, res, "HPRatings");
 });
 
-app.post("/postPitScouting", validateEventCode, async (req, res) => {
+app.post("/api/postPitScouting", validateEventCode, async (req, res) => {
     let event = req.body.event;
     let team = req.body.team;
     let formData = req.body.formData;
@@ -564,7 +551,7 @@ app.post("/postPitScouting", validateEventCode, async (req, res) => {
     res.sendStatus(200);
 });
 
-app.post("/postQualitativeScouting", validateEventCode, async (req, res) => {
+app.post("/api/postQualitativeScouting", validateEventCode, async (req, res) => {
     let event = req.body.event;
     let match = req.body.match;
     let team = req.body.team;
@@ -586,7 +573,7 @@ app.post("/postQualitativeScouting", validateEventCode, async (req, res) => {
     res.sendStatus(200);
 });
 
-app.post("/postGompeiMadnessBracket", async (req, res) => {
+app.post("/api/postGompeiMadnessBracket", async (req, res) => {
     bracket = req.body.bracket;
     if (!bracket) {
         res.sendStatus(400);

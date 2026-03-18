@@ -1,6 +1,7 @@
 <script>
     import { onMount, tick } from "svelte";
     import { fetchAllData, fetchEvents, fetchPitScouting, fetchQualitativeScouting, fetchEventDetails, postPitScouting, postQualitativeScouting } from "../utils/api";
+    import { setScoutingData, getScoutingData, getLastId, clearScoutingData } from '../utils/indexedDB';
 
     let eventCode = localStorage.getItem("eventCode");
     let isLoading = false;
@@ -28,14 +29,17 @@
     }
 
     async function cacheAllData() {
+        console.log(await getScoutingData());
         await withLoading(async () => {
-            const localData = JSON.parse(localStorage.getItem("data") || "[]");
-            const lastId = localData.reduce((max, row) => Math.max(max, row.ID || row.id || row.Id || 0), 0);
+            console.log(eventCode);
+            const localData = await getScoutingData() || [];
+            const lastId = await getLastId(localData);
 
             const dataRes = await fetchAllData(eventCode, lastId);
             const dataText = await dataRes.text();
             const dataJson = dataText ? JSON.parse(dataText) : {};
             const newData = dataJson.data || [];
+            console.log(newData);
 
             const dataMap = new Map();
             for (const row of localData) {
@@ -47,7 +51,7 @@
                 dataMap.set(key, row);
             }
             const combinedData = Array.from(dataMap.values());
-            localStorage.setItem("data", JSON.stringify(combinedData));
+            setScoutingData(combinedData);
 
             const localPitStr = localStorage.getItem("retrievePit");
             const localPit = localPitStr ? JSON.parse(localPitStr) : {};
@@ -150,7 +154,7 @@
         const previousEventCode = localStorage.getItem("eventCode");
         if (previousEventCode && previousEventCode !== eventCode) {
             // Clear data when switching events
-            localStorage.removeItem("data");
+            clearScoutingData();
             localStorage.removeItem("retrievePit");
             localStorage.removeItem("retrieveQual");
         }

@@ -1,5 +1,7 @@
 <script>
   import { Router } from "@mateothegreat/svelte5-router";
+  import { onMount } from "svelte";
+  import { isSidebarOpen } from "./stores/sidebarState.js";
 
   import Navbar from "./components/Navbar.svelte";
   import Home from "./pages/Home.svelte";
@@ -25,22 +27,31 @@
     { path: "/matchPreview", component: MatchPreview },
     { path: "/qualPage", component: QualPage },
   ];
+
+  onMount(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/service_worker.js')
+        .then(reg => console.log('SW registered', reg))
+        .catch(err => console.error('SW failed', err));
+    }
+  });
 </script>
 
 <!-- Navbar is fixed, so we need padding on main content -->
 <Navbar />
-<main class="page-content">
+<main class="page-content" class:sidebar-collapsed={!$isSidebarOpen}>
   <Router {routes} />
 </main>
 
 <style>
-  /* Ensure navbar doesn't cover content */
+  /* Adjust for sidebar navbar */
   .page-content {
-    padding-top: 20px; /* same as Navbar height */
+    margin-left: 0;
+    padding: 20px;
+    min-height: 100vh;
   }
 
   main {
-    max-width: 1200px;
-    margin: 0 auto;
+    max-width: 100%;
   }
 </style>
