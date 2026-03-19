@@ -29,6 +29,8 @@
       sd
   } from "../../utils/pageUtils.js";
 
+  import {  getScoutingData } from '../../utils/indexedDB';
+
   ModuleRegistry.registerModules([AllCommunityModule]);
 
   // ─── Constants ────────────────────────────────────────────────────────────────
@@ -263,7 +265,7 @@
   // ─── Data Loading ─────────────────────────────────────────────────────────────
 
   async function fetchAllMetricData(): Promise<string | null> {
-    const stored = localStorage.getItem("data");
+    const stored = localStorage.getItem("data");;
     if (!stored) return null;
     return JSON.stringify(extractValues(JSON.parse(stored), autoOnly));
   }

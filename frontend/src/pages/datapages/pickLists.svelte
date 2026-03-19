@@ -881,25 +881,49 @@
             {#each Object.entries(picklists) as [key, list]}
               <div class="picklist">
                 <h2>
-                  {#if editingPicklistId === key}
-                    <input
-                      type="text"
-                      bind:value={editingPicklistName}
-                      onblur={() => finishEditing(key)}
-                      onkeydown={(e) => e.key === "Enter" && finishEditing(key)}
-                      onfocus={(e) => e.currentTarget.select()}
-                    />
-                  {:else}
-                    <span
-                      role="button"
-                      tabindex="0"
-                      onclick={() => startEditing(key, list.name)}
-                      onkeydown={(e) =>
-                        e.key === "Enter" && startEditing(key, list.name)}
+                  <div style="display: flex; gap: 8px; align-items: center;">
+                    <button
+                      onclick={() => copySinglePicklist(list)}
+                      style="background: transparent; border: none; padding: 0; display: flex; align-items: center; color: white; opacity: 0.8; cursor: pointer;"
+                      title="Copy to clipboard"
+                      aria-label="Copy to clipboard"
                     >
-                      {list.name}
-                    </span>
-                  {/if}
+                      <svg
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        ><rect x="9" y="9" width="13" height="13" rx="2" ry="2"
+                        ></rect><path
+                          d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+                        ></path></svg
+                      >
+                    </button>
+                    {#if editingPicklistId === key}
+                      <input
+                        type="text"
+                        bind:value={editingPicklistName}
+                        onblur={() => finishEditing(key)}
+                        onkeydown={(e) =>
+                          e.key === "Enter" && finishEditing(key)}
+                        onfocus={(e) => e.currentTarget.select()}
+                      />
+                    {:else}
+                      <span
+                        role="button"
+                        tabindex="0"
+                        onclick={() => startEditing(key, list.name)}
+                        onkeydown={(e) =>
+                          e.key === "Enter" && startEditing(key, list.name)}
+                      >
+                        {list.name}
+                      </span>
+                    {/if}
+                  </div>
                   <button
                     onclick={() => deletePickList(key)}
                     style="background: transparent; border: none; font-size: 1.2rem; padding: 0;"

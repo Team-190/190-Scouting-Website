@@ -1,6 +1,7 @@
 <script>
     import { onMount, tick } from "svelte";
     import { fetchAllData, fetchEvents, fetchPitScouting, fetchQualitativeScouting, fetchEventDetails, postPitScouting, postQualitativeScouting } from "../utils/api";
+    import { setScoutingData, getScoutingData, getLastId, clearScoutingData } from '../utils/indexedDB';
 
     let eventCode = localStorage.getItem("eventCode");
     let isLoading = false;

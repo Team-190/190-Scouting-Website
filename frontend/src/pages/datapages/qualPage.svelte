@@ -10,6 +10,14 @@
 
   const TELEOP_QUESTIONS = [
     {
+      id: "fuelScored",
+      label: "Fuel Scored",
+      hint: "Roughly how much fuel did this robot score during teleop?",
+      type: "slider",
+      min: 0,
+      max: 10,
+    },
+    {
       id: "trenchFeedVolume",
       label: "Trench Feed Volume",
       hint: "If this robot trench feeds, roughly how many balls do they move per trench feed?",
@@ -41,6 +49,16 @@
     },
   ];
 
+  const SLIDER_LABELS = ["None", "A little", "Moderate", "A lot", "Tons"];
+
+  function getSliderLabel(val) {
+    if (val == null || val == 0) return "None";
+    if (val <= 2) return `A little (${val})`;
+    if (val <= 5) return `Moderate (${val})`;
+    if (val <= 8) return `A lot (${val})`;
+    return `Tons (${val})`;
+  }
+
   // ─── State ────────────────────────────────────────────────────────────────────
 
   let phase = "auto";
@@ -58,7 +76,9 @@
   let fieldImg = null;
 
   let teleopAnswers = {};
-  TELEOP_QUESTIONS.forEach((q) => { teleopAnswers[q.id] = ""; });
+  TELEOP_QUESTIONS.forEach((q) => {
+    teleopAnswers[q.id] = q.type === "slider" ? 0 : "";
+  });
 
   // ─── Canvas bootstrap (Svelte action) ────────────────────────────────────────
   function initCanvas(node) {
@@ -164,27 +184,21 @@
 
     ctx.clearRect(0, 0, W, H);
 
-    // Field image background (crop left/right to show only the playing field)
     if (fieldImg && fieldImg.complete && fieldImg.naturalWidth > 0) {
       const imgW = fieldImg.naturalWidth;
       const imgH = fieldImg.naturalHeight;
-      // Crop ~15% from each side to remove scoring table / sideline areas
       const cropPct = 0.15;
       const sx = imgW * cropPct;
       const sw = imgW * (1 - 2 * cropPct);
-      // Vertically, fit the full height then cover-crop if needed
       const srcAspect = sw / imgH;
       const dstAspect = W / H;
       let finalSx = sx, finalSy = 0, finalSw = sw, finalSh = imgH;
-      // Shift the image up by biasing the vertical crop toward the top
-      const verticalBias = 0.6; // 0 = top, 0.5 = center, 1 = bottom
+      const verticalBias = 0.6;
       if (dstAspect > srcAspect) {
-        // canvas is wider than cropped source — crop top/bottom
         const needed = sw / dstAspect;
         finalSy = (imgH - needed) * verticalBias;
         finalSh = needed;
       } else {
-        // canvas is taller — crop a bit more left/right
         const needed = imgH * dstAspect;
         finalSx = sx + (sw - needed) / 2;
         finalSw = needed;
@@ -192,7 +206,6 @@
       ctx.drawImage(fieldImg, finalSx, finalSy, finalSw, finalSh, 0, 0, W, H);
     }
 
-    // Replay paths
     drawnPaths.forEach((path) => {
       if (path.length < 2) return;
       ctx.beginPath();
@@ -227,17 +240,14 @@
     localStorage.setItem("scoutingData", JSON.stringify(existing));
 
     try {
-
       for (let i = 0; i < existing.length; i++) {
         const response = await postQualitativeScouting(eventCode, existing[i].Team, existing[i].Match, existing[i]);
         if (response.ok) {
-          // Update retrieveQual with the successfully posted data
           const qualData = JSON.parse(localStorage.getItem("retrieveQual") || "{}");
           const teamKey = String(existing[i].Team).replace(/\D/g, "");
           if (!qualData[teamKey]) qualData[teamKey] = {};
           qualData[teamKey][existing[i].Match] = existing[i];
           localStorage.setItem("retrieveQual", JSON.stringify(qualData));
-
           existing.splice(i, 1);
           i--;
           localStorage.setItem("scoutingData", JSON.stringify(existing));
@@ -258,8 +268,9 @@
     scouterName = "";
     teleopAnswers = {};
     matchNumber += 1;
-    
-    TELEOP_QUESTIONS.forEach((q) => { teleopAnswers[q.id] = ""; });
+    TELEOP_QUESTIONS.forEach((q) => {
+      teleopAnswers[q.id] = q.type === "slider" ? 0 : "";
+    });
   }
 
   $: allianceColor = ROBOT_COLORS[alliance] || "#C81B00";
@@ -359,13 +370,41 @@
           <div class="question-card">
             <span class="question-label">{q.label}</span>
             <p class="question-hint">{q.hint}</p>
-            <textarea
-              id={q.id}
-              bind:value={teleopAnswers[q.id]}
-              placeholder="Your observations…"
-              class="notes-area"
-              rows="3"
-            ></textarea>
+
+            {#if q.type === "slider"}
+              <div class="slider-wrapper">
+                <div class="slider-track-labels">
+                  {#each SLIDER_LABELS as lbl}
+                    <span class="track-label">{lbl}</span>
+                  {/each}
+                </div>
+                <div class="slider-track-container">
+                  <div
+                    class="slider-fill"
+                    style="width: {((teleopAnswers[q.id] ?? 0) / q.max) * 100}%"
+                  ></div>
+                  <input
+                    type="range"
+                    min={q.min}
+                    max={q.max}
+                    step="1"
+                    bind:value={teleopAnswers[q.id]}
+                    class="fuel-slider"
+                  />
+                </div>
+                <div class="slider-value-pill">
+                  {getSliderLabel(teleopAnswers[q.id])}
+                </div>
+              </div>
+            {:else}
+              <textarea
+                id={q.id}
+                bind:value={teleopAnswers[q.id]}
+                placeholder="Your observations…"
+                class="notes-area"
+                rows="3"
+              ></textarea>
+            {/if}
           </div>
         {/each}
       </div>
@@ -426,34 +465,7 @@
   }
   .header-section .subtitle { color: #4d4d4d; font-size: 0.95rem; margin: 0; }
 
-  /* Phase indicator */
-  .phase-indicator {
-    display: flex; align-items: center; margin-bottom: 24px;
-    background: linear-gradient(135deg, #1a1a1a, #2d2d2d);
-    border: 2px solid var(--frc-red); border-radius: 40px; padding: 10px 24px;
-  }
-  .phase-step { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-  .phase-step.inactive { opacity: 0.35; }
-  .phase-dot {
-    width: 32px; height: 32px; border-radius: 50%;
-    background: #333; border: 2px solid #555;
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-size: 13px; color: white;
-  }
-  .phase-step.current .phase-dot { background: var(--frc-red); border-color: var(--frc-red); box-shadow: 0 0 12px rgba(200,27,0,0.6); }
-  .phase-step.active  .phase-dot { background: #444; border-color: var(--frc-red); }
-  .done-dot { background: #1a7a1a !important; border-color: #1a7a1a !important; }
-  .pulse-dot { animation: pulse 1.6s ease-in-out infinite; }
-  @keyframes pulse {
-    0%,100% { box-shadow: 0 0 6px rgba(200,27,0,0.4); }
-    50%      { box-shadow: 0 0 18px rgba(200,27,0,0.9); }
-  }
-  .phase-step span { font-size: 11px; font-weight: 600; color: #ccc; white-space: nowrap; }
-  .phase-step.current span { color: white; }
-  .phase-line { width: 36px; height: 2px; background: #444; margin-bottom: 16px; transition: background 0.3s; }
-  .phase-line.filled { background: var(--frc-red); }
-
-  /* Auto layout — card + side button */
+  /* Auto layout */
   .auto-layout {
     display: flex;
     align-items: stretch;
@@ -499,15 +511,6 @@
   }
   .styled-select:focus { outline: none; border-color: var(--frc-red); }
 
-  /* Alliance */
-  .alliance-toggle { display: flex; gap: 8px; }
-  .alliance-btn {
-    flex: 1; padding: 10px; border: 2px solid #555; border-radius: 6px;
-    background: #2d2d2d; color: #aaa; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;
-  }
-  .alliance-btn.active-red  { border-color: #c81b00; background: rgba(200,27,0,0.2); color: white; }
-  .alliance-btn.active-blue { border-color: #003087; background: rgba(0,48,135,0.25); color: white; }
-
   /* Canvas */
   .canvas-section { margin-bottom: 28px; }
   .canvas-header h3 { font-size: 1.05rem; font-weight: 700; margin: 0 0 4px; }
@@ -518,7 +521,7 @@
     background: #2d2d2d; color: #ccc; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;
   }
   .tool-btn:hover { border-color: #888; color: white; }
-  .tool-btn.tool-active { border-color: var(--alliance-color, var(--frc-red)); background: rgba(255,255,255,0.07); color: white; }
+  .tool-btn.tool-active { border-color: var(--frc-red); background: rgba(255,255,255,0.07); color: white; }
   .clear-btn { border-color: var(--frc-red); }
   .clear-btn:hover { background: rgba(200,27,0,0.15); }
   .canvas-wrapper {
@@ -549,7 +552,6 @@
     width: 100%;
   }
 
-  /* Side teleop button — stretches full height of the auto-layout */
   .side-teleop-btn {
     width: 260px;
     flex-shrink: 0;
@@ -562,15 +564,10 @@
     text-align: center;
     font-size: 13px;
   }
-
-  .side-teleop-btn svg {
-    flex-shrink: 0;
-  }
+  .side-teleop-btn svg { flex-shrink: 0; }
 
   .teleop-btn { background: linear-gradient(135deg, var(--frc-red), #a01500); color: white; box-shadow: 0 4px 20px rgba(200,27,0,0.4); }
   .teleop-btn:hover { filter: brightness(1.1); transform: translateY(-2px); box-shadow: 0 8px 28px rgba(200,27,0,0.55); }
-
-  /* Override translateY for side button since it's horizontal */
   .side-teleop-btn:hover { transform: none; filter: brightness(1.12); }
 
   .submit-btn { background: linear-gradient(135deg, #1a6b1a, #0f4d0f); color: white; box-shadow: 0 4px 20px rgba(26,107,26,0.4); }
@@ -598,6 +595,117 @@
     margin-top: 4px;
   }
   .notes-area:focus { outline: none; border-color: var(--frc-red); }
+
+  /* ── Fuel Slider ──────────────────────────────────────────────────────────── */
+  .slider-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 4px 0;
+  }
+
+  .slider-track-labels {
+    display: flex;
+    justify-content: space-between;
+    padding: 0 2px;
+  }
+
+  .track-label {
+    font-size: 11px;
+    color: #666;
+    font-weight: 500;
+    text-align: center;
+  }
+
+  .slider-track-container {
+    position: relative;
+    height: 24px;
+    display: flex;
+    align-items: center;
+  }
+
+  .slider-fill {
+    position: absolute;
+    left: 0;
+    height: 6px;
+    background: var(--frc-red);
+    border-radius: 3px 0 0 3px;
+    pointer-events: none;
+    transition: width 0.05s;
+    z-index: 1;
+  }
+
+  .fuel-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: #444;
+    outline: none;
+    cursor: pointer;
+    margin: 0;
+  }
+
+  .fuel-slider::-webkit-slider-runnable-track {
+    background: transparent;
+    height: 6px;
+    border-radius: 3px;
+  }
+
+  .fuel-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: white;
+    border: 3px solid var(--frc-red);
+    cursor: grab;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    margin-top: -9px;
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+
+  .fuel-slider::-webkit-slider-thumb:active {
+    cursor: grabbing;
+    transform: scale(1.15);
+    box-shadow: 0 0 0 4px rgba(200,27,0,0.25);
+  }
+
+  .fuel-slider::-moz-range-track {
+    background: transparent;
+    height: 6px;
+    border-radius: 3px;
+  }
+
+  .fuel-slider::-moz-range-thumb {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: white;
+    border: 3px solid var(--frc-red);
+    cursor: grab;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  }
+
+  .fuel-slider::-moz-range-progress {
+    background: var(--frc-red);
+    height: 6px;
+    border-radius: 3px;
+  }
+
+  .slider-value-pill {
+    text-align: center;
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--frc-red);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    min-height: 18px;
+  }
 
   /* Teleop actions */
   .teleop-actions { display: flex; gap: 12px; align-items: center; }
