@@ -267,7 +267,7 @@
   async function fetchAllMetricData(): Promise<string | null> {
     const stored = await getScoutingData();
     if (!stored) return null;
-    return JSON.stringify(extractValues(JSON.parse(stored), autoOnly));
+    return JSON.stringify(extractValues(stored, autoOnly));
   }
 
   async function estimateTeamPoints(

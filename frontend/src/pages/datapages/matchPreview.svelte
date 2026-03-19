@@ -752,7 +752,7 @@
     isLoading = true;
     try {
       const stored = await getScoutingData();
-      const parsed = stored ? JSON.parse(stored) : [];
+      const parsed = stored ? stored : [];
       teamViewData = extractValues(parsed, autoOnly);
       eventCode    = localStorage.getItem("eventCode") || "";
 

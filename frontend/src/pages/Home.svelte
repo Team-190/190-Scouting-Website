@@ -30,8 +30,6 @@
 
     async function cacheAllData() {
         await withLoading(async () => {
-            const y = await clearScoutingData();
-            console.log(y);
             const localData = await getScoutingData() || [];
             const lastId = await getLastId(localData);
             
@@ -50,11 +48,7 @@
                 dataMap.set(key, row);
             }
             const combinedData = Array.from(dataMap.values());
-            const x = await setScoutingData(combinedData);
-            console.log(combinedData);
-
-            console.log(x)
-            console.log("m")
+            await setScoutingData(combinedData);
 
             const localPitStr = localStorage.getItem("retrievePit");
             const localPit = localPitStr ? JSON.parse(localPitStr) : {};

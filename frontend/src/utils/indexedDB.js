@@ -33,6 +33,7 @@ function openDB() {
 
 // Store an array of scouting rows (bulk write)
 export async function setScoutingData(rows) {
+    console.log('setScoutingData called with', rows.length, 'rows');
     const db = await openDB();
     return new Promise((resolve, reject) => {
         const tx = db.transaction(STORE, 'readwrite');
@@ -40,22 +41,29 @@ export async function setScoutingData(rows) {
         for (const row of rows) {
             store.put(row);
         }
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
+        tx.oncomplete = () => {
+            console.log('transaction complete');
+            resolve();
+        }
+        tx.onerror = () => {
+            console.log('transaction error', tx.error);
+            reject(tx.error);
+        }
+        tx.onabort = () => {
+            console.log('transaction aborted', tx.error);
+        }
     });
 }
 
 // Wipe all stored scouting data (call this when switching events)
 export async function clearScoutingData() {
-    console.log("x");
     const db = await openDB();
     return new Promise((resolve, reject) => {
-        console.log("a");
         const tx = db.transaction(STORE, 'readwrite');
         const store = tx.objectStore(STORE);
         const request = store.clear();
-        request.onsuccess = () => {resolve(); console.log("success");};
-        request.onerror = () => {reject(request.error); console.error(request.error);};
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
     });
 }
 
