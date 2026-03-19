@@ -1,5 +1,5 @@
 const CACHE_NAME = 'app-shell-v1';
-
+const IS_DEV = self.location.hostname === 'localhost';
 const APP_SHELL = ['/', '/index.html'];
 
 self.addEventListener('install', event => {
@@ -23,21 +23,24 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
+  if (IS_DEV) return;
   const url = new URL(event.request.url);
 
-  if (url.origin !== self.location.origin) {
-    return;
-  }
+  // Let API calls through untouched
+  if (url.origin !== self.location.origin) return;
 
   event.respondWith(
-    caches.match(event.request).then(cached => {
-      if (cached) return cached;
+    caches.open(CACHE_NAME).then(async cache => {
+      const cached = await cache.match(event.request);
 
-      return fetch(event.request).then(response => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+      // Always try to fetch a fresh version in the background
+      const fetchPromise = fetch(event.request).then(response => {
+        cache.put(event.request, response.clone());
         return response;
-      });
+      }).catch(() => null); // if network fails, silently fall back
+
+      // Return cached immediately if available, otherwise wait for network
+      return cached ?? await fetchPromise;
     })
   );
 });
