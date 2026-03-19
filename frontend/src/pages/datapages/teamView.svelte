@@ -241,7 +241,7 @@
   // ─── Data Loading ─────────────────────────────────────────────────────────────
 
   async function loadTeamNumbers(): Promise<number[]> {
-    const storedData = localStorage.getItem("data");;
+    const storedData = await getScoutingData();
     if (!storedData) return [];
     try {
       const parsed = storedData;
