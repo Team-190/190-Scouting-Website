@@ -265,7 +265,7 @@
   // ─── Data Loading ─────────────────────────────────────────────────────────────
 
   async function fetchAllMetricData(): Promise<string | null> {
-    const stored = await getScoutingData();
+    const stored = localStorage.getItem("data");;
     if (!stored) return null;
     return JSON.stringify(extractValues(stored, autoOnly));
   }
@@ -293,40 +293,97 @@
 
     const redKeys = tbaMatch.alliances.red.team_keys.map((k) => k.replace("frc", ""));
     const onRed = redKeys.includes(teamStrClean);
-    const allianceScore = onRed
-      ? tbaMatch.alliances.red.score
-      : tbaMatch.alliances.blue.score;
-    const allianceTeams = (onRed
-      ? tbaMatch.alliances.red.team_keys
-      : tbaMatch.alliances.blue.team_keys
-    ).map((k) => k.replace("frc", ""));
+    const allianceScoreBreakdown = onRed
+      ? tbaMatch.score_breakdown?.red
+      : tbaMatch.score_breakdown?.blue;
+    if (!allianceScoreBreakdown) return null;
+
+    // Define game phases with their time windows (in seconds from match start)
+    // scoreKey accesses hubScore nested object
+    const phases = [
+      { name: "Auto", start: 0, end: 20, scoreKey: "autoPoints" },
+      { name: "Transition", start: 20, end: 30, scoreKey: "transitionPoints" },
+      { name: "Phase1", start: 30, end: 55, scoreKey: "shift1Points" },
+      { name: "Phase2", start: 55, end: 80, scoreKey: "shift2Points" },
+      { name: "Phase3", start: 80, end: 105, scoreKey: "shift3Points" },
+      { name: "Phase4", start: 105, end: 130, scoreKey: "shift4Points" },
+      { name: "Endgame", start: 130, end: 160, scoreKey: "endgamePoints" }
+    ];
+
+    // Find EndAuto time to determine actual auto phase end
+    let autoEndTime = 20; // default
+    const endAutoRow = teamRows.find((row) => String(row.RecordType).toLowerCase() === "endauto");
+    if (endAutoRow && isNumeric(endAutoRow.Time)) {
+      autoEndTime = Number(endAutoRow.Time);
+    }
+
+    // Determine which phases the team was active in based on their data points
+    const teamActivePhases = new Set<string>();
     
-    const sumShootingTime = (rows) =>
-      rows.reduce((sum, row) => {
-        const v = row.FuelShootingTime;
-        return sum + (isNumeric(v) && Number(v) > 0 ? Number(v) : 0);
-      }, 0);
+    // Mark auto phase if any data exists before/at autoEndTime
+    if (teamRows.some((row) => !isNumeric(row.Time) || Number(row.Time) <= autoEndTime)) {
+      teamActivePhases.add("Auto");
+    }
 
-    const teamShootingTime = sumShootingTime(teamRows);
-    const allianceRows = data.filter((row) => {
-      if (row.RecordType === "Match_Event") return false;
-      return Number(row.Match) === matchNumber
-        && allianceTeams.includes(String(row.Team || row.team || "").replace(/\D/g, ""));
-    });
-    const totalAllianceShootingTime = sumShootingTime(allianceRows);
-
-    const pointsPerSecond = totalAllianceShootingTime > 0 ? allianceScore / totalAllianceShootingTime : 0;
-    const estimatedPoints = Math.round(teamShootingTime * pointsPerSecond * 10) / 10;
-
-    console.log(`[Match ${matchNumber}] Team ${teamStr}`, {
-      allianceColor: onRed ? "red" : "blue",
-      allianceTeams, allianceScore, teamShootingTime,
-      totalAllianceShootingTime,
-      pointsPerSecond: pointsPerSecond.toFixed(4),
-      estimatedPoints,
+    // Check other phases based on Time column
+    teamRows.forEach((row) => {
+      if (!isNumeric(row.Time)) return;
+      const time = Number(row.Time);
+      
+      phases.forEach((phase) => {
+        if (phase.name !== "Auto" && time >= phase.start && time <= phase.end) {
+          teamActivePhases.add(phase.name);
+        }
+      });
     });
 
-    return estimatedPoints;
+    // Calculate this team's total FuelShootingTime
+    let teamFuelShootingTime = 0;
+    teamRows.forEach((row) => {
+      if (isNumeric(row.FuelShootingTime)) {
+        teamFuelShootingTime += Number(row.FuelShootingTime);
+      }
+    });
+
+    // Get shooting times for all alliance teams
+    const allianceTeams = onRed ? tbaMatch.alliances.red.team_keys : tbaMatch.alliances.blue.team_keys;
+    const allianceTeamNumbers = allianceTeams.map((k) => String(k).replace("frc", ""));
+
+    let totalAllianceShootingTime = 0;
+    for (const allyTeamNum of allianceTeamNumbers) {
+      const allyRows = data.filter((row) => {
+        if (row.RecordType === "Match_Event") return false;
+        return String(row.Team || row.team || "").replace(/\D/g, "") === allyTeamNum
+          && Number(row.Match) === matchNumber;
+      });
+      
+      allyRows.forEach((row) => {
+        if (isNumeric(row.FuelShootingTime)) {
+          totalAllianceShootingTime += Number(row.FuelShootingTime);
+        }
+      });
+    }
+
+    // Calculate this team's percentage of total alliance shooting time
+    const teamShootingPercentage = totalAllianceShootingTime > 0 
+      ? teamFuelShootingTime / totalAllianceShootingTime 
+      : 0;
+
+    // Estimate team's points contribution across ALL phases
+    // Weight each phase score by this team's shooting time contribution percentage
+    let estimatedPoints = 0;
+    
+    const hubScore = allianceScoreBreakdown.hubScore;
+    if (hubScore) {
+      phases.forEach((phase) => {
+        const phaseScore = hubScore[phase.scoreKey] || 0;
+        if (phaseScore > 0 && teamShootingPercentage > 0) {
+          estimatedPoints += phaseScore * teamShootingPercentage;
+        }
+      });
+    }
+
+    return estimatedPoints > 0 ? Math.round(estimatedPoints * 10) / 10 : null;
   }
 
   function processTeamData(allRows: any[]) {
@@ -1017,7 +1074,7 @@
     });
   }
 
-  $: if (selectedMetric === OPR_DISPLAY && Object.keys(teamOPRs).length && !loading) {
+  $: if (selectedMetric === OPR_DISPLAY && !loading) {
     buildGrid();
   }
 

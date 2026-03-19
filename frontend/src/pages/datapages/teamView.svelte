@@ -241,7 +241,7 @@
   // ─── Data Loading ─────────────────────────────────────────────────────────────
 
   async function loadTeamNumbers(): Promise<number[]> {
-    const storedData = await getScoutingData();
+    const storedData = localStorage.getItem("data");;
     if (!storedData) return [];
     try {
       const parsed = storedData;
@@ -267,8 +267,9 @@
    */
   async function fetchTeamOPR(teamNumber: string) {
     if (!eventCode || !teamNumber) { teamOPR = null; return; }
+    const teamNumStr = String(teamNumber).replace(/\D/g, "");
     const { oprs } = await fetchOPR(eventCode);
-    teamOPR = (oprs[`frc${teamNumber}`] as number) ?? null;
+    teamOPR = (oprs[`frc${teamNumStr}`] as number) ?? null;
   }
 
   /**
@@ -296,51 +297,10 @@
 
     const redKeys = tbaMatch.alliances.red.team_keys.map((k) => k.replace("frc", ""));
     const onRed = redKeys.includes(teamStrClean);
-    const allianceScoreBreakdown = onRed
-      ? tbaMatch.score_breakdown?.red
-      : tbaMatch.score_breakdown?.blue;
-    if (!allianceScoreBreakdown) return null;
+    const allianceScore = onRed
+      ? tbaMatch.alliances.red.score
+      : tbaMatch.alliances.blue.score;
 
-    // Define game phases with their time windows (in seconds from match start)
-    // scoreKey accesses hubScore nested object
-    const phases = [
-      { name: "Auto", start: 0, end: 20, scoreKey: "autoPoints" },
-      { name: "Transition", start: 20, end: 30, scoreKey: "transitionPoints" },
-      { name: "Phase1", start: 30, end: 55, scoreKey: "shift1Points" },
-      { name: "Phase2", start: 55, end: 80, scoreKey: "shift2Points" },
-      { name: "Phase3", start: 80, end: 105, scoreKey: "shift3Points" },
-      { name: "Phase4", start: 105, end: 130, scoreKey: "shift4Points" },
-      { name: "Endgame", start: 130, end: 160, scoreKey: "endgamePoints" }
-    ];
-
-    // Find EndAuto time to determine actual auto phase end
-    let autoEndTime = 20; // default
-    const endAutoRow = teamRows.find((row) => String(row.RecordType).toLowerCase() === "endauto");
-    if (endAutoRow && isNumeric(endAutoRow.Time)) {
-      autoEndTime = Number(endAutoRow.Time);
-    }
-
-    // Determine which phases the team was active in based on their data points
-    const teamActivePhases = new Set<string>();
-    
-    // Mark auto phase if any data exists before/at autoEndTime
-    if (teamRows.some((row) => !isNumeric(row.Time) || Number(row.Time) <= autoEndTime)) {
-      teamActivePhases.add("Auto");
-    }
-
-    // Check other phases based on Time column
-    teamRows.forEach((row) => {
-      if (!isNumeric(row.Time)) return;
-      const time = Number(row.Time);
-      
-      phases.forEach((phase) => {
-        if (phase.name !== "Auto" && time >= phase.start && time <= phase.end) {
-          teamActivePhases.add(phase.name);
-        }
-      });
-    });
-
-    // Calculate this team's total FuelShootingTime
     let teamFuelShootingTime = 0;
     teamRows.forEach((row) => {
       if (isNumeric(row.FuelShootingTime)) {
@@ -348,7 +308,6 @@
       }
     });
 
-    // Get shooting times for all alliance teams
     const allianceTeams = onRed ? tbaMatch.alliances.red.team_keys : tbaMatch.alliances.blue.team_keys;
     const allianceTeamNumbers = allianceTeams.map((k) => String(k).replace("frc", ""));
 
@@ -367,26 +326,10 @@
       });
     }
 
-    // Calculate this team's percentage of total alliance shooting time
-    const teamShootingPercentage = totalAllianceShootingTime > 0 
-      ? teamFuelShootingTime / totalAllianceShootingTime 
-      : 0;
+    const pointsPerSecond = totalAllianceShootingTime > 0 ? allianceScore / totalAllianceShootingTime : 0;
+    const estimatedPoints = Math.round(teamFuelShootingTime * pointsPerSecond * 10) / 10;
 
-    // Estimate team's points contribution across ALL phases
-    // Weight each phase score by this team's shooting time contribution percentage
-    let estimatedPoints = 0;
-    
-    const hubScore = allianceScoreBreakdown.hubScore;
-    if (hubScore) {
-      phases.forEach((phase) => {
-        const phaseScore = hubScore[phase.scoreKey] || 0;
-        if (phaseScore > 0 && teamShootingPercentage > 0) {
-          estimatedPoints += phaseScore * teamShootingPercentage;
-        }
-      });
-    }
-
-    return estimatedPoints > 0 ? Math.round(estimatedPoints * 10) / 10 : null;
+    return estimatedPoints > 0 ? estimatedPoints : null;
   }
 
   /** Aggregates per-match zone-time percentages for a given team number string. */

@@ -1,5 +1,5 @@
 <script>
-    import baseX from "base-x"
+    import baseX from "base-x";
     import pako from "pako";
     import { writable } from "svelte/store";
     import Team from "../../components/Team.svelte";
@@ -14,7 +14,7 @@
     // ─── CONSTANTS ──────────────────────────────────────────────────────────────
 
     const BASE85_CHARS =
-        "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!#$%&()*+-;<=>?@^_`{|}~";
+        "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
     const bs85 = baseX(BASE85_CHARS);
 
     // ─── STORES ─────────────────────────────────────────────────────────────────
@@ -154,7 +154,11 @@
      * @param {object} pickingAlliance
      * @param {number} pickingAllianceIndex
      */
-    function pickTeamForAlliance(sortedTeams, pickingAlliance, pickingAllianceIndex) {
+    function pickTeamForAlliance(
+        sortedTeams,
+        pickingAlliance,
+        pickingAllianceIndex,
+    ) {
         const maxTeams = isFourTeamAlliance ? 4 : 3;
         if (pickingAlliance.teams.length >= maxTeams) return;
 
@@ -187,7 +191,9 @@
         pickingAlliance.teams.push(teamToPick);
 
         if (originalAlliance) {
-            const vacantIndex = alliances.findIndex((a) => a.id === originalAlliance.id);
+            const vacantIndex = alliances.findIndex(
+                (a) => a.id === originalAlliance.id,
+            );
             if (vacantIndex === -1) return;
 
             // Shift captains up from the vacated spot
@@ -212,34 +218,38 @@
     // ─── DATA FETCHING ───────────────────────────────────────────────────────────
 
     async function getTeams() {
-    if (!eventCode) {
-        alert("Please select an event first.");
-        return;
+        if (!eventCode) {
+            alert("Please select an event first.");
+            return;
+        }
+        try {
+            const [{ _teams, _teamNumbers }, teamRanksRaw] = await Promise.all([
+                fetchTeams(eventCode),
+                fetchTeamStatuses(eventCode),
+            ]);
+
+            const teamsMap = new Map(
+                Object.entries(_teams).map(([k, v]) => [Number(k), v]),
+            );
+            const _teamRanks = new Map(
+                Object.entries(teamRanksRaw).map(([k, v]) => [Number(k), v]),
+            );
+
+            _teamNumbers.sort((a, b) => {
+                const rankA = _teamRanks.get(a);
+                const rankB = _teamRanks.get(b);
+                if (rankA != null && rankB != null) return rankA - rankB;
+                if (rankA != null) return -1;
+                if (rankB != null) return 1;
+                return a - b;
+            });
+
+            teamsStore.set({ _teams: teamsMap, _teamNumbers, _teamRanks });
+        } catch (err) {
+            console.error(err);
+            alert("Failed to fetch teams for this event.");
+        }
     }
-    try {
-        const [{ _teams, _teamNumbers }, teamRanksRaw] = await Promise.all([
-            fetchTeams(eventCode),
-            fetchTeamStatuses(eventCode),
-        ]);
-
-        const teamsMap = new Map(Object.entries(_teams).map(([k, v]) => [Number(k), v]));
-        const _teamRanks = new Map(Object.entries(teamRanksRaw).map(([k, v]) => [Number(k), v]));
-
-        _teamNumbers.sort((a, b) => {
-            const rankA = _teamRanks.get(a);
-            const rankB = _teamRanks.get(b);
-            if (rankA != null && rankB != null) return rankA - rankB;
-            if (rankA != null) return -1;
-            if (rankB != null) return 1;
-            return a - b;
-        });
-
-        teamsStore.set({ _teams: teamsMap, _teamNumbers, _teamRanks });
-    } catch (err) {
-        console.error(err);
-        alert("Failed to fetch teams for this event.");
-    }
-}
 
     async function populateAllianceCaptains() {
         if (!eventCode) {
@@ -269,7 +279,9 @@
             });
 
             if (rankedTeams.length < 8) {
-                alert("Not enough ranked teams to populate all 8 alliance captain spots.");
+                alert(
+                    "Not enough ranked teams to populate all 8 alliance captain spots.",
+                );
             }
         } catch (err) {
             console.error(err);
@@ -284,18 +296,25 @@
         await populateAllianceCaptains();
 
         if (rankedTeams.length === 0) {
-            alert("Please ensure team rankings are loaded. The new selection may be empty.");
+            alert(
+                "Please ensure team rankings are loaded. The new selection may be empty.",
+            );
             return;
         }
 
         const occupied = () =>
-            new Set(alliances.flatMap((a) => a.teams.map((t) => t.team_number)));
+            new Set(
+                alliances.flatMap((a) => a.teams.map((t) => t.team_number)),
+            );
 
-        let available = rankedTeams.filter((rt) => !occupied().has(rt.team_number));
+        let available = rankedTeams.filter(
+            (rt) => !occupied().has(rt.team_number),
+        );
 
         const pickNext = (alliance) => {
             const maxTeams = isFourTeamAlliance ? 4 : 3;
-            if (alliance.teams.length >= maxTeams || available.length === 0) return;
+            if (alliance.teams.length >= maxTeams || available.length === 0)
+                return;
             const next = available.shift();
             const team = teamFromStore(next.team_number);
             if (team.nickname) alliance.teams.push(team);
@@ -319,7 +338,9 @@
         await populateAllianceCaptains();
 
         if (!alliances.every((a) => a.teams.length > 0)) {
-            alert("Could not populate all alliance captains. The new selection may be incomplete.");
+            alert(
+                "Could not populate all alliance captains. The new selection may be incomplete.",
+            );
             return;
         }
 
@@ -331,13 +352,18 @@
 
         const oprSortedTeams = Object.entries(oprs)
             .sort(([, a], [, b]) => b - a)
-            .map(([teamKey]) => teamFromStore(parseInt(teamKey.replace("frc", ""))))
+            .map(([teamKey]) =>
+                teamFromStore(parseInt(teamKey.replace("frc", ""))),
+            )
             .filter((t) => t.nickname != null);
 
-        for (let i = 0; i < 8; i++) pickTeamForAlliance(oprSortedTeams, alliances[i], i);
-        for (let i = 7; i >= 0; i--) pickTeamForAlliance(oprSortedTeams, alliances[i], i);
+        for (let i = 0; i < 8; i++)
+            pickTeamForAlliance(oprSortedTeams, alliances[i], i);
+        for (let i = 7; i >= 0; i--)
+            pickTeamForAlliance(oprSortedTeams, alliances[i], i);
         if (isFourTeamAlliance) {
-            for (let i = 7; i >= 0; i--) pickTeamForAlliance(oprSortedTeams, alliances[i], i);
+            for (let i = 7; i >= 0; i--)
+                pickTeamForAlliance(oprSortedTeams, alliances[i], i);
         }
     }
 
@@ -351,7 +377,9 @@
         await populateAllianceCaptains();
 
         if (!alliances.every((a) => a.teams.length > 0)) {
-            alert("Could not populate all alliance captains. The new selection may be incomplete.");
+            alert(
+                "Could not populate all alliance captains. The new selection may be incomplete.",
+            );
             return;
         }
 
@@ -366,10 +394,13 @@
             .map((stat) => teamFromStore(stat.team))
             .filter((t) => t.nickname != null);
 
-        for (let i = 0; i < 8; i++) pickTeamForAlliance(epaSortedTeams, alliances[i], i);
-        for (let i = 7; i >= 0; i--) pickTeamForAlliance(epaSortedTeams, alliances[i], i);
+        for (let i = 0; i < 8; i++)
+            pickTeamForAlliance(epaSortedTeams, alliances[i], i);
+        for (let i = 7; i >= 0; i--)
+            pickTeamForAlliance(epaSortedTeams, alliances[i], i);
         if (isFourTeamAlliance) {
-            for (let i = 7; i >= 0; i--) pickTeamForAlliance(epaSortedTeams, alliances[i], i);
+            for (let i = 7; i >= 0; i--)
+                pickTeamForAlliance(epaSortedTeams, alliances[i], i);
         }
     }
 
@@ -402,7 +433,10 @@
         const originalName = picklists[id]?.name;
 
         if (newName !== originalName) {
-            if (newName && !Object.values(picklists).some((p) => p.name === newName)) {
+            if (
+                newName &&
+                !Object.values(picklists).some((p) => p.name === newName)
+            ) {
                 picklists[id].name = newName;
             } else {
                 alert("Picklist name cannot be empty or already exist.");
@@ -438,10 +472,15 @@
 
         const sortedTeams = Object.entries(oprs)
             .sort(([, a], [, b]) => b - a)
-            .map(([teamKey]) => teamFromStore(parseInt(teamKey.replace("frc", ""))))
+            .map(([teamKey]) =>
+                teamFromStore(parseInt(teamKey.replace("frc", ""))),
+            )
             .filter((t) => t.nickname != null);
 
-        picklists[`picklist_${Date.now()}`] = { name: picklistName, teams: sortedTeams };
+        picklists[`picklist_${Date.now()}`] = {
+            name: picklistName,
+            teams: sortedTeams,
+        };
     }
 
     async function createEpaPicklist() {
@@ -469,7 +508,10 @@
             .map((stat) => teamFromStore(stat.team))
             .filter((t) => t.nickname != null);
 
-        picklists[`picklist_${Date.now()}`] = { name: picklistName, teams: sortedTeams };
+        picklists[`picklist_${Date.now()}`] = {
+            name: picklistName,
+            teams: sortedTeams,
+        };
     }
 
     // ─── IMPORT / EXPORT ─────────────────────────────────────────────────────────
@@ -477,7 +519,9 @@
     async function copySinglePicklist(list) {
         const dataString = `${list.name}:${list.teams.map((t) => t.team_number).join(",")}`;
         try {
-            await navigator.clipboard.writeText(bs85.encode(pako.deflate(dataString)));
+            await navigator.clipboard.writeText(
+                bs85.encode(pako.deflate(dataString)),
+            );
         } catch (err) {
             console.error("Failed to copy text:", err);
             alert("Failed to copy picklist.");
@@ -486,11 +530,16 @@
 
     async function exportPicklists() {
         const dataString = Object.values(picklists)
-            .map((list) => `${list.name}:${list.teams.map((t) => t.team_number).join(",")}`)
+            .map(
+                (list) =>
+                    `${list.name}:${list.teams.map((t) => t.team_number).join(",")}`,
+            )
             .join(";");
 
         try {
-            await navigator.clipboard.writeText(bs85.encode(pako.deflate(dataString)));
+            await navigator.clipboard.writeText(
+                bs85.encode(pako.deflate(dataString)),
+            );
         } catch (err) {
             console.error("Failed to copy text:", err);
             alert("Failed to copy picklists.");
@@ -503,7 +552,9 @@
             return;
         }
         try {
-            const decompressed = pako.inflate(bs85.decode(importData), { to: "string" });
+            const decompressed = pako.inflate(bs85.decode(importData), {
+                to: "string",
+            });
             const newPicklists = {};
 
             for (const listData of decompressed.split(";")) {
@@ -511,7 +562,9 @@
                 const [name, teamNumbersStr] = listData.split(":");
                 if (!name) continue;
 
-                const teamNumbers = teamNumbersStr ? teamNumbersStr.split(",") : [];
+                const teamNumbers = teamNumbersStr
+                    ? teamNumbersStr.split(",")
+                    : [];
                 const teams = teamNumbers
                     .map((numStr) => {
                         const num = parseInt(numStr);
@@ -520,7 +573,10 @@
                     })
                     .filter(Boolean);
 
-                newPicklists[`picklist_${Date.now()}_${Math.random()}`] = { name, teams };
+                newPicklists[`picklist_${Date.now()}_${Math.random()}`] = {
+                    name,
+                    teams,
+                };
             }
 
             picklists = newPicklists;
@@ -549,14 +605,20 @@
         const list = picklists[listKey]?.teams;
         if (!list) return;
 
-        const draggedIndex = list.findIndex((t) => t.team_number === item.team_number);
+        const draggedIndex = list.findIndex(
+            (t) => t.team_number === item.team_number,
+        );
         const targetElement = event.target.closest(".list-item");
         if (!targetElement) return;
 
         const targetNumber = Number(targetElement.dataset.teamNumber);
         const dropIndex = list.findIndex((t) => t.team_number === targetNumber);
 
-        if (draggedIndex !== -1 && dropIndex !== -1 && draggedIndex !== dropIndex) {
+        if (
+            draggedIndex !== -1 &&
+            dropIndex !== -1 &&
+            draggedIndex !== dropIndex
+        ) {
             const [moved] = list.splice(draggedIndex, 1);
             list.splice(dropIndex, 0, moved);
         }
@@ -572,13 +634,18 @@
         }
 
         const target = picklists[targetListKey];
-        if (target && !target.teams.some((t) => t.team_number === item.team_number)) {
+        if (
+            target &&
+            !target.teams.some((t) => t.team_number === item.team_number)
+        ) {
             target.teams.push(item);
         }
 
         if (sourceList && sourceList !== "teams" && picklists[sourceList]) {
             const source = picklists[sourceList];
-            const index = source.teams.findIndex((t) => t.team_number === item.team_number);
+            const index = source.teams.findIndex(
+                (t) => t.team_number === item.team_number,
+            );
             if (index > -1) source.teams.splice(index, 1);
         }
 
@@ -590,26 +657,34 @@
         if (
             event.target.closest(".picklist .list") ||
             event.target.closest(".alliance-list .list")
-        ) return;
+        )
+            return;
 
         const { item, sourceList } = draggedItem;
 
         if (sourceList && sourceList !== "teams" && picklists[sourceList]) {
             const source = picklists[sourceList];
-            const index = source.teams.findIndex((t) => t.team_number === item.team_number);
+            const index = source.teams.findIndex(
+                (t) => t.team_number === item.team_number,
+            );
             if (index > -1) {
                 source.teams.splice(index, 1);
                 picklists = { ...picklists };
             }
         } else if (sourceList?.startsWith("alliance_")) {
             const sourceAllianceId = parseInt(sourceList.split("_")[1]);
-            const sourceAlliance = alliances.find((a) => a.id === sourceAllianceId);
+            const sourceAlliance = alliances.find(
+                (a) => a.id === sourceAllianceId,
+            );
             if (sourceAlliance) {
-                const index = sourceAlliance.teams.findIndex((t) => t.team_number === item.team_number);
+                const index = sourceAlliance.teams.findIndex(
+                    (t) => t.team_number === item.team_number,
+                );
                 if (index > -1) {
                     sourceAlliance.teams.splice(index, 1);
                     alliances = [...alliances];
-                    if (index === 0 && sourceAlliance.id <= 8) updateAllianceCaptains();
+                    if (index === 0 && sourceAlliance.id <= 8)
+                        updateAllianceCaptains();
                 }
             }
         }
@@ -634,19 +709,28 @@
             return;
         }
 
-        if (!targetAlliance.teams.some((t) => t.team_number === item.team_number)) {
+        if (
+            !targetAlliance.teams.some(
+                (t) => t.team_number === item.team_number,
+            )
+        ) {
             targetAlliance.teams.push(item);
         }
 
         if (sourceList?.startsWith("alliance_")) {
             const sourceAllianceId = parseInt(sourceList.split("_")[1]);
             if (sourceAllianceId !== targetAllianceId) {
-                const sourceAlliance = alliances.find((a) => a.id === sourceAllianceId);
+                const sourceAlliance = alliances.find(
+                    (a) => a.id === sourceAllianceId,
+                );
                 if (sourceAlliance) {
-                    const index = sourceAlliance.teams.findIndex((t) => t.team_number === item.team_number);
+                    const index = sourceAlliance.teams.findIndex(
+                        (t) => t.team_number === item.team_number,
+                    );
                     if (index > -1) {
                         sourceAlliance.teams.splice(index, 1);
-                        if (index === 0 && sourceAlliance.id <= 8) updateAllianceCaptains();
+                        if (index === 0 && sourceAlliance.id <= 8)
+                            updateAllianceCaptains();
                     }
                 }
             }
@@ -660,7 +744,9 @@
     async function updateAllianceCaptains() {
         if (rankedTeams.length === 0) return;
 
-        const emptyIndex = alliances.findIndex((a) => a.id <= 8 && a.teams.length === 0);
+        const emptyIndex = alliances.findIndex(
+            (a) => a.id <= 8 && a.teams.length === 0,
+        );
         if (emptyIndex === -1) return;
 
         for (let i = emptyIndex; i < 7; i++) {
@@ -697,7 +783,9 @@
     function createAndSwitchToNewAllianceSelection(name) {
         let newName = name;
         let counter = 1;
-        while (Object.values(allianceSelections).some((s) => s.name === newName)) {
+        while (
+            Object.values(allianceSelections).some((s) => s.name === newName)
+        ) {
             newName = `${name} ${++counter}`;
         }
         const newId = `selection_${Date.now()}`;
@@ -728,19 +816,28 @@
     function startEditingAllianceSelection() {
         if (!activeAllianceSelectionId) return;
         editingAllianceSelectionId = activeAllianceSelectionId;
-        editingAllianceSelectionName = allianceSelections[activeAllianceSelectionId].name;
+        editingAllianceSelectionName =
+            allianceSelections[activeAllianceSelectionId].name;
     }
 
     function finishEditingAllianceSelection() {
         if (editingAllianceSelectionId === null) return;
         const newName = editingAllianceSelectionName.trim();
-        const originalName = allianceSelections[editingAllianceSelectionId]?.name;
+        const originalName =
+            allianceSelections[editingAllianceSelectionId]?.name;
 
         if (newName !== originalName) {
-            if (newName && !Object.values(allianceSelections).some((s) => s.name === newName)) {
+            if (
+                newName &&
+                !Object.values(allianceSelections).some(
+                    (s) => s.name === newName,
+                )
+            ) {
                 allianceSelections[editingAllianceSelectionId].name = newName;
             } else {
-                alert("Alliance selection name cannot be empty or already exist.");
+                alert(
+                    "Alliance selection name cannot be empty or already exist.",
+                );
             }
         }
         editingAllianceSelectionId = null;
@@ -760,7 +857,9 @@
         ].join("|");
 
         try {
-            await navigator.clipboard.writeText(bs85.encode(pako.deflate(dataString)));
+            await navigator.clipboard.writeText(
+                bs85.encode(pako.deflate(dataString)),
+            );
         } catch (err) {
             console.error("Failed to copy:", err);
             alert("Failed to copy alliance selection.");
@@ -769,11 +868,15 @@
 
     function pasteAllianceSelection() {
         if (!allianceImportData) {
-            alert("Please paste the alliance selection data into the text box.");
+            alert(
+                "Please paste the alliance selection data into the text box.",
+            );
             return;
         }
         try {
-            const decompressed = pako.inflate(bs85.decode(allianceImportData), { to: "string" });
+            const decompressed = pako.inflate(bs85.decode(allianceImportData), {
+                to: "string",
+            });
             const parts = decompressed.split("|");
             if (parts.length !== 3) throw new Error("Invalid data format");
 
@@ -781,7 +884,11 @@
 
             let newName = name;
             let counter = 1;
-            while (Object.values(allianceSelections).some((s) => s.name === newName)) {
+            while (
+                Object.values(allianceSelections).some(
+                    (s) => s.name === newName,
+                )
+            ) {
                 newName = `${name} (${++counter})`;
             }
 
@@ -807,7 +914,9 @@
             activeAllianceSelectionId = newId;
             allianceImportData = "";
         } catch (error) {
-            alert("Failed to parse alliance selection data. Please check the format.");
+            alert(
+                "Failed to parse alliance selection data. Please check the format.",
+            );
             console.error("Alliance import error:", error);
         }
     }
@@ -851,7 +960,10 @@
     <div
         class="main-content"
         ondragover={handleDragOver}
-        ondrop={(e) => { e.preventDefault(); handleDropToRemove(e); }}
+        ondrop={(e) => {
+            e.preventDefault();
+            handleDropToRemove(e);
+        }}
         role="application"
     >
         <!-- Team List Sidebar -->
@@ -862,7 +974,9 @@
                     class="list"
                     role="application"
                     ondragover={handleDragOver}
-                    ondrop={() => {/* Can't drop back on main list */}}
+                    ondrop={() => {
+                        /* Can't drop back on main list */
+                    }}
                 >
                     {#each getAvailableTeamNumbers() as teamNumber (teamNumber)}
                         {@const team = teamFromStore(teamNumber)}
@@ -882,7 +996,10 @@
             class="view-container"
             role="application"
             ondragover={handleDragOver}
-            ondrop={(e) => { e.preventDefault(); handleDropToRemove(e); }}
+            ondrop={(e) => {
+                e.preventDefault();
+                handleDropToRemove(e);
+            }}
         >
             {#if activeView === "picklists"}
                 <div class="picklist-view">
@@ -891,39 +1008,76 @@
                             type="text"
                             bind:value={newPickListName}
                             placeholder="New picklist name"
-                            onkeydown={(e) => e.key === "Enter" && createPickList()}
+                            onkeydown={(e) =>
+                                e.key === "Enter" && createPickList()}
                             style="width: 300px;"
                         />
-                        <button onclick={createPickList}>Create Picklist</button>
+                        <button onclick={createPickList}>Create Picklist</button
+                        >
                     </div>
 
                     <div class="container">
                         {#each Object.entries(picklists) as [key, list]}
                             <div class="picklist">
                                 <h2>
-                                    <div style="display: flex; gap: 8px; align-items: center;">
+                                    <div
+                                        style="display: flex; gap: 8px; align-items: center;"
+                                    >
                                         <button
-                                            onclick={() => copySinglePicklist(list)}
+                                            onclick={() =>
+                                                copySinglePicklist(list)}
                                             style="background: transparent; border: none; padding: 0; display: flex; align-items: center; color: white; opacity: 0.8; cursor: pointer;"
                                             title="Copy to clipboard"
                                             aria-label="Copy to clipboard"
                                         >
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                                            <svg
+                                                width="20"
+                                                height="20"
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                stroke-width="2"
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                ><rect
+                                                    x="9"
+                                                    y="9"
+                                                    width="13"
+                                                    height="13"
+                                                    rx="2"
+                                                    ry="2"
+                                                ></rect><path
+                                                    d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
+                                                ></path></svg
+                                            >
                                         </button>
                                         {#if editingPicklistId === key}
                                             <input
                                                 type="text"
                                                 bind:value={editingPicklistName}
-                                                onblur={() => finishEditing(key)}
-                                                onkeydown={(e) => e.key === "Enter" && finishEditing(key)}
-                                                onfocus={(e) => e.currentTarget.select()}
+                                                onblur={() =>
+                                                    finishEditing(key)}
+                                                onkeydown={(e) =>
+                                                    e.key === "Enter" &&
+                                                    finishEditing(key)}
+                                                onfocus={(e) =>
+                                                    e.currentTarget.select()}
                                             />
                                         {:else}
                                             <span
                                                 role="button"
                                                 tabindex="0"
-                                                onclick={() => startEditing(key, list.name)}
-                                                onkeydown={(e) => e.key === "Enter" && startEditing(key, list.name)}
+                                                onclick={() =>
+                                                    startEditing(
+                                                        key,
+                                                        list.name,
+                                                    )}
+                                                onkeydown={(e) =>
+                                                    e.key === "Enter" &&
+                                                    startEditing(
+                                                        key,
+                                                        list.name,
+                                                    )}
                                             >
                                                 {list.name}
                                             </span>
@@ -932,7 +1086,8 @@
                                     <button
                                         onclick={() => deletePickList(key)}
                                         style="background: transparent; border: none; font-size: 1.2rem; padding: 0;"
-                                    >X</button>
+                                        >X</button
+                                    >
                                 </h2>
                                 <div
                                     class="list"
@@ -944,9 +1099,15 @@
                                     {#each list.teams as team (team.team_number)}
                                         <Team
                                             {team}
-                                            picked={!!pickedTeams[team.team_number]}
-                                            onclick={() => toggleTeamPicked(team.team_number)}
-                                            ondragstart={() => handleDragStart(team, key)}
+                                            picked={!!pickedTeams[
+                                                team.team_number
+                                            ]}
+                                            onclick={() =>
+                                                toggleTeamPicked(
+                                                    team.team_number,
+                                                )}
+                                            ondragstart={() =>
+                                                handleDragStart(team, key)}
                                         />
                                     {/each}
                                 </div>
@@ -957,10 +1118,15 @@
                     <div class="share-container">
                         <div class="share-controls">
                             <h3>Share Picklists</h3>
-                            <p style="margin: 5px 0 10px; font-size: 0.9em; opacity: 0.8;">
-                                Generate a code to share your current picklists with others.
+                            <p
+                                style="margin: 5px 0 10px; font-size: 0.9em; opacity: 0.8;"
+                            >
+                                Generate a code to share your current picklists
+                                with others.
                             </p>
-                            <button onclick={exportPicklists}>Copy Code to Clipboard</button>
+                            <button onclick={exportPicklists}
+                                >Copy Code to Clipboard</button
+                            >
                         </div>
                         <div class="share-controls">
                             <h3>Import Picklists</h3>
@@ -970,13 +1136,19 @@
                                 placeholder="Paste shared data string here..."
                             ></textarea>
                             <br />
-                            <button onclick={importPicklists}>Import Data</button>
+                            <button onclick={importPicklists}
+                                >Import Data</button
+                            >
                         </div>
                     </div>
 
                     <div class="fixed-buttons">
-                        <button onclick={createOprPicklist}>Create OPR Picklist</button>
-                        <button onclick={createEpaPicklist}>Create EPA Picklist</button>
+                        <button onclick={createOprPicklist}
+                            >Create OPR Picklist</button
+                        >
+                        <button onclick={createEpaPicklist}
+                            >Create EPA Picklist</button
+                        >
                     </div>
                 </div>
             {/if}
@@ -987,8 +1159,12 @@
                         <div class="alliance-main">
                             <div class="alliance-controls">
                                 <h2>Alliance Selection Board</h2>
-                                <div style="display: flex; gap: 20px; align-items: center;">
-                                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                                <div
+                                    style="display: flex; gap: 20px; align-items: center;"
+                                >
+                                    <label
+                                        style="display: flex; align-items: center; gap: 10px; cursor: pointer;"
+                                    >
                                         <input
                                             type="checkbox"
                                             bind:checked={isFourTeamAlliance}
@@ -996,7 +1172,9 @@
                                         />
                                         4 teams per alliance
                                     </label>
-                                    <button onclick={populateAllianceCaptains}>Reset Board</button>
+                                    <button onclick={populateAllianceCaptains}
+                                        >Reset Board</button
+                                    >
                                 </div>
                             </div>
 
@@ -1006,21 +1184,34 @@
                                         class="alliance-list"
                                         role="application"
                                         ondragover={handleDragOver}
-                                        ondrop={() => handleDropOnAlliance(alliance.id)}
+                                        ondrop={() =>
+                                            handleDropOnAlliance(alliance.id)}
                                     >
                                         <h3>Alliance {alliance.id}</h3>
                                         <div
                                             class="list"
                                             role="application"
                                             ondragover={handleDragOver}
-                                            ondrop={() => handleDropOnAlliance(alliance.id)}
+                                            ondrop={() =>
+                                                handleDropOnAlliance(
+                                                    alliance.id,
+                                                )}
                                         >
                                             {#each alliance.teams as team (team.team_number)}
                                                 <Team
                                                     {team}
-                                                    picked={!!pickedTeams[team.team_number]}
-                                                    onclick={() => toggleTeamPicked(team.team_number)}
-                                                    ondragstart={() => handleDragStart(team, `alliance_${alliance.id}`)}
+                                                    picked={!!pickedTeams[
+                                                        team.team_number
+                                                    ]}
+                                                    onclick={() =>
+                                                        toggleTeamPicked(
+                                                            team.team_number,
+                                                        )}
+                                                    ondragstart={() =>
+                                                        handleDragStart(
+                                                            team,
+                                                            `alliance_${alliance.id}`,
+                                                        )}
                                                 />
                                             {/each}
                                         </div>
@@ -1039,7 +1230,9 @@
                             <h2>Picklists</h2>
                             <div class="picklists-scroll">
                                 {#if Object.keys(picklists).length === 0}
-                                    <p style="padding: 20px; text-align: center; opacity: 0.6;">
+                                    <p
+                                        style="padding: 20px; text-align: center; opacity: 0.6;"
+                                    >
                                         No picklists created yet
                                     </p>
                                 {:else}
@@ -1052,11 +1245,24 @@
                                                         role="button"
                                                         tabindex="0"
                                                         class="sidebar-team"
-                                                        class:picked={!!pickedTeams[team.team_number]}
+                                                        class:picked={!!pickedTeams[
+                                                            team.team_number
+                                                        ]}
                                                         draggable="true"
-                                                        ondragstart={() => handleDragStart(team, key)}
-                                                        onclick={() => toggleTeamPicked(team.team_number)}
-                                                        onkeydown={(e) => e.key === "Enter" && toggleTeamPicked(team.team_number)}
+                                                        ondragstart={() =>
+                                                            handleDragStart(
+                                                                team,
+                                                                key,
+                                                            )}
+                                                        onclick={() =>
+                                                            toggleTeamPicked(
+                                                                team.team_number,
+                                                            )}
+                                                        onkeydown={(e) =>
+                                                            e.key === "Enter" &&
+                                                            toggleTeamPicked(
+                                                                team.team_number,
+                                                            )}
                                                     >
                                                         {team.team_number}
                                                     </div>
@@ -1082,7 +1288,9 @@
                             type="text"
                             bind:value={editingAllianceSelectionName}
                             onblur={finishEditingAllianceSelection}
-                            onkeydown={(e) => e.key === "Enter" && finishEditingAllianceSelection()}
+                            onkeydown={(e) =>
+                                e.key === "Enter" &&
+                                finishEditingAllianceSelection()}
                             onfocus={(e) => e.currentTarget.select()}
                         />
                     {:else}
@@ -1090,10 +1298,13 @@
                             role="button"
                             tabindex="0"
                             onclick={startEditingAllianceSelection}
-                            onkeydown={(e) => e.key === "Enter" && startEditingAllianceSelection()}
+                            onkeydown={(e) =>
+                                e.key === "Enter" &&
+                                startEditingAllianceSelection()}
                             title="Click to rename"
                         >
-                            {allianceSelections[activeAllianceSelectionId]?.name || "Select a selection"}
+                            {allianceSelections[activeAllianceSelectionId]
+                                ?.name || "Select a selection"}
                         </span>
                     {/if}
                 </div>
@@ -1111,10 +1322,12 @@
                 <button
                     onclick={deleteAllianceSelection}
                     disabled={Object.keys(allianceSelections).length <= 1 ||
-                        activeAllianceSelectionId === "default"}
-                >Delete</button>
+                        activeAllianceSelectionId === "default"}>Delete</button
+                >
 
-                <div style="width: 1px; height: 20px; background: #555; margin: 0 5px;"></div>
+                <div
+                    style="width: 1px; height: 20px; background: #555; margin: 0 5px;"
+                ></div>
 
                 <button onclick={copyAllianceSelection}>Copy</button>
                 <input
@@ -1125,13 +1338,16 @@
                 />
                 <button onclick={pasteAllianceSelection}>Paste</button>
 
-                <div style="width: 1px; height: 20px; background: #555; margin: 0 5px;"></div>
+                <div
+                    style="width: 1px; height: 20px; background: #555; margin: 0 5px;"
+                ></div>
 
                 <input
                     type="text"
                     bind:value={newAllianceSelectionName}
                     placeholder="New list name"
-                    onkeydown={(e) => e.key === "Enter" && createAllianceSelection()}
+                    onkeydown={(e) =>
+                        e.key === "Enter" && createAllianceSelection()}
                     style="width: 150px;"
                 />
                 <button onclick={createAllianceSelection}>New</button>
@@ -1149,14 +1365,13 @@
         --card-bg: #2d2d2d;
     }
 
-    :global(html), :global(body) {
+    /* Let html/body scroll naturally — do NOT set overflow or height here,
+       as that would create a new scroll container and break position: sticky */
+    :global(html),
+    :global(body) {
         margin: 0;
         padding: 0;
         background: var(--wpi-gray);
-        height: 100vh;
-        width: 100vw;
-        overflow-x: hidden;
-        box-sizing: border-box;
     }
 
     :global(*) {
@@ -1181,10 +1396,18 @@
         box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
     }
 
-    button:active { transform: translateY(0); }
-    button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    button:active {
+        transform: translateY(0);
+    }
+    button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+    }
 
-    input[type="text"], textarea, select {
+    input[type="text"],
+    textarea,
+    select {
         padding: 8px 12px;
         border: 2px solid var(--frc-190-red);
         background: #333;
@@ -1193,11 +1416,15 @@
         font-size: 14px;
     }
 
-    input[type="text"]:focus, textarea:focus, select:focus {
+    input[type="text"]:focus,
+    textarea:focus,
+    select:focus {
         outline: none;
         box-shadow: 0 0 0 2px rgba(200, 27, 0, 0.4);
     }
 
+    /* The page wrapper is a normal block — no overflow, no fixed height.
+       Page scrolling happens on body so sticky children work correctly. */
     .page-wrapper {
         display: flex;
         flex-direction: column;
@@ -1258,8 +1485,17 @@
         font-size: 16px;
     }
 
-    .tabs button:hover { background: #333; color: white; transform: none; box-shadow: none; }
-    .tabs button.active { background: var(--frc-190-red); color: white; font-weight: bold; }
+    .tabs button:hover {
+        background: #333;
+        color: white;
+        transform: none;
+        box-shadow: none;
+    }
+    .tabs button.active {
+        background: var(--frc-190-red);
+        color: white;
+        font-weight: bold;
+    }
 
     .main-content {
         display: flex;
@@ -1268,6 +1504,8 @@
         align-items: flex-start;
     }
 
+    /* Sticky sidebar: body is the scroll container, so sticky works here.
+       Use a fixed height (not max-height) so the inner list scrolls. */
     .team-list-container {
         width: 150px;
         background: var(--dark-bg);
@@ -1275,7 +1513,10 @@
         border-radius: 8px;
         display: flex;
         flex-direction: column;
-        height: 75vh;
+        height: calc(100vh - 120px);
+        position: sticky;
+        top: 20px;
+        align-self: flex-start;
         box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
     }
 
@@ -1286,17 +1527,27 @@
         padding: 10px;
         text-align: center;
         font-size: 1.2rem;
+        flex-shrink: 0;
     }
 
     .team-list {
         flex: 1;
         overflow-y: auto;
         padding: 10px;
+        min-height: 0;
     }
 
     .view-container {
         flex: 1;
         min-width: 0;
+        min-height: 0;
+    }
+
+    .picklist-view {
+        height: 75vh;
+        overflow-y: auto;
+        padding-right: 10px;
+        padding-bottom: 20px;
     }
 
     .container {
@@ -1306,7 +1557,8 @@
         margin-top: 20px;
     }
 
-    .picklist, .alliance-list {
+    .picklist,
+    .alliance-list {
         background: var(--dark-bg);
         border: 2px solid var(--frc-190-black);
         border-radius: 8px;
@@ -1317,7 +1569,8 @@
         box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
     }
 
-    .picklist h2, .alliance-list h3 {
+    .picklist h2,
+    .alliance-list h3 {
         background: var(--frc-190-red);
         color: white;
         margin: 0;
@@ -1335,9 +1588,9 @@
         width: 70%;
     }
 
-    .picklist .list, .alliance-list .list {
+    .picklist .list,
+    .alliance-list .list {
         flex: 1;
-        overflow-y: auto;
         padding: 10px;
         background: #252525;
     }
@@ -1353,8 +1606,13 @@
         color: white;
     }
 
-    .share-controls { flex: 1; }
-    .share-controls h3 { margin-top: 0; color: var(--frc-190-red); }
+    .share-controls {
+        flex: 1;
+    }
+    .share-controls h3 {
+        margin-top: 0;
+        color: var(--frc-190-red);
+    }
 
     .fixed-buttons {
         position: fixed;
@@ -1366,10 +1624,18 @@
         z-index: 50;
     }
 
-    .fixed-buttons button { box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5); }
+    .fixed-buttons button {
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+    }
 
-    .alliance-with-picklists { display: flex; gap: 5px; }
-    .alliance-main { flex: 1; min-width: 0; }
+    .alliance-with-picklists {
+        display: flex;
+        gap: 5px;
+    }
+    .alliance-main {
+        flex: 1;
+        min-width: 0;
+    }
 
     .alliance-controls {
         background: var(--dark-bg);
@@ -1384,18 +1650,19 @@
     }
 
     .alliances-container {
-        overflow-y: scroll;
         display: grid;
         grid-template-columns: repeat(4, 1fr);
         gap: 8px;
         max-width: 100%;
-        height: 60vh;
     }
 
     @media (max-width: 1600px) {
-        .alliances-container { grid-template-columns: repeat(2, 1fr); }
+        .alliances-container {
+            grid-template-columns: repeat(2, 1fr);
+        }
     }
 
+    /* Same sticky treatment as .team-list-container */
     .picklists-sidebar {
         width: 140px;
         background: var(--dark-bg);
@@ -1403,8 +1670,11 @@
         border-radius: 8px;
         display: flex;
         flex-direction: column;
-        height: 75vh;
+        height: calc(100vh - 120px);
         box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        position: sticky;
+        top: 20px;
+        align-self: flex-start;
     }
 
     .picklists-sidebar h2 {
@@ -1414,9 +1684,15 @@
         padding: 10px;
         text-align: center;
         font-size: 1.2rem;
+        flex-shrink: 0;
     }
 
-    .picklists-scroll { flex: 1; overflow-y: auto; padding: 10px; }
+    .picklists-scroll {
+        flex: 1;
+        overflow-y: auto;
+        padding: 10px;
+        min-height: 0;
+    }
 
     .sidebar-picklist {
         background: #252525;
@@ -1435,7 +1711,9 @@
         border-bottom: 1px solid #333;
     }
 
-    .sidebar-list { padding: 5px; }
+    .sidebar-list {
+        padding: 5px;
+    }
 
     .sidebar-team {
         display: flex;
@@ -1453,9 +1731,18 @@
         font-weight: bold;
     }
 
-    .sidebar-team.picked { background: var(--frc-190-red); border-color: var(--frc-190-red); }
-    .sidebar-team:hover { background: #222; border-color: var(--frc-190-red); transform: translateX(2px); }
-    .sidebar-team:active { cursor: grabbing; }
+    .sidebar-team.picked {
+        background: var(--frc-190-red);
+        border-color: var(--frc-190-red);
+    }
+    .sidebar-team:hover {
+        background: #222;
+        border-color: var(--frc-190-red);
+        transform: translateX(2px);
+    }
+    .sidebar-team:active {
+        cursor: grabbing;
+    }
 
     .bottom-bar {
         position: fixed;
@@ -1481,11 +1768,28 @@
         border: 1px solid #444;
     }
 
-    .alliance-management input { border-radius: 20px; }
-    .current-selection-display { color: var(--frc-190-red); font-weight: bold; font-size: 1.1rem; }
+    .alliance-management input {
+        border-radius: 20px;
+    }
+    .current-selection-display {
+        color: var(--frc-190-red);
+        font-weight: bold;
+        font-size: 1.1rem;
+    }
 
-    :global(::-webkit-scrollbar) { width: 10px; height: 10px; }
-    :global(::-webkit-scrollbar-track) { background: #222; }
-    :global(::-webkit-scrollbar-thumb) { background: var(--frc-190-red); border-radius: 5px; border: 2px solid #222; }
-    :global(::-webkit-scrollbar-thumb:hover) { background: #e02200; }
+    :global(::-webkit-scrollbar) {
+        width: 10px;
+        height: 10px;
+    }
+    :global(::-webkit-scrollbar-track) {
+        background: #222;
+    }
+    :global(::-webkit-scrollbar-thumb) {
+        background: var(--frc-190-red);
+        border-radius: 5px;
+        border: 2px solid #222;
+    }
+    :global(::-webkit-scrollbar-thumb:hover) {
+        background: #e02200;
+    }
 </style>

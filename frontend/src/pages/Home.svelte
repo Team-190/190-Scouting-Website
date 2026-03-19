@@ -151,7 +151,7 @@
         const previousEventCode = localStorage.getItem("eventCode");
         if (previousEventCode && previousEventCode !== eventCode) {
             // Clear data when switching events
-            clearScoutingData();
+            localStorage.removeItem("data");
             localStorage.removeItem("retrievePit");
             localStorage.removeItem("retrieveQual");
         }
