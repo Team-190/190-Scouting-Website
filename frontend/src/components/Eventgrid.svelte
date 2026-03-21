@@ -17,7 +17,7 @@
     percentile,
     ROW_HEIGHT,
     sd,
-  } from "../../utils/pageUtils.js";
+  } from "../../src/utils/pageUtils";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
