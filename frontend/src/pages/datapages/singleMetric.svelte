@@ -22,6 +22,7 @@
     ROW_HEIGHT,
     sd,
   } from "../../utils/pageUtils.js";
+  import {  getScoutingData } from '../../utils/indexedDB';
 
   // ─── Constants ────────────────────────────────────────────────────────────────
 

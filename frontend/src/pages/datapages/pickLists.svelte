@@ -10,7 +10,9 @@
         fetchTeamStatuses,
         fetchTeams,
     } from "../../utils/api.js";
-    import { loadFromStorage, saveToStorage, METADATA_KEYS } from "../../utils/pageUtils";
+    import { loadFromStorage, saveToStorage, METADATA_KEYS, BOOLEAN_METRICS, CLIMBSTATE_METRIC, EXCLUDED_FIELDS, INVERTED_METRICS, mean, sd, percentile } from "../../utils/pageUtils";
+    import { onMount } from "svelte";
+    import { getScoutingData } from "../../utils/indexedDB.js";
 
     // ─── CONSTANTS ──────────────────────────────────────────────────────────────
 
@@ -94,15 +96,126 @@
         });
     }
 
-    let teamViewData = $state((() => {
+    // ─── LOAD SCOUTING DATA FROM INDEXEDDB ───────────────────────────────────────
+
+    let teamViewData = $state([]);
+
+    async function loadTeamViewData() {
         try {
-            const raw = localStorage.getItem("data");
-            if (!raw) return [];
-            return extractValues(JSON.parse(raw));
-        } catch {
-            return [];
+            const raw = await getScoutingData();
+            if (!raw || !raw.length) {
+                teamViewData = [];
+                return;
+            }
+            // IndexedDB rows are already flat — no extractValues needed.
+            // Log first row so we can verify the team field name.
+            console.log("[hovercard debug] sample IDB row:", raw[0]);
+            teamViewData = raw;
+        } catch (e) {
+            console.error("Failed to load scouting data from IndexedDB:", e);
+            teamViewData = [];
         }
-    })());
+    }
+
+    // Pre-processed data passed to hovercard
+    let teamAggCache = $state({});
+    let hovercardGlobalStats = $state({});
+
+    // Load once on mount
+    onMount(async () => {
+        await loadTeamViewData();
+        buildHovercardCache();
+        document.addEventListener('mousedown', onDocumentClick);
+        return () => document.removeEventListener('mousedown', onDocumentClick);
+    });
+
+    // ─── BUILD HOVERCARD CACHE ───────────────────────────────────────────────────
+    function buildHovercardCache() {
+        if (!teamViewData?.length) return;
+
+        const META = new Set(["Match","Team","team","Id","Time","RecordType","Mode","DriveStation","ScouterName","ScouterError"]);
+        const ZONE = new Set(["NearBlueZoneTime","FarBlueZoneTime","NearNeutralZoneTime","FarNeutralZoneTime","NearRedZoneTime","FarRedZoneTime"]);
+
+        function isNum(n) {
+            if (n===null||n===undefined||n===""||typeof n==="boolean") return false;
+            return !isNaN(parseFloat(n)) && isFinite(n);
+        }
+
+        function aggregateMatches(rawData) {
+            const grouped = {};
+            rawData.forEach((row) => {
+                const m = row.Match;
+                if (!m) return;
+                if (!grouped[m]) grouped[m] = [];
+                grouped[m].push(row);
+            });
+            // Per match, pick only the single highest-Id record
+            // (multiple scouts submit EndMatch — we just want one)
+            for (const m of Object.keys(grouped)) {
+                const rows = grouped[m].sort((a, b) => (Number(b.Id) || 0) - (Number(a.Id) || 0));
+                grouped[m] = [rows[0]];
+            }
+            return Object.keys(grouped).map((matchNum) => {
+                const rows = grouped[matchNum].sort((a,b)=>(Number(a.Id)||0)-(Number(b.Id)||0));
+                const agg  = {...rows[0]};
+                const allKeys = new Set();
+                rows.forEach((r)=>Object.keys(r).forEach((k)=>{ if (!META.has(k)) allKeys.add(k); }));
+                const state = {};
+                allKeys.forEach((k)=>{ state[k]={type:"none",val:0}; });
+                rows.forEach((row)=>{
+                    allKeys.forEach((key)=>{
+                        const v=row[key];
+                        if (v===-1||v==="-1"||v==="-"||v===null||v===undefined||v==="") return;
+                        const s=state[key];
+                        if (ZONE.has(key)) { if (isNum(v)){s.type="numeric";s.val=Number(v);} }
+                        else if (s.type==="string") { if (!isNum(v)) s.val=v; }
+                        else if (s.type==="numeric") { if (isNum(v)) s.val+=Number(v); else {s.type="string";s.val=v;} }
+                        else { if (isNum(v)){s.type="numeric";s.val=Number(v);}else{s.type="string";s.val=v;} }
+                    });
+                });
+                allKeys.forEach((key)=>{ agg[key]=state[key].val; });
+                return agg;
+            }).sort((a,b)=>a.Match-b.Match);
+        }
+
+        // Group raw rows by team
+        const groups = {};
+        teamViewData.forEach((row)=>{
+            if (row.RecordType==="Match_Event") return;
+            const k=String(row.Team??row.team??"").replace(/\D/g,"");
+            if (!k) return;
+            if (!groups[k]) groups[k]=[];
+            groups[k].push(row);
+        });
+
+        // Aggregate each team
+        const cache = {};
+        for (const [teamStr, rows] of Object.entries(groups)) {
+            cache[teamStr] = aggregateMatches(rows);
+        }
+        teamAggCache = cache;
+
+        // Build global stats from aggregated data
+        const allAgg = Object.values(cache).flat();
+        const allKeys = new Set();
+        allAgg.forEach((row) => Object.keys(row).forEach((k) => { if (!EXCLUDED_FIELDS.has(k)) allKeys.add(k); }));
+
+        const gs = {};
+        allKeys.forEach((metric) => {
+            if (BOOLEAN_METRICS.includes(metric) || metric === CLIMBSTATE_METRIC) {
+                gs[metric] = { isNumeric: false }; return;
+            }
+            const vals = allAgg.map((r) => r[metric])
+                .filter((v) => v !== undefined && v !== null && v !== "" && isNum(v) && Number(v) !== -1)
+                .map(Number);
+            if (!vals.length) { gs[metric] = { isNumeric: false }; return; }
+            const mu = mean(vals);
+            gs[metric] = { isNumeric: true, mean: mu, sd: sd(vals, mu),
+                p25: percentile(vals, 25), p50: percentile(vals, 50), p75: percentile(vals, 75) };
+        });
+        console.log('[cache] globalStats keys:', Object.keys(gs).length, 'teamAggCache teams:', Object.keys(cache).length);
+        hovercardGlobalStats = gs;
+    }
 
     // Pre-fetch OPRs when eventCode is available so hovercard gets them instantly
     $effect(() => {
@@ -120,6 +233,15 @@
     }
 
     function onTeamMouseLeave() {
+        // Don't hide on mouse leave — card stays until user clicks outside
+    }
+
+    function onDocumentClick(e) {
+        if (!hoverVisible) return;
+        const card = document.querySelector('.hover-card');
+        if (card && card.contains(e.target)) return;
+        // Clicking a team item switches to that team rather than closing
+        if (e.target.closest('[data-team-number]')) return;
         hoverVisible = false;
     }
 
@@ -1105,7 +1227,8 @@
         {eventCode}
         bind:anchorEl={hoverAnchorEl}
         visible={hoverVisible}
-        {teamViewData}
+        teamAggCache={teamAggCache}
+        globalStats={hovercardGlobalStats}
         {cachedOPRs}
         {cachedRobotPics}
     />

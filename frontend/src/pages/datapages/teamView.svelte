@@ -37,6 +37,7 @@
     ZONE_TIME_FIELDS,
   } from "../../utils/pageUtils.js";
   import TeamGrid from "../../components/Teamgrid.svelte";
+  import { getScoutingData } from '../../utils/indexedDB';
 
   // ─── Constants ────────────────────────────────────────────────────────────────
 

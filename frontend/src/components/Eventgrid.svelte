@@ -441,10 +441,11 @@
 
 <style>
   .event-grid-container {
-    width: 80vw;
+    width: 100%;
     background: var(--frc-190-black, #4d4d4d);
     border-radius: 8px;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+
   }
 
   :global(.ag-header-cell) {
