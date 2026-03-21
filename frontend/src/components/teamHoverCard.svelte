@@ -24,7 +24,9 @@
     cachedRobotPics = {},
   } = $props();
 
-  let colorblindMode   = $state(localStorage.getItem("colorblindMode") ?? "default");
+  // Use stored mode only if it's a valid key, otherwise fall back to first available
+  const _storedMode = localStorage.getItem("colorblindMode") ?? "";
+  let colorblindMode = $state(COLOR_MODES[_storedMode] ? _storedMode : Object.keys(COLOR_MODES)[0] ?? "default");
   let userMetric       = $state("");   // what user selected in dropdown
   let cardTop          = $state(-9999);
   let cardLeft         = $state(-9999);
@@ -123,7 +125,6 @@
   let eventRows = $derived.by(() => {
     // Read userMetric directly to avoid chained derived dependency issues
     const metric = (userMetric && evMetrics.includes(userMetric)) ? userMetric : (evMetrics[0] ?? "");
-    console.log("[eventRows] computing for metric:", metric, "userMetric:", userMetric, "cache size:", Object.keys(teamAggCache).length);
     if (!metric || !Object.keys(teamAggCache).length) return [];
     const isOPR  = metric === "OPR (Offensive Power Rating)";
     const dataKey = isOPR ? null : resolveDataKey(metric);
@@ -202,7 +203,7 @@
     if (num===-1) return "#4D4D4D";
     if (num===0)  return "#000";
     const inv  = INVERTED_METRICS.includes(metric);
-    const mode = COLOR_MODES[colorblindMode]??COLOR_MODES["default"];
+    const mode = COLOR_MODES[colorblindMode] ?? COLOR_MODES["default"] ?? COLOR_MODES[Object.keys(COLOR_MODES)[0]];
     const {p25,p50,p75}=stats;
     if (!p25&&!p50&&!p75) return "rgb(180,180,180)";
     let t;
@@ -323,7 +324,7 @@
           <div class="section-label">Event View</div>
           <div class="ev-metric-row">
             <label for="hc-metric" class="muted-label">Metric:</label>
-            <select id="hc-metric" value={selectedEvMetric} onchange={(e) => { userMetric = e.currentTarget.value; console.log("[dropdown] userMetric set to:", userMetric, "eventRows:", eventRows.length); }}>
+            <select id="hc-metric" value={selectedEvMetric} onchange={(e) => { userMetric = e.currentTarget.value; }}>
               {#each evMetrics as m}<option value={m}>{m}</option>{/each}
             </select>
           </div>

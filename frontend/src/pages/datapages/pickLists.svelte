@@ -107,10 +107,10 @@
                 teamViewData = [];
                 return;
             }
-            // IndexedDB rows are already flat — no extractValues needed.
-            // Log first row so we can verify the team field name.
-            console.log("[hovercard debug] sample IDB row:", raw[0]);
-            teamViewData = raw;
+            // IDB rows have [auto, full] tuple format — same as localStorage
+            // extractValues unwraps tuples to take the full (index 1) value
+            teamViewData = extractValues(raw);
+            console.log("[hovercard debug] sample extracted row:", teamViewData[0]);
         } catch (e) {
             console.error("Failed to load scouting data from IndexedDB:", e);
             teamViewData = [];
