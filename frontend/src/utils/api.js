@@ -1,60 +1,63 @@
 const VITE_TESTING = import.meta.env.VITE_TESTING || 1;
 const VITE_BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT || 8000;
-const SERVER = !parseInt(VITE_TESTING) ? import.meta.env.VITE_SERVER_IP : "localhost";
+const SERVER = !parseInt(VITE_TESTING)
+  ? import.meta.env.VITE_SERVER_IP
+  : "localhost";
 const defaultAPILink = `http://${SERVER}:${VITE_BACKEND_PORT}`;
 
 export function fetchEvents() {
-    const route = `${defaultAPILink}/api/getEvents`;
-    let data = fetch(route);
-    return data;
+  const route = `${defaultAPILink}/api/getEvents`;
+  let data = fetch(route);
+  return data;
 }
 
 export function fetchAvailableTeams(eventCode) {
-    const route = `${defaultAPILink}/api/getAvailableTeams?eventCode=` + eventCode;
-    let data = fetch(route);
-    return data;
+  const route =
+    `${defaultAPILink}/api/getAvailableTeams?eventCode=` + eventCode;
+  let data = fetch(route);
+  return data;
 }
 
 export function fetchAllData(eventCode, lastId = 0) {
-    const route = `${defaultAPILink}/api/getAllData?eventCode=${eventCode}&lastId=${lastId}`;
-    let data = fetch(route);
-    return data;
+  const route = `${defaultAPILink}/api/getAllData?eventCode=${eventCode}&lastId=${lastId}`;
+  let data = fetch(route);
+  return data;
 }
 
 export function fetchSingleMetric(eventCode) {
-    const route = `${defaultAPILink}/api/singleMetric?eventCode=` + eventCode;
-    let data = fetch(route);
-    return data;
+  const route = `${defaultAPILink}/api/singleMetric?eventCode=` + eventCode;
+  let data = fetch(route);
+  return data;
 }
 
 export function fetchQualitativeScouting(eventCode, localCounts = {}) {
-    const route = `${defaultAPILink}/api/getQualitativeScouting?eventCode=${eventCode}&localCounts=${encodeURIComponent(JSON.stringify(localCounts))}`;
-    let data = fetch(route);
-    return data;
+  const route = `${defaultAPILink}/api/getQualitativeScouting?eventCode=${eventCode}&localCounts=${encodeURIComponent(JSON.stringify(localCounts))}`;
+  let data = fetch(route);
+  return data;
 }
 
 export function fetchPitScouting(eventCode, localTeams = []) {
-    const route = `${defaultAPILink}/api/getPitScouting?eventCode=${eventCode}&localTeams=${encodeURIComponent(JSON.stringify(localTeams))}`;
-    let data = fetch(route);
-    return data;
+  const route = `${defaultAPILink}/api/getPitScouting?eventCode=${eventCode}&localTeams=${encodeURIComponent(JSON.stringify(localTeams))}`;
+  let data = fetch(route);
+  return data;
 }
 
 export function fetchPitScoutingImage(eventCode, team) {
-    const route = `${defaultAPILink}/api/getPitScoutingImage?eventCode=${eventCode}&teamNumber=${team}`;
-    let data = fetch(route);
-    return data;
+  const route = `${defaultAPILink}/api/getPitScoutingImage?eventCode=${eventCode}&teamNumber=${team}`;
+  let data = fetch(route);
+  return data;
 }
 
 export function fetchGracePage(eventCode) {
-    const route = `${defaultAPILink}/api/getRatings?eventCode=${eventCode}`;
-    let data = fetch(route);
-    return data;
+  const route = `${defaultAPILink}/api/getRatings?eventCode=${eventCode}`;
+  let data = fetch(route);
+  return data;
 }
 
 export function fetchAnanthPage(eventCode) {
-    const route = `${defaultAPILink}/api/getHPRatings?eventCode=${eventCode}`;
-    let data = fetch(route);
-    return data;
+  const route = `${defaultAPILink}/api/getHPRatings?eventCode=${eventCode}`;
+  let data = fetch(route);
+  return data;
 }
 
 ////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
@@ -62,182 +65,238 @@ export function fetchAnanthPage(eventCode) {
 ////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
 
 export async function fetchMatchAlliances(eventCode) {
-    const response = await fetch(`${defaultAPILink}/api/getMatchAlliances?eventCode=${eventCode}`);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await response.json();
+  const response = await fetch(
+    `${defaultAPILink}/api/getMatchAlliances?eventCode=${eventCode}`,
+  );
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return await response.json();
 }
 
 export async function fetchTeams(eventCode) {
-    const response = await fetch(`${defaultAPILink}/api/getTeams?eventCode=${eventCode}`);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await response.json();
+  const response = await fetch(
+    `${defaultAPILink}/api/getTeams?eventCode=${eventCode}`,
+  );
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return await response.json();
 }
 
 export async function fetchEventDetails(eventCode) {
-    const response = await fetch(`${defaultAPILink}/api/fetchEventDetails?eventCode=${eventCode}`);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await response.json();
+  const response = await fetch(
+    `${defaultAPILink}/api/fetchEventDetails?eventCode=${eventCode}`,
+  );
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return await response.json();
 }
 
 export async function fetchTeamStatuses(eventCode) {
-    const response = await fetch(`${defaultAPILink}/api/fetchTeamStatuses?eventCode=${eventCode}`);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await response.json();
+  const response = await fetch(
+    `${defaultAPILink}/api/fetchTeamStatuses?eventCode=${eventCode}`,
+  );
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return await response.json();
 }
 
 export async function fetchOPR(eventCode) {
-    const response = await fetch(`${defaultAPILink}/api/fetchOPR?eventCode=${eventCode}`);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await response.json();
+  const response = await fetch(
+    `${defaultAPILink}/api/fetchOPR?eventCode=${eventCode}`,
+  );
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return await response.json();
 }
 
 export async function fetchAlliances(eventCode) {
-    const response = await fetch(`${defaultAPILink}/api/fetchAlliances?eventCode=${eventCode}`);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await response.json();
+  const response = await fetch(
+    `${defaultAPILink}/api/fetchAlliances?eventCode=${eventCode}`,
+  );
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return await response.json();
 }
 
 export async function fetchAlliancesAvailable(eventCode) {
-    const response = await fetch(`${defaultAPILink}/api/fetchAlliances?eventCode=${eventCode}`);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const { available } = await response.json();
-    return available;
+  const response = await fetch(
+    `${defaultAPILink}/api/fetchAlliances?eventCode=${eventCode}`,
+  );
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const { available } = await response.json();
+  return available;
 }
 
 export async function fetchEventEpas(eventCode) {
-    const response = await fetch(`${defaultAPILink}/api/fetchEventEpas?eventCode=${eventCode}`);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await response.json();
+  const response = await fetch(
+    `${defaultAPILink}/api/fetchEventEpas?eventCode=${eventCode}`,
+  );
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return await response.json();
 }
 
 export async function fetchElimsHaveStarted(eventCode) {
-    const response = await fetch(`${defaultAPILink}/api/fetchElimsHaveStarted?eventCode=${eventCode}`);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const { elimsHaveStarted } = await response.json();
-    return elimsHaveStarted;
+  const response = await fetch(
+    `${defaultAPILink}/api/fetchElimsHaveStarted?eventCode=${eventCode}`,
+  );
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const { elimsHaveStarted } = await response.json();
+  return elimsHaveStarted;
 }
 
 export async function fetchMatchScores(eventCode, match, teamNumber) {
-    const response = await fetch(
-        `${defaultAPILink}/api/fetchMatchScores?eventCode=${eventCode}&matchNumber=${match.Match}&driveStation=${match.DriveStation}`
-    );
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const { score } = await response.json();
-    return score;
+  const response = await fetch(
+    `${defaultAPILink}/api/fetchMatchScores?eventCode=${eventCode}&matchNumber=${match.Match}&driveStation=${match.DriveStation}`,
+  );
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const { score } = await response.json();
+  return score;
 }
 
+export async function fetchRobotClimb(eventCode, teamNumber, matchNumber) {
+  const response = await fetch(
+    `${defaultAPILink}/api/getMatchAlliances?eventCode=${eventCode}`
+  );
 
-////////////// POST Methods \\\\\\\\\\\\\\
-////////////// POST Methods \\\\\\\\\\\\\\
-////////////// POST Methods \\\\\\\\\\\\\\
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  
+  const allMatches = await response.json();
+  const match = allMatches.find(m => m.match_number === parseInt(matchNumber) && m.comp_level === "qm");
 
+  if (!match) return { EndgameClimb: "Match Not Found", AutoClimb: "Match Not Found" };
+
+  let allianceColor = null;
+  let robotIndex = null;
+
+  ["red", "blue"].forEach((color) => {
+    const teamKeys = match.alliances[color].team_keys;
+    const index = teamKeys.indexOf(`frc${teamNumber}`);
+    if (index !== -1) {
+      allianceColor = color;
+      robotIndex = index + 1;
+    }
+  });
+  if (!allianceColor) return { EndgameClimb: "None", AutoClimb: "None" };
+  const scoreBreakdown = match.score_breakdown[allianceColor];
+  return { 
+    EndgameClimb: scoreBreakdown[`endGameTowerRobot${robotIndex}`] || "None", 
+    AutoClimb: scoreBreakdown[`autoTowerRobot${robotIndex}`] || "None" 
+  };
+}
+////////////// POST Methods \\\\\\\\\\\\\\
+////////////// POST Methods \\\\\\\\\\\\\\
+////////////// POST Methods \\\\\\\\\\\\\\
 
 export async function postEventCode(eventCode) {
-    const response = await fetch(`${defaultAPILink}/api/postEventCode`, {
-        method: 'POST',
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({eventCode})
-    });
+  const response = await fetch(`${defaultAPILink}/api/postEventCode`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ eventCode }),
+  });
 
-    if (!response.ok) {
-        // Handle HTTP errors, e.g., 404, 500 status codes
-        const errorText = await response.text();
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-    }
+  if (!response.ok) {
+    // Handle HTTP errors, e.g., 404, 500 status codes
+    const errorText = await response.text();
+    throw new Error(
+      `HTTP error! status: ${response.status}, message: ${errorText}`,
+    );
+  }
 
-    const result = await response.text(); // or response.json() if the server responds with JSON
-    console.log('Success:', result);
-    return result;
+  const result = await response.text(); // or response.json() if the server responds with JSON
+  console.log("Success:", result);
+  return result;
 }
 
 export async function postGracePage(event, team, rating) {
-    const response = await fetch(`${defaultAPILink}/api/postRatings`, {
-        method: 'POST',
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({event, team, rating})
-    });
+  const response = await fetch(`${defaultAPILink}/api/postRatings`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ event, team, rating }),
+  });
 
-    if (!response.ok) {
-        // Handle HTTP errors, e.g., 404, 500 status codes
-        const errorText = await response.text();
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-    }
+  if (!response.ok) {
+    // Handle HTTP errors, e.g., 404, 500 status codes
+    const errorText = await response.text();
+    throw new Error(
+      `HTTP error! status: ${response.status}, message: ${errorText}`,
+    );
+  }
 
-    const result = await response.text(); // or response.json() if the server responds with JSON
-    console.log('Success:', result);
-    return result;
+  const result = await response.text(); // or response.json() if the server responds with JSON
+  console.log("Success:", result);
+  return result;
 }
 
 export async function postAnanthPage(event, team, rating) {
-    const response = await fetch(`${defaultAPILink}/api/postHPRatings`, {
-        method: 'POST',
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({event, team, rating})
-    });
+  const response = await fetch(`${defaultAPILink}/api/postHPRatings`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ event, team, rating }),
+  });
 
-    if (!response.ok) {
-        // Handle HTTP errors, e.g., 404, 500 status codes
-        const errorText = await response.text();
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-    }
+  if (!response.ok) {
+    // Handle HTTP errors, e.g., 404, 500 status codes
+    const errorText = await response.text();
+    throw new Error(
+      `HTTP error! status: ${response.status}, message: ${errorText}`,
+    );
+  }
 
-    const result = await response.text(); // or response.json() if the server responds with JSON
-    console.log('Success:', result);
-    return result;
+  const result = await response.text(); // or response.json() if the server responds with JSON
+  console.log("Success:", result);
+  return result;
 }
 
-
 export async function postPitScouting(event, team, formData) {
+  const response = await fetch(`${defaultAPILink}/api/postPitScouting`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ event, team, formData }),
+  });
 
-    const response = await fetch(`${defaultAPILink}/api/postPitScouting`, {
-        method: 'POST',
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({event, team, formData})
-    });
-    
-    return response;
+  return response;
 }
 
 export async function postQualitativeScouting(event, team, match, formData) {
+  const response = await fetch(
+    `${defaultAPILink}/api/postQualitativeScouting`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ event, team, match, formData }),
+    },
+  );
 
-    const response = await fetch(`${defaultAPILink}/api/postQualitativeScouting`, {
-        method: 'POST',
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({event, team, match, formData})
-    });
-    
-    return response;
+  return response;
 }
 
-
 export async function postGompeiMadnessBracket(bracket) {
-    // data: { name: "guy", r1: [{matchNumber: 1 , winner: "a1"}, "a2", "a3", "a4"], r2: ["a1", "a2"], r3: ["a1"] }
+  // data: { name: "guy", r1: [{matchNumber: 1 , winner: "a1"}, "a2", "a3", "a4"], r2: ["a1", "a2"], r3: ["a1"] }
 
-    const response = await fetch(`${defaultAPILink}/api/postGompeiMadnessBracket`, {
-        method: 'POST',
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({bracket})
-    });
+  const response = await fetch(
+    `${defaultAPILink}/api/postGompeiMadnessBracket`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ bracket }),
+    },
+  );
 
-    if (!response.ok) {
-        // Handle HTTP errors, e.g., 404, 500 status codes
-        const errorText = await response.text();
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-    }
-    
-    const result = await response.text(); // or response.json() if the server responds with JSON
-    console.log('Success:', result);
-    return result;
+  if (!response.ok) {
+    // Handle HTTP errors, e.g., 404, 500 status codes
+    const errorText = await response.text();
+    throw new Error(
+      `HTTP error! status: ${response.status}, message: ${errorText}`,
+    );
+  }
+
+  const result = await response.text(); // or response.json() if the server responds with JSON
+  console.log("Success:", result);
+  return result;
 }

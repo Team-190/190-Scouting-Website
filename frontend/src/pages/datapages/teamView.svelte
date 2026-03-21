@@ -20,6 +20,7 @@
          fetchMatchAlliances,
          fetchOPR,
          fetchTeams,
+         fetchRobotClimb,
   } from "../../utils/api.js";
   
   import {
@@ -513,6 +514,8 @@
   // ─── Event Handlers ───────────────────────────────────────────────────────────
 
   async function onTeamChange() {
+    // let stuff = await fetchRobotClimb(eventCode, selectedTeam, 3);
+    // console.log("Here is the stuff ", stuff);
     isLoading = true;
     try {
       const teamStr = String(selectedTeam);
