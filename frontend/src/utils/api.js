@@ -174,7 +174,7 @@ export async function fetchRobotClimb(eventCode, teamNumber, matchNumber) {
   const scoreBreakdown = match.score_breakdown[allianceColor];
   return { 
     EndgameClimb: scoreBreakdown[`endGameTowerRobot${robotIndex}`] || "None", 
-    AutoClimb: scoreBreakdown[`autoTowerRobot${robotIndex}`] || "None" 
+    AutoClimb: scoreBreakdown[`autoTowerRobot${robotIndex}`] ||"Skibidi"
   };
 }
 ////////////// POST Methods \\\\\\\\\\\\\\
