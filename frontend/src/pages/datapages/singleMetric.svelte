@@ -249,9 +249,9 @@
   // ─── Data Loading ─────────────────────────────────────────────────────────────
 
   async function fetchAllMetricData(): Promise<string | null> {
-    const stored = localStorage.getItem("data");
+    const stored = await getScoutingData();
     if (!stored) return null;
-    return JSON.stringify(extractValues(JSON.parse(stored), autoOnly));
+    return JSON.stringify(extractValues(stored, autoOnly));
   }
 
   async function estimateTeamPoints(

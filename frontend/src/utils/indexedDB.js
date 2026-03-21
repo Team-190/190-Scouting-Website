@@ -33,6 +33,7 @@ function openDB() {
 
 // Store an array of scouting rows (bulk write)
 export async function setScoutingData(rows) {
+    console.log('setScoutingData called with', rows.length, 'rows');
     const db = await openDB();
     return new Promise((resolve, reject) => {
         const tx = db.transaction(STORE, 'readwrite');
@@ -40,8 +41,17 @@ export async function setScoutingData(rows) {
         for (const row of rows) {
             store.put(row);
         }
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
+        tx.oncomplete = () => {
+            console.log('transaction complete');
+            resolve();
+        }
+        tx.onerror = () => {
+            console.log('transaction error', tx.error);
+            reject(tx.error);
+        }
+        tx.onabort = () => {
+            console.log('transaction aborted', tx.error);
+        }
     });
 }
 

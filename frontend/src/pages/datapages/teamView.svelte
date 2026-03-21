@@ -234,10 +234,10 @@
   // ─── Data Loading ─────────────────────────────────────────────────────────────
 
   async function loadTeamNumbers(): Promise<number[]> {
-    const storedData = localStorage.getItem("data");
+    const storedData = await getScoutingData();
     if (!storedData) return [];
     try {
-      const parsed = JSON.parse(storedData);
+      const parsed = storedData;
       if (!Array.isArray(parsed)) return [];
       const teams: number[] = [];
       for (const el of parsed) {
@@ -587,8 +587,8 @@
   async function onAutoOnlyChange() {
     isLoading = true;
     try {
-      const stored = localStorage.getItem("data");
-      const parsed = stored ? JSON.parse(stored) : [];
+      const stored = await getScoutingData();
+      const parsed = stored ? stored : [];
       teamViewData = extractValues(parsed, autoOnly);
       cache = {};
       allTeams = await loadTeamNumbers();
@@ -1134,8 +1134,8 @@
   onMount(async () => {
     isLoading = true;
     try {
-      const stored = localStorage.getItem("data");
-      const parsed = stored ? JSON.parse(stored) : [];
+      const stored = await getScoutingData();
+      const parsed = stored ? stored : [];
       teamViewData = extractValues(parsed, autoOnly);
 
       if (eventCode) {
