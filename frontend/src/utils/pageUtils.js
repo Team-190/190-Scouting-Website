@@ -188,12 +188,12 @@ export const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime", "MatchEventCount"];
 /**
  * Metrics that contain boolean values
  */
-export const BOOLEAN_METRICS = ["AutoClimb", "AttemptClimb"];
+export const BOOLEAN_METRICS = ["AutoClimb", "AttemptClimb","Auto_Climb"];
 
 /**
  * Metric key for climb state data
  */
-export const CLIMBSTATE_METRIC = "EndState";
+export const CLIMBSTATE_METRIC = "Climb_State"
 
 /**
  * Metadata fields stored as single values (not [auto, full] arrays)

@@ -548,10 +548,11 @@
         } else {
           match.Climb_State = climbData.EndgameClimb;
         }
+
         if (climbData.AutoClimb.slice(-1) == "1") {
-          match.Auto_Climb = "L1";
+          match.Auto_Climb = "Yes";
         } else {
-          match.Auto_Climb = climbData.AutoClimb;
+          match.Auto_Climb = "No";
         }
       }
     }
