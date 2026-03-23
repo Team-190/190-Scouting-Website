@@ -539,8 +539,20 @@
           teamNumber,
           match.Match,
         );
-        match.Climb_State = climbData.EndgameClimb;
-        match.Auto_Climb = climbData.AutoClimb;
+        if (climbData.EndgameClimb.slice(-1) == "3") {
+          match.Climb_State = "L3";
+        } else if (climbData.EndgameClimb.slice(-1) == "2") {
+          match.Climb_State = "L2";
+        } else if (climbData.EndgameClimb.slice(-1) == "1") {
+          match.Climb_State = "L1";
+        } else {
+          match.Climb_State = climbData.EndgameClimb;
+        }
+        if (climbData.AutoClimb.slice(-1) == "1") {
+          match.Auto_Climb = "L1";
+        } else {
+          match.Auto_Climb = climbData.AutoClimb;
+        }
       }
     }
     cache[teamNumber] = data;
