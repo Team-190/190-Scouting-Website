@@ -164,6 +164,8 @@ export const METRIC_DISPLAY_NAMES = new Map([
   ["NearFar", "Near/Far"],
   ["MatchEventCount", "Match Events"],
   ["RecordType", "Record Type"],
+  ["Climb_State", "Climb State"],
+  ["Auto_Climb", "Auto Climb"]
 ]);
 
 /**
@@ -175,7 +177,7 @@ export const EXCLUDED_FIELDS = new Set([
   "NearNeutralZoneTime", "NearRedZoneTime", "NearBlueZoneTime",
   "FarNeutralZoneTime", "FarRedZoneTime", "FarBlueZoneTime",
   "MatchEvent", "MatchEventDetails",
-  "match", "team", "id", "created_at", "record_type", "scouter_name", "scouter_error",
+  "match", "team", "id", "created_at", "record_type", "scouter_name", "scouter_error", "EndState", "AutoClimb"
 ]);
 
 /**

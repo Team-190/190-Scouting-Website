@@ -14,6 +14,7 @@
     fetchMatchAlliances,
     fetchOPR,
     fetchTeams,
+    fetchRobotClimb,
   } from "../../utils/api.js";
   import {
     BOOLEAN_METRICS,
@@ -37,7 +38,7 @@
     ZONE_TIME_FIELDS,
   } from "../../utils/pageUtils.js";
   import TeamGrid from "../../components/Teamgrid.svelte";
-  import { getScoutingData } from '../../utils/indexedDB';
+  import { getScoutingData } from "../../utils/indexedDB";
 
   // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -533,6 +534,13 @@
           teamNumber,
           match.Match,
         );
+        let climbData = await fetchRobotClimb(
+          eventCode,
+          teamNumber,
+          match.Match,
+        );
+        match.Climb_State = climbData.EndgameClimb;
+        match.Auto_Climb = climbData.AutoClimb;
       }
     }
     cache[teamNumber] = data;
