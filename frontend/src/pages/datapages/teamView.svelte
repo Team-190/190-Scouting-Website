@@ -44,7 +44,7 @@
       ZONE_TIME_FIELDS,
   } from "../../utils/pageUtils.js";
 
-  import {  getScoutingData } from '../../utils/indexedDB';
+  import { getIndexedDBStore } from '../../utils/indexedDB';
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -241,7 +241,7 @@
   // ─── Data Loading ─────────────────────────────────────────────────────────────
 
   async function loadTeamNumbers(): Promise<number[]> {
-    const storedData = await getScoutingData();
+    const storedData = await getIndexedDBStore();
     if (!storedData) return [];
     try {
       const parsed = storedData;
@@ -536,7 +536,7 @@
   async function onAutoOnlyChange() {
     isLoading = true;
     try {
-      const stored = await getScoutingData();
+      const stored = await getIndexedDBStore();
       const parsed = stored ? stored : [];
       teamViewData = extractValues(parsed, autoOnly);
       cache = {};
@@ -1193,7 +1193,7 @@
   onMount(async () => {
     isLoading = true;
     try {
-      const stored = await getScoutingData();
+      const stored = await getIndexedDBStore();
       const parsed = stored ? stored : [];
       teamViewData = extractValues(parsed, autoOnly);
 

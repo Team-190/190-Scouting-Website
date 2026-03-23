@@ -1,7 +1,7 @@
 <script>
     import { onMount, tick } from "svelte";
     import { fetchAllData, fetchEvents, fetchPitScouting, fetchQualitativeScouting, fetchEventDetails, postPitScouting, postQualitativeScouting } from "../utils/api";
-    import { setScoutingData, getScoutingData, getLastId, clearScoutingData } from '../utils/indexedDB';
+    import { setIndexedDBStore, getIndexedDBStore, getLastId, clearIndexedDBStore } from '../utils/indexedDB';
 
     let eventCode = localStorage.getItem("eventCode");
     let isLoading = false;
@@ -30,7 +30,7 @@
 
     async function cacheAllData() {
         await withLoading(async () => {
-            const localData = await getScoutingData() || [];
+            const localData = await getIndexedDBStore() || [];
             const lastId = await getLastId(localData);
             
             const dataRes = await fetchAllData(eventCode, lastId);
@@ -48,7 +48,7 @@
                 dataMap.set(key, row);
             }
             const combinedData = Array.from(dataMap.values());
-            await setScoutingData(combinedData);
+            await setIndexedDBStore(combinedData);
 
             const localPitStr = localStorage.getItem("retrievePit");
             const localPit = localPitStr ? JSON.parse(localPitStr) : {};
@@ -151,7 +151,7 @@
         const previousEventCode = localStorage.getItem("eventCode");
         if (previousEventCode && previousEventCode !== eventCode) {
             // Clear data when switching events
-            clearScoutingData();
+            clearIndexedDBStore();
             localStorage.removeItem("retrievePit");
             localStorage.removeItem("retrieveQual");
         }

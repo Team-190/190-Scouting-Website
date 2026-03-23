@@ -3,6 +3,8 @@ const VITE_BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT || 8000;
 const SERVER = !parseInt(VITE_TESTING) ? import.meta.env.VITE_SERVER_IP : "localhost";
 const defaultAPILink = `http://${SERVER}:${VITE_BACKEND_PORT}`;
 
+import { setIndexedDBStore } from './indexedDB';
+
 export function fetchEvents() {
     const route = `${defaultAPILink}/api/getEvents`;
     let data = fetch(route);
@@ -22,7 +24,7 @@ export function fetchAllData(eventCode, lastId = 0) {
 }
 
 export function fetchSingleMetric(eventCode) {
-    const route = `${defaultAPILink}/api/singleMetric?eventCode=` + eventCode;
+    const route = `${defaultAPILink}/api/getSingleMetric?eventCode=` + eventCode;
     let data = fetch(route);
     return data;
 }
@@ -64,54 +66,60 @@ export function fetchAnanthPage(eventCode) {
 export async function fetchMatchAlliances(eventCode) {
     const response = await fetch(`${defaultAPILink}/api/getMatchAlliances?eventCode=${eventCode}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    await setIndexedDBStore(await response.json(), "matchAlliances");
     return await response.json();
 }
-
 export async function fetchTeams(eventCode) {
     const response = await fetch(`${defaultAPILink}/api/getTeams?eventCode=${eventCode}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    // await setIndexedDBStore(await response.json(), "teams");
     return await response.json();
 }
 
 export async function fetchEventDetails(eventCode) {
-    const response = await fetch(`${defaultAPILink}/api/fetchEventDetails?eventCode=${eventCode}`);
+    const response = await fetch(`${defaultAPILink}/api/getEventDetails?eventCode=${eventCode}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    // await setIndexedDBStore(await response.json(), "eventDetails");
     return await response.json();
 }
 
 export async function fetchTeamStatuses(eventCode) {
-    const response = await fetch(`${defaultAPILink}/api/fetchTeamStatuses?eventCode=${eventCode}`);
+    const response = await fetch(`${defaultAPILink}/api/getTeamStatuses?eventCode=${eventCode}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    // await setIndexedDBStore(await response.json(), "teamStatuses");
     return await response.json();
 }
 
 export async function fetchOPR(eventCode) {
-    const response = await fetch(`${defaultAPILink}/api/fetchOPR?eventCode=${eventCode}`);
+    const response = await fetch(`${defaultAPILink}/api/getOPR?eventCode=${eventCode}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    // await setIndexedDBStore(await response.json(), "OPR");
     return await response.json();
 }
 
 export async function fetchAlliances(eventCode) {
-    const response = await fetch(`${defaultAPILink}/api/fetchAlliances?eventCode=${eventCode}`);
+    const response = await fetch(`${defaultAPILink}/api/getAlliances?eventCode=${eventCode}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    // await setIndexedDBStore(await response.json(), "alliances");
     return await response.json();
 }
 
 export async function fetchAlliancesAvailable(eventCode) {
-    const response = await fetch(`${defaultAPILink}/api/fetchAlliances?eventCode=${eventCode}`);
+    const response = await fetch(`${defaultAPILink}/api/getAlliances?eventCode=${eventCode}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const { available } = await response.json();
+    // await setIndexedDBStore(available, "alliancesAvailable");
     return available;
 }
 
 export async function fetchEventEpas(eventCode) {
-    const response = await fetch(`${defaultAPILink}/api/fetchEventEpas?eventCode=${eventCode}`);
+    const response = await fetch(`${defaultAPILink}/api/getEventEpas?eventCode=${eventCode}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return await response.json();
 }
 
 export async function fetchElimsHaveStarted(eventCode) {
-    const response = await fetch(`${defaultAPILink}/api/fetchElimsHaveStarted?eventCode=${eventCode}`);
+    const response = await fetch(`${defaultAPILink}/api/getElimsHaveStarted?eventCode=${eventCode}`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const { elimsHaveStarted } = await response.json();
     return elimsHaveStarted;
@@ -119,13 +127,12 @@ export async function fetchElimsHaveStarted(eventCode) {
 
 export async function fetchMatchScores(eventCode, match, teamNumber) {
     const response = await fetch(
-        `${defaultAPILink}/api/fetchMatchScores?eventCode=${eventCode}&matchNumber=${match.Match}&driveStation=${match.DriveStation}`
+        `${defaultAPILink}/api/getMatchScores?eventCode=${eventCode}&matchNumber=${match.Match}&driveStation=${match.DriveStation}`
     );
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const { score } = await response.json();
     return score;
 }
-
 
 ////////////// POST Methods \\\\\\\\\\\\\\
 ////////////// POST Methods \\\\\\\\\\\\\\

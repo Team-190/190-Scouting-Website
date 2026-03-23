@@ -1,11 +1,11 @@
 // @ts-nocheck
 const DB_NAME = 'scoutingDB';
 const DB_VERSION = 1;
-const STORE = 'scoutingData';
 
 // ─── OPEN / INIT ────────────────────────────────────────────────────────────
 
 let dbInstance = null;
+
 
 function openDB() {
     if (dbInstance) return Promise.resolve(dbInstance);
@@ -15,8 +15,16 @@ function openDB() {
 
         request.onupgradeneeded = () => {
             const db = request.result;
-            if (!db.objectStoreNames.contains(STORE)) {
-                db.createObjectStore(STORE, { keyPath: 'Id' });
+            
+            if (!db.objectStoreNames.contains('scoutingData')) {
+                db.createObjectStore('scoutingData', { keyPath: 'Id' });
+            }
+            
+            const stores = ["matchAlliances", "teams", "eventDetails", "teamStatuses", "OPR", "alliances", "alliancesAvailable", "EPA", "elimsStarted", "matchScores"];
+            for (const store of stores) {
+                if (!db.objectStoreNames.contains(store)) {
+                    db.createObjectStore(store, { autoIncrement: true });
+                }
             }
         };
 
@@ -32,7 +40,7 @@ function openDB() {
 // ─── WRITE ──────────────────────────────────────────────────────────────────
 
 // Store an array of scouting rows (bulk write)
-export async function setScoutingData(rows) {
+export async function setIndexedDBStore(rows, STORE="scoutingData") {
     console.log('setScoutingData called with', rows.length, 'rows');
     const db = await openDB();
     return new Promise((resolve, reject) => {
@@ -56,7 +64,7 @@ export async function setScoutingData(rows) {
 }
 
 // Wipe all stored scouting data (call this when switching events)
-export async function clearScoutingData() {
+export async function clearIndexedDBStore(STORE="scoutingData") {
     const db = await openDB();
     return new Promise((resolve, reject) => {
         const tx = db.transaction(STORE, 'readwrite');
@@ -70,7 +78,7 @@ export async function clearScoutingData() {
 // ─── READ ────────────────────────────────────────────────────────────────────
 
 // Get all scouting rows
-export async function getScoutingData() {
+export async function getIndexedDBStore(STORE="scoutingData") {
     const db = await openDB();
     return new Promise((resolve, reject) => {
         const tx = db.transaction(STORE, 'readonly');
