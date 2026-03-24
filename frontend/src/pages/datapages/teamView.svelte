@@ -1,4 +1,9 @@
 <script lang="ts">
+  import {
+    AllCommunityModule,
+    createGrid,
+    ModuleRegistry,
+  } from "ag-grid-community";
   import { onMount, tick } from "svelte";
   import { v4 as uuidv4 } from "uuid";
   import fieldImageSrc from "../../images/FieldImage.png";
@@ -237,7 +242,7 @@
   // ─── Data Loading ─────────────────────────────────────────────────────────────
 
   async function loadTeamNumbers(): Promise<number[]> {
-    const storedData = await getIndexedDBStore("scoutingData");
+    const storedData = await getIndexedDBStore("scoutingData") || [];
     if (!storedData) return [];
     try {
       const parsed = storedData;
@@ -590,7 +595,7 @@
   async function onAutoOnlyChange() {
     isLoading = true;
     try {
-      const stored = await getIndexedDBStore("scoutingData");
+      const stored = await getIndexedDBStore("scoutingData") || [];
       const parsed = stored ? stored : [];
       teamViewData = extractValues(parsed, autoOnly);
       cache = {};
@@ -1137,7 +1142,7 @@
   onMount(async () => {
     isLoading = true;
     try {
-      const stored = await getIndexedDBStore("scoutingData");
+      const stored = await getIndexedDBStore("scoutingData") || [];
       const parsed = stored ? stored : [];
       teamViewData = extractValues(parsed, autoOnly);
 

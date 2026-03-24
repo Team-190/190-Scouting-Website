@@ -7,7 +7,7 @@
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
   import { fetchMatchAlliances, fetchOPR } from "../../utils/api.js";
-  import EventGrid from "../../components/EventGrid.svelte";
+  import EventGrid from "../../components/Eventgrid.svelte";
   import {
     COLOR_MODES,
     getColorblindMode,
@@ -253,7 +253,7 @@
   // ─── Data Loading ─────────────────────────────────────────────────────────────
 
   async function fetchAllMetricData(): Promise<string | null> {
-    const stored = await getIndexedDBStore("scoutingData");
+    const stored = await getIndexedDBStore("scoutingData") || [];
     if (!stored) return null;
     return JSON.stringify(extractValues(stored, autoOnly));
   }
