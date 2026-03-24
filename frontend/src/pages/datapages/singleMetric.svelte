@@ -265,7 +265,7 @@
   // ─── Data Loading ─────────────────────────────────────────────────────────────
 
   async function fetchAllMetricData(): Promise<string | null> {
-    const stored = await getIndexedDBStore();
+    const stored = await getIndexedDBStore("scoutingData");
     if (!stored) return null;
     return JSON.stringify(extractValues(stored, autoOnly));
   }

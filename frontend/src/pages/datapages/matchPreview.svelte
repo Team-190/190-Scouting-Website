@@ -751,7 +751,7 @@
   onMount(async () => {
     isLoading = true;
     try {
-      const stored = await getIndexedDBStore();
+      const stored = await getIndexedDBStore("scoutingData");
       const parsed = stored ? stored : [];
       teamViewData = extractValues(parsed, autoOnly);
       eventCode    = localStorage.getItem("eventCode") || "";

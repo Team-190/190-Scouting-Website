@@ -214,6 +214,8 @@ app.get("/api/getSingleMetric", validateEventCode, async (req, res) => {
 
         teams[strippedTeam][match].push(datapoint);
     }
+
+    res.send(teams);
 });
 
 app.get("/api/getRatings", validateEventCode, async (req, res) => {

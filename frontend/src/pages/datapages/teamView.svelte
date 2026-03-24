@@ -241,7 +241,7 @@
   // ─── Data Loading ─────────────────────────────────────────────────────────────
 
   async function loadTeamNumbers(): Promise<number[]> {
-    const storedData = await getIndexedDBStore();
+    const storedData = await getIndexedDBStore("scoutingData");
     if (!storedData) return [];
     try {
       const parsed = storedData;
@@ -536,7 +536,7 @@
   async function onAutoOnlyChange() {
     isLoading = true;
     try {
-      const stored = await getIndexedDBStore();
+      const stored = await getIndexedDBStore("scoutingData");
       const parsed = stored ? stored : [];
       teamViewData = extractValues(parsed, autoOnly);
       cache = {};
@@ -1193,7 +1193,7 @@
   onMount(async () => {
     isLoading = true;
     try {
-      const stored = await getIndexedDBStore();
+      const stored = await getIndexedDBStore("scoutingData");
       const parsed = stored ? stored : [];
       teamViewData = extractValues(parsed, autoOnly);
 
