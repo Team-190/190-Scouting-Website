@@ -1,15 +1,15 @@
 <script>
   import {
-    BOOLEAN_METRICS,
-    CLIMBSTATE_METRIC,
-    COLOR_MODES,
-    EXCLUDED_FIELDS,
-    INVERTED_METRICS,
-    lerpColor,
-    mean,
-    median,
-    METRIC_DISPLAY_NAMES,
-    percentile,
+      BOOLEAN_METRICS,
+      CLIMBSTATE_METRIC,
+      COLOR_MODES,
+      EXCLUDED_FIELDS,
+      INVERTED_METRICS,
+      lerpColor,
+      mean,
+      median,
+      METRIC_DISPLAY_NAMES,
+      percentile,
   } from "../utils/pageUtils.js";
 
   // ─── Props ───────────────────────────────────────────────────────────────────
@@ -17,7 +17,7 @@
     team = null,
     eventCode = "",
     anchorEl = $bindable(null),
-    visible = false,
+    visible = $bindable(false),
     teamAggCache = {},
     globalStats = {},
     cachedOPRs = {},
@@ -34,26 +34,48 @@
   let userMetric = $state(""); // what user selected in dropdown
   let cardTop = $state(-9999);
   let cardLeft = $state(-9999);
+  let cardW = $state(0);
+  let cardH = $state(0);
 
-  const CARD_W = 640;
-  const CARD_H = 720;
+  const CARD_W_PERCENT = 80;
+  const CARD_H_PERCENT = 92;
 
   // ─── Positioning only ────────────────────────────────────────────────────────
   $effect(() => {
-    if (visible && anchorEl) {
-      const rect = anchorEl.getBoundingClientRect();
-      let left = rect.right + 12;
-      let top = rect.top;
-      if (left + CARD_W > window.innerWidth - 8) left = rect.left - CARD_W - 12;
-      if (top + CARD_H > window.innerHeight - 8)
-        top = window.innerHeight - CARD_H - 8;
-      if (top < 8) top = 8;
+    if (visible) {
+      cardW = (window.innerWidth * CARD_W_PERCENT) / 100;
+      cardH = (window.innerHeight * CARD_H_PERCENT) / 100;
+      
+      // Center on screen
+      const left = (window.innerWidth - cardW) / 2;
+      const top = (window.innerHeight - cardH) / 2;
+      
       cardLeft = left;
       cardTop = top;
     } else if (!visible) {
       cardTop = -9999;
       cardLeft = -9999;
     }
+  });
+
+  // ─── Handle window resize ────────────────────────────────────────────────────
+  $effect(() => {
+    function handleResize() {
+      if (visible) {
+        cardW = (window.innerWidth * CARD_W_PERCENT) / 100;
+        cardH = (window.innerHeight * CARD_H_PERCENT) / 100;
+        
+        // Recenter on resize
+        const left = (window.innerWidth - cardW) / 2;
+        const top = (window.innerHeight - cardH) / 2;
+        
+        cardLeft = left;
+        cardTop = top;
+      }
+    }
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   });
 
   // ─── Reset user metric choice when team changes ──────────────────────────────
@@ -251,6 +273,7 @@
       "#000",
       "#000000",
       "#0000ff",
+      "#2a2a2a",
       "#4d4d4d",
       "#ff0000",
       "#808080",
@@ -259,6 +282,7 @@
       "rgb(255,0,0)",
       "rgb(128,128,128)",
       "rgb(77,77,77)",
+      "rgb(42,42,42)",
     ];
     return dark.includes(String(bg).trim().toLowerCase()) ? "white" : "black";
   }
@@ -358,7 +382,7 @@
   <div
     class="hover-card"
     class:hidden={!visible}
-    style="top:{cardTop}px; left:{cardLeft}px;"
+    style="top:{cardTop}px; left:{cardLeft}px; width:{cardW}px; max-height:{cardH}px;"
     role="dialog"
     aria-label="Team {team.team_number} details"
   >
@@ -374,6 +398,14 @@
         {#if robotPic}
           <img src={robotPic} alt="Robot" class="robot-thumb" />
         {/if}
+        <button 
+          class="close-btn"
+          onclick={() => (visible = false)}
+          title="Close"
+          aria-label="Close details"
+        >
+          X
+        </button>
       </div>
     </div>
 
@@ -533,9 +565,8 @@
   .hover-card {
     position: fixed;
     z-index: 9999;
-    width: 640px;
-    max-height: 720px;
     background: #1a1a1a;
+    color: white;
     border: 2px solid #c81b00;
     border-radius: 10px;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
@@ -647,7 +678,7 @@
     flex-shrink: 0;
   }
   .muted {
-    color: #666;
+    color: white;
     font-size: 0.72rem;
     padding: 8px 12px;
     margin: 0;
@@ -655,7 +686,7 @@
   .grid-scroll {
     overflow-x: auto;
     overflow-y: auto;
-    max-height: 230px;
+    max-height: 370px;
   }
   .grid-scroll::-webkit-scrollbar,
   .ev-scroll::-webkit-scrollbar {
@@ -734,7 +765,7 @@
     padding: 3px 0;
   }
   .muted-label {
-    color: #666;
+    color: white;
     font-size: 0.62rem;
     white-space: nowrap;
   }
@@ -751,7 +782,7 @@
   }
   .ev-scroll {
     overflow-y: auto;
-    max-height: 210px;
+    max-height: 370px;
   }
   .ev-grid {
     table-layout: fixed;
@@ -763,7 +794,7 @@
     width: 38px;
   }
   .rank-cell {
-    color: #888;
+    color: #bbb;
     font-weight: 400 !important;
   }
   .team-cell {
@@ -776,5 +807,28 @@
   .current-team {
     color: #ffd700 !important;
     font-weight: 800 !important;
+  }
+  .close-btn {
+    background: #dc3545;
+    border: 1px solid #c82333;
+    color: white;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 6px 12px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    min-width: 45px;
+    height: 32px;
+  }
+  .close-btn:hover {
+    background: #c82333;
+    border-color: #9d1c28;
+  }
+  .close-btn:active {
+    background: #9d1c28;
   }
 </style>
