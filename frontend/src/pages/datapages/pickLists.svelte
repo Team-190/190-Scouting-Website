@@ -23,6 +23,8 @@
       saveToStorage,
       sd
   } from "../../utils/pageUtils";
+  import { onMount } from "svelte";
+  import { getIndexedDBStore } from "../../utils/indexedDB.js";
 
   // ─── CONSTANTS ──────────────────────────────────────────────────────────────
 
@@ -112,7 +114,7 @@
 
   async function loadTeamViewData() {
     try {
-      const raw = await getScoutingData();
+      const raw = await getIndexedDBStore("scoutingData") || [];
       if (!raw || !raw.length) {
         teamViewData = [];
         return;
@@ -514,11 +516,11 @@
       return;
     }
     try {
-      const { _teamRanks } = await fetchTeamStatuses(eventCode);
+      const _teamRanks = await fetchTeamStatuses(eventCode);
 
-      rankedTeams = Array.from(_teamRanks.entries())
+      rankedTeams = Object.entries(_teamRanks)
         .filter(([, rank]) => rank != null)
-        .map(([team_number, rank]) => ({ team_number, rank }))
+        .map(([team_number, rank]) => ({ team_number: parseInt(team_number), rank }))
         .sort((a, b) => a.rank - b.rank);
 
       if ($teamsStore._teamNumbers.length === 0) {
@@ -536,9 +538,7 @@
       });
 
       if (rankedTeams.length < 8) {
-        alert(
-          "Not enough ranked teams to populate all 8 alliance captain spots.",
-        );
+          alert("Not enough ranked teams to populate all 8 alliance captain spots.");
       }
     } catch (err) {
       console.error(err);

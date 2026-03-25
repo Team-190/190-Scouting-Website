@@ -4,7 +4,7 @@
   import logo from "../images/frc190_Logo.png";
   import { isSidebarOpen } from "../stores/sidebarState.js";
   import {
-      fetchAlliancesAvailable,
+      fetchAlliances,
       fetchElimsHaveStarted,
   } from "../utils/api.js";
 
@@ -22,7 +22,7 @@
 
   async function checkAlliances() {
     const eventCode = localStorage.getItem("eventCode");
-    alliancesAvailable = await fetchAlliancesAvailable(eventCode);
+    alliancesAvailable = await fetchAlliances(eventCode);
     elimsStarted = await fetchElimsHaveStarted(eventCode);
   }
 
