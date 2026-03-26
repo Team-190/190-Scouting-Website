@@ -1,29 +1,28 @@
 <script>
   import baseX from "base-x";
   import pako from "pako";
+  import { onMount } from "svelte";
   import { writable } from "svelte/store";
   import Team from "../../components/Team.svelte";
   import TeamHoverCard from "../../components/TeamHoverCard.svelte";
   import {
-    fetchEventEpas,
-    fetchOPR,
-    fetchTeamStatuses,
-    fetchTeams,
+      fetchEventEpas,
+      fetchOPR,
+      fetchTeamStatuses,
+      fetchTeams,
   } from "../../utils/api.js";
+  import { getIndexedDBStore } from '../../utils/indexedDB';
   import {
-    loadFromStorage,
-    saveToStorage,
-    METADATA_KEYS,
-    BOOLEAN_METRICS,
-    CLIMBSTATE_METRIC,
-    EXCLUDED_FIELDS,
-    INVERTED_METRICS,
-    mean,
-    sd,
-    percentile,
+      BOOLEAN_METRICS,
+      CLIMBSTATE_METRIC,
+      EXCLUDED_FIELDS,
+      METADATA_KEYS,
+      loadFromStorage,
+      mean,
+      percentile,
+      saveToStorage,
+      sd
   } from "../../utils/pageUtils";
-  import { onMount } from "svelte";
-  import { getScoutingData } from "../../utils/indexedDB.js";
 
   // ─── CONSTANTS ──────────────────────────────────────────────────────────────
 
@@ -113,7 +112,7 @@
 
   async function loadTeamViewData() {
     try {
-      const raw = await getScoutingData();
+      const raw = await getIndexedDBStore("scoutingData") || [];
       if (!raw || !raw.length) {
         teamViewData = [];
         return;
@@ -325,26 +324,30 @@
     }
   });
 
-  function onTeamMouseEnter(e, team) {
+  function showTeamDetails(team) {
     hoveredTeam = team;
-    hoverAnchorEl = e.currentTarget;
     hoverVisible = true;
   }
 
-  function onTeamMouseLeave() {
-    // Don't hide on mouse leave — card stays until user clicks outside
+  function closeTeamDetails() {
+    hoverVisible = false;
   }
 
   function onDocumentClick(e) {
     if (!hoverVisible) return;
     const card = document.querySelector(".hover-card");
     if (card && card.contains(e.target)) return;
-    // Clicking a team item switches to that team rather than closing
-    if (e.target.closest("[data-team-number]")) return;
     hoverVisible = false;
   }
 
   // ─── EFFECTS ─────────────────────────────────────────────────────────────────
+
+  $effect(() => {
+    if (hoverVisible) {
+      document.addEventListener("mousedown", onDocumentClick);
+      return () => document.removeEventListener("mousedown", onDocumentClick);
+    }
+  });
 
   $effect(() => {
     if (eventCode) {
@@ -511,11 +514,11 @@
       return;
     }
     try {
-      const { _teamRanks } = await fetchTeamStatuses(eventCode);
+      const _teamRanks = await fetchTeamStatuses(eventCode);
 
-      rankedTeams = Array.from(_teamRanks.entries())
+      rankedTeams = Object.entries(_teamRanks)
         .filter(([, rank]) => rank != null)
-        .map(([team_number, rank]) => ({ team_number, rank }))
+        .map(([team_number, rank]) => ({ team_number: parseInt(team_number), rank }))
         .sort((a, b) => a.rank - b.rank);
 
       if ($teamsStore._teamNumbers.length === 0) {
@@ -533,9 +536,7 @@
       });
 
       if (rankedTeams.length < 8) {
-        alert(
-          "Not enough ranked teams to populate all 8 alliance captain spots.",
-        );
+          alert("Not enough ranked teams to populate all 8 alliance captain spots.");
       }
     } catch (err) {
       console.error(err);
@@ -886,14 +887,12 @@
 
   function handleDropToRemove(event) {
     if (!draggedItem) return;
-    if (
-      event.target.closest(".picklist .list") ||
-      event.target.closest(".alliance-list .list")
-    )
-      return;
+    // If dropped inside any picklist, do nothing (don't remove)
+    if (event.target.closest(".picklist .list")) return;
 
     const { item, sourceList } = draggedItem;
 
+    // Remove from picklist if that's the source
     if (sourceList && sourceList !== "teams" && picklists[sourceList]) {
       const source = picklists[sourceList];
       const index = source.teams.findIndex(
@@ -1186,8 +1185,7 @@
               picked={!!pickedTeams[teamNumber]}
               onclick={() => toggleTeamPicked(teamNumber)}
               ondragstart={() => handleDragStart(team, "teams")}
-              onmouseenter={(e) => onTeamMouseEnter(e, team)}
-              onmouseleave={onTeamMouseLeave}
+              onshowdetails={() => showTeamDetails(team)}
             />
           {/each}
         </div>
@@ -1285,8 +1283,7 @@
                       picked={!!pickedTeams[team.team_number]}
                       onclick={() => toggleTeamPicked(team.team_number)}
                       ondragstart={() => handleDragStart(team, key)}
-                      onmouseenter={(e) => onTeamMouseEnter(e, team)}
-                      onmouseleave={onTeamMouseLeave}
+                      onshowdetails={() => showTeamDetails(team)}
                     />
                   {/each}
                 </div>
@@ -1365,8 +1362,7 @@
                           onclick={() => toggleTeamPicked(team.team_number)}
                           ondragstart={() =>
                             handleDragStart(team, `alliance_${alliance.id}`)}
-                          onmouseenter={(e) => onTeamMouseEnter(e, team)}
-                          onmouseleave={onTeamMouseLeave}
+                          onshowdetails={() => showTeamDetails(team)}
                         />
                       {/each}
                     </div>
@@ -1401,12 +1397,13 @@
                             class:picked={!!pickedTeams[team.team_number]}
                             draggable="true"
                             ondragstart={() => handleDragStart(team, key)}
-                            onclick={() => toggleTeamPicked(team.team_number)}
+                            onclick={(e) => {
+                              e.stopPropagation();
+                              showTeamDetails(team);
+                            }}
                             onkeydown={(e) =>
                               e.key === "Enter" &&
-                              toggleTeamPicked(team.team_number)}
-                            onmouseenter={(e) => onTeamMouseEnter(e, team)}
-                            onmouseleave={onTeamMouseLeave}
+                              showTeamDetails(team)}
                           >
                             {team.team_number}
                           </div>
@@ -1501,7 +1498,7 @@
     team={hoveredTeam}
     {eventCode}
     bind:anchorEl={hoverAnchorEl}
-    visible={hoverVisible}
+    bind:visible={hoverVisible}
     {teamAggCache}
     globalStats={hovercardGlobalStats}
     {cachedOPRs}
@@ -1647,7 +1644,7 @@
   }
 
   .team-list-container {
-    width: 150px;
+    width: 280px;
     background: var(--dark-bg);
     border: 2px solid var(--frc-190-black);
     border-radius: 8px;

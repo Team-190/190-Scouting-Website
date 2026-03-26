@@ -5,6 +5,8 @@ const SERVER = !parseInt(VITE_TESTING)
   : "localhost";
 const defaultAPILink = `http://${SERVER}:${VITE_BACKEND_PORT}`;
 
+import { setIndexedDBStore, getIndexedDBStore  } from './indexedDB';
+
 export function fetchEvents() {
   const route = `${defaultAPILink}/api/getEvents`;
   let data = fetch(route);

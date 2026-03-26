@@ -1,4 +1,9 @@
 <script lang="ts">
+  import {
+    AllCommunityModule,
+    createGrid,
+    ModuleRegistry,
+  } from "ag-grid-community";
   import { onMount, tick } from "svelte";
   import { v4 as uuidv4 } from "uuid";
   import fieldImageSrc from "../../images/FieldImage.png";
@@ -37,8 +42,10 @@
     sd,
     ZONE_TIME_FIELDS,
   } from "../../utils/pageUtils.js";
+
+  import { getIndexedDBStore } from '../../utils/indexedDB';
   import TeamGrid from "../../components/Teamgrid.svelte";
-  import { getScoutingData } from "../../utils/indexedDB";
+  ModuleRegistry.registerModules([AllCommunityModule]);
 
   // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -236,7 +243,7 @@
   // ─── Data Loading ─────────────────────────────────────────────────────────────
 
   async function loadTeamNumbers(): Promise<number[]> {
-    const storedData = await getScoutingData();
+    const storedData = await getIndexedDBStore("scoutingData") || [];
     if (!storedData) return [];
     try {
       const parsed = storedData;
@@ -609,7 +616,7 @@
   async function onAutoOnlyChange() {
     isLoading = true;
     try {
-      const stored = await getScoutingData();
+      const stored = await getIndexedDBStore("scoutingData") || [];
       const parsed = stored ? stored : [];
       teamViewData = extractValues(parsed, autoOnly);
       cache = {};
@@ -1156,7 +1163,7 @@
   onMount(async () => {
     isLoading = true;
     try {
-      const stored = await getScoutingData();
+      const stored = await getIndexedDBStore("scoutingData") || [];
       const parsed = stored ? stored : [];
       teamViewData = extractValues(parsed, autoOnly);
 

@@ -6,32 +6,82 @@
     export let onkeydown = undefined;
     export let onmouseenter = undefined;
     export let onmouseleave = undefined;
+    export let onshowdetails = undefined;
 </script>
 <div
-    class="list-item"
+    class="list-item-container"
     data-team-number={team.team_number}
-    class:picked
-    draggable="true"
-    role="button"
-    tabindex="0"
-    {onclick}
-    {ondragstart}
-    {onkeydown}
-    {onmouseenter}
-    {onmouseleave}
 >
-    {team.team_number} - {team.nickname}
+    <div
+        class="list-item"
+        class:picked
+        draggable="true"
+        role="button"
+        tabindex="0"
+        {onclick}
+        {ondragstart}
+        {onkeydown}
+        {onmouseenter}
+        {onmouseleave}
+    >
+        {team.team_number} - {team.nickname}
+    </div>
+    {#if onshowdetails}
+        <button
+            class="details-btn"
+            onclick={onshowdetails}
+            title="View team details"
+            aria-label="View details for team {team.team_number}"
+        >
+            View
+        </button>
+    {/if}
 </div>
 <style>
-    .list-item {
-        padding: 8px;
+    .list-item-container {
+        display: flex;
+        gap: 2px;
+        align-items: center;
         margin-bottom: 5px;
+        width: 100%;
+    }
+
+    .list-item {
+        flex: 1;
+        padding: 8px;
         background-color: #fff;
         border: 1px solid #ddd;
         cursor: grab;
         color: #333;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
-    .picked {
+    .list-item.picked {
         background-color: lightcoral;
+    }
+
+    .details-btn {
+        padding: 4px 8px;
+        background: #007bff;
+        border: 1px solid #0056b3;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 0.75rem;
+        color: white;
+        font-weight: 500;
+        white-space: nowrap;
+        flex-shrink: 0;
+        transition: all 0.2s;
+    }
+
+    .details-btn:hover {
+        background: #0056b3;
+        border-color: #003d82;
+    }
+
+    .details-btn:active {
+        background: #003d82;
     }
 </style>
