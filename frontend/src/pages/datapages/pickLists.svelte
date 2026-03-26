@@ -11,7 +11,6 @@
       fetchTeamStatuses,
       fetchTeams,
   } from "../../utils/api.js";
-  import { getScoutingData } from "../../utils/indexedDB.js";
   import {
       BOOLEAN_METRICS,
       CLIMBSTATE_METRIC,
@@ -23,8 +22,6 @@
       saveToStorage,
       sd
   } from "../../utils/pageUtils";
-  import { onMount } from "svelte";
-  import { getIndexedDBStore } from "../../utils/indexedDB.js";
 
   // ─── CONSTANTS ──────────────────────────────────────────────────────────────
 
