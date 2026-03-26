@@ -2,6 +2,8 @@
     import { onMount, tick } from "svelte";
     import { fetchAllData, fetchEvents, fetchPitScouting, fetchQualitativeScouting, fetchEventDetails, fetchOPR, postPitScouting, postQualitativeScouting } from "../utils/api";
     import { setScoutingData, getScoutingData, getLastId, clearScoutingData } from '../utils/indexedDB';
+    import { fetchAllData, fetchEvents, fetchPitScouting, fetchQualitativeScouting, fetchEventDetails, postPitScouting, postQualitativeScouting } from "../utils/api";
+    import { setIndexedDBStore, getIndexedDBStore, getLastId, clearAllStores } from '../utils/indexedDB';
 
     let eventCode = localStorage.getItem("eventCode");
     let isLoading = false;
@@ -30,7 +32,7 @@
 
     async function cacheAllData() {
         await withLoading(async () => {
-            const localData = await getScoutingData() || [];
+            const localData = await getIndexedDBStore("scoutingData") || [];
             const lastId = await getLastId(localData);
             
             const dataRes = await fetchAllData(eventCode, lastId);
@@ -48,7 +50,7 @@
                 dataMap.set(key, row);
             }
             const combinedData = Array.from(dataMap.values());
-            await setScoutingData(combinedData);
+            await setIndexedDBStore("scoutingData", { rows: combinedData });
 
             const localPitStr = localStorage.getItem("retrievePit");
             const localPit = localPitStr ? JSON.parse(localPitStr) : {};
@@ -156,17 +158,14 @@
 
     // Reactive statement to handle event code changes
     $: if (eventCode && typeof window !== 'undefined') {
-        // Check if eventCode has changed
         const previousEventCode = localStorage.getItem("eventCode");
         if (previousEventCode && previousEventCode !== eventCode) {
-            // Clear data when switching events
-            clearScoutingData();
+            clearAllStores();
             localStorage.removeItem("retrievePit");
             localStorage.removeItem("retrieveQual");
             localStorage.removeItem("retrieveOPR");
         }
         localStorage.setItem("eventCode", eventCode);
-        // Automatically cache data when event changes
         cacheAllData();
     }
 </script>

@@ -1,11 +1,12 @@
 // @ts-nocheck
-const DB_NAME = 'scoutingDB';
-const DB_VERSION = 1;
-const STORE = 'scoutingData';
+const DB_NAME = "scoutingDB";
+const DB_VERSION = 5;
 
 // ─── OPEN / INIT ────────────────────────────────────────────────────────────
 
 let dbInstance = null;
+
+const STORE_LIST = ["matchAlliances", "teams", "eventDetails", "teamStatuses", "OPR", "alliances", "EPA", "elimsStarted", "matchScores"];
 
 function openDB() {
     if (dbInstance) return Promise.resolve(dbInstance);
@@ -15,8 +16,15 @@ function openDB() {
 
         request.onupgradeneeded = () => {
             const db = request.result;
-            if (!db.objectStoreNames.contains(STORE)) {
-                db.createObjectStore(STORE, { keyPath: 'Id' });
+
+            if (!db.objectStoreNames.contains("scoutingData")) {
+                db.createObjectStore("scoutingData", { keyPath: "Id" });
+            }
+            
+            for (const store of STORE_LIST) {
+                if (!db.objectStoreNames.contains(store)) {
+                    db.createObjectStore(store, { keyPath: "key" });
+                }
             }
         };
 
@@ -31,35 +39,32 @@ function openDB() {
 
 // ─── WRITE ──────────────────────────────────────────────────────────────────
 
-// Store an array of scouting rows (bulk write)
-export async function setScoutingData(rows) {
-    console.log('setScoutingData called with', rows.length, 'rows');
+export async function setIndexedDBStore(STORE, { rows = null, key = null, value = null } = {}) {
     const db = await openDB();
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE, 'readwrite');
+        const tx = db.transaction(STORE, "readwrite");
         const store = tx.objectStore(STORE);
-        for (const row of rows) {
-            store.put(row);
+
+        if (rows) {
+            for (const row of rows) {
+                store.put(row);
+            }
+        } else if (key !== null && value !== null) {
+            store.put({ key, value });
         }
-        tx.oncomplete = () => {
-            console.log('transaction complete');
-            resolve();
-        }
-        tx.onerror = () => {
-            console.log('transaction error', tx.error);
-            reject(tx.error);
-        }
-        tx.onabort = () => {
-            console.log('transaction aborted', tx.error);
-        }
+
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => console.log("transaction aborted", tx.error);
     });
 }
 
-// Wipe all stored scouting data (call this when switching events)
-export async function clearScoutingData() {
+// ─── CLEAR ──────────────────────────────────────────────────────────────────
+
+export async function clearIndexedDBStore(STORE) {
     const db = await openDB();
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE, 'readwrite');
+        const tx = db.transaction(STORE, "readwrite");
         const store = tx.objectStore(STORE);
         const request = store.clear();
         request.onsuccess = () => resolve();
@@ -67,19 +72,37 @@ export async function clearScoutingData() {
     });
 }
 
+export async function clearAllStores() {
+    for (const store of STORE_LIST) {
+        await clearIndexedDBStore(store);
+    }
+    await clearIndexedDBStore("scoutingData");
+}
+
 // ─── READ ────────────────────────────────────────────────────────────────────
 
-// Get all scouting rows
-export async function getScoutingData() {
+export async function getIndexedDBStore(STORE, key = null) {
     const db = await openDB();
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE, 'readonly');
+        const tx = db.transaction(STORE, "readonly");
         const store = tx.objectStore(STORE);
-        const request = store.getAll();
-        request.onsuccess = () => resolve(request.result);
+        let request;
+
+        if (key !== null) {
+            // Single record lookup — unwrap the value field
+            request = store.get(key);
+            request.onsuccess = () => resolve(request.result?.value ?? null);
+        } else {
+            // Full store dump — return raw array (used for scoutingData)
+            request = store.getAll();
+            request.onsuccess = () => resolve(request.result ?? []);
+        }
+
         request.onerror = () => reject(request.error);
     });
 }
+
+// ─── UTILS ───────────────────────────────────────────────────────────────────
 
 // Get the highest Id stored (used for incremental fetching)
 export async function getLastId(data) {
