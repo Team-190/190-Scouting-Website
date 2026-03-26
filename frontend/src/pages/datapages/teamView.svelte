@@ -19,6 +19,7 @@
     fetchMatchAlliances,
     fetchOPR,
     fetchTeams,
+    fetchRobotClimb,
   } from "../../utils/api.js";
   import {
     BOOLEAN_METRICS,
@@ -540,6 +541,26 @@
           teamNumber,
           match.Match,
         );
+        let climbData = await fetchRobotClimb(
+          eventCode,
+          teamNumber,
+          match.Match,
+        );
+        if (climbData.EndgameClimb.slice(-1) == "3") {
+          match.Climb_State = "L3";
+        } else if (climbData.EndgameClimb.slice(-1) == "2") {
+          match.Climb_State = "L2";
+        } else if (climbData.EndgameClimb.slice(-1) == "1") {
+          match.Climb_State = "L1";
+        } else {
+          match.Climb_State = climbData.EndgameClimb;
+        }
+
+        if (climbData.AutoClimb.slice(-1) == "1") {
+          match.Auto_Climb = "Yes";
+        } else {
+          match.Auto_Climb = "No";
+        }
       }
     }
     cache[teamNumber] = data;
