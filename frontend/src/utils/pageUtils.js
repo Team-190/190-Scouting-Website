@@ -11,11 +11,11 @@
  */
 export function getAnanthRatings() {
   return [
+    new URL("../images/AnanthRatings/valentine.png", import.meta.url).href,
     new URL("../images/AnanthRatings/celtics-shaq.png", import.meta.url).href,
     new URL("../images/AnanthRatings/image.png", import.meta.url).href,
     new URL("../images/AnanthRatings/jr-smith.jpg", import.meta.url).href,
-    new URL("../images/AnanthRatings/kobe.png", import.meta.url).href,
-    new URL("../images/AnanthRatings/valentine.png", import.meta.url).href,
+    new URL("../images/AnanthRatings/leborn.png", import.meta.url).href,
     new URL("../images/AnanthRatings/horse.png", import.meta.url).href,
   ];
 }
