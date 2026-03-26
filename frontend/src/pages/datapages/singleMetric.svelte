@@ -13,7 +13,7 @@
   import * as pieGraph from "../../pages/graphcode/pie.js";
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
-  import { fetchMatchAlliances, fetchOPR } from "../../utils/api.js";
+  import { fetchMatchAlliances } from "../../utils/api.js";
   import {
       COLOR_MODES,
       getColorblindMode,
@@ -72,7 +72,7 @@
   let colorblindMode = getColorblindMode();
   let eventCode = getEventCode();
 
-  /** Map of "frc254" → OPR value, populated from fetchOPR */
+  /** Map of "frc254" → OPR value, populated from cached localStorage data */
   let teamOPRs: Record<string, number> = {};
 
   let gridApi = null;
@@ -268,6 +268,29 @@
     const stored = await getScoutingData();
     if (!stored) return null;
     return JSON.stringify(extractValues(stored, autoOnly));
+  }
+
+  /**
+   * Load OPR data from cached localStorage instead of making an API call.
+   * Returns a map of team numbers (e.g., "254") to OPR values.
+   */
+  function loadOPRFromCache(): Record<string, number> {
+    const cachedOprStr = localStorage.getItem("retrieveOPR");
+    if (!cachedOprStr) return {};
+    
+    try {
+      const cachedOpr = JSON.parse(cachedOprStr);
+      // Convert from TBA format (frc254) to display format (254)
+      const converted: Record<string, number> = {};
+      Object.entries(cachedOpr).forEach(([key, value]) => {
+        const teamNum = String(key).replace("frc", "");
+        converted[teamNum] = Number(value);
+      });
+      return converted;
+    } catch (e) {
+      console.warn("Failed to parse cached OPR data:", e);
+      return {};
+    }
   }
 
   async function estimateTeamPoints(
@@ -653,11 +676,11 @@
       return;
     }
 
-    // teamOPRs keys are "frc254" — strip prefix for display
+    // teamOPRs keys are already converted to "254" format by loadOPRFromCache
     rowData = assignAlexPercentiles(
       Object.entries(teamOPRs)
-        .map(([teamKey, opr]) => ({
-          team: teamKey.replace("frc", ""),
+        .map(([teamNum, opr]) => ({
+          team: teamNum,
           hasData: true,
           mean: opr,
           median: opr,
@@ -1089,10 +1112,8 @@
       processTeamData(JSON.parse(raw));
       if (!availableTeams.length) { error = "No team data found from backend."; loading = false; return; }
 
-      if (eventCode) {
-        const { oprs } = await fetchOPR(eventCode);
-        teamOPRs = oprs;
-      }
+      // Load OPR from cached localStorage instead of making an API call
+      teamOPRs = loadOPRFromCache();
 
       metrics = computeMetrics();
       if (!metrics.length) { error = "Team data loaded, but no metrics were found."; loading = false; return; }
