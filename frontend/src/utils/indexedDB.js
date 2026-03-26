@@ -1,6 +1,6 @@
 // @ts-nocheck
 const DB_NAME = "scoutingDB";
-const DB_VERSION = 5;
+const DB_VERSION = 1;
 
 // ─── OPEN / INIT ────────────────────────────────────────────────────────────
 
