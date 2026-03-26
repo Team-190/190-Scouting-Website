@@ -71,8 +71,8 @@
     gridReady: { api: any };
   }>();
 
-  const BOOLEAN_METRICS = new Set(["AutoClimb", "AttemptClimb"]);
-  const CLIMBSTATE_METRIC = "EndState";
+  const BOOLEAN_METRICS = new Set(["Auto_Climb", "AttemptClimb"]);
+  const CLIMBSTATE_METRIC = "Climb_State";
   const INVERTED_METRICS = new Set(["TimeOfClimb", "ClimbTime", "MatchEventCount"]);
 
   const QUINTILE_COLORS: Record<number, string> = {
