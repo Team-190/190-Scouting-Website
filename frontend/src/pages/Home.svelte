@@ -1,5 +1,7 @@
 <script>
     import { onMount, tick } from "svelte";
+    import { fetchAllData, fetchEvents, fetchPitScouting, fetchQualitativeScouting, fetchEventDetails, fetchOPR, postPitScouting, postQualitativeScouting } from "../utils/api";
+    import { setScoutingData, getScoutingData, getLastId, clearScoutingData } from '../utils/indexedDB';
     import { fetchAllData, fetchEvents, fetchPitScouting, fetchQualitativeScouting, fetchEventDetails, postPitScouting, postQualitativeScouting } from "../utils/api";
     import { setIndexedDBStore, getIndexedDBStore, getLastId, clearAllStores } from '../utils/indexedDB';
 
@@ -98,6 +100,15 @@
                 }
             }
 
+            // Fetch and cache OPR data
+            const localOprStr = localStorage.getItem("retrieveOPR");
+            const localOpr = localOprStr ? JSON.parse(localOprStr) : {};
+
+            const newOprData = await fetchOPR(eventCode);
+            
+            const combinedOpr = { ...localOpr, ...newOprData };
+            localStorage.setItem("retrieveOPR", JSON.stringify(combinedOpr));
+
             localStorage.setItem("timestamp", new Date(Date.now()).toLocaleString());
             localStorage.setItem("eventCode", eventCode);
         }, "Data loaded successfully!", "Failed to load data.");
@@ -152,6 +163,7 @@
             clearAllStores();
             localStorage.removeItem("retrievePit");
             localStorage.removeItem("retrieveQual");
+            localStorage.removeItem("retrieveOPR");
         }
         localStorage.setItem("eventCode", eventCode);
         cacheAllData();
@@ -159,6 +171,8 @@
 </script>
 
 {#if notification}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="banner banner-{notification.type}" onclick={() => notification = null}>
         {notification.message}
     </div>
