@@ -32,8 +32,8 @@
   const HIGHLIGHTED_TEAM_KEY = "singleMetric_highlightedTeam";
   const OPR_DISPLAY = "OPR (Offensive Power Rating)";
   const EFS_DISPLAY = "EFS (Estimated Fuel Score)";
-  const BOOLEAN_METRICS = new Set(["AutoClimb", "AttemptClimb"]);
-  const CLIMBSTATE_METRIC = "EndState";
+  const BOOLEAN_METRICS = new Set(["AutoClimb", "AttemptClimb", "Auto_Climb"]);
+  const CLIMBSTATE_METRIC = "Climb_State";
 
   const EXCLUDED_FIELDS = new Set([
     "Match", "Team", "Id", "RecordType", "ScouterName", "ScouterError",
