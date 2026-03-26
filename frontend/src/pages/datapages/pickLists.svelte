@@ -11,6 +11,7 @@
       fetchTeamStatuses,
       fetchTeams,
   } from "../../utils/api.js";
+  import { getIndexedDBStore } from '../../utils/indexedDB';
   import {
       BOOLEAN_METRICS,
       CLIMBSTATE_METRIC,
