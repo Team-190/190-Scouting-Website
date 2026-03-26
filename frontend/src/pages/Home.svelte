@@ -1,9 +1,7 @@
 <script>
     import { onMount, tick } from "svelte";
-    import { fetchAllData, fetchEvents, fetchPitScouting, fetchQualitativeScouting, fetchEventDetails, fetchOPR, postPitScouting, postQualitativeScouting } from "../utils/api";
-    import { setScoutingData, getScoutingData, getLastId, clearScoutingData } from '../utils/indexedDB';
-    import { fetchAllData, fetchEvents, fetchPitScouting, fetchQualitativeScouting, fetchEventDetails, postPitScouting, postQualitativeScouting } from "../utils/api";
-    import { setIndexedDBStore, getIndexedDBStore, getLastId, clearAllStores } from '../utils/indexedDB';
+    import { fetchAllData, fetchEventDetails, fetchEvents, fetchOPR, fetchPitScouting, fetchQualitativeScouting, postPitScouting, postQualitativeScouting } from "../utils/api";
+    import { clearAllStores, getIndexedDBStore, getLastId, setIndexedDBStore } from '../utils/indexedDB';
 
     let eventCode = localStorage.getItem("eventCode");
     let isLoading = false;
