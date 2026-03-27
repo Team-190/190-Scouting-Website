@@ -1,11 +1,12 @@
 // @ts-nocheck
 const DB_NAME = 'scoutingDB';
 const DB_VERSION = 1;
-const STORE = 'scoutingData';
-
-// ─── OPEN / INIT ────────────────────────────────────────────────────────────
 
 let dbInstance = null;
+
+const STORE_LIST = ["matchAlliances", "teams", "eventDetails", "teamStatuses", "OPR", "alliances", "EPA", "elimsStarted", "matchScores"];
+
+// ─── OPEN / INIT ─────────────────────────────────────────────────────────────
 
 function openDB() {
     if (dbInstance) return Promise.resolve(dbInstance);
@@ -13,10 +14,17 @@ function openDB() {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-        request.onupgradeneeded = () => {
+        request.onupgradeneeded = (event) => {
             const db = request.result;
-            if (!db.objectStoreNames.contains(STORE)) {
-                db.createObjectStore(STORE, { keyPath: 'Id' });
+
+            // Drop any old stores if upgrading
+            for (const name of [...db.objectStoreNames]) {
+                db.deleteObjectStore(name);
+            }
+
+            db.createObjectStore("scoutingData", { keyPath: "Id" });
+            for (const store of STORE_LIST) {
+                db.createObjectStore(store, { keyPath: "key" });
             }
         };
 
@@ -38,12 +46,11 @@ export async function setScoutingData(rows) {
     return new Promise((resolve, reject) => {
         const tx = db.transaction(STORE, 'readwrite');
         const store = tx.objectStore(STORE);
-        for (const row of rows) {
-            store.put(row);
-        }
-        tx.oncomplete = () => {
-            console.log('transaction complete');
-            resolve();
+
+        if (rows) {
+            for (const row of rows) store.put(row);
+        } else if (key !== null && value !== null) {
+            store.put({ key, value });
         }
         tx.onerror = () => {
             console.log('transaction error', tx.error);
