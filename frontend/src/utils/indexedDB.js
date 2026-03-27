@@ -1,30 +1,48 @@
 // @ts-nocheck
-const DB_NAME = 'scoutingDB';
+const DB_NAME = "scoutingDB";
 const DB_VERSION = 1;
 
 let dbInstance = null;
 
 const STORE_LIST = ["matchAlliances", "teams", "eventDetails", "teamStatuses", "OPR", "alliances", "EPA", "elimsStarted", "matchScores"];
 
-// ─── OPEN / INIT ─────────────────────────────────────────────────────────────
+// ─── VERSION CHECK ───────────────────────────────────────────────────────────
+
+const dbReady = new Promise((resolve) => {
+    const checkRequest = indexedDB.open(DB_NAME);
+    checkRequest.onsuccess = () => {
+        const db = checkRequest.result;
+        const currentVersion = db.version;
+        db.close();
+        if (currentVersion !== DB_VERSION) {
+            console.log(`Version mismatch (found v${currentVersion}, expected v${DB_VERSION}), deleting...`);
+            const deleteRequest = indexedDB.deleteDatabase(DB_NAME);
+            deleteRequest.onsuccess = () => { dbInstance = null; resolve(); };
+            deleteRequest.onerror = () => resolve();
+        } else {
+            resolve();
+        }
+    };
+    checkRequest.onerror = () => resolve();
+});
+
+// ─── OPEN / INIT ────────────────────────────────────────────────────────────
 
 function openDB() {
     if (dbInstance) return Promise.resolve(dbInstance);
 
-    return new Promise((resolve, reject) => {
+    return dbReady.then(() => new Promise((resolve, reject) => {
         const request = indexedDB.open(DB_NAME, DB_VERSION);
 
         request.onupgradeneeded = (event) => {
             const db = request.result;
-
-            // Drop any old stores if upgrading
-            for (const name of [...db.objectStoreNames]) {
-                db.deleteObjectStore(name);
+            if (!db.objectStoreNames.contains("scoutingData")) {
+                db.createObjectStore("scoutingData", { keyPath: "Id" });
             }
-
-            db.createObjectStore("scoutingData", { keyPath: "Id" });
             for (const store of STORE_LIST) {
-                db.createObjectStore(store, { keyPath: "key" });
+                if (!db.objectStoreNames.contains(store)) {
+                    db.createObjectStore(store, { keyPath: "key" });
+                }
             }
         };
 
@@ -34,39 +52,37 @@ function openDB() {
         };
 
         request.onerror = () => reject(request.error);
-    });
+    }));
 }
 
 // ─── WRITE ──────────────────────────────────────────────────────────────────
 
-// Store an array of scouting rows (bulk write)
-export async function setScoutingData(rows) {
-    console.log('setScoutingData called with', rows.length, 'rows');
+export async function setIndexedDBStore(STORE, { rows = null, key = null, value = null } = {}) {
     const db = await openDB();
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE, 'readwrite');
+        const tx = db.transaction(STORE, "readwrite");
         const store = tx.objectStore(STORE);
 
         if (rows) {
-            for (const row of rows) store.put(row);
+            for (const row of rows) {
+                store.put(row);
+            }
         } else if (key !== null && value !== null) {
             store.put({ key, value });
         }
-        tx.onerror = () => {
-            console.log('transaction error', tx.error);
-            reject(tx.error);
-        }
-        tx.onabort = () => {
-            console.log('transaction aborted', tx.error);
-        }
+
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => console.log("transaction aborted", tx.error);
     });
 }
 
-// Wipe all stored scouting data (call this when switching events)
-export async function clearScoutingData() {
+// ─── CLEAR ──────────────────────────────────────────────────────────────────
+
+export async function clearIndexedDBStore(STORE) {
     const db = await openDB();
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE, 'readwrite');
+        const tx = db.transaction(STORE, "readwrite");
         const store = tx.objectStore(STORE);
         const request = store.clear();
         request.onsuccess = () => resolve();
@@ -74,21 +90,36 @@ export async function clearScoutingData() {
     });
 }
 
+export async function clearAllStores() {
+    for (const store of STORE_LIST) {
+        await clearIndexedDBStore(store);
+    }
+    await clearIndexedDBStore("scoutingData");
+}
+
 // ─── READ ────────────────────────────────────────────────────────────────────
 
-// Get all scouting rows
-export async function getScoutingData() {
+export async function getIndexedDBStore(STORE, key = null) {
     const db = await openDB();
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE, 'readonly');
+        const tx = db.transaction(STORE, "readonly");
         const store = tx.objectStore(STORE);
-        const request = store.getAll();
-        request.onsuccess = () => resolve(request.result);
+        let request;
+
+        if (key !== null) {
+            request = store.get(key);
+            request.onsuccess = () => resolve(request.result?.value ?? null);
+        } else {
+            request = store.getAll();
+            request.onsuccess = () => resolve(request.result ?? []);
+        }
+
         request.onerror = () => reject(request.error);
     });
 }
 
-// Get the highest Id stored (used for incremental fetching)
+// ─── UTILS ───────────────────────────────────────────────────────────────────
+
 export async function getLastId(data) {
     if (!data.length) return 0;
     return Math.max(...data.map(r => r.Id));

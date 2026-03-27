@@ -1,11 +1,4 @@
 <script lang="ts">
-  import {
-      AllCommunityModule,
-      createGrid,
-      ModuleRegistry,
-  } from "ag-grid-community";
-  import "ag-grid-community/styles/ag-grid.css";
-  import "ag-grid-community/styles/ag-theme-quartz.css";
   import { onDestroy, onMount } from "svelte";
   import { v4 as uuidv4 } from "uuid";
   import * as barGraph from "../../pages/graphcode/bar.js";
@@ -14,22 +7,23 @@
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
   import { fetchMatchAlliances, fetchOPR } from "../../utils/api.js";
+  import EventGrid from "../../components/Eventgrid.svelte";
   import {
-      COLOR_MODES,
-      getColorblindMode,
-      getEventCode,
-      HEADER_HEIGHT,
-      lerpColor,
-      mean,
-      median,
-      METADATA_KEYS,
-      METRIC_DISPLAY_NAMES,
-      percentile,
-      ROW_HEIGHT,
-      sd
+    COLOR_MODES,
+    getColorblindMode,
+    getEventCode,
+    HEADER_HEIGHT,
+    lerpColor,
+    mean,
+    median,
+    METADATA_KEYS,
+    METRIC_DISPLAY_NAMES,
+    percentile,
+    ROW_HEIGHT,
+    sd,
   } from "../../utils/pageUtils.js";
 
-  import {  getScoutingData } from '../../utils/indexedDB';
+  import { getIndexedDBStore } from '../../utils/indexedDB';
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -72,14 +66,17 @@
   let colorblindMode = getColorblindMode();
   let eventCode = getEventCode();
 
-  /** Map of "frc254" → OPR value, populated from fetchOPR */
   let teamOPRs: Record<string, number> = {};
 
-  let gridApi = null;
-  let domNode;
-  let gridHeight = 400;
+  // ── EventGrid props ──
   let rowData: any[] = [];
   let globalStats = { mean: 0, sd: 0, p25: 0, p50: 0, p75: 0, isNumeric: false };
+  let qLabels: string[] = [];
+  let inverted = false;
+  let isBooleanMetric = false;
+  let isClimbStateMetric = false;
+  let isNumericMetric = false;
+
   let charts: any[] = [];
   let chartTypes = ["bar", "line", "pie", "scatter", "radar"];
   let showDropdown = false;
@@ -115,7 +112,7 @@
     return "#" + Array.from({ length: 6 }, () => "0123456789ABCDEF"[Math.floor(Math.random() * 16)]).join("");
   }
 
-  // ─── Color Helpers ────────────────────────────────────────────────────────────
+  // ─── Color Helpers (kept for chart builders) ──────────────────────────────────
 
   function textColorForBg(bg: string): string {
     if (!bg) return "black";
@@ -152,13 +149,13 @@
     return { l1: "#FFFF00", l2: "#00FF00", l3: "#0000FF" }[s] ?? "#808080";
   }
 
-  function getAlexValueQuartile(v: any, stats: typeof globalStats, inverted: boolean): number | null {
+  function getAlexValueQuartile(v: any, stats: typeof globalStats, inv: boolean): number | null {
     if (!isNumeric(v)) return null;
     const val = Number(v);
     if (val === -1 || val === 0) return null;
     if (stats?.p25 == null) return null;
     const { p25, p50, p75 } = stats;
-    if (inverted) {
+    if (inv) {
       if (val <= p25) return 75;
       if (val <= p50) return 50;
       if (val <= p75) return 25;
@@ -174,30 +171,26 @@
   function colorFromStats(
     v: any,
     stats: typeof globalStats,
-    inverted = false,
+    inv = false,
     metricName: string | null = null,
     attemptClimbValue: any = null,
   ): string {
     if (metricName === CLIMBSTATE_METRIC) return getClimbStateColor(v, attemptClimbValue);
     if (BOOLEAN_METRICS.has(metricName)) return getBooleanColor(v);
     if (!isNumeric(v)) return "#4D4D4D";
-
     const val = Number(v);
     if (val === -1) return "#4D4D4D";
     if (val === 0) return "#000";
-
     if (colorblindMode === "alex") {
-      const q = getAlexValueQuartile(val, stats, inverted);
+      const q = getAlexValueQuartile(val, stats, inv);
       return q !== null ? getQuartileBg(q) : "#333";
     }
-
     const mode = COLOR_MODES[colorblindMode];
     const { p25, p50, p75 } = stats;
     if (p25 == null || p50 == null || p75 == null) return "rgb(180,180,180)";
     if (p25 === p50 && p50 === p75) return lerpColor(mode.below, mode.above, 0.5);
-
     let t: number;
-    if (inverted) {
+    if (inv) {
       if (val <= p25)      t = Math.min(1, 0.75 + ((p25 - val) / Math.max(p50 - p25, 0.001)) * 0.25);
       else if (val <= p50) t = 0.5 + 0.25 * (1 - (val - p25) / Math.max(p50 - p25, 0.001));
       else if (val <= p75) t = 0.25 + 0.25 * (1 - (val - p50) / Math.max(p75 - p50, 0.001));
@@ -208,7 +201,6 @@
       else if (val >= p25) t = 0.25 + 0.25 * ((val - p25) / Math.max(p50 - p25, 0.001));
       else                 t = Math.max(0, 0.25 * (1 - (p25 - val) / Math.max(p50 - p25, 0.001)));
     }
-
     t = Math.max(0, Math.min(1, t));
     return t < 0.5
       ? lerpColor(mode.below, mode.mid, t * 2)
@@ -230,10 +222,6 @@
     };
   }
 
-  /**
-   * Assigns an alexPercentile rank (0/20/40/60/80) to each row based on sorted mean.
-   * Mutates rows in place and returns them.
-   */
   function assignAlexPercentiles(rows: any[]): any[] {
     const validRows = rows.filter((r) => r.mean !== null);
     return rows.map((row) => {
@@ -265,15 +253,38 @@
   // ─── Data Loading ─────────────────────────────────────────────────────────────
 
   async function fetchAllMetricData(): Promise<string | null> {
-    const stored = await getScoutingData();
+    const stored = await getIndexedDBStore("scoutingData") || [];
     if (!stored) return null;
     return JSON.stringify(extractValues(stored, autoOnly));
+  }
+
+  /**
+   * Load OPR data from cached localStorage instead of making an API call.
+   * Returns a map of team numbers (e.g., "254") to OPR values.
+   */
+  function loadOPRFromCache(): Record<string, number> {
+    const cachedOprStr = localStorage.getItem("retrieveOPR");
+    if (!cachedOprStr) return {};
+    
+    try {
+      const cachedOpr = JSON.parse(cachedOprStr);
+      // Convert from TBA format (frc254) to display format (254)
+      const converted: Record<string, number> = {};
+      Object.entries(cachedOpr).forEach(([key, value]) => {
+        const teamNum = String(key).replace("frc", "");
+        converted[teamNum] = Number(value);
+      });
+      return converted;
+    } catch (e) {
+      console.warn("Failed to parse cached OPR data:", e);
+      return {};
+    }
   }
 
   async function estimateTeamPoints(
     teamStr: string,
     matchNumber: number,
-    preloadedAlliances?: any[],  // now an array
+    preloadedAlliances?: any[],
     preloadedData?: any[],
   ): Promise<number | null> {
     const allMatches = preloadedAlliances ?? await fetchMatchAlliances(eventCode);
@@ -298,57 +309,23 @@
       : tbaMatch.score_breakdown?.blue;
     if (!allianceScoreBreakdown) return null;
 
-    // Define game phases with their time windows (in seconds from match start)
-    // scoreKey accesses hubScore nested object
     const phases = [
-      { name: "Auto", start: 0, end: 20, scoreKey: "autoPoints" },
-      { name: "Transition", start: 20, end: 30, scoreKey: "transitionPoints" },
-      { name: "Phase1", start: 30, end: 55, scoreKey: "shift1Points" },
-      { name: "Phase2", start: 55, end: 80, scoreKey: "shift2Points" },
-      { name: "Phase3", start: 80, end: 105, scoreKey: "shift3Points" },
-      { name: "Phase4", start: 105, end: 130, scoreKey: "shift4Points" },
-      { name: "Endgame", start: 130, end: 160, scoreKey: "endgamePoints" }
+      { name: "Auto",       start: 0,   end: 20,  scoreKey: "autoPoints" },
+      { name: "Transition", start: 20,  end: 30,  scoreKey: "transitionPoints" },
+      { name: "Phase1",     start: 30,  end: 55,  scoreKey: "shift1Points" },
+      { name: "Phase2",     start: 55,  end: 80,  scoreKey: "shift2Points" },
+      { name: "Phase3",     start: 80,  end: 105, scoreKey: "shift3Points" },
+      { name: "Phase4",     start: 105, end: 130, scoreKey: "shift4Points" },
+      { name: "Endgame",    start: 130, end: 160, scoreKey: "endgamePoints" },
     ];
 
-    // Find EndAuto time to determine actual auto phase end
-    let autoEndTime = 20; // default
-    const endAutoRow = teamRows.find((row) => String(row.RecordType).toLowerCase() === "endauto");
-    if (endAutoRow && isNumeric(endAutoRow.Time)) {
-      autoEndTime = Number(endAutoRow.Time);
-    }
-
-    // Determine which phases the team was active in based on their data points
-    const teamActivePhases = new Set<string>();
-    
-    // Mark auto phase if any data exists before/at autoEndTime
-    if (teamRows.some((row) => !isNumeric(row.Time) || Number(row.Time) <= autoEndTime)) {
-      teamActivePhases.add("Auto");
-    }
-
-    // Check other phases based on Time column
-    teamRows.forEach((row) => {
-      if (!isNumeric(row.Time)) return;
-      const time = Number(row.Time);
-      
-      phases.forEach((phase) => {
-        if (phase.name !== "Auto" && time >= phase.start && time <= phase.end) {
-          teamActivePhases.add(phase.name);
-        }
-      });
-    });
-
-    // Calculate this team's total FuelShootingTime
     let teamFuelShootingTime = 0;
     teamRows.forEach((row) => {
-      if (isNumeric(row.FuelShootingTime)) {
-        teamFuelShootingTime += Number(row.FuelShootingTime);
-      }
+      if (isNumeric(row.FuelShootingTime)) teamFuelShootingTime += Number(row.FuelShootingTime);
     });
 
-    // Get shooting times for all alliance teams
     const allianceTeams = onRed ? tbaMatch.alliances.red.team_keys : tbaMatch.alliances.blue.team_keys;
     const allianceTeamNumbers = allianceTeams.map((k) => String(k).replace("frc", ""));
-
     let totalAllianceShootingTime = 0;
     for (const allyTeamNum of allianceTeamNumbers) {
       const allyRows = data.filter((row) => {
@@ -356,23 +333,16 @@
         return String(row.Team || row.team || "").replace(/\D/g, "") === allyTeamNum
           && Number(row.Match) === matchNumber;
       });
-      
       allyRows.forEach((row) => {
-        if (isNumeric(row.FuelShootingTime)) {
-          totalAllianceShootingTime += Number(row.FuelShootingTime);
-        }
+        if (isNumeric(row.FuelShootingTime)) totalAllianceShootingTime += Number(row.FuelShootingTime);
       });
     }
 
-    // Calculate this team's percentage of total alliance shooting time
-    const teamShootingPercentage = totalAllianceShootingTime > 0 
-      ? teamFuelShootingTime / totalAllianceShootingTime 
+    const teamShootingPercentage = totalAllianceShootingTime > 0
+      ? teamFuelShootingTime / totalAllianceShootingTime
       : 0;
 
-    // Estimate team's points contribution across ALL phases
-    // Weight each phase score by this team's shooting time contribution percentage
     let estimatedPoints = 0;
-    
     const hubScore = allianceScoreBreakdown.hubScore;
     if (hubScore) {
       phases.forEach((phase) => {
@@ -443,7 +413,6 @@
 
   // ─── Grid Building ────────────────────────────────────────────────────────────
 
-  /** Returns the maximum match count across all teams, with a minimum of 12. */
   function getMaxMatchCount(): number {
     return Math.max(12, availableTeams.reduce(
       (max, team) => Math.max(max, (teamData[team] ?? []).length), 0,
@@ -451,16 +420,16 @@
   }
 
   function buildGrid() {
-    if (!domNode || !selectedMetric || !availableTeams.length) return;
+    if (!selectedMetric || !availableTeams.length) return;
     if (selectedMetric === EFS_DISPLAY) { buildEFSGrid(); return; }
     if (selectedMetric === OPR_DISPLAY) { buildOPRGrid(); return; }
 
-    const isBooleanMetric = BOOLEAN_METRICS.has(dataMetric);
-    const isClimbStateMetric = dataMetric === CLIMBSTATE_METRIC;
-    const isNumericMetric = isBooleanMetric || isClimbStateMetric
+    isBooleanMetric    = BOOLEAN_METRICS.has(dataMetric);
+    isClimbStateMetric = dataMetric === CLIMBSTATE_METRIC;
+    isNumericMetric    = isBooleanMetric || isClimbStateMetric
       ? false
       : checkIsNumericMetric(dataMetric);
-    const inverted = INVERTED_METRICS.has(dataMetric);
+    inverted = INVERTED_METRICS.has(dataMetric);
 
     if (isNumericMetric) {
       const allValues: number[] = [];
@@ -477,14 +446,17 @@
 
     const maxMatchCount = getMaxMatchCount();
     if (!maxMatchCount) return;
-    const qLabels = Array.from({ length: maxMatchCount }, (_, i) => `Q${i + 1}`);
+    qLabels = Array.from({ length: maxMatchCount }, (_, i) => `Q${i + 1}`);
 
     rowData = availableTeams.map((team) => {
       const rows = teamData[team] ?? [];
-      const row: any = { team, hasData: rows.some((r) => {
-        const v = r[dataMetric];
-        return v !== undefined && v !== null && v !== "";
-      })};
+      const row: any = {
+        team,
+        hasData: rows.some((r) => {
+          const v = r[dataMetric];
+          return v !== undefined && v !== null && v !== "";
+        }),
+      };
       const values: number[] = [];
 
       rows.forEach((r, i) => {
@@ -529,27 +501,119 @@
       return b.mean - a.mean;
     });
 
-    const hideStats = !isNumericMetric || isBooleanMetric || isClimbStateMetric;
     rowData = assignAlexPercentiles(rowData);
-
-    const columnDefs = [
-      makeTeamColumn(),
-      ...qLabels.map((q) => makeQColumn(q, isNumericMetric, isBooleanMetric, isClimbStateMetric, inverted)),
-      makeMeanColumn(hideStats, inverted),
-      makeMedianColumn(hideStats, inverted),
-      makePercentileColumn(hideStats),
-    ];
-
-    gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT + 6;
-    applyGrid(columnDefs);
     updateAllCharts();
+  }
+
+  // ── EFS grid still needs its own applyGrid since it uses custom column defs ──
+
+  function statCellStyle(bg: string, color: string, extraBorder?: string) {
+    return {
+      background: bg, color, fontWeight: "bold", fontSize: "18px", textAlign: "center",
+      ...(extraBorder ? { borderLeft: extraBorder } : {}),
+    };
+  }
+
+  function makePercentileColumnDef(hide: boolean) {
+    return {
+      headerName: "Per.", field: "alexPercentile", flex: 1, minWidth: 100, hide,
+      headerClass: "header-center", cellClass: "cell-center",
+      cellStyle: (params) => {
+        const bg = params.value != null ? getQuintileBg(params.value) : "#4D4D4D";
+        return statCellStyle(bg, textColorForBg(bg), "2px solid #555");
+      },
+      valueFormatter: (params) =>
+        !params.data?.hasData ? "" : params.value != null ? params.value.toString() : "",
+    };
+  }
+
+  function makeTeamColumnDef() {
+    return {
+      headerName: "Team", field: "team", pinned: "left", width: 150,
+      headerClass: "header-center", cellClass: "cell-center",
+      cellStyle: (params) => ({
+        background: params.value === highlightedTeam ? "#FFD700" : "#C81B00",
+        color: params.value === highlightedTeam ? "black" : "white",
+        fontWeight: "bold", fontSize: "18px", textAlign: "center", cursor: "pointer",
+      }),
+      onCellClicked: (params) => {
+        if (!params.value) return;
+        highlightedTeam = highlightedTeam === params.value ? null : params.value;
+        broadcastHighlightedTeam(highlightedTeam);
+        efsGridApi?.redrawRows();
+      },
+    };
+  }
+
+  // EFS/OPR grids manage their own ag-grid instance since they have fully custom columns
+  let efsGridApi: any = null;
+  let efsGridNode: HTMLElement;
+  let efsGridHeight = 400;
+
+  async function applySpecialGrid(columnDefs: any[], data = rowData, node = efsGridNode) {
+    if (!node) return;
+    efsGridHeight = data.length * ROW_HEIGHT + HEADER_HEIGHT + 6;
+    if (efsGridApi) {
+      efsGridApi.setGridOption("columnDefs", columnDefs);
+      efsGridApi.setGridOption("rowData", data);
+    } else {
+      const { createGrid, AllCommunityModule, ModuleRegistry } = await import("ag-grid-community");
+      ModuleRegistry.registerModules([AllCommunityModule]);
+      efsGridApi = createGrid(node, {
+        rowData: data,
+        columnDefs,
+        rowHeight: ROW_HEIGHT,
+        headerHeight: HEADER_HEIGHT,
+        tooltipShowDelay: 200,
+        popupParent: document.body,
+        defaultColDef: {
+          resizable: false, sortable: false, suppressMovable: true,
+          cellStyle: { fontSize: "18px" },
+        },
+        suppressColumnVirtualisation: true,
+        suppressHorizontalScroll: true,
+        theme: "legacy",
+      });
+    }
+  }
+
+  // Use synchronous createGrid (already imported at top via EventGrid internals).
+  // We re-import here for the EFS/OPR special grids.
+  import { AllCommunityModule, createGrid, ModuleRegistry } from "ag-grid-community";
+  import "ag-grid-community/styles/ag-grid.css";
+  import "ag-grid-community/styles/ag-theme-quartz.css";
+  ModuleRegistry.registerModules([AllCommunityModule]);
+
+  function applyEFSOPRGrid(columnDefs: any[], data = rowData) {
+    if (!efsGridNode) return;
+    efsGridHeight = data.length * ROW_HEIGHT + HEADER_HEIGHT + 6;
+    if (efsGridApi) {
+      efsGridApi.setGridOption("columnDefs", columnDefs);
+      efsGridApi.setGridOption("rowData", data);
+    } else {
+      efsGridApi = createGrid(efsGridNode, {
+        rowData: data,
+        columnDefs,
+        rowHeight: ROW_HEIGHT,
+        headerHeight: HEADER_HEIGHT,
+        tooltipShowDelay: 200,
+        popupParent: document.body,
+        defaultColDef: {
+          resizable: false, sortable: false, suppressMovable: true,
+          cellStyle: { fontSize: "18px" },
+        },
+        suppressColumnVirtualisation: true,
+        suppressHorizontalScroll: true,
+        theme: "legacy",
+      });
+    }
   }
 
   async function buildEFSGrid() {
     if (!availableTeams.length) return;
     efsLoading = true;
 
-    applyGrid(
+    applyEFSOPRGrid(
       [{ headerName: "Loading EFS data…", field: "msg", flex: 1, cellStyle: { textAlign: "center", color: "white", padding: "20px" } }],
       [{ msg: "Fetching match alliances from TBA…" }],
     );
@@ -557,20 +621,18 @@
     const alliances = await fetchMatchAlliances(eventCode);
     const data = JSON.parse(await fetchAllMetricData());
     const maxMatchCount = getMaxMatchCount();
-    const qLabels = Array.from({ length: maxMatchCount }, (_, i) => `Q${i + 1}`);
+    const efsQLabels = Array.from({ length: maxMatchCount }, (_, i) => `Q${i + 1}`);
 
     rowData = await Promise.all(
       availableTeams.map(async (team) => {
         const matches = teamData[team] ?? [];
         const row: any = { team, hasData: false };
         const efsValues: number[] = [];
-
         await Promise.all(matches.map(async (matchRow, i) => {
           const efs = await estimateTeamPoints(String(team), Number(matchRow.Match), alliances, data);
-          row[qLabels[i]] = efs;
+          row[efsQLabels[i]] = efs;
           if (efs !== null) { efsValues.push(efs); row.hasData = true; }
         }));
-
         row.mean   = efsValues.length ? Number(mean(efsValues).toFixed(2)) : null;
         row.median = efsValues.length ? Number(median(efsValues).toFixed(2)) : null;
         return row;
@@ -578,7 +640,7 @@
     );
 
     if (!rowData.some((r) => r.hasData)) {
-      applyGrid(
+      applyEFSOPRGrid(
         [{ headerName: "Message", field: "message", flex: 1, cellStyle: { textAlign: "center", padding: "20px", color: "white" } }],
         [{ message: "No EFS data could be computed — check that FuelShootingTime is scouted and TBA alliance data is available." }],
       );
@@ -587,7 +649,7 @@
     }
 
     const allEfsValues: number[] = [];
-    rowData.forEach((r) => qLabels.forEach((q) => { if (r[q] !== null && r[q] > 0) allEfsValues.push(r[q]); }));
+    rowData.forEach((r) => efsQLabels.forEach((q) => { if (r[q] !== null && r[q] > 0) allEfsValues.push(r[q]); }));
     const efsGlobalStats = computeGlobalStats(allEfsValues);
 
     rowData = assignAlexPercentiles(
@@ -596,7 +658,7 @@
         if (b.mean === null && a.mean !== null) return -1;
         if (a.mean === null) return 0;
         return b.mean - a.mean;
-      })
+      }),
     );
 
     const efsCellStyle = (v: any) => {
@@ -614,8 +676,8 @@
     };
 
     const columnDefs = [
-      makeTeamColumn(),
-      ...qLabels.map((q) => ({
+      makeTeamColumnDef(),
+      ...efsQLabels.map((q) => ({
         headerName: q, field: q, flex: 1, minWidth: 70,
         headerClass: "header-center", cellClass: "cell-center",
         cellStyle: (params) => efsCellStyle(params.value),
@@ -633,43 +695,39 @@
         cellStyle: (params) => efsStatStyle(params.value, "2px solid #555"),
         valueFormatter: (params) => params.value != null && params.data?.hasData ? Number(params.value).toFixed(2) : "",
       },
-      makePercentileColumn(false),
+      makePercentileColumnDef(false),
     ];
 
-    gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT + 6;
-    applyGrid(columnDefs);
+    applyEFSOPRGrid(columnDefs);
     updateAllCharts();
     efsLoading = false;
   }
 
   function buildOPRGrid() {
     if (!Object.keys(teamOPRs).length) {
-      rowData = [];
-      gridHeight = 100;
-      applyGrid(
+      applyEFSOPRGrid(
         [{ headerName: "Message", field: "message", flex: 1, cellStyle: { textAlign: "center", padding: "20px", color: "white" } }],
         [{ message: "No OPR data available for this event" }],
       );
       return;
     }
 
-    // teamOPRs keys are "frc254" — strip prefix for display
     rowData = assignAlexPercentiles(
       Object.entries(teamOPRs)
-        .map(([teamKey, opr]) => ({
-          team: teamKey.replace("frc", ""),
+        .map(([teamNum, opr]) => ({
+          team: teamNum,
           hasData: true,
           mean: opr,
           median: opr,
         }))
         .filter((r) => r.mean !== null)
-        .sort((a, b) => b.mean - a.mean)
+        .sort((a, b) => b.mean - a.mean),
     );
 
     globalStats = computeGlobalStats(rowData.map((r) => r.mean));
 
     const columnDefs = [
-      makeTeamColumn(),
+      makeTeamColumnDef(),
       {
         headerName: "OPR", field: "mean", flex: 1, minWidth: 150,
         headerClass: "header-center", cellClass: "cell-center",
@@ -681,147 +739,10 @@
         },
         valueFormatter: (params) => params.value != null ? Number(params.value).toFixed(2) : "N/A",
       },
-      makePercentileColumn(false),
+      makePercentileColumnDef(false),
     ];
 
-    gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT + 6;
-    applyGrid(columnDefs);
-  }
-
-  // ─── Column Factories ─────────────────────────────────────────────────────────
-
-  function makeTeamColumn() {
-    return {
-      headerName: "Team", field: "team", pinned: "left", width: 150,
-      headerClass: "header-center", cellClass: "cell-center",
-      cellStyle: (params) => ({
-        background: params.value === highlightedTeam ? "#FFD700" : "#C81B00",
-        color: params.value === highlightedTeam ? "black" : "white",
-        fontWeight: "bold", fontSize: "18px", textAlign: "center", cursor: "pointer",
-      }),
-      onCellClicked: (params) => {
-        if (!params.value) return;
-        highlightedTeam = highlightedTeam === params.value ? null : params.value;
-        broadcastHighlightedTeam(highlightedTeam);
-        gridApi?.redrawRows();
-      },
-    };
-  }
-
-  function makeQColumn(q: string, isNumericMetric: boolean, isBooleanMetric: boolean, isClimbStateMetric: boolean, inverted: boolean) {
-    return {
-      headerName: q, field: q, flex: 1, minWidth: 70,
-      headerClass: "header-center", cellClass: "cell-center",
-      cellStyle: (params) => {
-        const v = params.value;
-        if (v === undefined || v === null || v === "") {
-          return { background: "#333", color: "white", fontWeight: 600, fontSize: "16px", textAlign: "center", border: "1px solid #555" };
-        }
-        if (isClimbStateMetric) {
-          const bg = getClimbStateColor(v, params.data?.AttemptClimb);
-          return { background: bg, color: textColorForBg(bg), fontWeight: 600, fontSize: "18px", textAlign: "center" };
-        }
-        if (isBooleanMetric) {
-          const bg = getBooleanColor(v);
-          return { background: bg, color: textColorForBg(bg), fontWeight: 600, fontSize: "18px", textAlign: "center" };
-        }
-        if (!isNumericMetric) {
-          return { background: "#333", color: "white", fontWeight: 600, fontSize: "16px", textAlign: "center", border: "1px solid #555" };
-        }
-        const val = Number(v ?? 0);
-        if (val === -1) return { background: "#4D4D4D", color: "white", fontWeight: 600, fontSize: "18px", textAlign: "center" };
-        if (val === 0)  return { background: "black",   color: "white", fontWeight: 600, fontSize: "18px", textAlign: "center" };
-        const bg = colorFromStats(val, globalStats, inverted, dataMetric);
-        return { background: bg, color: textColorForBg(bg), fontWeight: 600, fontSize: "18px", textAlign: "center" };
-      },
-      valueFormatter: (params) => {
-        if (!params.data?.hasData) return "";
-        if (isBooleanMetric || isClimbStateMetric) return normalizeValue(params.value);
-        if (params.value === undefined || params.value === null) return "";
-        if (!isNumericMetric) return normalizeValue(params.value);
-        const num = Number(params.value ?? 0);
-        return num === -1 ? "False" : num.toFixed(2);
-      },
-      tooltipValueGetter: (params) => {
-        if (dataMetric !== "MatchEventCount") return null;
-        const details = params.data?.[`${q}_details`];
-        if (!details?.length) return null;
-        return details.map((evt) => {
-          if (evt.matchTime == null) return `${evt.type}`;
-          const secs = Math.round(evt.matchTime);
-          const mins = Math.floor(Math.abs(secs) / 60);
-          const rem = Math.abs(secs) % 60;
-          return `${evt.type} @ ${mins}:${rem.toString().padStart(2, "0")} (${secs <= 20 ? "Auto" : "Teleop"})`;
-        }).join("\n");
-      },
-    };
-  }
-
-  function statCellStyle(bg: string, color: string, extraBorder?: string) {
-    return {
-      background: bg, color, fontWeight: "bold", fontSize: "18px", textAlign: "center",
-      ...(extraBorder ? { borderLeft: extraBorder } : {}),
-    };
-  }
-
-  function makeMeanColumn(hide: boolean, inverted: boolean) {
-    return {
-      headerName: "Mean", field: "mean", flex: 1, minWidth: 80, hide,
-      headerClass: "header-center", cellClass: "cell-center",
-      cellStyle: (params) => {
-        const bg = params.value == null ? "#4D4D4D" : colorFromStats(params.value, globalStats, inverted, dataMetric);
-        return statCellStyle(bg, textColorForBg(bg), "3px solid #C81B00");
-      },
-      valueFormatter: (params) => !params.data?.hasData || params.value == null ? "" : Number(params.value).toFixed(2),
-    };
-  }
-
-  function makeMedianColumn(hide: boolean, inverted: boolean) {
-    return {
-      headerName: "Med.", field: "median", flex: 1, minWidth: 80, hide,
-      headerClass: "header-center", cellClass: "cell-center",
-      cellStyle: (params) => {
-        const bg = params.value == null ? "#4D4D4D" : colorFromStats(params.value, globalStats, inverted, dataMetric);
-        return statCellStyle(bg, textColorForBg(bg), "2px solid #555");
-      },
-      valueFormatter: (params) => !params.data?.hasData || params.value == null ? "" : Number(params.value).toFixed(2),
-    };
-  }
-
-  function makePercentileColumn(hide: boolean) {
-    return {
-      headerName: "Per.", field: "alexPercentile", flex: 1, minWidth: 100, hide,
-      headerClass: "header-center", cellClass: "cell-center",
-      cellStyle: (params) => statCellStyle(params.value != null ? getQuintileBg(params.value) : "#4D4D4D", textColorForBg(params.value != null ? getQuintileBg(params.value) : "#4D4D4D"), "2px solid #555"),
-      valueFormatter: (params) => !params.data?.hasData ? "" : params.value != null ? params.value.toString() : "",
-    };
-  }
-
-  function broadcastHighlightedTeam(team: string | null) {
-    team ? localStorage.setItem(HIGHLIGHTED_TEAM_KEY, team) : localStorage.removeItem(HIGHLIGHTED_TEAM_KEY);
-  }
-
-  function applyGrid(columnDefs: any[], data = rowData) {
-    if (gridApi) {
-      gridApi.setGridOption("columnDefs", columnDefs);
-      gridApi.setGridOption("rowData", data);
-    } else {
-      gridApi = createGrid(domNode, {
-        rowData: data,
-        columnDefs,
-        rowHeight: ROW_HEIGHT,
-        headerHeight: HEADER_HEIGHT,
-        tooltipShowDelay: 200,
-        popupParent: document.body,
-        defaultColDef: {
-          resizable: false, sortable: false, suppressMovable: true,
-          cellStyle: { fontSize: "18px" },
-        },
-        suppressColumnVirtualisation: true,
-        suppressHorizontalScroll: true,
-        theme: /** @type {"legacy"} */ ("legacy"),
-      });
-    }
+    applyEFSOPRGrid(columnDefs, rowData);
   }
 
   // ─── Event Handlers ───────────────────────────────────────────────────────────
@@ -856,6 +777,10 @@
       loading = false;
       console.error("Error switching data mode:", e);
     }
+  }
+
+  function broadcastHighlightedTeam(team: string | null) {
+    team ? localStorage.setItem(HIGHLIGHTED_TEAM_KEY, team) : localStorage.removeItem(HIGHLIGHTED_TEAM_KEY);
   }
 
   // ─── Chart Management ─────────────────────────────────────────────────────────
@@ -911,9 +836,7 @@
     if (!chart.instance) return;
     chart.yAxisMetric = dataMetric;
     chart.selectedTeams ??= new Set(availableTeams);
-
     const isNumericData = selectedMetric === OPR_DISPLAY ? true : checkIsNumericMetric(dataMetric);
-
     let option;
     if (!isNumericData && chart.type !== "pie" && chart.type !== "radar") {
       option = {
@@ -1001,21 +924,17 @@
       const key = resolveDataKey(m);
       return checkIsNumericMetric(key) && !RADAR_EXCLUDED.has(key);
     });
-
     const numericMetrics = chart.selectedMetrics?.size > 0
       ? availableNumeric.filter((m) => chart.selectedMetrics.has(m))
       : availableNumeric;
-
     if (numericMetrics.length < 3) {
       return {
         title: { text: `Radar chart requires at least 3 numeric metrics. Found: ${numericMetrics.length}`, left: "center", top: "center", textStyle: { color: "#fff", fontSize: 14 } },
       };
     }
-
     const selectedTeams = chart.selectedTeams?.size > 0
       ? Array.from<string>(chart.selectedTeams).sort((a, b) => Number(a) - Number(b))
       : availableTeams;
-
     const maxValues = numericMetrics.map((m) => {
       const key = resolveDataKey(m);
       let max = 0;
@@ -1027,7 +946,6 @@
       });
       return max;
     });
-
     const colors = selectedTeams.map(() => randomHexColor());
     const seriesData = selectedTeams.map((team, idx) => {
       const rows = teamData[team] ?? [];
@@ -1039,7 +957,6 @@
       const color = colors[idx];
       return { value: avgValues, name: `Team ${team}`, areaStyle: { opacity: 0.15 }, lineStyle: { color, width: 2 }, itemStyle: { color }, symbolSize: 6 };
     });
-
     return {
       tooltip: { trigger: "item", backgroundColor: "rgba(0,0,0,0.8)" },
       radar: {
@@ -1054,15 +971,15 @@
     };
   }
 
-  // ─── Cross-tab sync ──────────────────────────────────────────────────────────
+  // ─── Cross-tab sync ───────────────────────────────────────────────────────────
 
   function handleStorageEvent(e: StorageEvent) {
     if (e.key !== HIGHLIGHTED_TEAM_KEY) return;
     highlightedTeam = e.newValue || null;
-    gridApi?.redrawRows();
+    efsGridApi?.redrawRows();
   }
 
-  // ─── Reactive ────────────────────────────────────────────────────────────────
+  // ─── Reactive ─────────────────────────────────────────────────────────────────
 
   $: {
     charts.forEach((chart) => {
@@ -1074,29 +991,25 @@
     });
   }
 
-  $: if (selectedMetric === OPR_DISPLAY && !loading) {
+  $: if (selectedMetric === OPR_DISPLAY && Object.keys(teamOPRs).length && !loading) {
     buildGrid();
   }
 
-  // ─── Mount / Destroy ─────────────────────────────────────────────────────────
+  // ─── Mount / Destroy ──────────────────────────────────────────────────────────
 
   onMount(async () => {
     window.addEventListener("storage", handleStorageEvent);
     try {
       const raw = await fetchAllMetricData();
       if (!raw) { error = "No scouting data found."; loading = false; return; }
-
       processTeamData(JSON.parse(raw));
       if (!availableTeams.length) { error = "No team data found from backend."; loading = false; return; }
 
-      if (eventCode) {
-        const { oprs } = await fetchOPR(eventCode);
-        teamOPRs = oprs;
-      }
+      // Load OPR from cached localStorage instead of making an API call
+      teamOPRs = loadOPRFromCache();
 
       metrics = computeMetrics();
       if (!metrics.length) { error = "Team data loaded, but no metrics were found."; loading = false; return; }
-
       selectedMetric = metrics[0];
       dataMetric = resolveDataKey(selectedMetric);
       loading = false;
@@ -1110,6 +1023,7 @@
 
   onDestroy(() => {
     window.removeEventListener("storage", handleStorageEvent);
+    efsGridApi?.destroy?.();
   });
 </script>
 
@@ -1158,7 +1072,31 @@
     {/if}
   </div>
 
-  <div class="grid-container ag-theme-quartz" bind:this={domNode} style="height: {gridHeight}px;"></div>
+  <!-- Normal metric grid via EventGrid component -->
+  {#if !loading && !error && selectedMetric !== EFS_DISPLAY && selectedMetric !== OPR_DISPLAY}
+    <EventGrid
+      {rowData}
+      {globalStats}
+      {qLabels}
+      {dataMetric}
+      {colorblindMode}
+      {inverted}
+      {isBooleanMetric}
+      {isClimbStateMetric}
+      {isNumericMetric}
+      bind:highlightedTeam
+      on:teamClick={(e) => broadcastHighlightedTeam(e.detail.highlightedTeam)}
+    />
+  {/if}
+
+  <!-- EFS / OPR use their own ag-grid instance with custom columns -->
+  {#if !loading && !error && (selectedMetric === EFS_DISPLAY || selectedMetric === OPR_DISPLAY)}
+    <div
+      class="grid-container ag-theme-quartz"
+      bind:this={efsGridNode}
+      style="height: {efsGridHeight}px;"
+    ></div>
+  {/if}
 
   <div class="graph-section">
     <h2 class="section-title">Charts & Graphs</h2>

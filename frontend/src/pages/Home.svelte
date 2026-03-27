@@ -1,7 +1,7 @@
 <script>
     import { onMount, tick } from "svelte";
-    import { fetchAllData, fetchEvents, fetchPitScouting, fetchQualitativeScouting, fetchEventDetails, postPitScouting, postQualitativeScouting } from "../utils/api";
-    import { setScoutingData, getScoutingData, getLastId, clearScoutingData } from '../utils/indexedDB';
+    import { fetchAllData, fetchEventDetails, fetchEvents, fetchOPR, fetchPitScouting, fetchQualitativeScouting, postPitScouting, postQualitativeScouting } from "../utils/api";
+    import { clearAllStores, getIndexedDBStore, getLastId, setIndexedDBStore } from '../utils/indexedDB';
 
     let eventCode = localStorage.getItem("eventCode");
     let isLoading = false;
@@ -30,7 +30,7 @@
 
     async function cacheAllData() {
         await withLoading(async () => {
-            const localData = await getScoutingData() || [];
+            const localData = await getIndexedDBStore("scoutingData") || [];
             const lastId = await getLastId(localData);
             
             const dataRes = await fetchAllData(eventCode, lastId);
@@ -48,7 +48,7 @@
                 dataMap.set(key, row);
             }
             const combinedData = Array.from(dataMap.values());
-            await setScoutingData(combinedData);
+            await setIndexedDBStore("scoutingData", { rows: combinedData });
 
             const localPitStr = localStorage.getItem("retrievePit");
             const localPit = localPitStr ? JSON.parse(localPitStr) : {};
@@ -97,6 +97,15 @@
                     }
                 }
             }
+
+            // Fetch and cache OPR data
+            const localOprStr = localStorage.getItem("retrieveOPR");
+            const localOpr = localOprStr ? JSON.parse(localOprStr) : {};
+
+            const newOprData = await fetchOPR(eventCode);
+            
+            const combinedOpr = { ...localOpr, ...newOprData };
+            localStorage.setItem("retrieveOPR", JSON.stringify(combinedOpr));
 
             localStorage.setItem("timestamp", new Date(Date.now()).toLocaleString());
             localStorage.setItem("eventCode", eventCode);
@@ -147,21 +156,21 @@
 
     // Reactive statement to handle event code changes
     $: if (eventCode && typeof window !== 'undefined') {
-        // Check if eventCode has changed
         const previousEventCode = localStorage.getItem("eventCode");
         if (previousEventCode && previousEventCode !== eventCode) {
-            // Clear data when switching events
-            clearScoutingData();
+            clearAllStores();
             localStorage.removeItem("retrievePit");
             localStorage.removeItem("retrieveQual");
+            localStorage.removeItem("retrieveOPR");
         }
         localStorage.setItem("eventCode", eventCode);
-        // Automatically cache data when event changes
         cacheAllData();
     }
 </script>
 
 {#if notification}
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="banner banner-{notification.type}" onclick={() => notification = null}>
         {notification.message}
     </div>
