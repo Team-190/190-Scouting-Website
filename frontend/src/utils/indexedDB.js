@@ -34,7 +34,7 @@ function openDB() {
     return dbReady.then(() => new Promise((resolve, reject) => {
         const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-        request.onupgradeneeded = () => {
+        request.onupgradeneeded = (event) => {
             const db = request.result;
             if (!db.objectStoreNames.contains("scoutingData")) {
                 db.createObjectStore("scoutingData", { keyPath: "Id" });
