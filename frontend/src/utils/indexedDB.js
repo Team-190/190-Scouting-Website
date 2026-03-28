@@ -1,58 +1,41 @@
 // @ts-nocheck
 const DB_NAME = "scoutingDB";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbInstance = null;
 
 const STORE_LIST = ["matchAlliances", "teams", "eventDetails", "teamStatuses", "OPR", "alliances", "EPA", "elimsStarted", "matchScores"];
 
-// ─── VERSION CHECK ───────────────────────────────────────────────────────────
-
-const dbReady = new Promise((resolve) => {
-    const checkRequest = indexedDB.open(DB_NAME);
-    checkRequest.onsuccess = () => {
-        const db = checkRequest.result;
-        const currentVersion = db.version;
-        db.close();
-        if (currentVersion !== DB_VERSION) {
-            console.log(`Version mismatch (found v${currentVersion}, expected v${DB_VERSION}), deleting...`);
-            const deleteRequest = indexedDB.deleteDatabase(DB_NAME);
-            deleteRequest.onsuccess = () => { dbInstance = null; resolve(); };
-            deleteRequest.onerror = () => resolve();
-        } else {
-            resolve();
-        }
-    };
-    checkRequest.onerror = () => resolve();
-});
-
-// ─── OPEN / INIT ────────────────────────────────────────────────────────────
+// ─── OPEN / INIT ─────────────────────────────────────────────────────────────
 
 function openDB() {
     if (dbInstance) return Promise.resolve(dbInstance);
 
-    return dbReady.then(() => new Promise((resolve, reject) => {
+    return new Promise((resolve, reject) => {
         const request = indexedDB.open(DB_NAME, DB_VERSION);
 
         request.onupgradeneeded = () => {
             const db = request.result;
-            if (!db.objectStoreNames.contains("scoutingData")) {
-                db.createObjectStore("scoutingData", { keyPath: "Id" });
+            for (const name of [...db.objectStoreNames]) {
+                db.deleteObjectStore(name);
             }
+            db.createObjectStore("scoutingData", { keyPath: "Id" });
             for (const store of STORE_LIST) {
-                if (!db.objectStoreNames.contains(store)) {
-                    db.createObjectStore(store, { keyPath: "key" });
-                }
+                db.createObjectStore(store, { keyPath: "key" });
             }
         };
 
         request.onsuccess = () => {
             dbInstance = request.result;
+            dbInstance.onversionchange = () => {
+                dbInstance.close();
+                dbInstance = null;
+            };
             resolve(dbInstance);
         };
 
         request.onerror = () => reject(request.error);
-    }));
+    });
 }
 
 // ─── WRITE ──────────────────────────────────────────────────────────────────
@@ -64,9 +47,7 @@ export async function setIndexedDBStore(STORE, { rows = null, key = null, value 
         const store = tx.objectStore(STORE);
 
         if (rows) {
-            for (const row of rows) {
-                store.put(row);
-            }
+            for (const row of rows) store.put(row);
         } else if (key !== null && value !== null) {
             store.put({ key, value });
         }
