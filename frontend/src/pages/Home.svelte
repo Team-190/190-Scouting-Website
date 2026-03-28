@@ -30,25 +30,13 @@
 
     async function cacheAllData() {
         await withLoading(async () => {
-            const localData = await getIndexedDBStore("scoutingData") || [];
-            const lastId = await getLastId(localData);
-            
-            const dataRes = await fetchAllData(eventCode, lastId);
+            await clearAllStores();
+        
+            const dataRes = await fetchAllData(eventCode, 0); 
             const dataText = await dataRes.text();
             const dataJson = dataText ? JSON.parse(dataText) : {};
             const newData = dataJson.data || [];
-
-            const dataMap = new Map();
-            for (const row of localData) {
-                const key = `${row.Team || row.team}_${row.Match || row.match}`;
-                dataMap.set(key, row);
-            }
-            for (const row of newData) {
-                const key = `${row.Team || row.team}_${row.Match || row.match}`;
-                dataMap.set(key, row);
-            }
-            const combinedData = Array.from(dataMap.values());
-            await setIndexedDBStore("scoutingData", { rows: combinedData });
+            await setIndexedDBStore("scoutingData", { rows: newData });
 
             const localPitStr = localStorage.getItem("retrievePit");
             const localPit = localPitStr ? JSON.parse(localPitStr) : {};
