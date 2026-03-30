@@ -395,10 +395,7 @@
           const v = params.value;
           if (v === null || v === undefined || v === "") return "";
           const s = String(v).toLowerCase().trim();
-          if (s === "l1") return "L1";
-          if (s === "l2") return "L2";
-          if (s === "l3") return "L3";
-          if (s === "none") return "No Climb";
+          if (s === "l1") {return "L1";} else if (s === "l2") {return "L2";} else if (s === "l3") {return "L3";} else {return "No_Climb";}
           return String(v);
         }
         if (isBooleanMetric) return normalizeValue(params.value);

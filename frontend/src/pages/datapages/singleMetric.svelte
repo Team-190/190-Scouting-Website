@@ -509,7 +509,7 @@
                 lastChar === "3" ? "L3" :
                 lastChar === "2" ? "L2" :
                 lastChar === "1" ? "L1" :
-                (end && end !== "None" && end !== "Match Not Found") ? end : null;
+                "No"
               const auto = climbData.AutoClimb ?? "";
               row.Auto_Climb = String(auto).slice(-1) === "1" ? "Yes" : "No";
             } catch {
