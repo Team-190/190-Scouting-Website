@@ -149,7 +149,6 @@ export const METRIC_DISPLAY_NAMES = new Map([
   ["Avoidance", "Avoidance Strategy"],
   ["ClimbTime", "Climb Time"],
   ["DefenseTime", "Defense Time"],
-  ["AutoClimb", "Auto Climb"],
   ["AttemptClimb", "Climb Attempt"],
   ["TrenchTraversal", "Times Under Trench"],
   ["BumpTraversal", "Times Over Bump"],
@@ -157,13 +156,14 @@ export const METRIC_DISPLAY_NAMES = new Map([
   ["FuelIntakingTime", "Fuel Intaking Time"],
   ["FuelShootingTime", "Fuel Shooting Time"],
   ["FeedingTime", "Feeding Time"],
-  ["EndState", "Climb State"],
   ["LadderLocation", "Ladder Location"],
   ["Strategy", "Strategy"],
   ["EstimatedPoints", "EFS (Estimated Fuel Scored)"],
   ["NearFar", "Near/Far"],
   ["MatchEventCount", "Match Events"],
   ["RecordType", "Record Type"],
+  ["Climb_State", "Climb State"],
+  ["Auto_Climb", "Auto Climb"]
 ]);
 
 /**
@@ -175,7 +175,7 @@ export const EXCLUDED_FIELDS = new Set([
   "NearNeutralZoneTime", "NearRedZoneTime", "NearBlueZoneTime",
   "FarNeutralZoneTime", "FarRedZoneTime", "FarBlueZoneTime",
   "MatchEvent", "MatchEventDetails",
-  "match", "team", "id", "created_at", "record_type", "scouter_name", "scouter_error",
+  "match", "team", "id", "created_at", "record_type", "scouter_name", "scouter_error", "EndState", "AutoClimb"
 ]);
 
 /**
@@ -186,12 +186,12 @@ export const INVERTED_METRICS = ["TimeOfClimb", "ClimbTime", "MatchEventCount"];
 /**
  * Metrics that contain boolean values
  */
-export const BOOLEAN_METRICS = ["AutoClimb", "AttemptClimb"];
+export const BOOLEAN_METRICS = ["AutoClimb", "AttemptClimb","Auto_Climb"];
 
 /**
  * Metric key for climb state data
  */
-export const CLIMBSTATE_METRIC = "EndState";
+export const CLIMBSTATE_METRIC = "Climb_State"
 
 /**
  * Metadata fields stored as single values (not [auto, full] arrays)

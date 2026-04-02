@@ -156,6 +156,36 @@ export async function fetchElimsHaveStarted(eventCode) {
     return data.elimsHaveStarted;
 }
 
+export async function fetchRobotClimb(eventCode, teamNumber, matchNumber) {
+  const response = await fetch(
+    `${defaultAPILink}/api/getMatchAlliances?eventCode=${eventCode}`
+  );
+
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  
+  const allMatches = await response.json();
+  const match = allMatches.find(m => m.match_number === parseInt(matchNumber) && m.comp_level === "qm");
+
+  if (!match) return { EndgameClimb: "Match Not Found", AutoClimb: "Match Not Found" };
+
+  let allianceColor = null;
+  let robotIndex = null;
+
+  ["red", "blue"].forEach((color) => {
+    const teamKeys = match.alliances[color].team_keys;
+    const index = teamKeys.indexOf(`frc${teamNumber}`);
+    if (index !== -1) {
+      allianceColor = color;
+      robotIndex = index + 1;
+    }
+  });
+  if (!allianceColor) return { EndgameClimb: "None", AutoClimb: "None" };
+  const scoreBreakdown = match.score_breakdown[allianceColor];
+  return { 
+    EndgameClimb: scoreBreakdown[`endGameTowerRobot${robotIndex}`] || "None", 
+    AutoClimb: scoreBreakdown[`autoTowerRobot${robotIndex}`] ||"Skibidi"
+  };
+}
 ////////////// POST Methods \\\\\\\\\\\\\\
 ////////////// POST Methods \\\\\\\\\\\\\\
 ////////////// POST Methods \\\\\\\\\\\\\\

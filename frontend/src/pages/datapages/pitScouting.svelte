@@ -33,12 +33,20 @@
 
     onMount(async () => {
         const { _teamNumbers } = await fetchTeams(eventCode);
+        console.log("_teamNumbers sample:", _teamNumbers[0]);
         
-        // Filter out teams already in pit scouting local storage
-        const pitScouting = JSON.parse(localStorage.getItem("retrievePit") || "{}");
-        const scoutedTeams = new Set(Object.keys(pitScouting).map(key => Number(key)));
+        const retrievePit = JSON.parse(localStorage.getItem("retrievePit") || "{}");
+        const pitScouting = JSON.parse(localStorage.getItem("pitScouting") || "[]");
         
-        allTeams = _teamNumbers.filter(team => !scoutedTeams.has(team));
+        const scoutedTeams = new Set([
+            ...Object.keys(retrievePit),
+            ...pitScouting.map(entry => String(entry.teamNumber))
+        ]);
+        
+        allTeams = _teamNumbers.map(team => ({
+            number: team,
+            hasData: scoutedTeams.has(String(team))
+        }));
     });
 
     function handleInput(field, event) {
@@ -187,7 +195,7 @@
                 <select id="teams" name="teams" bind:value={selectedTeam}>
                     <option value="Select a team">Select a team</option>
                     {#each allTeams as team}
-                        <option value={team}>{team}</option>
+                        <option value={team.number}>{team.number}{team.hasData ? "  ✅" : ""}</option>
                     {/each}
                 </select>
             </div>

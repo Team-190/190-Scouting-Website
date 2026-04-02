@@ -1,12 +1,12 @@
 // @ts-nocheck
 const DB_NAME = "scoutingDB";
-const DB_VERSION = 1;
-
-// ─── OPEN / INIT ────────────────────────────────────────────────────────────
+const DB_VERSION = 2;
 
 let dbInstance = null;
 
 const STORE_LIST = ["matchAlliances", "teams", "eventDetails", "teamStatuses", "OPR", "alliances", "EPA", "elimsStarted", "matchScores"];
+
+// ─── OPEN / INIT ─────────────────────────────────────────────────────────────
 
 function openDB() {
     if (dbInstance) return Promise.resolve(dbInstance);
@@ -16,20 +16,21 @@ function openDB() {
 
         request.onupgradeneeded = () => {
             const db = request.result;
-
-            if (!db.objectStoreNames.contains("scoutingData")) {
-                db.createObjectStore("scoutingData", { keyPath: "Id" });
+            for (const name of [...db.objectStoreNames]) {
+                db.deleteObjectStore(name);
             }
-            
+            db.createObjectStore("scoutingData", { keyPath: "Id" });
             for (const store of STORE_LIST) {
-                if (!db.objectStoreNames.contains(store)) {
-                    db.createObjectStore(store, { keyPath: "key" });
-                }
+                db.createObjectStore(store, { keyPath: "key" });
             }
         };
 
         request.onsuccess = () => {
             dbInstance = request.result;
+            dbInstance.onversionchange = () => {
+                dbInstance.close();
+                dbInstance = null;
+            };
             resolve(dbInstance);
         };
 
@@ -46,9 +47,7 @@ export async function setIndexedDBStore(STORE, { rows = null, key = null, value 
         const store = tx.objectStore(STORE);
 
         if (rows) {
-            for (const row of rows) {
-                store.put(row);
-            }
+            for (const row of rows) store.put(row);
         } else if (key !== null && value !== null) {
             store.put({ key, value });
         }
@@ -89,11 +88,9 @@ export async function getIndexedDBStore(STORE, key = null) {
         let request;
 
         if (key !== null) {
-            // Single record lookup — unwrap the value field
             request = store.get(key);
             request.onsuccess = () => resolve(request.result?.value ?? null);
         } else {
-            // Full store dump — return raw array (used for scoutingData)
             request = store.getAll();
             request.onsuccess = () => resolve(request.result ?? []);
         }
@@ -104,7 +101,6 @@ export async function getIndexedDBStore(STORE, key = null) {
 
 // ─── UTILS ───────────────────────────────────────────────────────────────────
 
-// Get the highest Id stored (used for incremental fetching)
 export async function getLastId(data) {
     if (!data.length) return 0;
     return Math.max(...data.map(r => r.Id));

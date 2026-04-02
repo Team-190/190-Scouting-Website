@@ -21,7 +21,6 @@
     "test": "jest --coverage --testPathIgnorePatterns=legacy"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.81.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",

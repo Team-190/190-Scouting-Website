@@ -67,19 +67,35 @@
 
   const dispatch = createEventDispatcher<{
     teamClick: { team: string; highlightedTeam: string | null };
-    cellHover: { row: any; globalStats: typeof globalStats; x: number; y: number };
+    cellHover: {
+      row: any;
+      globalStats: typeof globalStats;
+      x: number;
+      y: number;
+    };
     gridReady: { api: any };
   }>();
 
-  const BOOLEAN_METRICS = new Set(["AutoClimb", "AttemptClimb"]);
-  const CLIMBSTATE_METRIC = "EndState";
-  const INVERTED_METRICS = new Set(["TimeOfClimb", "ClimbTime", "MatchEventCount"]);
+  const BOOLEAN_METRICS = new Set(["Auto_Climb", "AttemptClimb"]);
+  const CLIMBSTATE_METRIC = "Climb_State";
+  const INVERTED_METRICS = new Set([
+    "TimeOfClimb",
+    "ClimbTime",
+    "MatchEventCount",
+  ]);
 
   const QUINTILE_COLORS: Record<number, string> = {
-    0: "#000000", 20: "#FF0000", 40: "#FFFF00", 60: "#00FF00", 80: "#0000FF",
+    0: "#000000",
+    20: "#FF0000",
+    40: "#FFFF00",
+    60: "#00FF00",
+    80: "#0000FF",
   };
   const QUARTILE_COLORS: Record<number, string> = {
-    0: "#FF0000", 25: "#FFFF00", 50: "#00FF00", 75: "#0000FF",
+    0: "#FF0000",
+    25: "#FFFF00",
+    50: "#00FF00",
+    75: "#0000FF",
   };
 
   let gridApi: any = null;
@@ -89,7 +105,8 @@
   // ─── Value Helpers ────────────────────────────────────────────────────────────
 
   function isNumeric(n: any): boolean {
-    if (n === null || n === undefined || n === "" || typeof n === "boolean") return false;
+    if (n === null || n === undefined || n === "" || typeof n === "boolean")
+      return false;
     return !isNaN(parseFloat(n)) && isFinite(n);
   }
 
@@ -117,13 +134,29 @@
   function textColorForBg(bg: string): string {
     if (!bg) return "black";
     const darkColors = [
-      "black", "#000", "#000000", "rgb(0,0,0)", "rgb(0, 0, 0)",
-      "#0000ff", "#00f", "rgb(0,0,255)", "rgb(0, 0, 255)",
-      "#4d4d4d", "rgb(77,77,77)", "rgb(77, 77, 77)",
-      "#ff0000", "#f00", "rgb(255,0,0)", "rgb(255, 0, 0)",
-      "#808080", "rgb(128,128,128)", "rgb(128, 128, 128)",
+      "black",
+      "#000",
+      "#000000",
+      "rgb(0,0,0)",
+      "rgb(0, 0, 0)",
+      "#0000ff",
+      "#00f",
+      "rgb(0,0,255)",
+      "rgb(0, 0, 255)",
+      "#4d4d4d",
+      "rgb(77,77,77)",
+      "rgb(77, 77, 77)",
+      "#ff0000",
+      "#f00",
+      "rgb(255,0,0)",
+      "rgb(255, 0, 0)",
+      "#808080",
+      "rgb(128,128,128)",
+      "rgb(128, 128, 128)",
     ];
-    return darkColors.includes(String(bg).trim().toLowerCase()) ? "white" : "black";
+    return darkColors.includes(String(bg).trim().toLowerCase())
+      ? "white"
+      : "black";
   }
 
   function getQuintileBg(p: number): string {
@@ -141,12 +174,22 @@
     if (s === "yes" || s === "true" || s === "1") return "#00FF00";
     if (s === "no" || s === "false") return "#000000";
     if (s === "0") return "#808080";
-    if (isNumeric(v)) return Number(v) === 0 ? "#808080" : Number(v) > 0 ? "#00FF00" : "#000000";
+    if (isNumeric(v))
+      return Number(v) === 0
+        ? "#808080"
+        : Number(v) > 0
+          ? "#00FF00"
+          : "#000000";
     return "#808080";
   }
 
   function getClimbStateColor(climbState: any, attemptClimb: any): string {
-    if (climbState === null || climbState === undefined || climbState === "" || climbState === -1)
+    if (
+      climbState === null ||
+      climbState === undefined ||
+      climbState === "" ||
+      climbState === -1
+    )
       return "#808080";
     const s = String(climbState).toLowerCase().trim();
     if (s === "no_climb" || s === "no climb" || s === "noclimb") {
@@ -155,7 +198,11 @@
     return { l1: "#FFFF00", l2: "#00FF00", l3: "#0000FF" }[s] ?? "#808080";
   }
 
-  function getAlexValueQuartile(v: any, stats: typeof globalStats, inv: boolean): number | null {
+  function getAlexValueQuartile(
+    v: any,
+    stats: typeof globalStats,
+    inv: boolean,
+  ): number | null {
     if (!isNumeric(v)) return null;
     const val = Number(v);
     if (val === -1 || val === 0) return null;
@@ -181,7 +228,8 @@
     metricName: string | null = null,
     attemptClimbValue: any = null,
   ): string {
-    if (metricName === CLIMBSTATE_METRIC) return getClimbStateColor(v, attemptClimbValue);
+    if (metricName === CLIMBSTATE_METRIC)
+      return getClimbStateColor(v, attemptClimbValue);
     if (BOOLEAN_METRICS.has(metricName)) return getBooleanColor(v);
     if (!isNumeric(v)) return "#4D4D4D";
 
@@ -197,19 +245,34 @@
     const mode = COLOR_MODES[colorblindMode];
     const { p25, p50, p75 } = stats;
     if (p25 == null || p50 == null || p75 == null) return "rgb(180,180,180)";
-    if (p25 === p50 && p50 === p75) return lerpColor(mode.below, mode.above, 0.5);
+    if (p25 === p50 && p50 === p75)
+      return lerpColor(mode.below, mode.above, 0.5);
 
     let t: number;
     if (inv) {
-      if (val <= p25)      t = Math.min(1, 0.75 + ((p25 - val) / Math.max(p50 - p25, 0.001)) * 0.25);
-      else if (val <= p50) t = 0.5 + 0.25 * (1 - (val - p25) / Math.max(p50 - p25, 0.001));
-      else if (val <= p75) t = 0.25 + 0.25 * (1 - (val - p50) / Math.max(p75 - p50, 0.001));
-      else                 t = Math.max(0, 0.25 * (1 - (val - p75) / Math.max(p75 - p50, 0.001)));
+      if (val <= p25)
+        t = Math.min(
+          1,
+          0.75 + ((p25 - val) / Math.max(p50 - p25, 0.001)) * 0.25,
+        );
+      else if (val <= p50)
+        t = 0.5 + 0.25 * (1 - (val - p25) / Math.max(p50 - p25, 0.001));
+      else if (val <= p75)
+        t = 0.25 + 0.25 * (1 - (val - p50) / Math.max(p75 - p50, 0.001));
+      else
+        t = Math.max(0, 0.25 * (1 - (val - p75) / Math.max(p75 - p50, 0.001)));
     } else {
-      if (val >= p75)      t = Math.min(1, 0.75 + ((val - p75) / Math.max(p75 - p50, 0.001)) * 0.25);
-      else if (val >= p50) t = 0.5 + 0.25 * ((val - p50) / Math.max(p75 - p50, 0.001));
-      else if (val >= p25) t = 0.25 + 0.25 * ((val - p25) / Math.max(p50 - p25, 0.001));
-      else                 t = Math.max(0, 0.25 * (1 - (p25 - val) / Math.max(p50 - p25, 0.001)));
+      if (val >= p75)
+        t = Math.min(
+          1,
+          0.75 + ((val - p75) / Math.max(p75 - p50, 0.001)) * 0.25,
+        );
+      else if (val >= p50)
+        t = 0.5 + 0.25 * ((val - p50) / Math.max(p75 - p50, 0.001));
+      else if (val >= p25)
+        t = 0.25 + 0.25 * ((val - p25) / Math.max(p50 - p25, 0.001));
+      else
+        t = Math.max(0, 0.25 * (1 - (p25 - val) / Math.max(p50 - p25, 0.001)));
     }
 
     t = Math.max(0, Math.min(1, t));
@@ -238,9 +301,13 @@
       }),
       onCellClicked: (params: any) => {
         if (!params.value) return;
-        const newHighlight = highlightedTeam === params.value ? null : params.value;
+        const newHighlight =
+          highlightedTeam === params.value ? null : params.value;
         highlightedTeam = newHighlight;
-        dispatch("teamClick", { team: params.value, highlightedTeam: newHighlight });
+        dispatch("teamClick", {
+          team: params.value,
+          highlightedTeam: newHighlight,
+        });
         gridApi?.redrawRows();
       },
     };
@@ -258,30 +325,80 @@
         const v = params.value;
         if (v === undefined || v === null || v === "") {
           return {
-            background: "#333", color: "white", fontWeight: 600,
-            fontSize: "16px", textAlign: "center", border: "1px solid #555",
+            background: "#333",
+            color: "white",
+            fontWeight: 600,
+            fontSize: "16px",
+            textAlign: "center",
+            border: "1px solid #555",
           };
         }
         if (isClimbStateMetric) {
-          const bg = getClimbStateColor(v, params.data?.AttemptClimb);
-          return { background: bg, color: textColorForBg(bg), fontWeight: 600, fontSize: "18px", textAlign: "center" };
+          const bg = getClimbStateColor(v, params.data?.[`${q}_AttemptClimb`]);
+          return {
+            background: bg,
+            color: textColorForBg(bg),
+            fontWeight: 600,
+            fontSize: "18px",
+            textAlign: "center",
+          };
         }
         if (isBooleanMetric) {
           const bg = getBooleanColor(v);
-          return { background: bg, color: textColorForBg(bg), fontWeight: 600, fontSize: "18px", textAlign: "center" };
+          return {
+            background: bg,
+            color: textColorForBg(bg),
+            fontWeight: 600,
+            fontSize: "18px",
+            textAlign: "center",
+          };
         }
         if (!isNumericMetric) {
-          return { background: "#333", color: "white", fontWeight: 600, fontSize: "16px", textAlign: "center", border: "1px solid #555" };
+          return {
+            background: "#333",
+            color: "white",
+            fontWeight: 600,
+            fontSize: "16px",
+            textAlign: "center",
+            border: "1px solid #555",
+          };
         }
         const val = Number(v ?? 0);
-        if (val === -1) return { background: "#4D4D4D", color: "white", fontWeight: 600, fontSize: "18px", textAlign: "center" };
-        if (val === 0)  return { background: "black",   color: "white", fontWeight: 600, fontSize: "18px", textAlign: "center" };
+        if (val === -1)
+          return {
+            background: "#4D4D4D",
+            color: "white",
+            fontWeight: 600,
+            fontSize: "18px",
+            textAlign: "center",
+          };
+        if (val === 0)
+          return {
+            background: "black",
+            color: "white",
+            fontWeight: 600,
+            fontSize: "18px",
+            textAlign: "center",
+          };
         const bg = colorFromStats(val, globalStats, inverted, dataMetric);
-        return { background: bg, color: textColorForBg(bg), fontWeight: 600, fontSize: "18px", textAlign: "center" };
+        return {
+          background: bg,
+          color: textColorForBg(bg),
+          fontWeight: 600,
+          fontSize: "18px",
+          textAlign: "center",
+        };
       },
       valueFormatter: (params: any) => {
         if (!params.data?.hasData) return "";
-        if (isBooleanMetric || isClimbStateMetric) return normalizeValue(params.value);
+        if (isClimbStateMetric) {
+          const v = params.value;
+          if (v === null || v === undefined || v === "") return "";
+          const s = String(v).toLowerCase().trim();
+          if (s === "l1") {return "L1";} else if (s === "l2") {return "L2";} else if (s === "l3") {return "L3";} else {return "No_Climb";}
+          return String(v);
+        }
+        if (isBooleanMetric) return normalizeValue(params.value);
         if (params.value === undefined || params.value === null) return "";
         if (!isNumericMetric) return normalizeValue(params.value);
         const num = Number(params.value ?? 0);
@@ -291,20 +408,26 @@
         if (dataMetric !== "MatchEventCount") return null;
         const details = params.data?.[`${q}_details`];
         if (!details?.length) return null;
-        return details.map((evt: any) => {
-          if (evt.matchTime == null) return `${evt.type}`;
-          const secs = Math.round(evt.matchTime);
-          const mins = Math.floor(Math.abs(secs) / 60);
-          const rem  = Math.abs(secs) % 60;
-          return `${evt.type} @ ${mins}:${rem.toString().padStart(2, "0")} (${secs <= 20 ? "Auto" : "Teleop"})`;
-        }).join("\n");
+        return details
+          .map((evt: any) => {
+            if (evt.matchTime == null) return `${evt.type}`;
+            const secs = Math.round(evt.matchTime);
+            const mins = Math.floor(Math.abs(secs) / 60);
+            const rem = Math.abs(secs) % 60;
+            return `${evt.type} @ ${mins}:${rem.toString().padStart(2, "0")} (${secs <= 20 ? "Auto" : "Teleop"})`;
+          })
+          .join("\n");
       },
     };
   }
 
   function statCellStyle(bg: string, color: string, extraBorder?: string) {
     return {
-      background: bg, color, fontWeight: "bold", fontSize: "18px", textAlign: "center",
+      background: bg,
+      color,
+      fontWeight: "bold",
+      fontSize: "18px",
+      textAlign: "center",
       ...(extraBorder ? { borderLeft: extraBorder } : {}),
     };
   }
@@ -320,13 +443,16 @@
       headerClass: "header-center",
       cellClass: "cell-center",
       cellStyle: (params: any) => {
-        const bg = params.value == null
-          ? "#4D4D4D"
-          : colorFromStats(params.value, globalStats, inverted, dataMetric);
+        const bg =
+          params.value == null
+            ? "#4D4D4D"
+            : colorFromStats(params.value, globalStats, inverted, dataMetric);
         return statCellStyle(bg, textColorForBg(bg), "3px solid #C81B00");
       },
       valueFormatter: (params: any) =>
-        !params.data?.hasData || params.value == null ? "" : Number(params.value).toFixed(2),
+        !params.data?.hasData || params.value == null
+          ? ""
+          : Number(params.value).toFixed(2),
     };
   }
 
@@ -341,13 +467,16 @@
       headerClass: "header-center",
       cellClass: "cell-center",
       cellStyle: (params: any) => {
-        const bg = params.value == null
-          ? "#4D4D4D"
-          : colorFromStats(params.value, globalStats, inverted, dataMetric);
+        const bg =
+          params.value == null
+            ? "#4D4D4D"
+            : colorFromStats(params.value, globalStats, inverted, dataMetric);
         return statCellStyle(bg, textColorForBg(bg), "2px solid #555");
       },
       valueFormatter: (params: any) =>
-        !params.data?.hasData || params.value == null ? "" : Number(params.value).toFixed(2),
+        !params.data?.hasData || params.value == null
+          ? ""
+          : Number(params.value).toFixed(2),
     };
   }
 
@@ -362,11 +491,16 @@
       headerClass: "header-center",
       cellClass: "cell-center",
       cellStyle: (params: any) => {
-        const bg = params.value != null ? getQuintileBg(params.value) : "#4D4D4D";
+        const bg =
+          params.value != null ? getQuintileBg(params.value) : "#4D4D4D";
         return statCellStyle(bg, textColorForBg(bg), "2px solid #555");
       },
       valueFormatter: (params: any) =>
-        !params.data?.hasData ? "" : params.value != null ? params.value.toString() : "",
+        !params.data?.hasData
+          ? ""
+          : params.value != null
+            ? params.value.toString()
+            : "",
     };
   }
 
@@ -445,7 +579,6 @@
     background: var(--frc-190-black, #4d4d4d);
     border-radius: 8px;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
-
   }
 
   :global(.ag-header-cell) {
@@ -486,7 +619,10 @@
     overflow-y: scroll !important;
     overflow-x: auto !important;
   }
-  :global(.ag-body-viewport::-webkit-scrollbar) { width: 12px; height: 12px; }
+  :global(.ag-body-viewport::-webkit-scrollbar) {
+    width: 12px;
+    height: 12px;
+  }
   :global(.ag-body-viewport::-webkit-scrollbar-track) {
     background: var(--frc-190-black, #4d4d4d);
     border-radius: 6px;
@@ -496,5 +632,7 @@
     border-radius: 6px;
     border: 2px solid var(--frc-190-black, #4d4d4d);
   }
-  :global(.ag-body-viewport::-webkit-scrollbar-thumb:hover) { background: #e02200; }
+  :global(.ag-body-viewport::-webkit-scrollbar-thumb:hover) {
+    background: #e02200;
+  }
 </style>
