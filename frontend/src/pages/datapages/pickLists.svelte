@@ -4,7 +4,7 @@
   import { onMount } from "svelte";
   import { writable } from "svelte/store";
   import Team from "../../components/Team.svelte";
-  import TeamHoverCard from "../../components/TeamHoverCard.svelte";
+  import TeamHoverCard from "../../components/teamHoverCard.svelte";
   import {
       fetchEventEpas,
       fetchOPR,
