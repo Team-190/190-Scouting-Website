@@ -126,6 +126,10 @@ app.get("/api/getEvents", async (req, res) => {
     }
 });
 
+app.get("/api/health", (req, res) => {
+    res.json({ ok: true, timestamp: Date.now() });
+});
+
 app.get("/api/getAvailableTeams", validateEventCode, async (req, res) => {
     const eventCode = req.query.eventCode;
     let result = await database.getAvailableTeams(eventCode);

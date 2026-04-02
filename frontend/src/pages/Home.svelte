@@ -106,9 +106,7 @@
             }
             localStorage.setItem("retrieveQual", JSON.stringify(combinedQual));
 
-            const newOprData = await refreshEventCaches(eventCode);
-
-            localStorage.setItem("retrieveOPR", JSON.stringify(newOprData || {}));
+            await refreshEventCaches(eventCode);
 
             localStorage.setItem("timestamp", new Date(Date.now()).toLocaleString());
             localStorage.setItem("eventCode", eventCode);
@@ -127,7 +125,6 @@
                 await clearAllStores();
                 localStorage.removeItem("retrievePit");
                 localStorage.removeItem("retrieveQual");
-                localStorage.removeItem("retrieveOPR");
             }
 
             localStorage.setItem("eventCode", eventCode);

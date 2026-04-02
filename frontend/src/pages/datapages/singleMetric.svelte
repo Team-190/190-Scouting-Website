@@ -258,25 +258,20 @@
     return JSON.stringify(extractValues(stored, autoOnly));
   }
 
-  /**
-   * Load OPR data from cached localStorage instead of making an API call.
-   * Returns a map of team numbers (e.g., "254") to OPR values.
-   */
-  function loadOPRFromCache(): Record<string, number> {
-    const cachedOprStr = localStorage.getItem("retrieveOPR");
-    if (!cachedOprStr) return {};
-    
+  async function loadOPRFromCache(): Promise<Record<string, number>> {
     try {
-      const cachedOpr = JSON.parse(cachedOprStr);
+      const cachedOpr = await fetchOPR(eventCode);
+      const rawOprs = cachedOpr?.oprs ?? {};
+
       // Convert from TBA format (frc254) to display format (254)
       const converted: Record<string, number> = {};
-      Object.entries(cachedOpr).forEach(([key, value]) => {
+      Object.entries(rawOprs).forEach(([key, value]) => {
         const teamNum = String(key).replace("frc", "");
         converted[teamNum] = Number(value);
       });
       return converted;
     } catch (e) {
-      console.warn("Failed to parse cached OPR data:", e);
+      console.warn("Failed to load cached OPR data:", e);
       return {};
     }
   }
@@ -1005,8 +1000,7 @@
       processTeamData(JSON.parse(raw));
       if (!availableTeams.length) { error = "No team data found from backend."; loading = false; return; }
 
-      // Load OPR from cached localStorage instead of making an API call
-      teamOPRs = loadOPRFromCache();
+      teamOPRs = await loadOPRFromCache();
 
       metrics = computeMetrics();
       if (!metrics.length) { error = "Team data loaded, but no metrics were found."; loading = false; return; }

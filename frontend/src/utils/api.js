@@ -115,7 +115,7 @@ async function fetchWithCache(
     }
 }
 
-function fetchTeamsData(eventCode, options = {}) {
+export async function fetchTeams(eventCode, options = {}) {
     return fetchWithCache(
         `${defaultAPILink}/api/getTeams?eventCode=${eventCode}`,
         "teams",
@@ -123,7 +123,7 @@ function fetchTeamsData(eventCode, options = {}) {
     );
 }
 
-function fetchMatchAlliancesData(eventCode, options = {}) {
+export async function fetchMatchAlliances(eventCode, options = {}) {
     return fetchWithCache(
         `${defaultAPILink}/api/getMatchAlliances?eventCode=${eventCode}`,
         "matchAlliances",
@@ -131,7 +131,7 @@ function fetchMatchAlliancesData(eventCode, options = {}) {
     );
 }
 
-function fetchEventDetailsData(eventCode, options = {}) {
+export async function fetchEventDetails(eventCode, options = {}) {
     return fetchWithCache(
         `${defaultAPILink}/api/getEventDetails?eventCode=${eventCode}`,
         "eventDetails",
@@ -139,7 +139,7 @@ function fetchEventDetailsData(eventCode, options = {}) {
     );
 }
 
-function fetchTeamStatusesData(eventCode, options = {}) {
+export async function fetchTeamStatuses(eventCode, options = {}) {
     return fetchWithCache(
         `${defaultAPILink}/api/getTeamStatuses?eventCode=${eventCode}`,
         "teamStatuses",
@@ -147,7 +147,7 @@ function fetchTeamStatusesData(eventCode, options = {}) {
     );
 }
 
-function fetchOPRData(eventCode, options = {}) {
+export async function fetchOPR(eventCode, options = {}) {
     return fetchWithCache(
         `${defaultAPILink}/api/getOPR?eventCode=${eventCode}`,
         "OPR",
@@ -155,7 +155,7 @@ function fetchOPRData(eventCode, options = {}) {
     );
 }
 
-function fetchAlliancesData(eventCode, options = {}) {
+export async function fetchAlliances(eventCode, options = {}) {
     return fetchWithCache(
         `${defaultAPILink}/api/getAlliances?eventCode=${eventCode}`,
         "alliances",
@@ -163,7 +163,7 @@ function fetchAlliancesData(eventCode, options = {}) {
     );
 }
 
-function fetchEventEpasData(eventCode, options = {}) {
+export async function fetchEventEpas(eventCode, options = {}) {
     return fetchWithCache(
         `${defaultAPILink}/api/getEventEpas?eventCode=${eventCode}`,
         "EPA",
@@ -171,44 +171,12 @@ function fetchEventEpasData(eventCode, options = {}) {
     );
 }
 
-function fetchElimsHaveStartedData(eventCode, options = {}) {
-    return fetchWithCache(
+export async function fetchElimsHaveStarted(eventCode, options = {}) {
+    const data = await fetchWithCache(
         `${defaultAPILink}/api/getElimsHaveStarted?eventCode=${eventCode}`,
         "elimsStarted",
         { key: eventCode, ...options }
     );
-}
-
-export async function fetchTeams(eventCode) {
-    return fetchTeamsData(eventCode);
-}
-
-export async function fetchMatchAlliances(eventCode) {
-    return fetchMatchAlliancesData(eventCode);
-}
-
-export async function fetchEventDetails(eventCode) {
-    return fetchEventDetailsData(eventCode);
-}
-
-export async function fetchTeamStatuses(eventCode) {
-    return fetchTeamStatusesData(eventCode);
-}
-
-export async function fetchOPR(eventCode) {
-    return fetchOPRData(eventCode);
-}
-
-export async function fetchAlliances(eventCode) {
-    return fetchAlliancesData(eventCode);
-}
-
-export async function fetchEventEpas(eventCode) {
-    return fetchEventEpasData(eventCode);
-}
-
-export async function fetchElimsHaveStarted(eventCode) {
-    const data = await fetchElimsHaveStartedData(eventCode);
     return data.elimsHaveStarted;
 }
 
@@ -216,14 +184,14 @@ export async function refreshEventCaches(eventCode) {
     const refreshOptions = { persist: true, refresh: true };
 
     const results = await Promise.allSettled([
-        fetchOPRData(eventCode, refreshOptions),
-        fetchTeamsData(eventCode, refreshOptions),
-        fetchMatchAlliancesData(eventCode, refreshOptions),
-        fetchEventDetailsData(eventCode, refreshOptions),
-        fetchTeamStatusesData(eventCode, refreshOptions),
-        fetchAlliancesData(eventCode, refreshOptions),
-        fetchEventEpasData(eventCode, refreshOptions),
-        fetchElimsHaveStartedData(eventCode, refreshOptions),
+        fetchOPR(eventCode, refreshOptions),
+        fetchTeams(eventCode, refreshOptions),
+        fetchMatchAlliances(eventCode, refreshOptions),
+        fetchEventDetails(eventCode, refreshOptions),
+        fetchTeamStatuses(eventCode, refreshOptions),
+        fetchAlliances(eventCode, refreshOptions),
+        fetchEventEpas(eventCode, refreshOptions),
+        fetchElimsHaveStarted(eventCode, refreshOptions),
     ]);
 
     const oprResult = results[0];
@@ -233,6 +201,195 @@ export async function refreshEventCaches(eventCode) {
 
     console.warn("Failed to refresh OPR during cache refresh:", oprResult.reason);
     return {};
+}
+
+const PIT_QUEUE_KEY = "pitScouting";
+const QUAL_QUEUE_KEY = "scoutingData";
+
+function canUseLocalStorage() {
+    return typeof window !== "undefined" && typeof localStorage !== "undefined";
+}
+
+function readLocalJson(key, fallback) {
+    if (!canUseLocalStorage()) return fallback;
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    try {
+        return JSON.parse(raw);
+    } catch {
+        return fallback;
+    }
+}
+
+function writeLocalJson(key, value) {
+    if (!canUseLocalStorage()) return;
+    localStorage.setItem(key, JSON.stringify(value));
+}
+
+function readQueue(key) {
+    const queue = readLocalJson(key, []);
+    return Array.isArray(queue) ? queue : [];
+}
+
+function updatePitMirror(team, formData) {
+    const pitData = readLocalJson("retrievePit", {});
+    pitData[String(team)] = formData;
+    writeLocalJson("retrievePit", pitData);
+}
+
+function updateQualMirror(team, match, formData) {
+    const qualData = readLocalJson("retrieveQual", {});
+    const teamKey = String(team).replace(/\D/g, "");
+    qualData[teamKey] ||= {};
+    qualData[teamKey][String(match)] = formData;
+    writeLocalJson("retrieveQual", qualData);
+}
+
+export async function hasServerConnection(timeoutMs = 2500) {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+        return false;
+    }
+
+    try {
+        const response = await fetchWithTimeout(`${defaultAPILink}/api/health`, timeoutMs);
+        return response?.ok === true;
+    } catch {
+        return false;
+    }
+}
+
+export function queuePitScoutingForSync(event, team, formData) {
+    const queue = readQueue(PIT_QUEUE_KEY);
+    queue.push({ event, team: String(team), formData });
+    writeLocalJson(PIT_QUEUE_KEY, queue);
+    updatePitMirror(team, formData);
+    return queue.length;
+}
+
+export function queueQualitativeScoutingForSync(event, team, match, formData) {
+    const queue = readQueue(QUAL_QUEUE_KEY);
+    queue.push({ event, team: String(team), match: String(match), formData });
+    writeLocalJson(QUAL_QUEUE_KEY, queue);
+    updateQualMirror(team, match, formData);
+    return queue.length;
+}
+
+export async function flushPitScoutingQueue() {
+    const queue = readQueue(PIT_QUEUE_KEY);
+    if (queue.length === 0) {
+        return { uploaded: 0, remaining: 0 };
+    }
+
+    if (!(await hasServerConnection())) {
+        return { uploaded: 0, remaining: queue.length };
+    }
+
+    const remaining = [];
+    let uploaded = 0;
+
+    for (let i = 0; i < queue.length; i++) {
+        const item = queue[i];
+        const event = item.event || localStorage.getItem("eventCode");
+        const team = item.team || item.teamNumber;
+        const formData = item.formData || item;
+
+        if (!event || !team || !formData) {
+            remaining.push(item);
+            continue;
+        }
+
+        try {
+            const response = await postPitScouting(event, team, formData);
+            if (response.ok) {
+                uploaded += 1;
+                updatePitMirror(team, formData);
+            } else {
+                remaining.push(item);
+            }
+        } catch {
+            remaining.push(item, ...queue.slice(i + 1));
+            break;
+        }
+    }
+
+    writeLocalJson(PIT_QUEUE_KEY, remaining);
+    return { uploaded, remaining: remaining.length };
+}
+
+export async function flushQualitativeScoutingQueue() {
+    const queue = readQueue(QUAL_QUEUE_KEY);
+    if (queue.length === 0) {
+        return { uploaded: 0, remaining: 0 };
+    }
+
+    if (!(await hasServerConnection())) {
+        return { uploaded: 0, remaining: queue.length };
+    }
+
+    const remaining = [];
+    let uploaded = 0;
+
+    for (let i = 0; i < queue.length; i++) {
+        const item = queue[i];
+        const event = item.event || localStorage.getItem("eventCode");
+        const team = item.team || item.Team;
+        const match = item.match || item.Match;
+        const formData = item.formData || item;
+
+        if (!event || !team || !match || !formData) {
+            remaining.push(item);
+            continue;
+        }
+
+        try {
+            const response = await postQualitativeScouting(event, team, match, formData);
+            if (response.ok) {
+                uploaded += 1;
+                updateQualMirror(team, match, formData);
+            } else {
+                remaining.push(item);
+            }
+        } catch {
+            remaining.push(item, ...queue.slice(i + 1));
+            break;
+        }
+    }
+
+    writeLocalJson(QUAL_QUEUE_KEY, remaining);
+    return { uploaded, remaining: remaining.length };
+}
+
+export async function flushOfflineScoutingQueues() {
+    const [pitResult, qualResult] = await Promise.all([
+        flushPitScoutingQueue(),
+        flushQualitativeScoutingQueue(),
+    ]);
+
+    return {
+        pit: pitResult,
+        qual: qualResult,
+    };
+}
+
+export function startPeriodicQueueSync(intervalMs = 15000) {
+    if (typeof window === "undefined") {
+        return () => {};
+    }
+
+    const runSync = () => {
+        flushOfflineScoutingQueues().catch((error) => {
+            console.warn("Periodic scouting queue sync failed", error);
+        });
+    };
+
+    const intervalId = window.setInterval(runSync, intervalMs);
+    window.addEventListener("online", runSync);
+    runSync();
+
+    return () => {
+        window.clearInterval(intervalId);
+        window.removeEventListener("online", runSync);
+    };
 }
 
 export async function fetchRobotClimb(eventCode, teamNumber, matchNumber) {

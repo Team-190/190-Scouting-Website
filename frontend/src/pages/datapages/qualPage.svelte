@@ -1,6 +1,10 @@
 <script>
   import fieldImageSrc from "../../images/FieldImage.png";
-  import { postQualitativeScouting } from "../../utils/api";
+  import {
+    flushQualitativeScoutingQueue,
+    hasServerConnection,
+    queueQualitativeScoutingForSync,
+  } from "../../utils/api";
   import { getEventCode, MATCH_NUMBERS } from "../../utils/pageUtils";
 
   // ─── Constants ────────────────────────────────────────────────────────────────
@@ -235,26 +239,10 @@
       ...teleopAnswers,
     };
 
-    const existing = JSON.parse(localStorage.getItem("scoutingData") || "[]");
-    existing.push(record);
-    localStorage.setItem("scoutingData", JSON.stringify(existing));
+    queueQualitativeScoutingForSync(eventCode, record.Team, record.Match, record);
 
-    try {
-      for (let i = 0; i < existing.length; i++) {
-        const response = await postQualitativeScouting(eventCode, existing[i].Team, existing[i].Match, existing[i]);
-        if (response.ok) {
-          const qualData = JSON.parse(localStorage.getItem("retrieveQual") || "{}");
-          const teamKey = String(existing[i].Team).replace(/\D/g, "");
-          if (!qualData[teamKey]) qualData[teamKey] = {};
-          qualData[teamKey][existing[i].Match] = existing[i];
-          localStorage.setItem("retrieveQual", JSON.stringify(qualData));
-          existing.splice(i, 1);
-          i--;
-          localStorage.setItem("scoutingData", JSON.stringify(existing));
-        }
-      }
-    } catch (e) {
-      console.log("No internet, saving data later...");
+    if (await hasServerConnection()) {
+      await flushQualitativeScoutingQueue();
     }
 
     phase = "done";

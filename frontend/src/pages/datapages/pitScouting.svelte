@@ -1,6 +1,11 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { postPitScouting, fetchTeams } from "../../utils/api";
+    import {
+        fetchTeams,
+        flushPitScoutingQueue,
+        hasServerConnection,
+        queuePitScoutingForSync,
+    } from "../../utils/api";
     import { compressImage, formatBytes, getBase64Size } from "../../utils/imageCompression";
     import { getEventCode } from "../../utils/pageUtils";
 
@@ -106,59 +111,43 @@
             ...Object.fromEntries(plainFields.map(f => [f, formData[f]])),
         };
 
-        const existing = JSON.parse(localStorage.getItem("pitScouting") || "[]");
-        existing.push(apiFormData);
-        localStorage.setItem("pitScouting", JSON.stringify(existing));
+        const apiFormDataWithImage = {
+            ...apiFormData,
+            ...(formData.robotPicture
+                ? { robotPicturePreview: formData.robotPicturePreview }
+                : { robotPicturePreview: "" })
+        };
 
+        queuePitScoutingForSync(eventCode, selectedTeam, apiFormDataWithImage);
 
-        try {
-            const apiFormDataWithImage = {
-                ...apiFormData,
-                ...(formData.robotPicture
-                    ? { robotPicturePreview: formData.robotPicturePreview }
-                    : { robotPicturePreview: "" })
-            };
-            
-            for (let i = 0; i < existing.length; i++) {
-                const isLast = i === existing.length - 1;
-                let response = await postPitScouting(
-                    eventCode,
-                    isLast ? selectedTeam : existing[i].teamNumber,
-                    isLast ? apiFormDataWithImage : existing[i]
-                );
-                if (response.ok) {
-                    // Update retrievePit with the successfully posted data
-                    const pitData = JSON.parse(localStorage.getItem("retrievePit") || "{}");
-                    const teamNum = isLast ? selectedTeam : existing[i].teamNumber;
-                    pitData[teamNum] = isLast ? apiFormDataWithImage : existing[i];
-                    localStorage.setItem("retrievePit", JSON.stringify(pitData));
+        // Prevent duplicate entry on the form list once data is locally queued.
+        allTeams = allTeams.filter(team => String(team) !== String(selectedTeam));
 
-                    existing.splice(i, 1);
-                    i--;
-                    localStorage.setItem("pitScouting", JSON.stringify(existing));
-                }
-            }
-            
-            if (existing.length === 0) {
-                submitMessage = "✓ Pit scouting data submitted to server successfully!";
-                submitError = false;
-                clearForm();
-                setTimeout(() => { submitMessage = ""; }, 3000);
-            } else {
-                submitMessage = `Some entries failed to submit and were saved locally.`;
-                submitError = true;
-                clearForm();
-                setTimeout(() => { submitMessage = ""; }, 3000);
-            }
-        } catch (error) {
-            console.error("Submission error:", error);
-            submitMessage = "No internet, so pit scouting data was sent to local storage.";
+        const connected = await hasServerConnection();
+        if (!connected) {
+            submitMessage = "No internet detected. Pit scouting data was saved locally and will auto-upload when connection returns.";
             submitError = false;
             clearForm();
-            setTimeout(() => { submitMessage = ""; }, 3000);
-        } finally {
+            setTimeout(() => { submitMessage = ""; }, 3500);
             submitting = false;
+            return;
         }
+
+        const result = await flushPitScoutingQueue();
+        if (result.remaining === 0) {
+            submitMessage = "✓ Pit scouting data submitted to server successfully!";
+            submitError = false;
+        } else if (result.uploaded > 0) {
+            submitMessage = "Partial upload complete. Remaining entries were kept locally.";
+            submitError = true;
+        } else {
+            submitMessage = "Could not upload right now. Data remains safely queued locally.";
+            submitError = true;
+        }
+
+        clearForm();
+        setTimeout(() => { submitMessage = ""; }, 3500);
+        submitting = false;
     }
 </script>
 

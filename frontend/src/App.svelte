@@ -2,6 +2,7 @@
   import { Router } from "@mateothegreat/svelte5-router";
   import { onMount } from "svelte";
   import { isSidebarOpen } from "./stores/sidebarState.js";
+  import { startPeriodicQueueSync } from "./utils/api.js";
 
   import Navbar from "./components/Navbar.svelte";
   import Home from "./pages/Home.svelte";
@@ -29,11 +30,17 @@
   ];
 
   onMount(() => {
+    const stopQueueSync = startPeriodicQueueSync(15000);
+
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/service_worker.js')
         .then(reg => console.log('SW registered', reg))
         .catch(err => console.error('SW failed', err));
     }
+
+    return () => {
+      stopQueueSync();
+    };
   });
 </script>
 
