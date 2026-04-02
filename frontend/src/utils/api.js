@@ -70,10 +70,24 @@ function fetchWithTimeout(url, timeoutMs = 5000) {
     );
     return Promise.race([fetch(url), timeout]);
 }
-async function fetchWithCache(url, storeName, { key = "current", isRows = false, timeoutMs = 5000 } = {}) {
+async function fetchWithCache(
+    url,
+    storeName,
+    {
+        key = "current",
+        isRows = false,
+        timeoutMs = 5000,
+        persist = false,
+        refresh = false,
+    } = {}
+) {
     // Check if we have cached data before attempting network
     const cached = await getIndexedDBStore(storeName, isRows ? null : key);
     const hasCachedData = cached !== null && !(Array.isArray(cached) && cached.length === 0);
+
+    if (hasCachedData && !refresh) {
+        return cached;
+    }
 
     try {
         // If we have cache, use a short timeout — fall back fast
@@ -83,10 +97,12 @@ async function fetchWithCache(url, storeName, { key = "current", isRows = false,
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
 
-        if (isRows) {
-            await setIndexedDBStore(storeName, { rows: data });
-        } else {
-            await setIndexedDBStore(storeName, { key, value: data });
+        if (persist) {
+            if (isRows) {
+                await setIndexedDBStore(storeName, { rows: data });
+            } else {
+                await setIndexedDBStore(storeName, { key, value: data });
+            }
         }
 
         return data;
@@ -99,62 +115,124 @@ async function fetchWithCache(url, storeName, { key = "current", isRows = false,
     }
 }
 
-export async function fetchTeams(eventCode) {
+function fetchTeamsData(eventCode, options = {}) {
     return fetchWithCache(
         `${defaultAPILink}/api/getTeams?eventCode=${eventCode}`,
-        "teams"
+        "teams",
+        { key: eventCode, ...options }
     );
 }
 
-export async function fetchMatchAlliances(eventCode) {
+function fetchMatchAlliancesData(eventCode, options = {}) {
     return fetchWithCache(
         `${defaultAPILink}/api/getMatchAlliances?eventCode=${eventCode}`,
         "matchAlliances",
-        { isRows: true }
+        { isRows: true, ...options }
     );
+}
+
+function fetchEventDetailsData(eventCode, options = {}) {
+    return fetchWithCache(
+        `${defaultAPILink}/api/getEventDetails?eventCode=${eventCode}`,
+        "eventDetails",
+        { key: eventCode, ...options }
+    );
+}
+
+function fetchTeamStatusesData(eventCode, options = {}) {
+    return fetchWithCache(
+        `${defaultAPILink}/api/getTeamStatuses?eventCode=${eventCode}`,
+        "teamStatuses",
+        { key: eventCode, ...options }
+    );
+}
+
+function fetchOPRData(eventCode, options = {}) {
+    return fetchWithCache(
+        `${defaultAPILink}/api/getOPR?eventCode=${eventCode}`,
+        "OPR",
+        { key: eventCode, ...options }
+    );
+}
+
+function fetchAlliancesData(eventCode, options = {}) {
+    return fetchWithCache(
+        `${defaultAPILink}/api/getAlliances?eventCode=${eventCode}`,
+        "alliances",
+        { key: eventCode, ...options }
+    );
+}
+
+function fetchEventEpasData(eventCode, options = {}) {
+    return fetchWithCache(
+        `${defaultAPILink}/api/getEventEpas?eventCode=${eventCode}`,
+        "EPA",
+        { key: eventCode, ...options }
+    );
+}
+
+function fetchElimsHaveStartedData(eventCode, options = {}) {
+    return fetchWithCache(
+        `${defaultAPILink}/api/getElimsHaveStarted?eventCode=${eventCode}`,
+        "elimsStarted",
+        { key: eventCode, ...options }
+    );
+}
+
+export async function fetchTeams(eventCode) {
+    return fetchTeamsData(eventCode);
+}
+
+export async function fetchMatchAlliances(eventCode) {
+    return fetchMatchAlliancesData(eventCode);
 }
 
 export async function fetchEventDetails(eventCode) {
-    return fetchWithCache(
-        `${defaultAPILink}/api/getEventDetails?eventCode=${eventCode}`,
-        "eventDetails"
-    );
+    return fetchEventDetailsData(eventCode);
 }
 
 export async function fetchTeamStatuses(eventCode) {
-    return fetchWithCache(
-        `${defaultAPILink}/api/getTeamStatuses?eventCode=${eventCode}`,
-        "teamStatuses"
-    );
+    return fetchTeamStatusesData(eventCode);
 }
 
 export async function fetchOPR(eventCode) {
-    return fetchWithCache(
-        `${defaultAPILink}/api/getOPR?eventCode=${eventCode}`,
-        "OPR"
-    );
+    return fetchOPRData(eventCode);
 }
 
 export async function fetchAlliances(eventCode) {
-    return fetchWithCache(
-        `${defaultAPILink}/api/getAlliances?eventCode=${eventCode}`,
-        "alliances"
-    );
+    return fetchAlliancesData(eventCode);
 }
 
 export async function fetchEventEpas(eventCode) {
-    return fetchWithCache(
-        `${defaultAPILink}/api/getEventEpas?eventCode=${eventCode}`,
-        "EPA"
-    );
+    return fetchEventEpasData(eventCode);
 }
 
 export async function fetchElimsHaveStarted(eventCode) {
-    const data = await fetchWithCache(
-        `${defaultAPILink}/api/getElimsHaveStarted?eventCode=${eventCode}`,
-        "elimsStarted"
-    );
+    const data = await fetchElimsHaveStartedData(eventCode);
     return data.elimsHaveStarted;
+}
+
+export async function refreshEventCaches(eventCode) {
+    const refreshOptions = { persist: true, refresh: true };
+
+    const results = await Promise.allSettled([
+        fetchOPRData(eventCode, refreshOptions),
+        fetchTeamsData(eventCode, refreshOptions),
+        fetchMatchAlliancesData(eventCode, refreshOptions),
+        fetchEventDetailsData(eventCode, refreshOptions),
+        fetchTeamStatusesData(eventCode, refreshOptions),
+        fetchAlliancesData(eventCode, refreshOptions),
+        fetchEventEpasData(eventCode, refreshOptions),
+        fetchElimsHaveStartedData(eventCode, refreshOptions),
+    ]);
+
+    const oprResult = results[0];
+    if (oprResult.status === "fulfilled") {
+        return oprResult.value;
+    }
+
+    console.warn("Failed to refresh OPR during cache refresh:", oprResult.reason);
+    return {};
 }
 
 export async function fetchRobotClimb(eventCode, teamNumber, matchNumber) {

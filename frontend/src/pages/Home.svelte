@@ -1,13 +1,19 @@
 <script>
     import { onMount, tick } from "svelte";
-    import { fetchAllData, fetchEventDetails, fetchEvents, fetchOPR, fetchPitScouting, fetchQualitativeScouting } from "../utils/api";
+    import {
+        fetchAllData,
+        fetchEventDetails,
+        fetchEvents,
+        fetchPitScouting,
+        fetchQualitativeScouting,
+        refreshEventCaches,
+    } from "../utils/api";
     import { clearAllStores, getIndexedDBStore, getLastId, setIndexedDBStore } from '../utils/indexedDB';
 
     let eventCode = localStorage.getItem("eventCode");
     let isLoading = false;
     let notification = null;
     let isAutoSyncing = false;
-    let lastAutoSyncedEvent = null;
 
     function parseStoredJson(key, fallback) {
         const raw = localStorage.getItem(key);
@@ -100,7 +106,8 @@
             }
             localStorage.setItem("retrieveQual", JSON.stringify(combinedQual));
 
-            const newOprData = await fetchOPR(eventCode);
+            const newOprData = await refreshEventCaches(eventCode);
+
             localStorage.setItem("retrieveOPR", JSON.stringify(newOprData || {}));
 
             localStorage.setItem("timestamp", new Date(Date.now()).toLocaleString());
@@ -125,7 +132,6 @@
 
             localStorage.setItem("eventCode", eventCode);
             await cacheAllData({ forceFullRefresh: isNewEvent });
-            lastAutoSyncedEvent = eventCode;
         } finally {
             isAutoSyncing = false;
         }
@@ -172,11 +178,6 @@
     onMount(async () => {
         await loadDbEvents();
     });
-
-    // Reactive statement to handle event code changes
-    $: if (eventCode && typeof window !== 'undefined' && eventCode !== lastAutoSyncedEvent && !isAutoSyncing) {
-        syncEventData();
-    }
 </script>
 
 {#if notification}
@@ -197,10 +198,10 @@
     <div class="button-container">
         <div
             class="button-wrapper"
-            onclick={() => cacheAllData()}
+            onclick={syncEventData}
             role="button"
             tabindex="0"
-            onkeydown={(e) => e.key === "Enter" && cacheAllData()}
+            onkeydown={(e) => e.key === "Enter" && syncEventData()}
         >
             <div class="circle">
                 <span class="label">Populate Local Storage</span>
