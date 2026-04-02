@@ -760,33 +760,59 @@
 
   // ─── IMPORT / EXPORT ─────────────────────────────────────────────────────────
 
+  async function copyToClipboard(text) {
+    if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+    } else {
+        // Fallback for non-HTTPS
+        const el = document.createElement("textarea");
+        el.value = text;
+        el.style.position = "fixed";
+        el.style.opacity = "0";
+        document.body.appendChild(el);
+        el.focus();
+        el.select();
+        document.execCommand("copy");
+        document.body.removeChild(el);
+    }
+}
+  
   async function copySinglePicklist(list) {
     const dataString = `${list.name}:${list.teams.map((t) => t.team_number).join(",")}`;
     try {
-      await navigator.clipboard.writeText(
-        bs85.encode(pako.deflate(dataString)),
-      );
+        await copyToClipboard(bs85.encode(pako.deflate(dataString)));
     } catch (err) {
-      console.error("Failed to copy text:", err);
-      alert("Failed to copy picklist.");
+        console.error("Failed to copy text:", err);
+        alert("Failed to copy picklist.");
     }
-  }
+}
 
   async function exportPicklists() {
-    const dataString = Object.values(picklists)
-      .map(
-        (list) =>
-          `${list.name}:${list.teams.map((t) => t.team_number).join(",")}`,
-      )
-      .join(";");
-    try {
-      await navigator.clipboard.writeText(
-        bs85.encode(pako.deflate(dataString)),
-      );
-    } catch (err) {
-      console.error("Failed to copy text:", err);
-      alert("Failed to copy picklists.");
-    }
+      const dataString = Object.values(picklists)
+          .map((list) => `${list.name}:${list.teams.map((t) => t.team_number).join(",")}`)
+          .join(";");
+      try {
+          await copyToClipboard(bs85.encode(pako.deflate(dataString)));
+      } catch (err) {
+          console.error("Failed to copy text:", err);
+          alert("Failed to copy picklists.");
+      }
+  }
+
+  async function copyAllianceSelection() {
+      const selection = allianceSelections[activeAllianceSelectionId];
+      if (!selection) return;
+      const dataString = [
+          selection.name,
+          selection.isFourTeamAlliance ? "1" : "0",
+          selection.alliances.map((a) => a.teams.map((t) => t.team_number).join(",")).join(";"),
+      ].join("|");
+      try {
+          await copyToClipboard(bs85.encode(pako.deflate(dataString)));
+      } catch (err) {
+          console.error("Failed to copy:", err);
+          alert("Failed to copy alliance selection.");
+      }
   }
 
   function importPicklists() {
@@ -1052,26 +1078,6 @@
     }
     editingAllianceSelectionId = null;
     editingAllianceSelectionName = "";
-  }
-
-  async function copyAllianceSelection() {
-    const selection = allianceSelections[activeAllianceSelectionId];
-    if (!selection) return;
-    const dataString = [
-      selection.name,
-      selection.isFourTeamAlliance ? "1" : "0",
-      selection.alliances
-        .map((a) => a.teams.map((t) => t.team_number).join(","))
-        .join(";"),
-    ].join("|");
-    try {
-      await navigator.clipboard.writeText(
-        bs85.encode(pako.deflate(dataString)),
-      );
-    } catch (err) {
-      console.error("Failed to copy:", err);
-      alert("Failed to copy alliance selection.");
-    }
   }
 
   function pasteAllianceSelection() {
