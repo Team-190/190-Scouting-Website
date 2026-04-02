@@ -1,11 +1,34 @@
 <script>
     import { onMount, tick } from "svelte";
-    import { fetchAllData, fetchEventDetails, fetchEvents, fetchOPR, fetchPitScouting, fetchQualitativeScouting, postPitScouting, postQualitativeScouting } from "../utils/api";
+    import { fetchAllData, fetchEventDetails, fetchEvents, fetchOPR, fetchPitScouting, fetchQualitativeScouting } from "../utils/api";
     import { clearAllStores, getIndexedDBStore, getLastId, setIndexedDBStore } from '../utils/indexedDB';
 
     let eventCode = localStorage.getItem("eventCode");
     let isLoading = false;
     let notification = null;
+    let isAutoSyncing = false;
+    let lastAutoSyncedEvent = null;
+
+    function parseStoredJson(key, fallback) {
+        const raw = localStorage.getItem(key);
+        if (!raw) return fallback;
+        try {
+            return JSON.parse(raw);
+        } catch {
+            return fallback;
+        }
+    }
+
+    async function parseResponseJson(response, fallback = {}) {
+        const responseText = await response.text();
+        if (!responseText) return fallback;
+
+        try {
+            return JSON.parse(responseText);
+        } catch {
+            return fallback;
+        }
+    }
 
     function showNotification(message, type = "success", duration = 3000) {
         notification = { message, type };
@@ -28,76 +51,84 @@
         }
     }
 
-    async function cacheAllData() {
+    async function cacheAllData({ forceFullRefresh = false } = {}) {
         await withLoading(async () => {
-            await clearAllStores();
-        
-            const dataRes = await fetchAllData(eventCode, 0); 
-            const dataText = await dataRes.text();
-            const dataJson = dataText ? JSON.parse(dataText) : {};
-            const newData = dataJson.data || [];
-            await setIndexedDBStore("scoutingData", { rows: newData });
+            if (!eventCode) {
+                throw new Error("No event selected");
+            }
 
-            const localPitStr = localStorage.getItem("retrievePit");
-            const localPit = localPitStr ? JSON.parse(localPitStr) : {};
+            const existingData = forceFullRefresh ? [] : await getIndexedDBStore("scoutingData");
+            const lastId = await getLastId(existingData);
+
+            const dataRes = await fetchAllData(eventCode, lastId);
+            if (!dataRes.ok) {
+                throw new Error(`Failed to fetch scouting data: HTTP ${dataRes.status}`);
+            }
+            const dataJson = await parseResponseJson(dataRes, {});
+            const newData = dataJson.data || [];
+            if (newData.length > 0) {
+                await setIndexedDBStore("scoutingData", { rows: newData });
+            }
+
+            const localPit = forceFullRefresh ? {} : parseStoredJson("retrievePit", {});
             const pitTeams = Object.keys(localPit);
 
             const pitRes = await fetchPitScouting(eventCode, pitTeams);
-            const pitText = await pitRes.text();
-            const newPitData = pitText ? JSON.parse(pitText) : {};
+            if (!pitRes.ok) {
+                throw new Error(`Failed to fetch pit scouting: HTTP ${pitRes.status}`);
+            }
+            const newPitData = await parseResponseJson(pitRes, {});
             
             const combinedPit = { ...localPit, ...newPitData };
             localStorage.setItem("retrievePit", JSON.stringify(combinedPit));
 
-            // Save pit scouting data to backend
-            for (const [teamNum, pitData] of Object.entries(combinedPit)) {
-                try {
-                    await postPitScouting(eventCode, teamNum, pitData);
-                } catch (e) {
-                    console.warn(`Failed to save pit data for team ${teamNum}:`, e);
-                }
-            }
-
-            const localQualStr = localStorage.getItem("retrieveQual");
-            const localQual = localQualStr ? JSON.parse(localQualStr) : {};
+            const localQual = forceFullRefresh ? {} : parseStoredJson("retrieveQual", {});
             const qualCounts = {};
-            for (let team in localQual) {
-                qualCounts[team] = Object.keys(localQual[team]).length;
+            for (const team in localQual) {
+                qualCounts[team] = Object.keys(localQual[team] || {}).length;
             }
 
             const qualRes = await fetchQualitativeScouting(eventCode, qualCounts);
-            const qualText = await qualRes.text();
-            const newQualData = qualText ? JSON.parse(qualText) : {};
+            if (!qualRes.ok) {
+                throw new Error(`Failed to fetch qualitative scouting: HTTP ${qualRes.status}`);
+            }
+            const newQualData = await parseResponseJson(qualRes, {});
             
             const combinedQual = { ...localQual };
-            for (let team in newQualData) {
+            for (const team in newQualData) {
                 combinedQual[team] = { ...(combinedQual[team] || {}), ...newQualData[team] };
             }
             localStorage.setItem("retrieveQual", JSON.stringify(combinedQual));
 
-            // Save qualitative scouting data to backend
-            for (const [teamNum, matchData] of Object.entries(combinedQual)) {
-                for (const [matchNum, qualData] of Object.entries(matchData)) {
-                    try {
-                        await postQualitativeScouting(eventCode, teamNum, matchNum, qualData);
-                    } catch (e) {
-                        console.warn(`Failed to save qual data for team ${teamNum} match ${matchNum}:`, e);
-                    }
-                }
-            }
-
-            // Fetch and cache OPR data
-            const localOprStr = localStorage.getItem("retrieveOPR");
-            const localOpr = localOprStr ? JSON.parse(localOprStr) : {};
-
             const newOprData = await fetchOPR(eventCode);
-            
-            const combinedOpr = { ...localOpr, ...newOprData };
-            localStorage.setItem("retrieveOPR", JSON.stringify(combinedOpr));
+            localStorage.setItem("retrieveOPR", JSON.stringify(newOprData || {}));
 
             localStorage.setItem("timestamp", new Date(Date.now()).toLocaleString());
             localStorage.setItem("eventCode", eventCode);
         }, "Data loaded successfully!", "Failed to load data.");
+    }
+
+    async function syncEventData() {
+        if (!eventCode || isAutoSyncing) return;
+
+        isAutoSyncing = true;
+        try {
+            const previousEventCode = localStorage.getItem("eventCode");
+            const isNewEvent = previousEventCode !== eventCode;
+
+            if (isNewEvent) {
+                await clearAllStores();
+                localStorage.removeItem("retrievePit");
+                localStorage.removeItem("retrieveQual");
+                localStorage.removeItem("retrieveOPR");
+            }
+
+            localStorage.setItem("eventCode", eventCode);
+            await cacheAllData({ forceFullRefresh: isNewEvent });
+            lastAutoSyncedEvent = eventCode;
+        } finally {
+            isAutoSyncing = false;
+        }
     }
 
     let dbEvents = [];
@@ -143,16 +174,8 @@
     });
 
     // Reactive statement to handle event code changes
-    $: if (eventCode && typeof window !== 'undefined') {
-        const previousEventCode = localStorage.getItem("eventCode");
-        if (previousEventCode && previousEventCode !== eventCode) {
-            clearAllStores();
-            localStorage.removeItem("retrievePit");
-            localStorage.removeItem("retrieveQual");
-            localStorage.removeItem("retrieveOPR");
-        }
-        localStorage.setItem("eventCode", eventCode);
-        cacheAllData();
+    $: if (eventCode && typeof window !== 'undefined' && eventCode !== lastAutoSyncedEvent && !isAutoSyncing) {
+        syncEventData();
     }
 </script>
 
@@ -174,7 +197,7 @@
     <div class="button-container">
         <div
             class="button-wrapper"
-            onclick={cacheAllData}
+            onclick={() => cacheAllData()}
             role="button"
             tabindex="0"
             onkeydown={(e) => e.key === "Enter" && cacheAllData()}

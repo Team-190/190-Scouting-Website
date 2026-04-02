@@ -5,58 +5,59 @@ const defaultAPILink = `http://${SERVER}:${VITE_BACKEND_PORT}`;
 
 import { setIndexedDBStore, getIndexedDBStore  } from './indexedDB';
 
+function fetchApi(path, query = {}) {
+    const params = new URLSearchParams();
+
+    for (const [key, value] of Object.entries(query)) {
+        if (value === undefined || value === null) continue;
+        params.set(key, String(value));
+    }
+
+    const queryString = params.toString();
+    const route = `${defaultAPILink}${path}${queryString ? `?${queryString}` : ""}`;
+    return fetch(route);
+}
+
 export function fetchEvents() {
-    const route = `${defaultAPILink}/api/getEvents`;
-    let data = fetch(route);
-    return data;
+    return fetchApi("/api/getEvents");
 }
 
 export function fetchAvailableTeams(eventCode) {
-    const route = `${defaultAPILink}/api/getAvailableTeams?eventCode=` + eventCode;
-    let data = fetch(route);
-    return data;
+    return fetchApi("/api/getAvailableTeams", { eventCode });
 }
 
 export function fetchAllData(eventCode, lastId = 0) {
-    const route = `${defaultAPILink}/api/getAllData?eventCode=${eventCode}&lastId=${lastId}`;
-    let data = fetch(route);
-    return data;
+    return fetchApi("/api/getAllData", { eventCode, lastId });
 }
 
 export function fetchSingleMetric(eventCode) {
-    const route = `${defaultAPILink}/api/getSingleMetric?eventCode=` + eventCode;
-    let data = fetch(route);
-    return data;
+    return fetchApi("/api/getSingleMetric", { eventCode });
 }
 
 export function fetchQualitativeScouting(eventCode, localCounts = {}) {
-    const route = `${defaultAPILink}/api/getQualitativeScouting?eventCode=${eventCode}&localCounts=${encodeURIComponent(JSON.stringify(localCounts))}`;
-    let data = fetch(route);
-    return data;
+    return fetchApi("/api/getQualitativeScouting", {
+        eventCode,
+        localCounts: JSON.stringify(localCounts),
+    });
 }
 
 export function fetchPitScouting(eventCode, localTeams = []) {
-    const route = `${defaultAPILink}/api/getPitScouting?eventCode=${eventCode}&localTeams=${encodeURIComponent(JSON.stringify(localTeams))}`;
-    let data = fetch(route);
-    return data;
+    return fetchApi("/api/getPitScouting", {
+        eventCode,
+        localTeams: JSON.stringify(localTeams),
+    });
 }
 
 export function fetchPitScoutingImage(eventCode, team) {
-    const route = `${defaultAPILink}/api/getPitScoutingImage?eventCode=${eventCode}&teamNumber=${team}`;
-    let data = fetch(route);
-    return data;
+    return fetchApi("/api/getPitScoutingImage", { eventCode, teamNumber: team });
 }
 
 export function fetchGracePage(eventCode) {
-    const route = `${defaultAPILink}/api/getRatings?eventCode=${eventCode}`;
-    let data = fetch(route);
-    return data;
+    return fetchApi("/api/getRatings", { eventCode });
 }
 
 export function fetchAnanthPage(eventCode) {
-    const route = `${defaultAPILink}/api/getHPRatings?eventCode=${eventCode}`;
-    let data = fetch(route);
-    return data;
+    return fetchApi("/api/getHPRatings", { eventCode });
 }
 
 ////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
@@ -157,13 +158,7 @@ export async function fetchElimsHaveStarted(eventCode) {
 }
 
 export async function fetchRobotClimb(eventCode, teamNumber, matchNumber) {
-  const response = await fetch(
-    `${defaultAPILink}/api/getMatchAlliances?eventCode=${eventCode}`
-  );
-
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  
-  const allMatches = await response.json();
+    const allMatches = await fetchMatchAlliances(eventCode);
   const match = allMatches.find(m => m.match_number === parseInt(matchNumber) && m.comp_level === "qm");
 
   if (!match) return { EndgameClimb: "Match Not Found", AutoClimb: "Match Not Found" };

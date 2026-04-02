@@ -102,6 +102,12 @@ export async function getIndexedDBStore(STORE, key = null) {
 // ─── UTILS ───────────────────────────────────────────────────────────────────
 
 export async function getLastId(data) {
-    if (!data.length) return 0;
-    return Math.max(...data.map(r => r.Id));
+    if (!Array.isArray(data) || data.length === 0) return 0;
+
+    const ids = data
+        .map((row) => Number(row?.Id ?? row?.ID ?? row?.id))
+        .filter((id) => Number.isFinite(id));
+
+    if (ids.length === 0) return 0;
+    return Math.max(...ids);
 }
