@@ -4,7 +4,7 @@
   import { onMount } from "svelte";
   import { writable } from "svelte/store";
   import Team from "../../components/Team.svelte";
-  import TeamHoverCard from "../../components/TeamHoverCard.svelte";
+  import TeamHoverCard from "../../components/teamHoverCard.svelte";
   import {
       fetchEventEpas,
       fetchOPR,
@@ -338,6 +338,14 @@
     const card = document.querySelector(".hover-card");
     if (card && card.contains(e.target)) return;
     hoverVisible = false;
+  }
+
+  // ---------------------------------- SUCCESS/UNSUCCESSFUL HOVERCARD PICKLIST COPYING ----------------------------------
+  let notification = $state(null);
+
+  function showNotification(message, type = "success", duration = 3000) {
+      notification = { message, type };
+      setTimeout(() => { notification = null; }, duration);
   }
 
   // ─── EFFECTS ─────────────────────────────────────────────────────────────────
@@ -760,33 +768,61 @@
 
   // ─── IMPORT / EXPORT ─────────────────────────────────────────────────────────
 
-  async function copySinglePicklist(list) {
-    const dataString = `${list.name}:${list.teams.map((t) => t.team_number).join(",")}`;
-    try {
-      await navigator.clipboard.writeText(
-        bs85.encode(pako.deflate(dataString)),
-      );
-    } catch (err) {
-      console.error("Failed to copy text:", err);
-      alert("Failed to copy picklist.");
+  async function copyToClipboard(text) {
+    if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+    } else {
+        const el = document.createElement("textarea");
+        el.value = text;
+        el.style.position = "fixed";
+        el.style.opacity = "0";
+        document.body.appendChild(el);
+        el.focus();
+        el.select();
+        document.execCommand("copy");
+        document.body.removeChild(el);
     }
-  }
+}
+  
+  async function copySinglePicklist(list) {
+      const dataString = `${list.name}:${list.teams.map((t) => t.team_number).join(",")}`;
+      try {
+          await copyToClipboard(bs85.encode(pako.deflate(dataString)));
+          showNotification("✓ Picklist copied to clipboard!");
+      } catch (err) {
+          console.error("Failed to copy text:", err);
+          showNotification("Failed to copy picklist.", "error");
+      }
+  } 
 
   async function exportPicklists() {
-    const dataString = Object.values(picklists)
-      .map(
-        (list) =>
-          `${list.name}:${list.teams.map((t) => t.team_number).join(",")}`,
-      )
-      .join(";");
-    try {
-      await navigator.clipboard.writeText(
-        bs85.encode(pako.deflate(dataString)),
-      );
-    } catch (err) {
-      console.error("Failed to copy text:", err);
-      alert("Failed to copy picklists.");
-    }
+      const dataString = Object.values(picklists)
+          .map((list) => `${list.name}:${list.teams.map((t) => t.team_number).join(",")}`)
+          .join(";");
+      try {
+          await copyToClipboard(bs85.encode(pako.deflate(dataString)));
+          showNotification("✓ All picklists copied to clipboard!");
+      } catch (err) {
+          console.error("Failed to copy text:", err);
+          showNotification("Failed to copy picklists.", "error");
+      }
+  }
+
+  async function copyAllianceSelection() {
+      const selection = allianceSelections[activeAllianceSelectionId];
+      if (!selection) return;
+      const dataString = [
+          selection.name,
+          selection.isFourTeamAlliance ? "1" : "0",
+          selection.alliances.map((a) => a.teams.map((t) => t.team_number).join(",")).join(";"),
+      ].join("|");
+      try {
+          await copyToClipboard(bs85.encode(pako.deflate(dataString)));
+          showNotification("✓ Alliance selection copied to clipboard!");
+      } catch (err) {
+          console.error("Failed to copy:", err);
+          showNotification("Failed to copy alliance selection.", "error");
+      }
   }
 
   function importPicklists() {
@@ -842,20 +878,21 @@
     const list = picklists[listKey]?.teams;
     if (!list) return;
 
-    const draggedIndex = list.findIndex(
-      (t) => t.team_number === item.team_number,
-    );
-    const targetElement = event.target.closest(".list-item");
+    const targetElement = event.target.closest("[data-team-number]");
     if (!targetElement) return;
 
     const targetNumber = Number(targetElement.dataset.teamNumber);
-    const dropIndex = list.findIndex((t) => t.team_number === targetNumber);
+    if (!targetNumber) return;
+
+    const draggedIndex = list.findIndex(t => t.team_number === item.team_number);
+    const dropIndex = list.findIndex(t => t.team_number === targetNumber);
 
     if (draggedIndex !== -1 && dropIndex !== -1 && draggedIndex !== dropIndex) {
-      const [moved] = list.splice(draggedIndex, 1);
-      list.splice(dropIndex, 0, moved);
+        const [moved] = list.splice(draggedIndex, 1);
+        list.splice(dropIndex, 0, moved);
+        picklists = { ...picklists }; // force reactivity
     }
-  }
+}
 
   function handleDrop(targetListKey) {
     if (!draggedItem) return;
@@ -1053,26 +1090,6 @@
     editingAllianceSelectionName = "";
   }
 
-  async function copyAllianceSelection() {
-    const selection = allianceSelections[activeAllianceSelectionId];
-    if (!selection) return;
-    const dataString = [
-      selection.name,
-      selection.isFourTeamAlliance ? "1" : "0",
-      selection.alliances
-        .map((a) => a.teams.map((t) => t.team_number).join(","))
-        .join(";"),
-    ].join("|");
-    try {
-      await navigator.clipboard.writeText(
-        bs85.encode(pako.deflate(dataString)),
-      );
-    } catch (err) {
-      console.error("Failed to copy:", err);
-      alert("Failed to copy alliance selection.");
-    }
-  }
-
   function pasteAllianceSelection() {
     if (!allianceImportData) {
       alert("Please paste the alliance selection data into the text box.");
@@ -1125,6 +1142,12 @@
 </script>
 
 <div class="page-wrapper">
+  {#if notification}
+    <div class="banner banner-{notification.type}" onclick={() => notification = null}>
+        {notification.message}
+    </div>
+  {/if}
+
   <!-- Header -->
   <div class="header-section">
     <h1>Picklists & Alliance Selection</h1>
@@ -1911,4 +1934,26 @@
   :global(::-webkit-scrollbar-thumb:hover) {
     background: #e02200;
   }
+
+  .banner {
+    position: fixed;
+    top: 40%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 1rem 2rem;
+    border-radius: 8px;
+    color: white;
+    font-weight: bold;
+    z-index: 10000;
+    cursor: pointer;
+}
+
+  .banner-success {
+      background-color: #4CAF50;
+  }
+
+  .banner-error {
+      background-color: #f44336;
+  }
+
 </style>
