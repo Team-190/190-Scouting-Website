@@ -23,10 +23,10 @@ describe('Navbar Component', () => {
         vi.clearAllMocks();
         // Reset local storage mocks
         Storage.prototype.getItem = vi.fn(() => 'testEvent123');
-        
+
         api.fetchAlliances.mockResolvedValue(false);
         api.fetchElimsHaveStarted.mockResolvedValue(false);
-        
+
         isSidebarOpen.set(false);
     });
 
@@ -39,7 +39,7 @@ describe('Navbar Component', () => {
     it('toggles sidebar state on menu button click', async () => {
         render(Navbar);
         const toggleBtn = screen.getByLabelText(/toggle sidebar/i);
-        
+
         await fireEvent.click(toggleBtn);
         // Checking the class change requires knowing the internal state sync
         let sidebarVal;
@@ -53,12 +53,12 @@ describe('Navbar Component', () => {
         // but JSDOM fireEvent will click it anyway unless pointer-events none blocks dom-testing-library.
         // Let's set it to open just in case:
         isSidebarOpen.set(true);
-        
+
         render(Navbar);
-        
+
         const teamViewBtn = screen.getByText('Team View').closest('button');
         await fireEvent.click(teamViewBtn);
-        
+
         expect(goto).toHaveBeenCalledWith('/teamView');
         // Side bar should close on navigation
         let sidebarVal;
@@ -69,7 +69,7 @@ describe('Navbar Component', () => {
 
     it('fetches alliances and shows Gompei Madness if available', async () => {
         api.fetchAlliances.mockResolvedValue(true);
-        
+
         render(Navbar);
 
         // the async fetch should trigger a re-render showing the madness button

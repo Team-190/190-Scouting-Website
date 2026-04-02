@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { render, screen } from '@testing-library/svelte';
 import TeamHoverCard from '../teamHoverCard.svelte';
 

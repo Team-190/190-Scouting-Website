@@ -21,7 +21,7 @@ describe('Teamgrid Component', () => {
                 eventCode: '2024test'
             }
         });
-        
+
         expect(container).toBeInTheDocument();
         // Since ag-grid creates nodes asynchronously, we only check the container is mounted successfully without crashing.
     });
