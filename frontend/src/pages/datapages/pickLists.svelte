@@ -543,9 +543,10 @@
         }
       });
 
-      if (rankedTeams.length < 8) {
-          alert("Not enough ranked teams to populate all 8 alliance captain spots.");
-      }
+      // AFTER
+    if (rankedTeams.length < 8) {
+        showNotification("Not enough ranked teams to populate all 8 alliance captain spots.", "error");
+    }
     } catch (err) {
       console.error(err);
       alert("Failed to populate alliance captains.");
