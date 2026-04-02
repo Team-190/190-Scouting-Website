@@ -340,6 +340,14 @@
     hoverVisible = false;
   }
 
+  // ---------------------------------- SUCCESS/UNSUCCESSFUL HOVERCARD PICKLIST COPYING ----------------------------------
+  let notification = $state(null);
+
+  function showNotification(message, type = "success", duration = 3000) {
+      notification = { message, type };
+      setTimeout(() => { notification = null; }, duration);
+  }
+
   // ─── EFFECTS ─────────────────────────────────────────────────────────────────
 
   $effect(() => {
@@ -764,7 +772,6 @@
     if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(text);
     } else {
-        // Fallback for non-HTTPS
         const el = document.createElement("textarea");
         el.value = text;
         el.style.position = "fixed";
@@ -778,14 +785,15 @@
 }
   
   async function copySinglePicklist(list) {
-    const dataString = `${list.name}:${list.teams.map((t) => t.team_number).join(",")}`;
-    try {
-        await copyToClipboard(bs85.encode(pako.deflate(dataString)));
-    } catch (err) {
-        console.error("Failed to copy text:", err);
-        alert("Failed to copy picklist.");
-    }
-}
+      const dataString = `${list.name}:${list.teams.map((t) => t.team_number).join(",")}`;
+      try {
+          await copyToClipboard(bs85.encode(pako.deflate(dataString)));
+          showNotification("✓ Picklist copied to clipboard!");
+      } catch (err) {
+          console.error("Failed to copy text:", err);
+          showNotification("Failed to copy picklist.", "error");
+      }
+  } 
 
   async function exportPicklists() {
       const dataString = Object.values(picklists)
@@ -793,9 +801,10 @@
           .join(";");
       try {
           await copyToClipboard(bs85.encode(pako.deflate(dataString)));
+          showNotification("✓ All picklists copied to clipboard!");
       } catch (err) {
           console.error("Failed to copy text:", err);
-          alert("Failed to copy picklists.");
+          showNotification("Failed to copy picklists.", "error");
       }
   }
 
@@ -809,9 +818,10 @@
       ].join("|");
       try {
           await copyToClipboard(bs85.encode(pako.deflate(dataString)));
+          showNotification("✓ Alliance selection copied to clipboard!");
       } catch (err) {
           console.error("Failed to copy:", err);
-          alert("Failed to copy alliance selection.");
+          showNotification("Failed to copy alliance selection.", "error");
       }
   }
 
@@ -1132,6 +1142,12 @@
 </script>
 
 <div class="page-wrapper">
+  {#if notification}
+    <div class="banner banner-{notification.type}" onclick={() => notification = null}>
+        {notification.message}
+    </div>
+  {/if}
+
   <!-- Header -->
   <div class="header-section">
     <h1>Picklists & Alliance Selection</h1>
@@ -1918,4 +1934,26 @@
   :global(::-webkit-scrollbar-thumb:hover) {
     background: #e02200;
   }
+
+  .banner {
+    position: fixed;
+    top: 40%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 1rem 2rem;
+    border-radius: 8px;
+    color: white;
+    font-weight: bold;
+    z-index: 10000;
+    cursor: pointer;
+}
+
+  .banner-success {
+      background-color: #4CAF50;
+  }
+
+  .banner-error {
+      background-color: #f44336;
+  }
+
 </style>
