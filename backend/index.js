@@ -24,7 +24,7 @@ const app = express();
  * Middleware to validate eventCode parameter
  */
 const validateEventCode = (req, res, next) => {
-    const eventCode = req.query.eventCode || req.body.event;
+    const eventCode = req.query.eventCode || req.body?.event;
     if (!eventCode) return res.sendStatus(403);
     next();
 };
