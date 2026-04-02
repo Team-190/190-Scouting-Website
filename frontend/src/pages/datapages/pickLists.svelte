@@ -842,20 +842,21 @@
     const list = picklists[listKey]?.teams;
     if (!list) return;
 
-    const draggedIndex = list.findIndex(
-      (t) => t.team_number === item.team_number,
-    );
-    const targetElement = event.target.closest(".list-item");
+    const targetElement = event.target.closest("[data-team-number]");
     if (!targetElement) return;
 
     const targetNumber = Number(targetElement.dataset.teamNumber);
-    const dropIndex = list.findIndex((t) => t.team_number === targetNumber);
+    if (!targetNumber) return;
+
+    const draggedIndex = list.findIndex(t => t.team_number === item.team_number);
+    const dropIndex = list.findIndex(t => t.team_number === targetNumber);
 
     if (draggedIndex !== -1 && dropIndex !== -1 && draggedIndex !== dropIndex) {
-      const [moved] = list.splice(draggedIndex, 1);
-      list.splice(dropIndex, 0, moved);
+        const [moved] = list.splice(draggedIndex, 1);
+        list.splice(dropIndex, 0, moved);
+        picklists = { ...picklists }; // force reactivity
     }
-  }
+}
 
   function handleDrop(targetListKey) {
     if (!draggedItem) return;
