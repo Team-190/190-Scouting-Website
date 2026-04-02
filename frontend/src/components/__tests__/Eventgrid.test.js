@@ -20,7 +20,7 @@ describe('Eventgrid Component', () => {
                 onSortRequest: vi.fn()
             }
         });
-        
+
         expect(container).toBeInTheDocument();
         // The component uses native HTML table layout or divs depending on implementation
         // Either way, it shouldn't crash
