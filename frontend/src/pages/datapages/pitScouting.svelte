@@ -601,7 +601,7 @@
     .header {
         background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
         color: white;
-        padding: 20px;
+        padding: 1.5rem;
         text-align: center;
         border-bottom: 3px solid var(--frc-190-red);
         position: sticky;
@@ -612,21 +612,21 @@
 
     .header h1 {
         margin: 0;
-        font-size: 1.5rem;
+        font-size: 1.3rem;
         font-weight: 800;
         color: var(--frc-190-red);
         text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
     }
 
     .header .subtitle {
-        margin: 5px 0 0 0;
-        font-size: 0.9rem;
+        margin: 0.3rem 0 0 0;
+        font-size: 0.85rem;
         color: #ddd;
         font-weight: 400;
     }
 
     .form-container {
-        padding: 20px;
+        padding: 1.5rem;
         max-width: 600px;
         margin: 0 auto;
     }
@@ -634,22 +634,22 @@
     .form-section {
         background: white;
         border-radius: 12px;
-        padding: 20px;
-        margin-bottom: 20px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
 
     .section-title {
-        font-size: 1.1rem;
+        font-size: 1rem;
         font-weight: 700;
         color: var(--frc-190-red);
-        margin: 0 0 15px 0;
-        padding-bottom: 10px;
+        margin: 0 0 1rem 0;
+        padding-bottom: 0.75rem;
         border-bottom: 2px solid var(--frc-190-red);
     }
 
     .form-group {
-        margin-bottom: 20px;
+        margin-bottom: 1.5rem;
     }
 
     .form-group:last-child {
@@ -661,22 +661,22 @@
         display: block;
         font-weight: 600;
         color: var(--frc-190-black);
-        margin-bottom: 8px;
-        font-size: 0.95rem;
+        margin-bottom: 0.6rem;
+        font-size: 0.9rem;
     }
 
     .label-helper {
         font-weight: 400;
         color: #666;
-        font-size: 0.85rem;
-        margin-left: 5px;
+        font-size: 0.8rem;
+        margin-left: 0.4rem;
     }
 
     input[type="text"],
     select {
         width: 100%;
-        padding: 12px 15px;
-        font-size: 16px;
+        padding: 0.9rem 1rem;
+        font-size: 1rem;
         border: 2px solid #ddd;
         border-radius: 8px;
         background: white;
@@ -703,14 +703,14 @@
     /* Boolean Toggle Buttons */
     .bool-toggle {
         display: flex;
-        gap: 10px;
+        gap: 0.75rem;
         width: 100%;
     }
 
     .bool-btn {
         flex: 1;
-        padding: 12px;
-        font-size: 16px;
+        padding: 0.9rem;
+        font-size: 0.95rem;
         font-weight: 600;
         border: 2px solid #ddd;
         border-radius: 8px;
@@ -749,7 +749,7 @@
 
     .file-upload-label {
         display: block;
-        padding: 15px;
+        padding: 1.25rem;
         border: 2px dashed #ddd;
         border-radius: 8px;
         text-align: center;
@@ -783,20 +783,20 @@
     }
 
     .upload-icon {
-        font-size: 2rem;
+        font-size: 1.75rem;
         color: var(--frc-190-red);
-        margin-bottom: 5px;
+        margin-bottom: 0.4rem;
     }
 
     .upload-text {
-        font-size: 0.9rem;
+        font-size: 0.85rem;
         color: #666;
     }
 
     .size-info {
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         color: #999;
-        margin-top: 5px;
+        margin-top: 0.4rem;
         font-weight: 500;
     }
 
@@ -810,12 +810,12 @@
             transform: translateY(0);
         }
         50% {
-            transform: translateY(-5px);
+            transform: translateY(-4px);
         }
     }
 
     .image-preview {
-        margin-top: 15px;
+        margin-top: 1rem;
         border-radius: 8px;
         overflow: hidden;
         border: 2px solid var(--frc-190-red);
@@ -829,7 +829,7 @@
 
     /* Submit Button */
     .submit-section {
-        padding: 20px;
+        padding: 1.5rem;
         position: sticky;
         bottom: 0;
         background: var(--wpi-gray);
@@ -838,8 +838,8 @@
 
     .submit-btn {
         width: 100%;
-        padding: 16px;
-        font-size: 1.1rem;
+        padding: 1.2rem;
+        font-size: 1rem;
         font-weight: 700;
         color: white;
         background: linear-gradient(
@@ -853,7 +853,7 @@
         transition: all 0.3s ease;
         box-shadow: 0 4px 15px rgba(200, 27, 0, 0.3);
         text-transform: uppercase;
-        letter-spacing: 1px;
+        letter-spacing: 0.5px;
     }
 
     .submit-btn:hover:not(:disabled) {
@@ -872,8 +872,8 @@
 
     .clear-btn {
         width: 100%;
-        padding: 12px;
-        font-size: 0.95rem;
+        padding: 0.9rem;
+        font-size: 0.9rem;
         font-weight: 600;
         color: var(--frc-190-black);
         background: white;
@@ -881,7 +881,7 @@
         border-radius: 8px;
         cursor: pointer;
         transition: all 0.3s ease;
-        margin-top: 10px;
+        margin-top: 0.75rem;
     }
 
     .clear-btn:hover {
@@ -891,9 +891,9 @@
 
     /* Message */
     .message {
-        padding: 12px 15px;
+        padding: 1rem 1.2rem;
         border-radius: 8px;
-        margin-bottom: 15px;
+        margin-bottom: 1.2rem;
         font-weight: 600;
         text-align: center;
     }
@@ -913,13 +913,13 @@
     /* Loading Spinner */
     .spinner {
         display: inline-block;
-        width: 20px;
-        height: 20px;
+        width: 18px;
+        height: 18px;
         border: 3px solid rgba(255, 255, 255, 0.3);
         border-radius: 50%;
         border-top-color: white;
         animation: spin 0.8s linear infinite;
-        margin-right: 10px;
+        margin-right: 0.75rem;
     }
 
     @keyframes spin {
@@ -928,35 +928,53 @@
         }
     }
 
-    /* Desktop optimizations */
-    @media (min-width: 768px) {
-        .form-container {
-            padding: 30px;
-        }
-
-        .header h1 {
-            font-size: 2rem;
-        }
-
-        .submit-section {
-            position: relative;
-            max-width: 600px;
-            margin: 0 auto;
-        }
+    /* Tablet */
+    @media (max-width: 1024px) {
+        .header h1 { font-size: 1.2rem; }
+        .form-container { padding: 1.25rem; max-width: 100%; }
+        .form-section { padding: 1.25rem; margin-bottom: 1.25rem; }
+        .section-title { font-size: 0.95rem; margin-bottom: 0.9rem; }
+        .form-group { margin-bottom: 1.25rem; }
+        .submit-btn { font-size: 0.95rem; padding: 1rem; }
     }
 
-    /* Mobile adjustments */
-    @media (max-width: 400px) {
-        .header h1 {
-            font-size: 1.3rem;
-        }
+    /* Mobile */
+    @media (max-width: 768px) {
+        .header { padding: 1.2rem; }
+        .header h1 { font-size: 1.1rem; }
+        .header .subtitle { font-size: 0.8rem; }
+        .form-container { padding: 1rem; }
+        .form-section { padding: 1.2rem; margin-bottom: 1.2rem; }
+        .section-title { font-size: 0.9rem; margin-bottom: 0.8rem; }
+        label, .field-label { font-size: 0.85rem; margin-bottom: 0.5rem; }
+        input[type="text"], select { padding: 0.8rem 0.9rem; font-size: 0.95rem; }
+        .bool-btn { padding: 0.8rem; font-size: 0.9rem; }
+        .upload-icon { font-size: 1.5rem; }
+        .upload-text { font-size: 0.8rem; }
+        .submit-section { padding: 1.2rem; }
+        .submit-btn { padding: 1rem; font-size: 0.9rem; }
+        .clear-btn { padding: 0.8rem; font-size: 0.85rem; }
+    }
 
-        .form-container {
-            padding: 15px;
-        }
-
-        .form-section {
-            padding: 15px;
-        }
+    /* Small Mobile */
+    @media (max-width: 480px) {
+        .header { padding: 1rem; }
+        .header h1 { font-size: 1rem; }
+        .header .subtitle { font-size: 0.75rem; }
+        .form-container { padding: 0.75rem; }
+        .form-section { padding: 1rem; margin-bottom: 1rem; }
+        .section-title { font-size: 0.85rem; margin-bottom: 0.75rem; padding-bottom: 0.5rem; }
+        label, .field-label { font-size: 0.8rem; margin-bottom: 0.4rem; }
+        .label-helper { font-size: 0.7rem; }
+        input[type="text"], select { padding: 0.7rem 0.8rem; font-size: 0.9rem; }
+        .bool-toggle { gap: 0.5rem; }
+        .bool-btn { padding: 0.7rem; font-size: 0.85rem; }
+        .upload-icon { font-size: 1.3rem; }
+        .upload-text { font-size: 0.75rem; }
+        .message { padding: 0.8rem 1rem; margin-bottom: 1rem; font-size: 0.85rem; }
+        .submit-section { padding: 1rem; }
+        .submit-btn { padding: 0.9rem; font-size: 0.85rem; letter-spacing: 0; }
+        .clear-btn { padding: 0.75rem; font-size: 0.8rem; margin-top: 0.5rem; }
+        .spinner { width: 16px; height: 16px; border-width: 2px; margin-right: 0.5rem; }
     }
 </style>

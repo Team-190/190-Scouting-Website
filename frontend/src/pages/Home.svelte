@@ -180,7 +180,7 @@
             onkeydown={(e) => e.key === "Enter" && cacheAllData()}
         >
             <div class="circle">
-                <span class="label">Populate Local Storage</span>
+                <span class="label">Get Data</span>
             </div>
         </div>
     </div>
@@ -214,17 +214,17 @@
         align-items: center;
         justify-content: center;
         min-height: 100vh;
-        padding: 2rem;
+        padding: 1.25rem;
         background: var(--wpi-gray);
         font-family: sans-serif;
+        gap: 2rem;
     }
 
     .button-wrapper {
-        width: 300px;
-        height: 300px;
+        width: 18.75rem;
+        height: 18.75rem;
         cursor: pointer;
         transition: transform 0.2s;
-        margin-bottom: 2rem;
     }
 
     .button-wrapper:hover {
@@ -243,32 +243,63 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 0.625rem 1.875rem rgba(0, 0, 0, 0.5);
+        padding: 1rem;
     }
 
     .label {
         color: white;
-        font-size: 1.5rem;
+        font-size: 1.2rem;
         font-weight: 800;
-        letter-spacing: 2px;
+        letter-spacing: 0.125rem;
         text-align: center;
-        line-height: 1.2;
+        line-height: 1.3;
     }
 
     .event-selector-panel {
         display: flex;
         flex-direction: column;
-        gap: 1rem;
+        gap: 0.75rem;
         width: 100%;
-        max-width: 500px;
+        max-width: 31.25rem;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
     }
 
     h2 {
-        margin: 0;
+        margin: 0 0 0.5rem 0;
+        font-size: 1.3rem;
+        color: var(--frc-190-black);
     }
 
     .select {
-        height: 22px;
+        padding: 0.5rem 0.75rem;
+        font-size: 1rem;
+        border: 0.125rem solid var(--frc-190-red);
+        border-radius: 0.25rem;
+        background: #fff;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .select:hover {
+        border-color: #e02200;
+        box-shadow: 0 0 0 3px rgba(200, 27, 0, 0.1);
+    }
+
+    .select:focus {
+        outline: none;
+        border-color: var(--frc-190-red);
+        box-shadow: 0 0 0 3px rgba(200, 27, 0, 0.2);
+    }
+
+    .selected-event {
+        margin: 0.5rem 0 0 0;
+        font-size: 0.9rem;
+        color: var(--frc-190-black);
+        font-weight: 500;
     }
 
     .loading-spinner-overlay {
@@ -285,11 +316,11 @@
     }
 
     .loading-spinner {
-        border: 8px solid rgba(255, 255, 255, 0.3);
+        border: 0.5rem solid rgba(255, 255, 255, 0.3);
         border-left-color: var(--frc-190-red);
         border-radius: 50%;
-        width: 50px;
-        height: 50px;
+        width: 3.125rem;
+        height: 3.125rem;
         animation: spin 1s linear infinite;
     }
 
@@ -301,31 +332,121 @@
 
     .banner {
         position: fixed;
-        top: 400px;
+        top: 25rem;
         left: 50%;
         transform: translateX(-50%);
-        padding: 1rem 2rem;
-        border-radius: 8px;
+        padding: 1rem 1.5rem;
+        border-radius: 0.5rem;
         color: white;
         font-weight: bold;
         z-index: 10000;
         cursor: pointer;
         transition: top 0.3s ease-in-out;
+        font-size: 0.95rem;
+        max-width: 90vw;
     }
 
     .banner-success {
-        background-color: #4CAF50; /* Green */
+        background-color: #4CAF50;
     }
 
     .banner-error {
-        background-color: #f44336; /* Red */
+        background-color: #f44336;
     }
 
     .button-container {
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 1rem;
-        margin-bottom: 2rem;
+        gap: 0.75rem;
+    }
+
+    /* Tablet Breakpoint (768px) */
+    @media (max-width: 768px) {
+        .container {
+            padding: 1rem;
+            gap: 1.5rem;
+        }
+
+        .button-wrapper {
+            width: 15rem;
+            height: 15rem;
+        }
+
+        .label {
+            font-size: 1rem;
+            letter-spacing: 0.05rem;
+        }
+
+        .event-selector-panel {
+            padding: 1.25rem;
+            gap: 0.6rem;
+        }
+
+        h2 {
+            font-size: 1.1rem;
+            margin-bottom: 0.4rem;
+        }
+
+        .select {
+            font-size: 0.9rem;
+            padding: 0.4rem 0.6rem;
+        }
+
+        .selected-event {
+            font-size: 0.8rem;
+        }
+    }
+
+    /* Mobile Breakpoint (480px) */
+    @media (max-width: 480px) {
+        .container {
+            padding: 0.75rem;
+            gap: 1.25rem;
+            justify-content: flex-start;
+            padding-top: 2rem;
+        }
+
+        .button-wrapper {
+            width: 11.25rem;
+            height: 11.25rem;
+        }
+
+        .circle {
+            padding: 0.75rem;
+        }
+
+        .label {
+            font-size: 0.85rem;
+            letter-spacing: 0.03rem;
+            line-height: 1.2;
+        }
+
+        .event-selector-panel {
+            max-width: 100%;
+            padding: 1rem;
+            gap: 0.5rem;
+        }
+
+        h2 {
+            font-size: 0.95rem;
+            margin-bottom: 0.3rem;
+        }
+
+        .select {
+            font-size: 0.85rem;
+            padding: 0.35rem 0.5rem;
+        }
+
+        .selected-event {
+            font-size: 0.75rem;
+            margin-top: 0.25rem;
+        }
+
+        .banner {
+            top: 5rem;
+            font-size: 0.85rem;
+            padding: 0.75rem 1rem;
+        }
     }
 </style>

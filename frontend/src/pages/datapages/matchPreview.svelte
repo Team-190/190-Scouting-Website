@@ -927,26 +927,70 @@
   :global(.ag-body-viewport::-webkit-scrollbar-thumb) { background: var(--frc-190-red); border-radius: 6px; border: 2px solid var(--frc-190-black); }
   :global(.ag-body-viewport::-webkit-scrollbar-thumb:hover) { background: #e02200; }
 
-  .header-section { text-align: center; margin-bottom: 20px; }
-  .header-section h1 { color: var(--frc-190-red); font-size: 2.5rem; font-weight: 800; margin: 0 0 5px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); letter-spacing: 1px; }
-  .header-section .subtitle { color: var(--frc-190-black); font-size: 1rem; margin: 0; }
+  .page-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: 100vh; padding: 1rem; background: var(--wpi-gray); }
+  .header-section { text-align: center; margin-bottom: 1rem; }
+  .header-section h1 { color: var(--frc-190-red); font-size: 1.8rem; font-weight: 800; margin: 0 0 0.3rem; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); letter-spacing: 1px; }
+  .header-section .subtitle { color: var(--frc-190-black); font-size: 0.9rem; margin: 0; }
 
-  .controls { padding: 15px 25px; background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); color: white; font-size: 18px; display: flex; gap: 30px; align-items: center; justify-content: center; width: 80%; max-width: 1200px; border-radius: 10px; margin-bottom: 20px; border: 2px solid var(--frc-190-red); box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
-  .controls label { font-weight: 600; color: #fff; }
+  .controls { padding: 1rem; background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); color: white; font-size: 1rem; display: flex; gap: 1.5rem; align-items: center; justify-content: center; width: 100%; max-width: 1200px; border-radius: 10px; margin-bottom: 1rem; border: 2px solid var(--frc-190-red); box-shadow: 0 4px 15px rgba(0,0,0,0.3); flex-wrap: wrap; }
+  .controls label { font-weight: 600; color: #fff; font-size: 0.95rem; }
 
-  select { margin-left: 10px; padding: 8px 15px; background: linear-gradient(135deg, #333 0%, #444 100%); color: white; font-size: 16px; border: 2px solid var(--frc-190-red); border-radius: 6px; cursor: pointer; transition: all 0.3s ease; }
+  select { margin-left: 0.5rem; padding: 0.5rem 1rem; background: linear-gradient(135deg, #333 0%, #444 100%); color: white; font-size: 0.9rem; border: 2px solid var(--frc-190-red); border-radius: 6px; cursor: pointer; transition: all 0.3s ease; }
   select:hover { background: linear-gradient(135deg, #444 0%, #555 100%); border-color: #e02200; }
   select:focus { outline: none; box-shadow: 0 0 0 3px rgba(200, 27, 0, 0.4); }
 
-  .grid-wrapper { width: 80vw; display: flex; align-items: center; justify-content: center; gap: 20px; }
-  .grid-column { flex: 1; display: flex; flex-direction: column; gap: 20px; }
+  .grid-wrapper { width: 100%; max-width: 1400px; display: flex; align-items: flex-start; justify-content: center; gap: 1rem; flex-wrap: wrap; }
+  .grid-column { flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 1rem; }
   .team-box { display: flex; flex-direction: column; }
 
-  .team-label { margin: 0 0 10px; padding: 8px 15px; font-size: 1.2rem; font-weight: 700; text-align: center; border-radius: 6px 6px 0 0; text-shadow: 1px 1px 2px rgba(0,0,0,0.3); position: relative; height: 70px; width: 700px; display: flex; align-items: center; justify-content: center; }
-  .last-match-badge { position: absolute; top: 6px; left: 8px; background: rgba(0,0,0,0.45); color: #fff; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.03em; padding: 3px 8px; border-radius: 4px; line-height: 1.2; white-space: nowrap; pointer-events: none; }
+  .team-label { margin: 0 0 0.5rem; padding: 0.5rem 1rem; font-size: 1rem; font-weight: 700; text-align: center; border-radius: 6px 6px 0 0; text-shadow: 1px 1px 2px rgba(0,0,0,0.3); position: relative; height: auto; min-height: 50px; width: 100%; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; }
+  .last-match-badge { position: absolute; top: 0.3rem; left: 0.5rem; background: rgba(0,0,0,0.45); color: #fff; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.03em; padding: 0.2rem 0.5rem; border-radius: 4px; line-height: 1.2; white-space: nowrap; pointer-events: none; }
   .red-label  { background: var(--frc-190-red); color: white; }
   .blue-label { background: linear-gradient(135deg, #003d7a 0%, #0066cc 100%); color: white; }
 
-  .grid-container { width: 700px; background: var(--frc-190-black); border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.4); }
-  .opr-badge { margin-left: 10px; padding: 4px 10px; background: rgba(0,0,0,0.3); border-radius: 4px; font-size: 0.9rem; font-weight: 600; }
+  .grid-container { width: 100%; background: var(--frc-190-black); border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.4); overflow-x: auto; }
+  .opr-badge { margin-left: 0.5rem; padding: 0.2rem 0.75rem; background: rgba(0,0,0,0.3); border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
+
+  /* Tablet */
+  @media (max-width: 1024px) {
+    .page-wrapper { padding: 0.75rem; }
+    .header-section h1 { font-size: 1.5rem; }
+    .header-section .subtitle { font-size: 0.8rem; }
+    .controls { gap: 1rem; padding: 0.75rem; }
+    .grid-wrapper { gap: 0.75rem; }
+    .grid-column { min-width: 280px; }
+    .team-label { font-size: 0.9rem; min-height: 45px; padding: 0.4rem 0.8rem; }
+    .grid-container { border-radius: 6px; }
+  }
+
+  /* Mobile */
+  @media (max-width: 768px) {
+    .page-wrapper { padding: 0.5rem; }
+    .header-section { margin-bottom: 0.75rem; }
+    .header-section h1 { font-size: 1.2rem; margin-bottom: 0.2rem; }
+    .header-section .subtitle { font-size: 0.75rem; }
+    .controls { gap: 0.75rem; padding: 0.6rem; font-size: 0.85rem; flex-direction: column; }
+    .controls label { font-size: 0.8rem; }
+    select { margin-left: 0; margin-top: 0.3rem; padding: 0.4rem 0.8rem; font-size: 0.8rem; width: 100%; }
+    .grid-wrapper { flex-direction: column; gap: 0.5rem; }
+    .grid-column { min-width: auto; width: 100%; }
+    .team-label { font-size: 0.8rem; min-height: 40px; padding: 0.3rem 0.6rem; }
+    .last-match-badge { font-size: 0.6rem; padding: 0.15rem 0.4rem; }
+    .opr-badge { font-size: 0.7rem; margin-left: 0.25rem; padding: 0.15rem 0.5rem; }
+  }
+
+  /* Small Mobile */
+  @media (max-width: 480px) {
+    .page-wrapper { padding: 0.4rem; }
+    .header-section { margin-bottom: 0.5rem; }
+    .header-section h1 { font-size: 1rem; }
+    .header-section .subtitle { font-size: 0.7rem; }
+    .controls { gap: 0.5rem; padding: 0.5rem; font-size: 0.75rem; }
+    .controls label { font-size: 0.7rem; }
+    select { margin-left: 0; padding: 0.3rem 0.6rem; font-size: 0.7rem; }
+    .grid-wrapper { gap: 0.4rem; }
+    .team-label { font-size: 0.7rem; min-height: 35px; padding: 0.25rem 0.5rem; }
+    .last-match-badge { font-size: 0.55rem; padding: 0.1rem 0.3rem; }
+    .opr-badge { font-size: 0.65rem; margin-left: 0.2rem; }
+  }
 </style>

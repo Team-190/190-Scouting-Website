@@ -131,9 +131,9 @@
       <tbody>
         {#each tableData as row}
           <tr>
-            <td>{row.team}</td>
-            <td>{row.name}</td>
-            <td
+            <td data-label="Team #">{row.team}</td>
+            <td data-label="Team Name">{row.name}</td>
+            <td data-label="Rating"
               ><img
                 src={row.rating}
                 alt="Rating Emoji"
@@ -163,31 +163,64 @@
     margin: 0;
     padding: 0;
     background: var(--wpi-gray);
-    height: 100vh;
-    width: 100vw;
-    overflow-x: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   }
 
   :global(*) {
     box-sizing: border-box;
   }
 
+  .inputSection {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  label {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--frc-190-black);
+    margin-bottom: 0.5rem;
+    display: block;
+  }
+
+  select {
+    width: 100%;
+    max-width: 300px;
+    padding: 0.75rem;
+    border: 2px solid var(--frc-190-red);
+    background: #333;
+    color: white;
+    border-radius: 6px;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+
+  select:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(200, 27, 0, 0.2);
+  }
+
   button {
     cursor: pointer;
-    padding: 8px 16px;
+    padding: 0.75rem 1rem;
     border: 2px solid var(--frc-190-red);
     background: linear-gradient(135deg, #333 0%, #444 100%);
     color: white;
     font-weight: 600;
     border-radius: 6px;
     transition: all 0.2s;
+    font-size: 0.9rem;
   }
 
   button:hover {
     background: linear-gradient(135deg, #444 0%, #555 100%);
     border-color: #e02200;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
   }
 
   button:active {
@@ -200,18 +233,8 @@
     transform: none;
   }
 
-  select {
-    padding: 8px 12px;
-    border: 2px solid var(--frc-190-red);
-    background: #333;
-    color: white;
-    border-radius: 6px;
-    font-size: 14px;
-  }
-
-  select:focus {
-    outline: none;
-    box-shadow: 0 0 0 2px rgba(200, 27, 0, 0.4);
+  button img {
+    display: block;
   }
 
   .ratingSection {
@@ -219,21 +242,192 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-  }
-  .ratingButtonContainer {
-    display: flex;
-    gap: 10px;
-    margin-top: 10px;
+    gap: 1rem;
   }
 
-  table,
-  th,
-  td {
-    margin-top: 10px;
-    border: solid #642a75;
-    color: var(--dark-bg);
-    background-color: white;
+  .ratingSection p {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--frc-190-black);
+    margin: 0;
+  }
+
+  .ratingButtonContainer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    justify-content: center;
+  }
+
+  .ratingButtonContainer button {
+    padding: 0.5rem;
+    min-width: 50px;
+  }
+
+  .ratingButtonContainer img {
+    width: 40px;
+    height: 40px;
+    pointer-events: none;
+  }
+
+  /* Desktop Table */
+  table {
+    width: 100%;
+    margin-top: 1.5rem;
     border-collapse: collapse;
-    padding: 10px;
+    background-color: white;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  thead {
+    background-color: var(--frc-190-red);
+    color: white;
+    font-weight: 600;
+  }
+
+  th {
+    padding: 1rem;
+    text-align: left;
+    border: none;
+    font-size: 0.95rem;
+  }
+
+  td {
+    padding: 0.75rem 1rem;
+    border: 1px solid #e0e0e0;
+    color: var(--dark-bg);
+    font-size: 0.9rem;
+  }
+
+  tbody tr:hover {
+    background-color: #f5f5f5;
+  }
+
+  td img {
+    width: 40px;
+    height: 40px;
+  }
+
+  /* Mobile Responsive */
+  @media (max-width: 768px) {
+    .inputSection {
+      padding: 1rem 0.75rem;
+    }
+
+    label {
+      font-size: 0.95rem;
+    }
+
+    select {
+      max-width: 100%;
+      font-size: 1rem;
+    }
+
+    .ratingSection p {
+      font-size: 1rem;
+    }
+
+    .ratingButtonContainer {
+      gap: 0.5rem;
+    }
+
+    .ratingButtonContainer button {
+      min-width: 45px;
+      padding: 0.4rem;
+    }
+
+    .ratingButtonContainer img {
+      width: 35px;
+      height: 35px;
+    }
+
+    /* Card layout for tables on mobile */
+    table,
+    thead,
+    tbody,
+    th,
+    td,
+    tr {
+      display: block;
+      border: none;
+    }
+
+    table {
+      margin-top: 1rem;
+    }
+
+    thead {
+      display: none;
+    }
+
+    tr {
+      background-color: white;
+      margin-bottom: 1rem;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    td {
+      padding: 0.75rem;
+      border: none;
+      padding-left: 40%;
+      position: relative;
+    }
+
+    td::before {
+      content: attr(data-label);
+      position: absolute;
+      left: 0.75rem;
+      font-weight: 600;
+      color: var(--frc-190-red);
+      width: 35%;
+    }
+
+    td img {
+      width: 35px;
+      height: 35px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .inputSection {
+      padding: 0.75rem;
+      gap: 1rem;
+    }
+
+    label {
+      font-size: 0.9rem;
+    }
+
+    .ratingButtonContainer {
+      gap: 0.4rem;
+    }
+
+    .ratingButtonContainer button {
+      min-width: 40px;
+      padding: 0.3rem;
+    }
+
+    .ratingButtonContainer img {
+      width: 30px;
+      height: 30px;
+    }
+
+    td {
+      padding: 0.5rem 0.5rem 0.5rem 40%;
+      font-size: 0.85rem;
+    }
+
+    td::before {
+      font-size: 0.8rem;
+    }
+
+    td img {
+      width: 30px;
+      height: 30px;
+    }
   }
 </style>

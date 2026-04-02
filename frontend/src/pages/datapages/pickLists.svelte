@@ -1551,13 +1551,14 @@
 
   button {
     cursor: pointer;
-    padding: 8px 16px;
+    padding: 0.6rem 1.2rem;
     border: 2px solid var(--frc-190-red);
     background: linear-gradient(135deg, #333 0%, #444 100%);
     color: white;
     font-weight: 600;
     border-radius: 6px;
     transition: all 0.2s;
+    font-size: 0.9rem;
   }
   button:hover {
     background: linear-gradient(135deg, #444 0%, #555 100%);
@@ -1577,12 +1578,12 @@
   input[type="text"],
   textarea,
   select {
-    padding: 8px 12px;
+    padding: 0.6rem 0.9rem;
     border: 2px solid var(--frc-190-red);
     background: #333;
     color: white;
     border-radius: 6px;
-    font-size: 14px;
+    font-size: 0.9rem;
   }
   input[type="text"]:focus,
   textarea:focus,
@@ -1595,20 +1596,20 @@
     display: flex;
     flex-direction: column;
     min-height: 100vh;
-    padding-bottom: 80px;
+    padding-bottom: 5rem;
     background: var(--wpi-gray);
   }
 
   .header-section {
     text-align: center;
-    padding: 10px 0;
-    margin-bottom: 10px;
+    padding: 1rem 0;
+    margin-bottom: 0.5rem;
   }
   .header-section h1 {
     color: var(--frc-190-red);
-    font-size: 2.5rem;
+    font-size: 2rem;
     font-weight: 800;
-    margin: 0 0 5px 0;
+    margin: 0 0 0.3rem 0;
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
     letter-spacing: 1px;
   }
@@ -1616,21 +1617,23 @@
   .top-controls {
     width: 100%;
     background: var(--dark-bg);
-    padding: 10px 15px;
+    padding: 0.75rem 1rem;
     border-top: 2px solid var(--frc-190-red);
     border-bottom: 2px solid var(--frc-190-red);
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-    margin-bottom: 5px;
+    margin-bottom: 0.3rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 20px;
+    gap: 1rem;
     color: white;
+    flex-wrap: wrap;
   }
   .top-left-group {
     display: flex;
     align-items: center;
-    gap: 20px;
+    gap: 1rem;
+    flex-wrap: wrap;
   }
 
   .tabs {
@@ -1644,8 +1647,8 @@
     border: none;
     background: #222;
     color: #aaa;
-    padding: 10px 20px;
-    font-size: 16px;
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
   }
   .tabs button:hover {
     background: #333;
@@ -1659,11 +1662,117 @@
     font-weight: bold;
   }
 
+  /* Tablet Responsive */
+  @media (max-width: 1024px) {
+    .header-section h1 { font-size: 1.5rem; }
+    .team-list-container { width: 240px; }
+    .picklist, .alliance-list { min-height: 280px; }
+    .alliances-container { grid-template-columns: repeat(2, 1fr); gap: 0.4rem; }
+    .container { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; }
+  }
+
+  /* Mobile Responsive */
+  @media (max-width: 768px) {
+    .page-wrapper { padding-bottom: 6rem; }
+    .header-section { padding: 0.75rem 0; margin-bottom: 0.3rem; }
+    .header-section h1 { font-size: 1.2rem; }
+    .top-controls {
+      padding: 0.5rem 0.75rem;
+      gap: 0.5rem;
+    }
+    .top-left-group { gap: 0.5rem; }
+    .tabs button { padding: 0.5rem 0.75rem; font-size: 0.8rem; }
+    
+    .main-content {
+      flex-direction: column;
+      padding: 0 0.3rem;
+    }
+    .team-list-container {
+      width: 100%;
+      height: auto;
+      max-height: 200px;
+      position: static;
+      margin-bottom: 1rem;
+    }
+    .team-list { padding: 0.5rem; }
+    
+    .view-container { min-height: 0; }
+    .picklist-view { height: auto; max-height: 60vh; padding-right: 0.5rem; }
+    
+    .container {
+      grid-template-columns: 1fr;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .picklist, .alliance-list { min-height: 250px; }
+    
+    .alliance-controls { margin-bottom: 1rem; padding: 0.75rem; }
+    .alliances-container { 
+      grid-template-columns: 1fr;
+      gap: 0.4rem;
+    }
+    
+    .picklists-sidebar {
+      width: 100%;
+      height: auto;
+      max-height: 150px;
+      position: static;
+      margin-bottom: 1rem;
+    }
+    .picklists-scroll { padding: 0.5rem; }
+    
+    .share-container {
+      flex-direction: column;
+      gap: 1rem;
+      padding: 1rem;
+    }
+    .share-controls { min-width: auto; }
+    
+    .bottom-bar {
+      padding: 0.75rem 1rem;
+      overflow-x: auto;
+    }
+    .alliance-management { gap: 0.75rem; padding: 0.6rem 1rem; }
+    .current-selection-display { font-size: 0.85rem; }
+    
+    .fixed-buttons {
+      bottom: 5rem;
+      right: 1rem;
+      gap: 0.5rem;
+    }
+  }
+
+  /* Small Mobile */
+  @media (max-width: 480px) {
+    .page-wrapper { padding-bottom: 5.5rem; }
+    .header-section h1 { font-size: 1rem; }
+    .top-controls { 
+      padding: 0.4rem 0.5rem;
+      gap: 0.3rem;
+    }
+    .top-left-group { gap: 0.3rem; }
+    button { padding: 0.5rem 0.8rem; font-size: 0.8rem; }
+    input[type="text"], textarea, select { padding: 0.5rem 0.7rem; font-size: 0.8rem; }
+    
+    .team-list-container { max-height: 150px; }
+    .container { grid-template-columns: 1fr; gap: 0.8rem; margin-top: 0.8rem; }
+    .picklist, .alliance-list { min-height: 220px; }
+    .alliances-container { grid-template-columns: 1fr; gap: 0.3rem; }
+    
+    .share-container { margin-top: 1.5rem; padding: 0.75rem; gap: 0.75rem; }
+    .bottom-bar { padding: 0.5rem 0.75rem; }
+    .alliance-management { padding: 0.5rem 0.75rem; gap: 0.5rem; }
+    .current-selection-display { font-size: 0.75rem; }
+    
+    .fixed-buttons { bottom: 4.75rem; right: 0.75rem; }
+  }
+
   .main-content {
     display: flex;
     width: 100%;
-    gap: 5px;
+    gap: 0.3rem;
     align-items: flex-start;
+    padding: 0 0.5rem;
   }
 
   .team-list-container {
@@ -1675,7 +1784,7 @@
     flex-direction: column;
     height: calc(100vh - 120px);
     position: sticky;
-    top: 20px;
+    top: 1rem;
     align-self: flex-start;
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
   }
@@ -1683,15 +1792,15 @@
     background: var(--frc-190-red);
     color: white;
     margin: 0;
-    padding: 10px;
+    padding: 0.75rem;
     text-align: center;
-    font-size: 1.2rem;
+    font-size: 1rem;
     flex-shrink: 0;
   }
   .team-list {
     flex: 1;
     overflow-y: auto;
-    padding: 10px;
+    padding: 0.75rem;
     min-height: 0;
   }
 
@@ -1703,15 +1812,15 @@
   .picklist-view {
     height: 75vh;
     overflow-y: auto;
-    padding-right: 10px;
-    padding-bottom: 20px;
+    padding-right: 0.75rem;
+    padding-bottom: 1.25rem;
   }
 
   .container {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 20px;
-    margin-top: 20px;
+    gap: 1.25rem;
+    margin-top: 1.25rem;
   }
 
   .picklist,
@@ -1721,7 +1830,7 @@
     border-radius: 8px;
     display: flex;
     flex-direction: column;
-    min-height: 400px;
+    min-height: 300px;
     overflow: hidden;
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
   }
@@ -1730,11 +1839,12 @@
     background: var(--frc-190-red);
     color: white;
     margin: 0;
-    padding: 10px;
-    font-size: 1.1rem;
+    padding: 0.75rem;
+    font-size: 0.95rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
   }
   .picklist h2 input {
     background: rgba(0, 0, 0, 0.2);
@@ -1745,7 +1855,7 @@
   .picklist .list,
   .alliance-list .list {
     flex: 1;
-    padding: 10px;
+    padding: 0.75rem;
     background: #252525;
   }
 
@@ -1823,22 +1933,22 @@
     height: calc(100vh - 120px);
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
     position: sticky;
-    top: 20px;
+    top: 1rem;
     align-self: flex-start;
   }
   .picklists-sidebar h2 {
     background: var(--frc-190-red);
     color: white;
     margin: 0;
-    padding: 10px;
+    padding: 0.75rem;
     text-align: center;
-    font-size: 1.2rem;
+    font-size: 0.95rem;
     flex-shrink: 0;
   }
   .picklists-scroll {
     flex: 1;
     overflow-y: auto;
-    padding: 10px;
+    padding: 0.75rem;
     min-height: 0;
   }
 
@@ -1846,33 +1956,33 @@
     background: #252525;
     border: 1px solid #333;
     border-radius: 6px;
-    margin-bottom: 15px;
+    margin-bottom: 1rem;
     overflow: hidden;
   }
   .sidebar-picklist h3 {
     background: #2d2d2d;
     color: var(--frc-190-red);
     margin: 0;
-    padding: 8px 12px;
-    font-size: 1rem;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.9rem;
     border-bottom: 1px solid #333;
   }
   .sidebar-list {
-    padding: 5px;
+    padding: 0.4rem;
   }
   .sidebar-team {
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 3px;
+    padding: 0.25rem;
     background: #1a1a1a;
     border: 1px solid #333;
     border-radius: 4px;
-    margin-bottom: 2px;
+    margin-bottom: 0.15rem;
     color: white;
     cursor: grab;
     transition: all 0.15s;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     font-weight: bold;
   }
   .sidebar-team.picked {
@@ -1882,7 +1992,7 @@
   .sidebar-team:hover {
     background: #222;
     border-color: var(--frc-190-red);
-    transform: translateX(2px);
+    transform: translateX(1px);
   }
   .sidebar-team:active {
     cursor: grabbing;
@@ -1895,20 +2005,23 @@
     width: 100%;
     background: #151515;
     border-top: 2px solid var(--frc-190-red);
-    padding: 15px 30px;
+    padding: 1rem 1.5rem;
     z-index: 100;
     display: flex;
     justify-content: center;
     box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.3);
+    overflow-x: auto;
   }
   .alliance-management {
     background: #222;
-    padding: 10px 20px;
+    padding: 0.75rem 1.25rem;
     border-radius: 50px;
     display: flex;
     align-items: center;
-    gap: 15px;
+    gap: 1rem;
     border: 1px solid #444;
+    flex-wrap: wrap;
+    justify-content: center;
   }
   .alliance-management input {
     border-radius: 20px;
@@ -1916,7 +2029,7 @@
   .current-selection-display {
     color: var(--frc-190-red);
     font-weight: bold;
-    font-size: 1.1rem;
+    font-size: 0.95rem;
   }
 
   :global(::-webkit-scrollbar) {
@@ -1954,6 +2067,111 @@
 
   .banner-error {
       background-color: #f44336;
+  }
+
+  /* Tablet Responsive */
+  @media (max-width: 1024px) {
+    .header-section h1 { font-size: 1.5rem; }
+    .team-list-container { width: 240px; }
+    .picklist, .alliance-list { min-height: 280px; }
+    .alliances-container { grid-template-columns: repeat(2, 1fr); gap: 0.4rem; }
+    .container { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; }
+  }
+
+  /* Mobile Responsive */
+  @media (max-width: 768px) {
+    .page-wrapper { padding-bottom: 6rem; }
+    .header-section { padding: 0.75rem 0; margin-bottom: 0.3rem; }
+    .header-section h1 { font-size: 1.2rem; }
+    .top-controls {
+      padding: 0.5rem 0.75rem;
+      gap: 0.5rem;
+    }
+    .top-left-group { gap: 0.5rem; }
+    .tabs button { padding: 0.5rem 0.75rem; font-size: 0.8rem; }
+    
+    .main-content {
+      flex-direction: column;
+      padding: 0 0.3rem;
+    }
+    .team-list-container {
+      width: 100%;
+      height: auto;
+      max-height: 200px;
+      position: static;
+      margin-bottom: 1rem;
+    }
+    .team-list { padding: 0.5rem; }
+    
+    .view-container { min-height: 0; }
+    .picklist-view { height: auto; max-height: 60vh; padding-right: 0.5rem; }
+    
+    .container {
+      grid-template-columns: 1fr;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .picklist, .alliance-list { min-height: 250px; }
+    
+    .alliance-controls { margin-bottom: 1rem; padding: 0.75rem; }
+    .alliances-container { 
+      grid-template-columns: 1fr;
+      gap: 0.4rem;
+    }
+    
+    .picklists-sidebar {
+      width: 100%;
+      height: auto;
+      max-height: 150px;
+      position: static;
+      margin-bottom: 1rem;
+    }
+    .picklists-scroll { padding: 0.5rem; }
+    
+    .share-container {
+      flex-direction: column;
+      gap: 1rem;
+      padding: 1rem;
+    }
+    .share-controls { min-width: auto; }
+    
+    .bottom-bar {
+      padding: 0.75rem 1rem;
+      overflow-x: auto;
+    }
+    .alliance-management { gap: 0.75rem; padding: 0.6rem 1rem; }
+    .current-selection-display { font-size: 0.85rem; }
+    
+    .fixed-buttons {
+      bottom: 5rem;
+      right: 1rem;
+      gap: 0.5rem;
+    }
+  }
+
+  /* Small Mobile */
+  @media (max-width: 480px) {
+    .page-wrapper { padding-bottom: 5.5rem; }
+    .header-section h1 { font-size: 1rem; }
+    .top-controls { 
+      padding: 0.4rem 0.5rem;
+      gap: 0.3rem;
+    }
+    .top-left-group { gap: 0.3rem; }
+    button { padding: 0.5rem 0.8rem; font-size: 0.8rem; }
+    input[type="text"], textarea, select { padding: 0.5rem 0.7rem; font-size: 0.8rem; }
+    
+    .team-list-container { max-height: 150px; }
+    .container { grid-template-columns: 1fr; gap: 0.8rem; margin-top: 0.8rem; }
+    .picklist, .alliance-list { min-height: 220px; }
+    .alliances-container { grid-template-columns: 1fr; gap: 0.3rem; }
+    
+    .share-container { margin-top: 1.5rem; padding: 0.75rem; gap: 0.75rem; }
+    .bottom-bar { padding: 0.5rem 0.75rem; }
+    .alliance-management { padding: 0.5rem 0.75rem; gap: 0.5rem; }
+    .current-selection-display { font-size: 0.75rem; }
+    
+    .fixed-buttons { bottom: 4.75rem; right: 0.75rem; }
   }
 
 </style>

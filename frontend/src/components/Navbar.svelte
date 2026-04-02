@@ -10,14 +10,30 @@
 
   let alliancesAvailable = false;
   let elimsStarted = false;
+  let expandedMenu = null;
+  let isHovering = false;
+  let isPinnedOpen = false;
 
   function toggleSidebar() {
-    isSidebarOpen.update((val) => !val);
+    if ($isSidebarOpen) {
+      isPinnedOpen = false;
+      isSidebarOpen.set(false);
+    } else {
+      isPinnedOpen = true;
+      isSidebarOpen.set(true);
+    }
   }
 
   function navigate(path) {
     goto(path);
-    isSidebarOpen.set(false);
+    if ($isSidebarOpen) {
+      toggleSidebar();
+    }
+    expandedMenu = null;
+  }
+
+  function toggleMenu(menuName) {
+    expandedMenu = expandedMenu === menuName ? null : menuName;
   }
 
   async function checkAlliances() {
@@ -46,7 +62,7 @@
   });
 </script>
 
-<nav class="navbar" class:collapsed={!$isSidebarOpen}>
+<nav class="navbar" class:collapsed={!$isSidebarOpen && !isHovering} on:mouseenter={() => { isHovering = true; isSidebarOpen.set(true); }} on:mouseleave={() => { isHovering = false; isSidebarOpen.set(isPinnedOpen); }}>
   <button class="toggle-btn" on:click={toggleSidebar} aria-label="Toggle sidebar">
     <span class="toggle-icon" class:rotated={$isSidebarOpen}></span>
   </button>
@@ -56,30 +72,78 @@
       <img src={logo} alt="FRC 190 Logo" class="logo" />
     </div>
 
-    <div class="nav-links" class:disabled={!$isSidebarOpen}>
-      <button on:click={() => navigate("/pickLists")} disabled={!$isSidebarOpen}>
+    <div class="nav-links" class:disabled={!($isSidebarOpen || isHovering)}>
+      <!-- Data Collection Dropdown -->
+      <div class="dropdown" class:disabled={!($isSidebarOpen || isHovering)}>
+        <button 
+          class="dropdown-toggle" 
+          on:click={() => toggleMenu('dataCollection')}
+          disabled={!($isSidebarOpen || isHovering)}
+        >
+          <span class="label">Data Collection</span>
+          <span class="dropdown-arrow" class:expanded={expandedMenu === 'dataCollection'}>▼</span>
+        </button>
+        {#if expandedMenu === 'dataCollection' && $isSidebarOpen}
+          <div class="dropdown-menu">
+            <button on:click={() => navigate("/pitScouting")} class="dropdown-item">
+              Pit Scouting
+            </button>
+            <button on:click={() => navigate("/qualPage")} class="dropdown-item">
+              Qual Scouting
+            </button>
+          </div>
+        {/if}
+      </div>
+      
+      <!-- Ratings Dropdown -->
+      <div class="dropdown" class:disabled={!($isSidebarOpen || isHovering)}>
+        <button 
+          class="dropdown-toggle" 
+          on:click={() => toggleMenu('ratings')}
+          disabled={!($isSidebarOpen || isHovering)}
+        >
+          <span class="label">Ratings</span>
+          <span class="dropdown-arrow" class:expanded={expandedMenu === 'ratings'}>▼</span>
+        </button>
+        {#if expandedMenu === 'ratings' && $isSidebarOpen}
+          <div class="dropdown-menu">
+            <button on:click={() => navigate("/gracePage")} class="dropdown-item">
+              Grace Page
+            </button>
+            <button on:click={() => navigate("/ananthPage")} class="dropdown-item">
+              Ananth Page
+            </button>
+          </div>
+        {/if}
+      </div>
+      
+      <!-- View Data Dropdown -->
+      <div class="dropdown" class:disabled={!($isSidebarOpen || isHovering)}>
+        <button 
+          class="dropdown-toggle" 
+          on:click={() => toggleMenu('viewData')}
+          disabled={!($isSidebarOpen || isHovering)}
+        >
+          <span class="label">View Data</span>
+          <span class="dropdown-arrow" class:expanded={expandedMenu === 'viewData'}>▼</span>
+        </button>
+        {#if expandedMenu === 'viewData' && $isSidebarOpen}
+          <div class="dropdown-menu">
+            <button on:click={() => navigate("/singleMetric")} class="dropdown-item">
+              Event View
+            </button>
+            <button on:click={() => navigate("/teamView")} class="dropdown-item">
+              Team View
+            </button>
+            <button on:click={() => navigate("/matchPreview")} class="dropdown-item">
+              Match Preview
+            </button>
+          </div>
+        {/if}
+      </div>
+      
+      <button on:click={() => navigate("/pickLists")} disabled={!($isSidebarOpen || isHovering)}>
         <span class="label">Pick Lists</span>
-      </button>
-      <button on:click={() => navigate("/singleMetric")} disabled={!$isSidebarOpen}>
-        <span class="label">Event View</span>
-      </button>
-      <button on:click={() => navigate("/teamView")} disabled={!$isSidebarOpen}>
-        <span class="label">Team View</span>
-      </button>
-      <button on:click={() => navigate("/pitScouting")} disabled={!$isSidebarOpen}>
-        <span class="label">Pit Scouting</span>
-      </button>
-      <button on:click={() => navigate("/gracePage")} disabled={!$isSidebarOpen}>
-        <span class="label">Grace Page</span>
-      </button>
-      <button on:click={() => navigate("/ananthPage")} disabled={!$isSidebarOpen}>
-        <span class="label">Ananth Page</span>
-      </button>
-      <button on:click={() => navigate("/matchPreview")} disabled={!$isSidebarOpen}>
-        <span class="label">Match Preview</span>
-      </button>
-      <button on:click={() => navigate("/qualPage")} disabled={!$isSidebarOpen}>
-        <span class="label">Qual Scouting</span>
       </button>
 
       {#if alliancesAvailable}
@@ -317,10 +381,106 @@
   .nav-links button:disabled {
     cursor: not-allowed;
     pointer-events: none;
+    opacity: 0.75;
   }
 
   .navbar.collapsed .nav-links button {
     color: #777;
+  }
+
+  /* ── Dropdown styles ── */
+  .dropdown {
+    position: relative;
+  }
+
+  .dropdown-toggle {
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 1rem;
+    transition: background-color 0.2s, opacity 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-size: 1rem;
+    white-space: nowrap;
+    text-align: left;
+    font-family: inherit;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .dropdown-toggle:hover {
+    background-color: #555;
+  }
+
+  .dropdown-toggle:active {
+    background-color: #666;
+  }
+
+  .dropdown-toggle:disabled {
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  .dropdown-arrow {
+    flex-shrink: 0;
+    transition: transform 0.2s;
+    font-size: 0.75rem;
+    margin-left: auto;
+  }
+
+  .dropdown-arrow.expanded {
+    transform: rotate(180deg);
+  }
+
+  .dropdown-menu {
+    background-color: #222;
+    border-left: 3px solid #c81b00;
+    padding: 0;
+    margin: 0;
+    animation: slideDown 0.2s ease-out;
+  }
+
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .dropdown-item {
+    background: none;
+    border: none;
+    color: #ccc;
+    cursor: pointer;
+    padding: 0.75rem 1rem 0.75rem 2rem;
+    width: 100%;
+    text-align: left;
+    font-size: 0.95rem;
+    font-family: inherit;
+    transition: all 0.2s;
+    display: block;
+  }
+
+  .dropdown-item:hover {
+    background-color: #444;
+    color: white;
+    padding-left: 2.5rem;
+  }
+
+  .dropdown-item:active {
+    background-color: #555;
+  }
+
+  .dropdown.disabled {
+    opacity: 0.5;
   }
 
   /* ── Madness wrapper ── */
