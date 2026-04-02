@@ -1,231 +1,299 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { fetchTeams, fetchQualitativeScouting, fetchPitScouting } from "../../utils/api.js";
+  import {
+    fetchTeams,
+    fetchQualitativeScouting,
+    fetchPitScouting,
+  } from "../../utils/api.js";
   import { getEventCode } from "../../utils/pageUtils.js";
 
-  // ─── State ────────────────────────────────────────────────────────────────────
-
-  const eventCode = getEventCode();
-  let isLoading = false;
+  //vars
+  let eventCode = getEventCode();
+  let isLoading = true;
   let teamsMap: Map<number, string> = new Map();
+  let teamNumbers: number[] = [];
+  let qualDataByTeam: Record<string, any[]> = {};
+  let pitDataByTeam: Record<string, any> = {};
 
-  let allTeamData: {
-    teamNumber: number;
-    teamName: string;
-    qualData: any[];
-    pitData: any;
-  }[] = [];
-
-  // ─── Data Helpers — same logic as TeamView ────────────────────────────────────
-
-  function getQualDataForTeam(teamNumber: number): any[] {
-    const stored = localStorage.getItem("retrieveQual");
-    const qualData = stored ? JSON.parse(stored) : {};
-    const teamKey = String(teamNumber).replace(/\D/g, "");
-    const teamMatches = qualData[teamKey];
-    if (!teamMatches) return [];
-    return Object.values(teamMatches).sort(
-      (a: any, b: any) => a.Match - b.Match,
-    );
+  //functions
+  function capabilityIcon(val: any): string {
+    if (val === "Y" || val === true || val === "Yes") return "✓";
+    if (val === "N" || val === false || val === "No") return "✗";
+    return String(val ?? "—");
   }
 
-  function getPitDataForTeam(teamNumber: number): any {
-    const stored = localStorage.getItem("retrievePit");
-    const pitScouting = stored ? JSON.parse(stored) : {};
-    return pitScouting[String(teamNumber)] ?? null;
+  function capabilityClass(val: any): string {
+    if (val === "Y" || val === true || val === "Yes") return "cap-yes";
+    if (val === "N" || val === false || val === "No") return "cap-no";
+    return "cap-neutral";
   }
 
   // ─── Mount ────────────────────────────────────────────────────────────────────
   onMount(async () => {
-  isLoading = true;
-  try {
-    // ── Fetch and store qual/pit data from the server first ──
-    if (eventCode) {
-  console.log("Using eventCode:", eventCode);
+    isLoading = true;
+    try {
+      const teamsResult = await fetchTeams(eventCode);
+      teamsMap = new Map(
+        Object.entries(teamsResult._teams).map(([k, v]) => [
+          Number(k),
+          v as string,
+        ]),
+      );
+      teamNumbers = teamsResult._teamNumbers as number[];
 
-  const [qualRes, pitRes] = await Promise.all([
-    fetchQualitativeScouting(eventCode),
-    fetchPitScouting(eventCode),
-  ]);
+      const localPitStr = localStorage.getItem("retrievePit");
+      const localPit = localPitStr ? JSON.parse(localPitStr) : {};
+      const pitTeams = Object.keys(localPit);
 
-  console.log("qual response status:", qualRes.status, qualRes.url);
-  console.log("pit response status:",  pitRes.status,  pitRes.url);
+      const localQualStr = localStorage.getItem("retrieveQual");
+      const localQual = localQualStr ? JSON.parse(localQualStr) : {};
+      const localCounts: Record<string, Record<string, number>> = {};
+      for (const [team, matches] of Object.entries(localQual)) {
+        localCounts[team] = {};
+        for (const matchKey of Object.keys(matches as object)) {
+          localCounts[team][matchKey] = 1;
+        }
+      }
+      console.log("localQual:", localQual);
+      console.log("localPit:", localPit);
+      console.log("eventCode:", eventCode);
+      const qualResponse = await fetchQualitativeScouting(
+        eventCode,
+        localCounts,
+      );
+      //skibidi data go to data
+      const qualRaw = await qualResponse.json();
+      console.log("Qual raw:", qualRaw);
 
-  const qualJson = await qualRes.json();
-  const pitJson  = await pitRes.json();
+      const pitResponse = await fetchPitScouting(eventCode, pitTeams);
+      const pitRaw = await pitResponse.json();
+      console.log("Pit raw:", pitRaw);
 
-  console.log("qualJson raw:", qualJson);
-  console.log("pitJson raw:",  pitJson);}
-
-    let teamNumbers: number[] = [];
-
-      if (eventCode) {
-        try {
-          const result = await fetchTeams(eventCode);
-          teamsMap = new Map(
-            Object.entries(result._teams).map(([k, v]) => [
-              Number(k),
-              v as string,
-            ]),
-          );
-          teamNumbers = result._teamNumbers;
-        } catch (e) {
-          console.error(
-            "Failed to fetch teams from API, falling back to localStorage:",
-            e,
-          );
+      for (const [team, matches] of Object.entries(localQual)) {
+        for (const [matchKey, matchData] of Object.entries(
+          matches as Record<string, any>,
+        )) {
+          if (!qualRaw[team]) qualRaw[team] = {};
+          if (!qualRaw[team][matchKey]) {
+            qualRaw[team][matchKey] = matchData;
+          }
         }
       }
 
-      // Fallback: derive team list from retrieveQual / retrievePit if API failed
-      if (teamNumbers.length === 0) {
-        const qualStored = localStorage.getItem("retrieveQual");
-        const pitStored = localStorage.getItem("retrievePit");
-        const qualKeys = qualStored ? Object.keys(JSON.parse(qualStored)) : [];
-        const pitKeys = pitStored ? Object.keys(JSON.parse(pitStored)) : [];
-        const combined = new Set(
-          [...qualKeys, ...pitKeys].map(Number).filter((n) => !isNaN(n)),
-        );
-        teamNumbers = Array.from(combined).sort((a, b) => a - b);
+      if (Array.isArray(qualRaw)) {
+        for (const row of qualRaw) {
+          const key = String(row.Team ?? row.team ?? "");
+          if (!key) continue;
+          if (!qualDataByTeam[key]) qualDataByTeam[key] = [];
+          qualDataByTeam[key].push(row);
+        }
+      } else if (qualRaw && typeof qualRaw === "object") {
+        for (const [teamKey, val] of Object.entries(qualRaw)) {
+          if (Array.isArray(val)) {
+            qualDataByTeam[teamKey] = (val as any[]).sort(
+              (a, b) =>
+                Number(a.Match ?? a.match ?? 0) -
+                Number(b.Match ?? b.match ?? 0),
+            );
+          } else if (val && typeof val === "object") {
+            qualDataByTeam[teamKey] = Object.entries(val as Record<string, any>)
+              .map(([matchNum, matchData]) => ({
+                Match: matchNum,
+                ...(matchData as object),
+              }))
+              .sort((a, b) => Number(a.Match) - Number(b.Match));
+          }
+        }
       }
 
-      allTeamData = teamNumbers.map((teamNumber) => ({
-        teamNumber,
-        teamName: teamsMap.get(teamNumber) ?? "",
-        qualData: getQualDataForTeam(teamNumber),
-        pitData: getPitDataForTeam(teamNumber),
-      }));
-      // Only keep teams that have at least some data
-      allTeamData = allTeamData.filter(
-        (t) => t.qualData.length > 0 || t.pitData !== null,
-      );
+      for (const [teamKey, pitInfo] of Object.entries(localPit)) {
+        if (!pitRaw[teamKey]) pitRaw[teamKey] = pitInfo;
+      }
+
+      if (Array.isArray(pitRaw)) {
+        for (const row of pitRaw) {
+          const key = String(row.Team ?? row.team ?? "");
+          if (key) pitDataByTeam[key] = row;
+        }
+      } else if (pitRaw && typeof pitRaw === "object") {
+        for (const [teamKey, val] of Object.entries(pitRaw)) {
+          pitDataByTeam[teamKey] = val;
+        }
+      }
+
+      qualDataByTeam = { ...qualDataByTeam };
+      pitDataByTeam = { ...pitDataByTeam };
+    } catch (error) {
+      console.error("Error fetching scouting data:", error);
     } finally {
       isLoading = false;
     }
   });
+
+  $: teamsWithData = teamNumbers.filter(
+    (t) => qualDataByTeam[t]?.length > 0 || !!pitDataByTeam[t],
+  );
 </script>
 
 <!-- ─── Template ──────────────────────────────────────────────────────────────── -->
 
 {#if isLoading}
-  <div class="loading-spinner-overlay">
-    <div class="loading-spinner"></div>
+  <div class="loading-overlay">
+    <div class="spinner"></div>
+    <span class="loading-text">Loading scouting data…</span>
   </div>
 {/if}
 
 <div class="page-wrapper">
   <div class="header-section">
-    <h1>Pit & Qualitative Scouting</h1>
-    <p class="subtitle">FRC Team 190 — All Teams</p>
+    <h1>Qualitative Scouting</h1>
+    <p class="subtitle">FRC Team 190 — Pit & Qualitative Data</p>
   </div>
 
-  {#if !isLoading && allTeamData.length === 0}
-    <div class="empty-state">
-      <span class="empty-icon">📋</span>
-      <p>No scouting data found. Make sure data has been synced.</p>
-    </div>
-  {/if}
-
-  {#each allTeamData as team (team.teamNumber)}
-    <div class="team-row">
-      <!-- Team header -->
-      <div class="team-header">
-        <span class="team-number">#{team.teamNumber}</span>
-        {#if team.teamName}
-          <span class="team-name">{team.teamName}</span>
-        {/if}
+  {#if !isLoading}
+    {#if teamsWithData.length === 0}
+      <div class="empty-state">
+        <span class="empty-icon">📋</span>
+        <p>No scouting data found.</p>
       </div>
-
-      <div class="team-content">
-        <!-- Pit Scouting -->
-        {#if team.pitData}
-          <div class="pit-block">
-            <h3 class="block-title">Pit Scouting</h3>
-            <div class="pit-grid">
-              <div class="pit-card">
-                <div class="card-header">Robot Info</div>
-                {#each [["Frame Size", team.pitData.framesize], ["Starting Height", team.pitData.startingHeight], ["Full Extension Height", team.pitData.fullExtensionHeight], ["Balls in Hopper", team.pitData.quantityBallsHopper]] as [label, value]}
-                  {#if value}
-                    <div class="data-row">
-                      <span class="data-label">{label}</span>
-                      <span class="data-value">{value}</span>
-                    </div>
-                  {/if}
-                {/each}
+    {:else}
+      <div class="teams-grid">
+        {#each teamsWithData as team}
+          {@const teamName = teamsMap.get(team)}
+          {@const qual = qualDataByTeam[team] ?? []}
+          {@const pit = pitDataByTeam[team]}
+          <div class="team-card">
+            <!-- Card Header -->
+            <div class="card-header">
+              <div class="team-identity">
+                <span class="team-number">{team}</span>
+                {#if teamName}
+                  <span class="team-name">{teamName}</span>
+                {/if}
               </div>
-
-              <div class="pit-card">
-                <div class="card-header">Performance</div>
-                {#each [["Avg Intake Speed", team.pitData.avgIntakeSpeed], ["Avg Shoot Speed", team.pitData.avgShootSpeed], ["Accuracy", team.pitData.accuracy], ["Climb Levels", team.pitData.climbLevels]] as [label, value]}
-                  {#if value}
-                    <div class="data-row">
-                      <span class="data-label">{label}</span>
-                      <span class="data-value">{value}</span>
-                    </div>
-                  {/if}
-                {/each}
-              </div>
-
-              <div class="pit-card">
-                <div class="card-header">Capabilities</div>
-                {#each [["Over Bump", team.pitData.overBump], ["Through Trench", team.pitData.throughTrench], ["Climb During Auto", team.pitData.climbDuringAuto], ["Can Use HP", team.pitData.canUseHP], ["Can Use Depot", team.pitData.canUseDepot], ["Can Feed", team.pitData.canFeed]] as [label, value]}
-                  {#if value}
-                    <div class="data-row">
-                      <span class="data-label">{label}</span>
-                      <span class="data-value">
-                        {value === "Y"
-                          ? "✓ Yes"
-                          : value === "N"
-                            ? "✗ No"
-                            : value}
-                      </span>
-                    </div>
-                  {/if}
-                {/each}
+              <div class="card-badges">
+                {#if pit}
+                  <span class="badge badge-pit">PIT</span>
+                {/if}
+                {#if qual.length > 0}
+                  <span class="badge badge-qual"
+                    >{qual.length} match{qual.length !== 1 ? "es" : ""}</span
+                  >
+                {/if}
               </div>
             </div>
-          </div>
-        {/if}
 
-        <!-- Qualitative Notes -->
-        {#if team.qualData.length > 0}
-          <div class="qual-block">
-            <h3 class="block-title">Qualitative Notes</h3>
-            <div class="qual-grid">
-              {#each team.qualData as match}
-                <div class="qual-card">
-                  <div class="card-header">Match {match.Match}</div>
-                  {#each [["Trench Feed Volume", match.trenchFeedVolume], ["Defense Effectiveness", match.defenseEffectiveness], ["Defense Avoidance", match.defenseAvoidance], ["Intake Efficiency", match.intakeEfficiency], ["Match Events", match.matchEvents], ["Notes", match.otherNotes]] as [label, value]}
-                    {#if value}
-                      <div class="data-row">
-                        <span class="data-label">{label}</span>
-                        <span class="data-value">{value}</span>
+            <!-- Pit Scouting -->
+            {#if pit}
+              <div class="card-section">
+                <div class="section-label">
+                  <span class="section-icon">🔧</span> Pit Scouting
+                </div>
+
+                {#if pit.framesize || pit.startingHeight || pit.fullExtensionHeight || pit.quantityBallsHopper}
+                  <div class="info-group">
+                    <div class="info-group-title">Robot Info</div>
+                    <div class="info-rows">
+                      {#each [["Frame Size", pit.framesize], ["Start Height", pit.startingHeight], ["Full Extension", pit.fullExtensionHeight], ["Hopper Capacity", pit.quantityBallsHopper]] as [label, value]}
+                        {#if value !== undefined && value !== null && value !== ""}
+                          <div class="info-row">
+                            <span class="info-lbl">{label}</span>
+                            <span class="info-val">{value}</span>
+                          </div>
+                        {/if}
+                      {/each}
+                    </div>
+                  </div>
+                {/if}
+
+                {#if pit.avgIntakeSpeed || pit.avgShootSpeed || pit.accuracy || pit.climbLevels}
+                  <div class="info-group">
+                    <div class="info-group-title">Performance</div>
+                    <div class="info-rows">
+                      {#each [["Intake Speed", pit.avgIntakeSpeed], ["Shoot Speed", pit.avgShootSpeed], ["Accuracy", pit.accuracy], ["Climb Levels", pit.climbLevels]] as [label, value]}
+                        {#if value !== undefined && value !== null && value !== ""}
+                          <div class="info-row">
+                            <span class="info-lbl">{label}</span>
+                            <span class="info-val">{value}</span>
+                          </div>
+                        {/if}
+                      {/each}
+                    </div>
+                  </div>
+                {/if}
+
+                {#if [pit.overBump, pit.throughTrench, pit.climbDuringAuto, pit.canUseHP, pit.canUseDepot, pit.canFeed].some((v) => v !== undefined && v !== null && v !== "")}
+                  <div class="info-group">
+                    <div class="info-group-title">Capabilities</div>
+                    <div class="capabilities-grid">
+                      {#each [["Over Bump", pit.overBump], ["Trench", pit.throughTrench], ["Auto Climb", pit.climbDuringAuto], ["Use HP", pit.canUseHP], ["Use Depot", pit.canUseDepot], ["Can Feed", pit.canFeed]] as [label, val]}
+                        {#if val !== undefined && val !== null && val !== ""}
+                          <div class="cap-chip {capabilityClass(val)}">
+                            <span class="cap-icon">{capabilityIcon(val)}</span>
+                            <span class="cap-label">{label}</span>
+                          </div>
+                        {/if}
+                      {/each}
+                    </div>
+                  </div>
+                {/if}
+              </div>
+            {/if}
+
+            <!-- Qualitative Notes -->
+            {#if qual.length > 0}
+              <div class="card-section">
+                <div class="section-label">
+                  <span class="section-icon">📝</span> Qualitative Notes
+                </div>
+                <div class="qual-matches">
+                  {#each qual as matchRow}
+                    <div class="qual-match-block">
+                      <div class="qual-match-header">
+                        Match {matchRow.Match ?? matchRow.match}
                       </div>
-                    {/if}
+                      <div class="qual-rows">
+                        {#each [["Trench Feed Vol.", matchRow.trenchFeedVolume], ["Defense Effect.", matchRow.defenseEffectiveness], ["Defense Avoid.", matchRow.defenseAvoidance], ["Intake Efficiency", matchRow.intakeEfficiency], ["Match Events", matchRow.matchEvents], ["Notes", matchRow.otherNotes]] as [label, value]}
+                          {#if value !== undefined && value !== null && value !== ""}
+                            <div class="qual-row-item">
+                              <span class="qual-row-lbl">{label}</span>
+                              <span class="qual-row-val">{value}</span>
+                            </div>
+                          {/if}
+                        {/each}
+                      </div>
+                    </div>
                   {/each}
                 </div>
-              {/each}
-            </div>
+              </div>
+            {/if}
+
+            {#if !pit && qual.length === 0}
+              <div class="card-empty">No data collected yet.</div>
+            {/if}
           </div>
-        {/if}
+        {/each}
       </div>
-    </div>
-  {/each}
+    {/if}
+  {/if}
 </div>
 
 <style>
   :root {
-    --frc-190-red: #c81b00;
-    --wpi-gray: #a9b0b7;
-    --frc-190-black: #4d4d4d;
+    --red: #c81b00;
+    --red-hover: #e02200;
+    --gray: #a9b0b7;
+    --dark: #1a1a1a;
+    --dark2: #2d2d2d;
+    --dark3: #3a3a3a;
+    --border: rgba(200, 27, 0, 0.35);
   }
 
-  /* ── Global ── */
   :global(html),
   :global(body) {
     margin: 0;
     padding: 0;
-    background: var(--wpi-gray);
+    background: var(--gray);
     min-height: 100vh;
     overflow-x: hidden;
   }
@@ -233,23 +301,29 @@
     box-sizing: border-box;
   }
 
-  /* ── Loading ── */
-  .loading-spinner-overlay {
+  .loading-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.6);
     display: flex;
-    justify-content: center;
+    flex-direction: column;
     align-items: center;
+    justify-content: center;
+    gap: 16px;
     z-index: 9999;
   }
-  .loading-spinner {
-    border: 8px solid rgba(255, 255, 255, 0.3);
-    border-left-color: var(--frc-190-red);
+  .spinner {
+    width: 52px;
+    height: 52px;
+    border: 6px solid rgba(255, 255, 255, 0.2);
+    border-left-color: var(--red);
     border-radius: 50%;
-    width: 50px;
-    height: 50px;
-    animation: spin 1s linear infinite;
+    animation: spin 0.9s linear infinite;
+  }
+  .loading-text {
+    color: white;
+    font-size: 1rem;
+    font-weight: 600;
   }
   @keyframes spin {
     to {
@@ -257,163 +331,279 @@
     }
   }
 
-  /* ── Page ── */
   .page-wrapper {
     display: flex;
     flex-direction: column;
     align-items: center;
     min-height: 100vh;
-    padding: 20px;
-    background: var(--wpi-gray);
-    gap: 24px;
+    padding: 24px 20px 60px;
+    background: var(--gray);
   }
 
-  /* ── Header ── */
   .header-section {
     text-align: center;
+    margin-bottom: 28px;
   }
   .header-section h1 {
-    color: var(--frc-190-red);
-    font-size: 2.5rem;
+    color: var(--red);
+    font-size: 2.4rem;
     font-weight: 800;
-    margin: 0 0 5px;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    margin: 0 0 4px;
+    text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.25);
     letter-spacing: 1px;
   }
   .header-section .subtitle {
-    color: var(--frc-190-black);
-    font-size: 1rem;
+    color: #555;
+    font-size: 0.95rem;
     margin: 0;
   }
 
-  /* ── Team Row ── */
-  .team-row {
-    width: 90vw;
+  .teams-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 20px;
+    width: 100%;
     max-width: 1400px;
-    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-    border: 2px solid var(--frc-190-red);
+  }
+
+  .team-card {
+    background: linear-gradient(160deg, var(--dark) 0%, var(--dark2) 100%);
+    border: 2px solid var(--border);
     border-radius: 12px;
     overflow: hidden;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    transition:
+      border-color 0.2s,
+      transform 0.15s,
+      box-shadow 0.2s;
+    display: flex;
+    flex-direction: column;
+  }
+  .team-card:hover {
+    border-color: var(--red);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(200, 27, 0, 0.2);
   }
 
-  .team-header {
-    background: var(--frc-190-red);
-    padding: 10px 20px;
+  .card-header {
     display: flex;
-    align-items: baseline;
-    gap: 14px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px 12px;
+    background: linear-gradient(
+      90deg,
+      rgba(200, 27, 0, 0.18) 0%,
+      transparent 100%
+    );
+    border-bottom: 1px solid rgba(200, 27, 0, 0.25);
+  }
+  .team-identity {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
   .team-number {
-    color: white;
     font-size: 1.5rem;
     font-weight: 900;
-    letter-spacing: 1px;
+    color: var(--red);
+    line-height: 1;
   }
   .team-name {
-    color: rgba(255, 255, 255, 0.85);
-    font-size: 1.1rem;
+    font-size: 0.78rem;
     font-weight: 600;
+    color: #bbb;
   }
 
-  .team-content {
-    padding: 16px 20px;
+  .card-badges {
     display: flex;
-    flex-direction: column;
-    gap: 20px;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
-
-  /* ── Block titles ── */
-  .block-title {
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 0.75rem;
-    font-weight: 700;
+  .badge {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.8px;
     text-transform: uppercase;
-    letter-spacing: 1.2px;
-    margin: 0 0 10px;
+  }
+  .badge-pit {
+    background: rgba(200, 27, 0, 0.2);
+    border: 1px solid rgba(200, 27, 0, 0.5);
+    color: #ff8070;
+  }
+  .badge-qual {
+    background: rgba(40, 160, 80, 0.18);
+    border: 1px solid rgba(40, 160, 80, 0.45);
+    color: #60dd90;
   }
 
-  /* ── Pit grid ── */
-  .pit-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
+  .card-section {
+    padding: 14px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   }
-
-  /* ── Qual grid ── */
-  .qual-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 12px;
-  }
-
-  /* ── Shared card ── */
-  .pit-card,
-  .qual-card {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(200, 27, 0, 0.35);
-    border-radius: 8px;
-    overflow: hidden;
-  }
-  .card-header {
-    background: rgba(200, 27, 0, 0.75);
-    color: white;
-    font-weight: 700;
-    font-size: 0.85rem;
-    padding: 6px 12px;
-    letter-spacing: 0.5px;
-  }
-  .data-row {
-    display: flex;
-    flex-direction: column;
-    padding: 7px 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  }
-  .data-row:last-child {
+  .card-section:last-child {
     border-bottom: none;
   }
-  .data-label {
+
+  .section-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--red);
+    margin-bottom: 10px;
+  }
+
+  .info-group {
+    margin-bottom: 10px;
+  }
+  .info-group:last-child {
+    margin-bottom: 0;
+  }
+  .info-group-title {
     font-size: 0.65rem;
     font-weight: 700;
-    color: var(--frc-190-red);
-    text-transform: uppercase;
     letter-spacing: 0.8px;
-    margin-bottom: 2px;
+    text-transform: uppercase;
+    color: #666;
+    margin-bottom: 5px;
   }
-  .data-value {
-    font-size: 0.88rem;
+  .info-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 4px 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 5px;
+  }
+  .info-lbl {
+    font-size: 0.75rem;
+    color: #888;
+    font-weight: 600;
+  }
+  .info-val {
+    font-size: 0.82rem;
     color: #ddd;
+    font-weight: 600;
+    text-align: right;
+    max-width: 60%;
+    word-break: break-word;
+  }
+
+  .capabilities-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .cap-chip {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 9px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 700;
+  }
+  .cap-yes {
+    background: rgba(40, 160, 80, 0.18);
+    border: 1px solid rgba(40, 160, 80, 0.45);
+    color: #60dd90;
+  }
+  .cap-no {
+    background: rgba(200, 27, 0, 0.14);
+    border: 1px solid rgba(200, 27, 0, 0.4);
+    color: #ff8070;
+  }
+  .cap-neutral {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #aaa;
+  }
+
+  .qual-matches {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .qual-match-block {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 7px;
+    overflow: hidden;
+  }
+  .qual-match-header {
+    background: rgba(200, 27, 0, 0.15);
+    border-bottom: 1px solid rgba(200, 27, 0, 0.25);
+    color: #ff9980;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    padding: 5px 10px;
+  }
+  .qual-rows {
+    padding: 6px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .qual-row-item {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.02);
+  }
+  .qual-row-lbl {
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--red);
+  }
+  .qual-row-val {
+    font-size: 0.82rem;
+    color: #ccc;
     line-height: 1.4;
   }
 
-  /* ── Empty state ── */
+  .card-empty {
+    padding: 20px;
+    text-align: center;
+    color: #555;
+    font-size: 0.85rem;
+    font-style: italic;
+  }
   .empty-state {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 8px;
-    margin-top: 40px;
-    color: var(--frc-190-black);
-    font-size: 1rem;
-    font-weight: 600;
-    opacity: 0.7;
+    gap: 12px;
+    margin-top: 80px;
+    color: #666;
   }
   .empty-icon {
-    font-size: 2.5rem;
+    font-size: 3rem;
+  }
+  .empty-state p {
+    font-size: 1rem;
+    margin: 0;
   }
 
-  /* ── Responsive ── */
-  @media (max-width: 900px) {
-    .pit-grid {
-      grid-template-columns: repeat(2, 1fr);
-    }
-  }
-  @media (max-width: 600px) {
-    .pit-grid {
+  @media (max-width: 700px) {
+    .teams-grid {
       grid-template-columns: 1fr;
-    }
-    .team-row {
-      width: 98vw;
     }
   }
 </style>
