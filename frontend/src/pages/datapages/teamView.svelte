@@ -586,6 +586,67 @@
     return pitScouting[String(teamNumber)] ?? null;
   }
 
+  // ─── Qual Display Helpers ───────────────────────────────────────────────────
+
+  const QUAL_METADATA_KEYS = new Set([
+    "RecordType",
+    "Match",
+    "Team",
+    "ScouterName",
+    "Alliance",
+    "AutoPath",
+  ]);
+
+  const QUAL_LABEL_OVERRIDES: Record<string, string> = {
+    fuelScored: "Fuel Scored",
+    trenchFeedVolume: "Trench Feed Volume",
+    defenseEffectiveness: "Defense Effectiveness",
+    defenseAvoidance: "Defense Avoidance",
+    intakeEfficiency: "Intake Efficiency",
+    matchEvents: "Match Events",
+    otherNotes: "Notes",
+  };
+
+  function humanizeKey(key: string): string {
+    if (QUAL_LABEL_OVERRIDES[key]) return QUAL_LABEL_OVERRIDES[key];
+    return key
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      .replace(/[_-]+/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+      .trim();
+  }
+
+  function hasRenderableValue(value: any): boolean {
+    if (value === null || value === undefined) return false;
+    if (typeof value === "string") return value.trim() !== "";
+    if (Array.isArray(value)) return value.length > 0;
+    return true;
+  }
+
+  function formatSliderValue(value: any): string {
+    const num = Number(value);
+    if (!isFinite(num) || num <= 0) return "None (0)";
+    if (num <= 2) return `A little (${num})`;
+    if (num <= 5) return `Moderate (${num})`;
+    if (num <= 8) return `A lot (${num})`;
+    return `Tons (${num})`;
+  }
+
+  function formatQualValue(key: string, value: any): string {
+    if (key === "fuelScored") return formatSliderValue(value);
+    if (typeof value === "boolean") return value ? "Yes" : "No";
+    if (Array.isArray(value) || typeof value === "object") {
+      return JSON.stringify(value);
+    }
+    return String(value);
+  }
+
+  function getQualMetricEntries(row: Record<string, any>): Array<[string, string]> {
+    return Object.entries(row)
+      .filter(([key, value]) => !QUAL_METADATA_KEYS.has(key) && hasRenderableValue(value))
+      .map(([key, value]) => [humanizeKey(key), formatQualValue(key, value)]);
+  }
+
   // ─── Event Handlers ───────────────────────────────────────────────────────────
 
   async function onTeamChange() {
@@ -1385,7 +1446,7 @@
         {#each teamQualData as row}
           <div class="qual-card">
             <div class="qual-card-header">Match {row.Match}</div>
-            {#each [["Trench Feed Volume", row.trenchFeedVolume], ["Defense Effectiveness", row.defenseEffectiveness], ["Defense Avoidance", row.defenseAvoidance], ["Intake Efficiency", row.intakeEfficiency], ["Match Events", row.matchEvents], ["Notes", row.otherNotes]] as [label, value]}
+            {#each getQualMetricEntries(row) as [label, value]}
               {#if value}
                 <div class="qual-row">
                   <span class="qual-label">{label}</span>
