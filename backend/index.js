@@ -18,16 +18,9 @@ require('dotenv').config({ path: path.resolve(__dirname, '../.env'), override: t
 
 const app = express();
 
-
-const refreshTimer = setInterval(() => {
-    if (eventCode) {
-        externalAPI.populateEventData(eventCode);
-    }
-}, 1000 * 60 * 5);
-
-if (typeof refreshTimer.unref === "function") {
-    refreshTimer.unref();
-}
+let eventCode = "";
+let bracket;
+let refreshTimer;
 
 // ─── HELPER FUNCTIONS ───────────────────────────────────────────────────────
 
@@ -92,8 +85,16 @@ const VITE_FRONTEND_PORT = process.env.VITE_FRONTEND_PORT || 5173;
 const VITE_TESTING = process.env.VITE_TESTING || 1;
 const SERVER = !parseInt(VITE_TESTING) ? process.env.VITE_SERVER_IP : "localhost";
 
-let eventCode = "";
-let bracket;
+refreshTimer = setInterval(() => {
+    if (eventCode && eventCode.trim()) {
+        console.log(`[RefreshTimer] Refreshing data for event: ${eventCode}`);
+        externalAPI.populateEventData(eventCode);
+    }
+}, 1000 * 60 * 5);
+
+if (typeof refreshTimer.unref === "function") {
+    refreshTimer.unref();
+}
 
 app.use(express.json());
 

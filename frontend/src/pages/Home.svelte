@@ -6,6 +6,7 @@
         fetchEvents,
         fetchPitScouting,
         fetchQualitativeScouting,
+        postEventCode,
         refreshEventCaches,
     } from "../utils/api";
     import { clearAllStores, getIndexedDBStore, getLastId, setIndexedDBStore } from '../utils/indexedDB';
@@ -128,6 +129,7 @@
             }
 
             localStorage.setItem("eventCode", eventCode);
+            await postEventCode(eventCode);
             await cacheAllData({ forceFullRefresh: isNewEvent });
         } finally {
             isAutoSyncing = false;

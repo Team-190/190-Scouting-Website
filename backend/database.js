@@ -348,13 +348,16 @@ async function writeJSONFile(filename, data) {
         fs.mkdirSync('./data', { recursive: true });
     }
 
-    fs.writeFile(fullPath, JSON.stringify(data, null, 4), "utf8", (err) => {
-        if (err) {
-            console.error("Error writing to file", err);
-        }
+    return new Promise((resolve, reject) => {
+        fs.writeFile(fullPath, JSON.stringify(data, null, 4), "utf8", (err) => {
+            if (err) {
+                console.error("Error writing to file", err);
+                reject(err);
+            } else {
+                resolve(true);
+            }
+        });
     });
-
-    return true;
 }
 
 module.exports = {
