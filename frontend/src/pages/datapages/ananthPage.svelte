@@ -176,6 +176,7 @@
     padding: 1rem;
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 1.5rem;
   }
 
@@ -185,6 +186,7 @@
     color: var(--frc-190-black);
     margin-bottom: 0.5rem;
     display: block;
+    text-align: center;
   }
 
   select {

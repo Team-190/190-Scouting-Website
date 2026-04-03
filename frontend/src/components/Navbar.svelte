@@ -26,7 +26,8 @@
 
   function navigate(path) {
     goto(path);
-    if ($isSidebarOpen) {
+    // Only close sidebar if it was pinned open (not just hovered)
+    if (isPinnedOpen) {
       toggleSidebar();
     }
     expandedMenu = null;
