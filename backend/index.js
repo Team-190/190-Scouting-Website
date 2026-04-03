@@ -90,7 +90,7 @@ refreshTimer = setInterval(() => {
         console.log(`[RefreshTimer] Refreshing data for event: ${eventCode}`);
         externalAPI.populateEventData(eventCode);
     }
-}, 1000 * 60 * 5);
+}, 1000 * 60 * 1);
 
 if (typeof refreshTimer.unref === "function") {
     refreshTimer.unref();
