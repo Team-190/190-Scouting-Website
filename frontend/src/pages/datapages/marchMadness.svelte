@@ -337,25 +337,27 @@
 
     :global(body) {
         margin: 0;
-        font-family: 'Roboto', sans-serif;
+        font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         background: var(--wpi-gray);
     }
 
     .bracket-app {
-        width: 1300px;
-        margin: 10px auto;
+        width: 100%;
+        max-width: 1300px;
+        margin: 1rem auto;
         position: relative;
+        padding: 0 0.5rem;
     }
 
     .loading-overlay {
         text-align: center;
         font-weight: bold;
         color: var(--frc-190-black);
-        padding: 10px;
-        font-size: 14px;
+        padding: 1rem;
+        font-size: 0.9rem;
         background: rgba(255,255,255,0.7);
         border-radius: 6px;
-        margin-bottom: 8px;
+        margin-bottom: 0.5rem;
     }
 
     .headers {
@@ -363,10 +365,11 @@
         grid-template-columns: repeat(6, 1fr);
         text-align: center;
         font-weight: bold;
-        font-size: 14px;
+        font-size: 0.85rem;
         color: #333;
-        margin-bottom: 5px;
+        margin-bottom: 0.3rem;
         text-transform: uppercase;
+        gap: 0.3rem;
     }
 
     .bracket-grid {
@@ -374,6 +377,7 @@
         grid-template-columns: repeat(6, 1fr);
         grid-template-rows: repeat(28, 28px);
         position: relative;
+        gap: 0.3rem;
     }
 
     /* Background Stripes */
@@ -401,10 +405,11 @@
         font-weight: bold;
         color: #666;
         position: absolute;
-        left: -30px;
+        left: -2rem;
         height: 100%;
         display: flex;
         align-items: center;
+        font-size: 0.7rem;
     }
     .label-lower {
         grid-column: 1;
@@ -415,8 +420,9 @@
         font-weight: bold;
         color: #666;
         position: absolute;
-        left: -30px;
-        top: 140px;
+        left: -2rem;
+        top: 8rem;
+        font-size: 0.7rem;
     }
 
     /* Match Cells */
@@ -426,7 +432,7 @@
         display: flex;
         flex-direction: column;
         justify-content: center;
-        padding-right: 20px;
+        padding-right: 1rem;
     }
 
     /* Placement */
@@ -434,31 +440,24 @@
     .m2 { grid-column: 1; grid-row: 6; }
     .m3 { grid-column: 1; grid-row: 10; }
     .m4 { grid-column: 1; grid-row: 14; }
-
     .m7 { grid-column: 2; grid-row: 4; }
     .m8 { grid-column: 2; grid-row: 12; }
-
     .m11 { grid-column: 4; grid-row: 8; }
-
     .m5 { grid-column: 2; grid-row: 18; }
     .m6 { grid-column: 2; grid-row: 24; }
-
     .m10 { grid-column: 3; grid-row: 18; }
     .m9  { grid-column: 3; grid-row: 24; }
-
     .m12 { grid-column: 4; grid-row: 21; } 
-
     .m13 { grid-column: 5; grid-row: 21; } 
-
     .f1 { grid-column: 6; grid-row: 14; }
 
     /* MATCH CARD STYLES */
     .match-card {
         display: flex;
         flex-direction: column;
-        width: 190px;
+        width: 100%;
         position: relative;
-        font-size: 12px;
+        font-size: 0.75rem;
         font-weight: bold;
         color: white;
         filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.2));
@@ -467,10 +466,10 @@
     .alliance-bar {
         display: flex;
         align-items: center;
-        height: 28px;
-        padding-left: 5px;
+        height: 1.75rem;
+        padding-left: 0.3rem;
         clip-path: polygon(0 0, 92% 0, 100% 50%, 92% 100%, 0 100%);
-        margin-bottom: 2px;
+        margin-bottom: 0.1rem;
         cursor: pointer;
         transition: transform 0.1s;
     }
@@ -478,21 +477,21 @@
 
     .alliance-bar.red  { background: #e75a5a; }
     .alliance-bar.blue { background: #5a9ce7; }
-    .alliance-bar.winner { filter: brightness(1.2) contrast(1.1); border-left: 4px solid gold; }
+    .alliance-bar.winner { filter: brightness(1.2) contrast(1.1); border-left: 3px solid gold; }
     .alliance-bar.tbd { opacity: 0.7; }
     .alliance-bar.red.tbd  { background: #a65858; }
     .alliance-bar.blue.tbd { background: #587ca6; }
 
     .rank {
         background: rgba(0,0,0,0.3);
-        width: 20px;
-        height: 20px;
-        min-width: 20px;
+        width: 1.25rem;
+        height: 1.25rem;
+        min-width: 1.25rem;
         display: flex;
         align-items: center;
         justify-content: center;
-        margin-right: 8px;
-        font-size: 11px;
+        margin-right: 0.5rem;
+        font-size: 0.7rem;
     }
     
     .name {
@@ -500,16 +499,16 @@
         overflow: hidden;
         text-overflow: ellipsis;
         flex-grow: 1;
-        padding-right: 15px;
-        font-size: 11px;
+        padding-right: 1rem;
+        font-size: 0.7rem;
     }
 
     .match-info-bar {
         position: absolute;
         top: 50%;
         left: 0;
-        right: 10px;
-        height: 14px;
+        right: 0.5rem;
+        height: 0.9rem;
         background: black;
         color: white;
         transform: translateY(-50%);
@@ -517,8 +516,8 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 0 10px;
-        font-size: 9px;
+        padding: 0 0.6rem;
+        font-size: 0.6rem;
         width: 60%;
         margin-left: 15%;
         border-radius: 2px;
@@ -533,26 +532,28 @@
     }
 
     .cell::after {
-        right: -15px; top: 50%; width: 15px; height: 2px;
+        right: -1rem; top: 50%; width: 1rem; height: 2px;
     }
 
-    .m1::before { right: -15px; top: 50%; width: 2px; height: 130%; }
-    .m2::before { right: -15px; bottom: 50%; width: 2px; height: 130%; }
-    .m7::before { left: -15px; top: 50%; width: 15px; height: 2px; }
+    .m1::before { right: -1rem; top: 50%; width: 2px; height: 130%; }
+    .m2::before { right: -1rem; bottom: 50%; width: 2px; height: 130%; }
+    .m7::before { left: -1rem; top: 50%; width: 1rem; height: 2px; }
 
-    .m3::before { right: -15px; top: 50%; width: 2px; height: 130%; }
-    .m4::before { right: -15px; bottom: 50%; width: 2px; height: 130%; }
-    .m8::before { left: -15px; top: 50%; width: 15px; height: 2px; }
+    .m3::before { right: -1rem; top: 50%; width: 2px; height: 130%; }
+    .m4::before { right: -1rem; bottom: 50%; width: 2px; height: 130%; }
+    .m8::before { left: -1rem; top: 50%; width: 1rem; height: 2px; }
 
     .cell::before { display: block; }
 
     .submissionSection {
-        width: 1300px;
-        margin: 0 auto 10px auto;
+        width: 100%;
+        max-width: 1300px;
+        margin: 0 auto 1rem auto;
+        padding: 0 0.5rem;
         display: flex;
-        flex-direction: row;
+        flex-direction: column;
         align-items: center;
-        gap: 10px;
+        gap: 0.75rem;
     }
 
     .submissionSection label {
@@ -562,13 +563,14 @@
     }
 
     .submissionSection input {
-        width: 220px;
-        padding: 7px 10px;
+        width: 100%;
+        max-width: 220px;
+        padding: 0.5rem 0.75rem;
         border: 2px solid var(--frc-190-red);
         background: white;
         color: var(--frc-190-black);
         border-radius: 6px;
-        font-size: 14px;
+        font-size: 0.9rem;
     }
 
     .submissionSection input:focus {
@@ -577,7 +579,7 @@
     }
 
     .submissionSection button {
-        padding: 7px 18px;
+        padding: 0.5rem 1.2rem;
         border: 2px solid var(--frc-190-red);
         background: linear-gradient(135deg, #333 0%, #444 100%);
         color: white;
@@ -586,6 +588,7 @@
         cursor: pointer;
         transition: all 0.2s;
         white-space: nowrap;
+        font-size: 0.9rem;
     }
 
     .submissionSection button:hover {
@@ -593,5 +596,220 @@
         border-color: #e02200;
         transform: translateY(-1px);
         box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    }
+
+    /* Tablet Responsive */
+    @media (max-width: 1024px) {
+        .bracket-app {
+            max-width: 100%;
+            margin: 0.5rem auto;
+        }
+
+        .headers {
+            font-size: 0.75rem;
+        }
+
+        .match-card {
+            font-size: 0.65rem;
+        }
+
+        .alliance-bar {
+            height: 1.5rem;
+        }
+
+        .rank {
+            width: 1rem;
+            height: 1rem;
+            min-width: 1rem;
+            margin-right: 0.4rem;
+            font-size: 0.6rem;
+        }
+
+        .name {
+            font-size: 0.6rem;
+            padding-right: 0.8rem;
+        }
+
+        .match-info-bar {
+            height: 0.8rem;
+            padding: 0 0.4rem;
+            font-size: 0.5rem;
+        }
+    }
+
+    /* Mobile Responsive */
+    @media (max-width: 768px) {
+        .bracket-app {
+            padding: 0 0.25rem;
+        }
+
+        .headers {
+            font-size: 0.65rem;
+            margin-bottom: 0.2rem;
+            gap: 0.2rem;
+        }
+
+        .bracket-grid {
+            grid-template-rows: repeat(28, 24px);
+            gap: 0.2rem;
+        }
+
+        .label-upper,
+        .label-lower {
+            font-size: 0.6rem;
+            left: -1.5rem;
+        }
+
+        .label-lower {
+            top: 6rem;
+        }
+
+        .match-card {
+            font-size: 0.6rem;
+        }
+
+        .alliance-bar {
+            height: 1.4rem;
+            padding-left: 0.2rem;
+            margin-bottom: 0.08rem;
+        }
+
+        .rank {
+            width: 0.9rem;
+            height: 0.9rem;
+            min-width: 0.9rem;
+            margin-right: 0.3rem;
+            font-size: 0.55rem;
+        }
+
+        .name {
+            font-size: 0.55rem;
+            padding-right: 0.6rem;
+        }
+
+        .match-info-bar {
+            height: 0.7rem;
+            padding: 0 0.3rem;
+            font-size: 0.45rem;
+        }
+
+        .cell {
+            padding-right: 0.8rem;
+        }
+
+        .cell::after {
+            right: -0.8rem;
+            width: 0.8rem;
+        }
+
+        .m1::before { right: -0.8rem; }
+        .m2::before { right: -0.8rem; }
+        .m7::before { left: -0.8rem; width: 0.8rem; }
+        .m3::before { right: -0.8rem; }
+        .m4::before { right: -0.8rem; }
+        .m8::before { left: -0.8rem; width: 0.8rem; }
+
+        .submissionSection {
+            flex-direction: row;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0 0.25rem;
+        }
+
+        .submissionSection label {
+            width: 100%;
+            text-align: center;
+            font-size: 0.9rem;
+        }
+
+        .submissionSection input {
+            max-width: 100%;
+            font-size: 0.85rem;
+        }
+
+        .submissionSection button {
+            font-size: 0.85rem;
+            padding: 0.4rem 1rem;
+        }
+    }
+
+    /* Small Mobile */
+    @media (max-width: 480px) {
+        .bracket-app {
+            padding: 0;
+        }
+
+        .headers {
+            font-size: 0.55rem;
+            gap: 0.15rem;
+        }
+
+        .bracket-grid {
+            grid-template-rows: repeat(28, 20px);
+            gap: 0.15rem;
+        }
+
+        .label-upper,
+        .label-lower {
+            display: none;
+        }
+
+        .match-card {
+            font-size: 0.55rem;
+        }
+
+        .alliance-bar {
+            height: 1.2rem;
+            padding-left: 0.15rem;
+            margin-bottom: 0.05rem;
+        }
+
+        .rank {
+            width: 0.8rem;
+            height: 0.8rem;
+            min-width: 0.8rem;
+            margin-right: 0.2rem;
+            font-size: 0.5rem;
+        }
+
+        .name {
+            font-size: 0.5rem;
+            padding-right: 0.5rem;
+        }
+
+        .match-info-bar {
+            height: 0.6rem;
+            padding: 0 0.2rem;
+            font-size: 0.4rem;
+            width: 70%;
+            margin-left: 10%;
+        }
+
+        .cell {
+            padding-right: 0.6rem;
+        }
+
+        .cell::after {
+            right: -0.6rem;
+            width: 0.6rem;
+        }
+
+        .m1::before { right: -0.6rem; }
+        .m2::before { right: -0.6rem; }
+        .m7::before { left: -0.6rem; width: 0.6rem; }
+        .m3::before { right: -0.6rem; }
+        .m4::before { right: -0.6rem; }
+        .m8::before { left: -0.6rem; width: 0.6rem; }
+
+        .submissionSection {
+            gap: 0.3rem;
+        }
+
+        .submissionSection input,
+        .submissionSection button {
+            font-size: 0.8rem;
+            padding: 0.35rem 0.75rem;
+        }
     }
 </style>

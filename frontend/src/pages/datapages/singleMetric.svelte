@@ -490,8 +490,9 @@
   }
   availableTeams = availableTeams.sort();
 
+  // Load climb data in background (non-blocking) to keep initial page load fast
   if (eventCode) {
-    await Promise.all(
+    Promise.all(
       availableTeams.map(async (team) => {
         const rows = teamData[team] ?? [];
         await Promise.all(
@@ -514,7 +515,7 @@
           })
         );
       })
-    );
+    ).catch((e) => console.warn("Background climb data fetch failed:", e));
   }
 }
 
@@ -1805,8 +1806,9 @@
     align-items: center;
     justify-content: flex-start;
     min-height: 100vh;
-    padding: 20px;
+    padding: 1.25rem;
     background: var(--wpi-gray);
+    width: 100%;
   }
 
   :global(select option:checked) {
@@ -1877,41 +1879,43 @@
 
   .header-section {
     text-align: center;
-    margin-bottom: 20px;
+    margin-bottom: 1.25rem;
   }
   .header-section h1 {
     color: var(--frc-190-red);
-    font-size: 2.5rem;
+    font-size: 1.8rem;
     font-weight: 800;
-    margin: 0 0 5px;
+    margin: 0 0 0.3rem;
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-    letter-spacing: 1px;
+    letter-spacing: 0.8px;
   }
   .header-section .subtitle {
     color: var(--frc-190-black);
-    font-size: 1rem;
+    font-size: 0.9rem;
     margin: 0;
   }
 
   .controls {
-    padding: 15px 25px;
+    padding: 1rem 1.5rem;
     background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
     color: white;
-    font-size: 18px;
+    font-size: 1.1rem;
     display: flex;
-    gap: 30px;
+    flex-wrap: wrap;
+    gap: 1.875rem;
     align-items: center;
     justify-content: center;
-    width: 80%;
-    max-width: 1200px;
-    border-radius: 10px;
-    margin-bottom: 20px;
+    width: 100%;
+    max-width: 75rem;
+    border-radius: 0.625rem;
+    margin-bottom: 1.25rem;
     border: 2px solid var(--frc-190-red);
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
   }
   .controls label {
     font-weight: 600;
     color: #fff;
+    font-size: 0.9rem;
   }
   .auto-only-toggle {
     display: flex;
@@ -1920,26 +1924,26 @@
   .auto-only-toggle label {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 0.5rem;
     cursor: pointer;
     font-weight: 600;
     color: #fff;
   }
   .auto-only-toggle input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
+    width: 1.1rem;
+    height: 1.1rem;
     accent-color: var(--frc-190-red);
     cursor: pointer;
   }
 
   select {
-    margin-left: 10px;
-    padding: 8px 15px;
+    margin-left: 0.6rem;
+    padding: 0.5rem 0.9rem;
     background: linear-gradient(135deg, #333 0%, #444 100%);
     color: white;
-    font-size: 16px;
+    font-size: 1rem;
     border: 2px solid var(--frc-190-red);
-    border-radius: 6px;
+    border-radius: 0.4rem;
     cursor: pointer;
     transition: all 0.3s ease;
   }
@@ -1953,40 +1957,42 @@
   }
 
   .grid-container {
-    width: 80vw;
+    width: 100%;
+    max-width: 75rem;
     background: var(--frc-190-black);
-    border-radius: 8px;
+    border-radius: 0.5rem;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
   }
 
   .graph-section {
-    width: 80vw;
-    margin-top: 30px;
+    width: 100%;
+    max-width: 75rem;
+    margin-top: 1.9rem;
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding-bottom: 50px;
+    padding-bottom: 3.125rem;
   }
   .section-title {
     color: var(--frc-190-red);
-    font-size: 1.8rem;
+    font-size: 1.2rem;
     font-weight: 700;
-    margin-bottom: 20px;
+    margin-bottom: 1.25rem;
     text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
   }
 
   .dropdown-container {
     position: relative;
-    margin-bottom: 20px;
+    margin-bottom: 1.25rem;
   }
   .plus-btn {
-    width: 50px;
-    height: 50px;
+    width: 3.125rem;
+    height: 3.125rem;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 2rem;
+    font-size: 1.25rem;
     font-weight: 600;
     border: 2px solid var(--frc-190-red);
     background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
@@ -2002,27 +2008,28 @@
 
   .dropdown {
     position: absolute;
-    top: 60px;
+    top: 3.75rem;
     left: 50%;
     transform: translateX(-50%);
     background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
     border: 2px solid var(--frc-190-red);
-    border-radius: 8px;
+    border-radius: 0.5rem;
     list-style: none;
     padding: 0;
     margin: 0;
-    width: 150px;
+    width: 9.375rem;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
     z-index: 10;
     overflow: hidden;
   }
   .dropdown li {
-    padding: 12px 15px;
+    padding: 0.75rem 0.9rem;
     cursor: pointer;
     text-align: center;
     color: white;
     font-weight: 500;
     text-transform: capitalize;
+    font-size: 0.9rem;
     transition: background 0.2s ease;
   }
   .dropdown li:hover {
@@ -2033,57 +2040,59 @@
     display: flex;
     justify-content: center;
     flex-wrap: wrap;
-    width: 100vw;
+    width: 100%;
+    max-width: 75rem;
   }
   .chart-wrapper {
     position: relative;
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    width: 80vw;
+    width: 100%;
     background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
     border: 2px solid var(--frc-190-red);
-    border-radius: 8px;
-    padding: 15px;
+    border-radius: 0.5rem;
+    padding: 1rem;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-    margin-bottom: 20px;
+    margin-bottom: 1.25rem;
   }
   .chart-container {
     width: 100%;
-    height: 350px;
+    height: 22rem;
     display: flex;
     justify-content: center;
     align-items: center;
     flex-grow: 1;
     background: rgba(255, 255, 255, 0.05);
-    border-radius: 6px;
+    border-radius: 0.4rem;
   }
   .chart-label {
-    margin-top: 10px;
+    margin-top: 0.6rem;
     font-weight: bold;
     text-transform: capitalize;
     text-align: center;
     color: white;
-    font-size: 1rem;
+    font-size: 0.9rem;
   }
 
   .chart-controls {
     display: flex;
     justify-content: flex-end;
-    gap: 10px;
-    margin-bottom: 10px;
+    gap: 0.6rem;
+    margin-bottom: 0.625rem;
+    flex-wrap: wrap;
   }
   .mini-btn {
     background: transparent;
     border: 1px solid var(--frc-190-red);
     color: white;
-    padding: 4px 10px;
-    font-size: 14px;
-    border-radius: 4px;
+    padding: 0.25rem 0.625rem;
+    font-size: 0.85rem;
+    border-radius: 0.25rem;
     cursor: pointer;
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 0.3rem;
   }
   .mini-btn:hover {
     background: rgba(200, 27, 0, 0.2);
@@ -2092,34 +2101,93 @@
   .local-filter-panel {
     background: rgba(0, 0, 0, 0.3);
     border: 1px solid #444;
-    border-radius: 6px;
-    padding: 10px;
-    margin-bottom: 15px;
-    max-height: 200px;
+    border-radius: 0.4rem;
+    padding: 0.6rem;
+    margin-bottom: 0.9rem;
+    max-height: 12.5rem;
     overflow-y: auto;
   }
   .local-filter-actions {
     display: flex;
-    gap: 10px;
-    margin-bottom: 10px;
-    padding-bottom: 5px;
+    gap: 0.6rem;
+    margin-bottom: 0.6rem;
+    padding-bottom: 0.3rem;
     border-bottom: 1px solid #444;
   }
   .local-grid {
     display: flex;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 0.6rem;
   }
   .mini-checkbox {
-    font-size: 13px;
+    font-size: 0.8rem;
     color: #ddd;
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 0.25rem;
     cursor: pointer;
   }
   .mini-checkbox input {
     accent-color: var(--frc-190-red);
+  }
+
+  /* Responsive Design */
+  @media (max-width: 1024px) {
+    .header-section h1 { font-size: 1.5rem; }
+    .controls { font-size: 1rem; gap: 1.25rem; padding: 0.8rem 1.25rem; }
+    .controls label { font-size: 0.85rem; }
+    select { font-size: 0.9rem; padding: 0.4rem 0.8rem; }
+    .section-title { font-size: 1.1rem; margin-bottom: 1rem; }
+    .chart-wrapper { padding: 0.75rem; }
+  }
+
+  @media (max-width: 768px) {
+    .page-wrapper { padding: 0.75rem; }
+    .header-section { margin-bottom: 1rem; }
+    .header-section h1 { font-size: 1.2rem; }
+    .header-section .subtitle { font-size: 0.8rem; }
+    .controls { gap: 0.75rem; padding: 0.6rem 1rem; font-size: 0.9rem; flex-direction: column; }
+    .controls label { font-size: 0.8rem; }
+    .auto-only-toggle label { gap: 0.4rem; }
+    .auto-only-toggle input { width: 1rem; height: 1rem; }
+    select { margin-left: 0.4rem; font-size: 0.8rem; padding: 0.4rem 0.7rem; }
+    .grid-container { border-radius: 0.4rem; }
+    .graph-section { margin-top: 1.5rem; padding-bottom: 2rem; }
+    .section-title { font-size: 1rem; margin-bottom: 0.8rem; }
+    .dropdown-container { margin-bottom: 1rem; }
+    .plus-btn { width: 2.75rem; height: 2.75rem; font-size: 1.1rem; }
+    .dropdown { top: 3.25rem; width: 8rem; }
+    .dropdown li { padding: 0.6rem 0.8rem; font-size: 0.8rem; }
+    .chart-wrapper { padding: 0.6rem; margin-bottom: 1rem; }
+    .chart-container { height: 18rem; }
+    .chart-label { font-size: 0.8rem; margin-top: 0.5rem; }
+    .chart-controls { gap: 0.4rem; }
+    .mini-btn { padding: 0.2rem 0.5rem; font-size: 0.75rem; }
+    .local-filter-panel { padding: 0.5rem; margin-bottom: 0.75rem; max-height: 11rem; }
+    .local-filter-actions { gap: 0.4rem; margin-bottom: 0.4rem; }
+    .local-grid { gap: 0.4rem; }
+    .mini-checkbox { font-size: 0.75rem; gap: 0.2rem; }
+  }
+
+  @media (max-width: 480px) {
+    .page-wrapper { padding: 0.5rem; }
+    .header-section h1 { font-size: 1rem; }
+    .header-section .subtitle { font-size: 0.7rem; }
+    .controls { gap: 0.5rem; padding: 0.4rem 0.75rem; font-size: 0.85rem; }
+    select { margin-left: 0.25rem; font-size: 0.75rem; padding: 0.3rem 0.6rem; }
+    .grid-container { border-radius: 0.3rem; }
+    .graph-section { margin-top: 1.25rem; padding-bottom: 1.5rem; max-width: 100%; }
+    .section-title { font-size: 0.95rem; margin-bottom: 0.75rem; }
+    .plus-btn { width: 2.5rem; height: 2.5rem; font-size: 1rem; }
+    .dropdown { width: 7.5rem; top: 3rem; }
+    .dropdown li { padding: 0.5rem; font-size: 0.75rem; }
+    .chart-wrapper { padding: 0.5rem; margin-bottom: 0.8rem; }
+    .chart-container { height: 15rem; }
+    .chart-label { font-size: 0.75rem; }
+    .mini-btn { padding: 0.15rem 0.4rem; font-size: 0.7rem; }
+    .local-filter-panel { padding: 0.4rem; margin-bottom: 0.6rem; max-height: 10rem; }
+    .local-grid { gap: 0.3rem; }
+    .mini-checkbox { font-size: 0.7rem; }
   }
 </style>
