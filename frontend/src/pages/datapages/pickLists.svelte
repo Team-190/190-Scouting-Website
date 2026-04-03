@@ -6,22 +6,22 @@
   import Team from "../../components/Team.svelte";
   import TeamHoverCard from "../../components/teamHoverCard.svelte";
   import {
-      fetchEventEpas,
-      fetchOPR,
-      fetchTeamStatuses,
-      fetchTeams,
+    fetchEventEpas,
+    fetchOPR,
+    fetchTeamStatuses,
+    fetchTeams,
   } from "../../utils/api.js";
-  import { getIndexedDBStore } from '../../utils/indexedDB';
+  import { getIndexedDBStore } from "../../utils/indexedDB";
   import {
-      BOOLEAN_METRICS,
-      CLIMBSTATE_METRIC,
-      EXCLUDED_FIELDS,
-      METADATA_KEYS,
-      loadFromStorage,
-      mean,
-      percentile,
-      saveToStorage,
-      sd
+    BOOLEAN_METRICS,
+    CLIMBSTATE_METRIC,
+    EXCLUDED_FIELDS,
+    METADATA_KEYS,
+    loadFromStorage,
+    mean,
+    percentile,
+    saveToStorage,
+    sd,
   } from "../../utils/pageUtils";
 
   // ─── CONSTANTS ──────────────────────────────────────────────────────────────
@@ -113,7 +113,7 @@
 
   async function loadTeamViewData() {
     try {
-      const raw = await getIndexedDBStore("scoutingData") || [];
+      const raw = (await getIndexedDBStore("scoutingData")) || [];
       if (!raw || !raw.length) {
         teamViewData = [];
         return;
@@ -528,7 +528,10 @@
 
       rankedTeams = Object.entries(_teamRanks)
         .filter(([, rank]) => rank != null)
-        .map(([team_number, rank]) => ({ team_number: parseInt(team_number), rank }))
+        .map(([team_number, rank]) => ({
+          team_number: parseInt(team_number),
+          rank,
+        }))
         .sort((a, b) => a.rank - b.rank);
 
       if ($teamsStore._teamNumbers.length === 0) {
@@ -1447,8 +1450,7 @@
                               showTeamDetails(team);
                             }}
                             onkeydown={(e) =>
-                              e.key === "Enter" &&
-                              showTeamDetails(team)}
+                              e.key === "Enter" && showTeamDetails(team)}
                           >
                             {team.team_number}
                           </div>
