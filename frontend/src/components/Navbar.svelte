@@ -15,10 +15,12 @@
   let isPinnedOpen = false;
 
   function toggleSidebar() {
-    if ($isSidebarOpen) {
+    if (isPinnedOpen) {
+      // Currently pinned open, close it
       isPinnedOpen = false;
       isSidebarOpen.set(false);
     } else {
+      // Currently closed, pin it open
       isPinnedOpen = true;
       isSidebarOpen.set(true);
     }
@@ -26,20 +28,14 @@
 
   function navigate(path) {
     goto(path);
-    // Only close sidebar if it was pinned open (not just hovered)
-    if (isPinnedOpen) {
-      toggleSidebar();
-    }
+    // Always hide navbar when clicking a link
+    isPinnedOpen = false;
+    isSidebarOpen.set(false);
     expandedMenu = null;
   }
 
   function toggleMenu(menuName) {
     expandedMenu = expandedMenu === menuName ? null : menuName;
-    // On mobile, ensure sidebar stays open when toggling dropdowns
-    if (expandedMenu) {
-      isPinnedOpen = true;
-      isSidebarOpen.set(true);
-    }
   }
 
   async function checkAlliances() {
@@ -80,7 +76,7 @@
   });
 </script>
 
-<nav class="navbar" class:collapsed={!$isSidebarOpen && !isHovering} on:mouseenter={() => { isHovering = true; isSidebarOpen.set(true); }} on:mouseleave={() => { isHovering = false; isSidebarOpen.set(isPinnedOpen); }}>
+<nav class="navbar" class:collapsed={!$isSidebarOpen && !isHovering} on:mouseenter={() => { isHovering = true; isSidebarOpen.set(true); }} on:mouseleave={() => { isHovering = false; if (!isPinnedOpen) isSidebarOpen.set(false); }}>
   <button class="toggle-btn" on:click={toggleSidebar} aria-label="Toggle sidebar">
     <span class="toggle-icon" class:rotated={$isSidebarOpen}></span>
   </button>
@@ -101,7 +97,7 @@
           <span class="label">Data Collection</span>
           <span class="dropdown-arrow" class:expanded={expandedMenu === 'dataCollection'}>▼</span>
         </button>
-        {#if expandedMenu === 'dataCollection' && $isSidebarOpen}
+        {#if expandedMenu === 'dataCollection'}
           <div class="dropdown-menu">
             <button on:click={() => navigate("/pitScouting")} class="dropdown-item">
               Pit Scouting
@@ -123,7 +119,7 @@
           <span class="label">Ratings</span>
           <span class="dropdown-arrow" class:expanded={expandedMenu === 'ratings'}>▼</span>
         </button>
-        {#if expandedMenu === 'ratings' && $isSidebarOpen}
+        {#if expandedMenu === 'ratings'}
           <div class="dropdown-menu">
             <button on:click={() => navigate("/gracePage")} class="dropdown-item">
               Grace Page
@@ -145,7 +141,7 @@
           <span class="label">View Data</span>
           <span class="dropdown-arrow" class:expanded={expandedMenu === 'viewData'}>▼</span>
         </button>
-        {#if expandedMenu === 'viewData' && $isSidebarOpen}
+        {#if expandedMenu === 'viewData'}
           <div class="dropdown-menu">
             <button on:click={() => navigate("/singleMetric")} class="dropdown-item">
               Event View

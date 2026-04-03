@@ -516,7 +516,8 @@
                         type="file"
                         id="robot-picture"
                         bind:this={fileInputNode}
-                        accept="image/png,image/jpeg,image/jpg"
+                        accept="image/*"
+                        capture="environment"
                         on:change={handleFileUpload}
                     />
                 </div>
