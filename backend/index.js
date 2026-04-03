@@ -256,14 +256,16 @@ app.get("/api/getHPRatings", validateEventCode, async (req, res) => {
 app.get("/api/getMatchAlliances", validateEventCode, async (req, res) => {
     eventCode = req.query.eventCode;
     console.log("matches requested, eventCode: " + eventCode);
-    const raw = await externalAPI.fetchMatchAlliances(eventCode);
+    await ensureEventCodeExists("matches", eventCode);
+    const raw = await getEventData("matches", eventCode);
     res.send(raw);
 });
 
 app.get("/api/getTeams", validateEventCode, async (req, res) => {
     eventCode = req.query.eventCode;
     console.log("teams requested, eventCode: " + eventCode);
-    const raw = await externalAPI.fetchTeams(eventCode);
+    await ensureEventCodeExists("teams", eventCode);
+    const raw = await getEventData("teams", eventCode);
     const teamList = Array.isArray(raw) ? raw : [];
 
     const result = {
@@ -277,12 +279,13 @@ app.get("/api/getTeams", validateEventCode, async (req, res) => {
 app.get("/api/getEventDetails", validateEventCode, async (req, res) => {
     eventCode = req.query.eventCode;
     console.log("event details requested, eventCode: " + eventCode);
-    const raw = await externalAPI.fetchEventDetails(eventCode);
+    await ensureEventCodeExists("eventDetails", eventCode);
+    const raw = await getEventData("eventDetails", eventCode);
 
     const result = {
-        name: raw.name,
-        short_name: raw.short_name,
-        location: raw.location,
+        name: raw?.name || "",
+        short_name: raw?.short_name || "",
+        location: raw?.location || "",
     };
 
     res.send(result);
@@ -291,7 +294,8 @@ app.get("/api/getEventDetails", validateEventCode, async (req, res) => {
 app.get("/api/getTeamStatuses", validateEventCode, async (req, res) => {
     eventCode = req.query.eventCode;
     console.log("team statuses requested, eventCode: " + eventCode);
-    const raw = await externalAPI.fetchTeamStatuses(eventCode);
+    await ensureEventCodeExists("teamStatuses", eventCode);
+    const raw = await getEventData("teamStatuses", eventCode);
 
     const result = Object.fromEntries(
         Object.entries(raw).map(([teamKey, status]) => [
@@ -306,7 +310,8 @@ app.get("/api/getTeamStatuses", validateEventCode, async (req, res) => {
 app.get("/api/getOPR", validateEventCode, async (req, res) => {
     eventCode = req.query.eventCode;
     console.log("OPR requested, eventCode: " + eventCode);
-    const raw = await externalAPI.fetchOPR(eventCode);
+    await ensureEventCodeExists("oprs", eventCode);
+    const raw = await getEventData("oprs", eventCode);
 
     const result = {
         oprs:  raw.oprs  ?? {},
@@ -320,7 +325,8 @@ app.get("/api/getOPR", validateEventCode, async (req, res) => {
 app.get("/api/getAlliances", validateEventCode, async (req, res) => {
     eventCode = req.query.eventCode;
     console.log("alliances requested, eventCode: " + eventCode);
-    const raw = await externalAPI.fetchAlliances(eventCode);
+    await ensureEventCodeExists("alliances", eventCode);
+    const raw = await getEventData("alliances", eventCode);
 
     const available = Array.isArray(raw) && raw.length > 0 && raw[0]?.picks?.length > 0;
 
@@ -330,16 +336,20 @@ app.get("/api/getAlliances", validateEventCode, async (req, res) => {
 app.get("/api/getEventEpas", validateEventCode, async (req, res) => {
     eventCode = req.query.eventCode;
     console.log("EPAs requested, eventCode: " + eventCode);
-    const raw = await externalAPI.fetchEventEpas(eventCode);
+    await ensureEventCodeExists("epas", eventCode);
+    const raw = await getEventData("epas", eventCode);
     res.send(raw);
 });
 
 app.get("/api/getElimsHaveStarted", validateEventCode, async (req, res) => {
     eventCode = req.query.eventCode;
     console.log("elims check requested, eventCode: " + eventCode);
-    const raw = await externalAPI.fetchMatchAlliances(eventCode);
+    await ensureEventCodeExists("matches", eventCode);
+    const raw = await getEventData("matches", eventCode);
 
-    const result = raw.some(
+    // raw might be an empty object {} if data hasn't been loaded yet
+    const matchesArray = Array.isArray(raw) ? raw : [];
+    const result = matchesArray.some(
         (m) => ["sf", "ef", "f"].includes(m.comp_level)
             && m.winning_alliance !== ""
             && m.winning_alliance !== null
@@ -353,11 +363,14 @@ app.get("/api/getMatchScores", async (req, res) => {
     if (!eventCode || !matchNumber || !driveStation) return res.sendStatus(403);
     console.log("match scores requested, eventCode: " + eventCode);
 
-    const raw = await externalAPI.fetchMatchAlliances(eventCode);
+    await ensureEventCodeExists("matches", eventCode);
+    const raw = await getEventData("matches", eventCode);
 
+    // raw might be an empty object {} if data hasn't been loaded yet
+    const matchesArray = Array.isArray(raw) ? raw : [];
     const matchKey = `${eventCode}_qm${matchNumber}`;
     const alliance = driveStation.startsWith("red") ? "red" : "blue";
-    const tbaMatch = raw.find((m) => m.key === matchKey);
+    const tbaMatch = matchesArray.find((m) => m.key === matchKey);
 
     if (!tbaMatch) {
         console.warn(`Match ${matchKey} not found in event data`);

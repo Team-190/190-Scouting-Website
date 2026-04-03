@@ -144,30 +144,14 @@
             if (res.ok) {
                 const eventsFromDb = await res.json();
                 
-                // Fetch event details from Blue Alliance for each event code
-                // Only fetch for valid TBA event codes (format: YYYY[event-code])
-                const eventsWithNames = await Promise.all(
-                    eventsFromDb.map(async (event) => {
-                        // Check if event code looks like a real TBA event code
-                        const isTbaEventCode = /^\d{4}[a-z0-9]+$/.test(event.eventCode);
-                        
-                        if (isTbaEventCode) {
-                            const details = await fetchEventDetails(event.eventCode);
-                            return {
-                                ...event,
-                                name: details.name || event.eventCode,
-                            };
-                        } else {
-                            // Use eventCode as name for non-TBA event codes
-                            return {
-                                ...event,
-                                name: event.name || event.eventCode,
-                            };
-                        }
-                    })
-                );
+                // Save event code -> name mapping to localStorage for offline reference
+                const eventMapping = {};
+                eventsFromDb.forEach(event => {
+                    eventMapping[event.eventCode] = event.name;
+                });
+                localStorage.setItem("eventCodeToName", JSON.stringify(eventMapping));
                 
-                dbEvents = eventsWithNames;
+                dbEvents = eventsFromDb;
             } else {
                 throw new Error("Failed to fetch events");
             }
