@@ -1161,9 +1161,13 @@
 
 <div class="page-wrapper">
   {#if notification}
-    <div class="banner banner-{notification.type}" onclick={() => notification = null}>
-        {notification.message}
-    </div>
+    <button
+      type="button"
+      class="banner banner-{notification.type}"
+      onclick={() => (notification = null)}
+    >
+      {notification.message}
+    </button>
   {/if}
 
   <!-- Header -->
@@ -1960,11 +1964,12 @@
     transform: translateX(-50%);
     padding: 1rem 2rem;
     border-radius: 8px;
+    border: none;
     color: white;
     font-weight: bold;
     z-index: 10000;
     cursor: pointer;
-}
+  }
 
   .banner-success {
       background-color: #4CAF50;

@@ -19,12 +19,17 @@ require('dotenv').config({ path: path.resolve(__dirname, '../.env'), override: t
 const app = express();
 
 
-setInterval(() => {
+const refreshTimer = setInterval(() => {
     if (eventCode) {
         externalAPI.populateEventData(eventCode);
     }
 }, 1000 * 60 * 5);
 
+if (typeof refreshTimer.unref === "function") {
+    refreshTimer.unref();
+}
+
+// ─── HELPER FUNCTIONS ───────────────────────────────────────────────────────
 
 /**
  * Middleware to validate eventCode parameter
@@ -130,6 +135,10 @@ app.get("/api/getEvents", async (req, res) => {
         console.error(error);
         res.status(500).json({ error: "Failed to fetch events" });
     }
+});
+
+app.get("/api/health", (req, res) => {
+    res.json({ ok: true, timestamp: Date.now() });
 });
 
 app.get("/api/getAvailableTeams", validateEventCode, async (req, res) => {
@@ -254,10 +263,11 @@ app.get("/api/getTeams", validateEventCode, async (req, res) => {
     eventCode = req.query.eventCode;
     console.log("teams requested, eventCode: " + eventCode);
     const raw = await externalAPI.fetchTeams(eventCode);
+    const teamList = Array.isArray(raw) ? raw : [];
 
     const result = {
-        _teams: Object.fromEntries(raw.map((team) => [team.team_number, team.nickname])),
-        _teamNumbers: raw.map((t) => t.team_number).sort((a, b) => a - b),
+        _teams: Object.fromEntries(teamList.map((team) => [team.team_number, team.nickname])),
+        _teamNumbers: teamList.map((t) => t.team_number).sort((a, b) => a - b),
     };
 
     res.send(result);

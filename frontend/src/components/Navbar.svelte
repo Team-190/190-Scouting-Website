@@ -22,8 +22,20 @@
 
   async function checkAlliances() {
     const eventCode = localStorage.getItem("eventCode");
-    alliancesAvailable = await fetchAlliances(eventCode);
-    elimsStarted = await fetchElimsHaveStarted(eventCode);
+    if (!eventCode) {
+      alliancesAvailable = false;
+      elimsStarted = false;
+      return;
+    }
+
+    try {
+      const alliancesData = await fetchAlliances(eventCode);
+      alliancesAvailable = Boolean(alliancesData?.available);
+      elimsStarted = await fetchElimsHaveStarted(eventCode);
+    } catch {
+      alliancesAvailable = false;
+      elimsStarted = false;
+    }
   }
 
   function onStorageChange(e) {

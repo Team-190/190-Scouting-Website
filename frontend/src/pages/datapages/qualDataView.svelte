@@ -308,7 +308,7 @@
         </button>
 
         {#if showFilterDropdown}
-          <div class="filter-dropdown" on:click|stopPropagation>
+          <div class="filter-dropdown">
             <div class="filter-dropdown-header">
               <span class="filter-dropdown-title">Show / Hide Teams</span>
               <div class="filter-actions">
@@ -327,7 +327,7 @@
                   />
                   <span class="filter-team-num">{team}</span>
                   {#if teamsMap.get(team)}
-                    <span class="filter-team-name">{teamsMap.get(team)}-teamName</span>
+                    <span class="filter-team-name">{teamsMap.get(team)}</span>
                   {/if}
                 </label>
               {/each}

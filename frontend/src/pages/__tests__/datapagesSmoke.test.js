@@ -29,13 +29,15 @@ vi.mock('../../utils/api.js', () => ({
     fetchPitScouting: vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
     fetchGracePage: vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
     fetchAnanthPage: vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
-    fetchMatchAlliances: vi.fn().mockResolvedValue({ ok: true, json: async () => ([]) }),
-    fetchEventDetails: vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
-    fetchTeamStatuses: vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
-    fetchOPR: vi.fn().mockResolvedValue({ ok: true, json: async () => ({ oprs: {}, dprs: {}, ccwms: {} }) }),
-    fetchAlliances: vi.fn().mockResolvedValue({ ok: true, json: async () => ({ alliances: [], available: false }) }),
-    fetchEventEpas: vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
-    fetchElimsHaveStarted: vi.fn().mockResolvedValue({ ok: true, json: async () => ({ elimsHaveStarted: false }) }),
+    fetchMatchAlliances: vi.fn().mockResolvedValue([]),
+    fetchEventDetails: vi.fn().mockResolvedValue({}),
+    fetchTeamStatuses: vi.fn().mockResolvedValue({}),
+    fetchOPR: vi.fn().mockResolvedValue({ oprs: {}, dprs: {}, ccwms: {} }),
+    fetchAlliances: vi.fn().mockResolvedValue({ alliances: [], available: false }),
+    fetchEventEpas: vi.fn().mockResolvedValue({}),
+    fetchElimsHaveStarted: vi.fn().mockResolvedValue(false),
+    fetchRobotClimb: vi.fn().mockResolvedValue({ EndgameClimb: 'None', AutoClimb: 'None' }),
+    startPeriodicQueueSync: vi.fn(() => vi.fn()),
 }));
 
 vi.mock('../../utils/pageUtils.js', async (importOriginal) => {
