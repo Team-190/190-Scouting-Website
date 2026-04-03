@@ -64,143 +64,135 @@ export function fetchAnanthPage(eventCode) {
 ////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
 ////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
 
-function fetchWithTimeout(url, timeoutMs = 5000) {
-    const timeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Request timed out")), timeoutMs)
-    );
-    return Promise.race([fetch(url), timeout]);
-}
-async function fetchWithCache(
-    url,
-    storeName,
-    {
-        key = "current",
-        isRows = false,
-        timeoutMs = 5000,
-        persist = false,
-        refresh = false,
-    } = {}
-) {
-    // Check if we have cached data before attempting network
-    const cached = await getIndexedDBStore(storeName, isRows ? null : key);
-    const hasCachedData = cached !== null && !(Array.isArray(cached) && cached.length === 0);
-
-    if (hasCachedData && !refresh) {
-        return cached;
+/**
+ * Read data directly from IndexedDB without hitting the backend.
+ * Data is populated by refreshEventCaches() or the backend's refreshTimer every minute.
+ * If IndexedDB is empty, returns empty object/array (data must be loaded via refreshEventCaches first).
+ */
+async function readFromIndexedDB(storeName, eventCode, isRows = false) {
+    const cached = await getIndexedDBStore(storeName, isRows ? null : eventCode);
+    
+    if (cached === null) {
+        console.warn(`No data found in IndexedDB for ${storeName}/${eventCode}. Call refreshEventCaches() to load data.`);
+        return isRows ? [] : {};
     }
-
-    try {
-        // If we have cache, use a short timeout — fall back fast
-        // If we have no cache, wait longer because we have no fallback
-        const timeout = hasCachedData ? timeoutMs : 30000;
-        const response = await fetchWithTimeout(url, timeout);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json();
-
-        if (persist) {
-            if (isRows) {
-                await setIndexedDBStore(storeName, { rows: data });
-            } else {
-                await setIndexedDBStore(storeName, { key, value: data });
-            }
-        }
-
-        return data;
-    } catch (e) {
-        if (hasCachedData) {
-            console.warn(`Network failed for ${storeName} (${e.message}), falling back to IndexedDB`);
-            return cached;
-        }
-        throw new Error(`Network failed and no cached data available for ${storeName}: ${e.message}`);
-    }
+    
+    return cached;
 }
 
-export async function fetchTeams(eventCode, options = {}) {
-    return fetchWithCache(
-        `${defaultAPILink}/api/getTeams?eventCode=${eventCode}`,
-        "teams",
-        { key: eventCode, ...options }
-    );
+export async function fetchTeams(eventCode) {
+    return readFromIndexedDB("teams", eventCode, false);
 }
 
-export async function fetchMatchAlliances(eventCode, options = {}) {
-    return fetchWithCache(
-        `${defaultAPILink}/api/getMatchAlliances?eventCode=${eventCode}`,
-        "matchAlliances",
-        { isRows: true, ...options }
-    );
+export async function fetchMatchAlliances(eventCode) {
+    return readFromIndexedDB("matchAlliances", eventCode, true);
 }
 
-export async function fetchEventDetails(eventCode, options = {}) {
-    return fetchWithCache(
-        `${defaultAPILink}/api/getEventDetails?eventCode=${eventCode}`,
-        "eventDetails",
-        { key: eventCode, ...options }
-    );
+export async function fetchEventDetails(eventCode) {
+    return readFromIndexedDB("eventDetails", eventCode, false);
 }
 
-export async function fetchTeamStatuses(eventCode, options = {}) {
-    return fetchWithCache(
-        `${defaultAPILink}/api/getTeamStatuses?eventCode=${eventCode}`,
-        "teamStatuses",
-        { key: eventCode, ...options }
-    );
+export async function fetchTeamStatuses(eventCode) {
+    return readFromIndexedDB("teamStatuses", eventCode, false);
 }
 
-export async function fetchOPR(eventCode, options = {}) {
-    return fetchWithCache(
-        `${defaultAPILink}/api/getOPR?eventCode=${eventCode}`,
-        "OPR",
-        { key: eventCode, ...options }
-    );
+export async function fetchOPR(eventCode) {
+    return readFromIndexedDB("OPR", eventCode, false);
 }
 
-export async function fetchAlliances(eventCode, options = {}) {
-    return fetchWithCache(
-        `${defaultAPILink}/api/getAlliances?eventCode=${eventCode}`,
-        "alliances",
-        { key: eventCode, ...options }
-    );
+export async function fetchAlliances(eventCode) {
+    return readFromIndexedDB("alliances", eventCode, false);
 }
 
-export async function fetchEventEpas(eventCode, options = {}) {
-    return fetchWithCache(
-        `${defaultAPILink}/api/getEventEpas?eventCode=${eventCode}`,
-        "EPA",
-        { key: eventCode, ...options }
-    );
+export async function fetchEventEpas(eventCode) {
+    return readFromIndexedDB("EPA", eventCode, false);
 }
 
-export async function fetchElimsHaveStarted(eventCode, options = {}) {
-    const data = await fetchWithCache(
-        `${defaultAPILink}/api/getElimsHaveStarted?eventCode=${eventCode}`,
-        "elimsStarted",
-        { key: eventCode, ...options }
-    );
-    return data.elimsHaveStarted;
+export async function fetchElimsHaveStarted(eventCode) {
+    const data = await readFromIndexedDB("elimsStarted", eventCode, false);
+    return data.elimsHaveStarted ?? false;
 }
 
+/**
+ * Trigger cache refresh by fetching all external API data from the backend
+ * and storing it in IndexedDB for offline access.
+ * Called when a new event is selected.
+ */
 export async function refreshEventCaches(eventCode) {
-    const refreshOptions = { persist: true, refresh: true };
+    try {
+        // First, trigger the backend to populate its JSON caches
+        await fetch(`${defaultAPILink}/api/postEventCode`, {
+            method: 'POST',
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ eventCode })
+        });
 
-    const results = await Promise.allSettled([
-        fetchOPR(eventCode, refreshOptions),
-        fetchTeams(eventCode, refreshOptions),
-        fetchMatchAlliances(eventCode, refreshOptions),
-        fetchEventDetails(eventCode, refreshOptions),
-        fetchTeamStatuses(eventCode, refreshOptions),
-        fetchAlliances(eventCode, refreshOptions),
-        fetchEventEpas(eventCode, refreshOptions),
-        fetchElimsHaveStarted(eventCode, refreshOptions),
-    ]);
+        // Now fetch all the cached data from the backend and store in IndexedDB
+        const results = await Promise.allSettled([
+            (async () => {
+                const data = await fetchApi("/api/getTeams", { eventCode });
+                if (data.ok) {
+                    const json = await data.json();
+                    await setIndexedDBStore("teams", { key: eventCode, value: json });
+                }
+            })(),
+            (async () => {
+                const data = await fetchApi("/api/getMatchAlliances", { eventCode });
+                if (data.ok) {
+                    const json = await data.json();
+                    await setIndexedDBStore("matchAlliances", { rows: json });
+                }
+            })(),
+            (async () => {
+                const data = await fetchApi("/api/getEventDetails", { eventCode });
+                if (data.ok) {
+                    const json = await data.json();
+                    await setIndexedDBStore("eventDetails", { key: eventCode, value: json });
+                }
+            })(),
+            (async () => {
+                const data = await fetchApi("/api/getTeamStatuses", { eventCode });
+                if (data.ok) {
+                    const json = await data.json();
+                    await setIndexedDBStore("teamStatuses", { key: eventCode, value: json });
+                }
+            })(),
+            (async () => {
+                const data = await fetchApi("/api/getOPR", { eventCode });
+                if (data.ok) {
+                    const json = await data.json();
+                    await setIndexedDBStore("OPR", { key: eventCode, value: json });
+                }
+            })(),
+            (async () => {
+                const data = await fetchApi("/api/getAlliances", { eventCode });
+                if (data.ok) {
+                    const json = await data.json();
+                    await setIndexedDBStore("alliances", { key: eventCode, value: json });
+                }
+            })(),
+            (async () => {
+                const data = await fetchApi("/api/getEventEpas", { eventCode });
+                if (data.ok) {
+                    const json = await data.json();
+                    await setIndexedDBStore("EPA", { key: eventCode, value: json });
+                }
+            })(),
+            (async () => {
+                const data = await fetchApi("/api/getElimsHaveStarted", { eventCode });
+                if (data.ok) {
+                    const json = await data.json();
+                    await setIndexedDBStore("elimsStarted", { key: eventCode, value: json });
+                }
+            })(),
+        ]);
 
-    const oprResult = results[0];
-    if (oprResult.status === "fulfilled") {
-        return oprResult.value;
+        console.log(`Cache refresh completed for event: ${eventCode}`);
+        return {};
+    } catch (error) {
+        console.warn(`Failed to refresh caches: ${error.message}`);
+        return {};
     }
-
-    console.warn("Failed to refresh OPR during cache refresh:", oprResult.reason);
-    return {};
 }
 
 const PIT_QUEUE_KEY = "pitScouting";
@@ -251,7 +243,13 @@ export async function hasServerConnection(timeoutMs = 2500) {
     }
 
     try {
-        const response = await fetchWithTimeout(`${defaultAPILink}/api/health`, timeoutMs);
+        const timeout = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Request timed out")), timeoutMs)
+        );
+        const response = await Promise.race([
+            fetch(`${defaultAPILink}/api/health`),
+            timeout
+        ]);
         return response?.ok === true;
     } catch {
         return false;
