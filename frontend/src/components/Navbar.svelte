@@ -35,6 +35,11 @@
 
   function toggleMenu(menuName) {
     expandedMenu = expandedMenu === menuName ? null : menuName;
+    // On mobile, ensure sidebar stays open when toggling dropdowns
+    if (expandedMenu) {
+      isPinnedOpen = true;
+      isSidebarOpen.set(true);
+    }
   }
 
   async function checkAlliances() {
@@ -409,6 +414,10 @@
     position: relative;
   }
 
+  .navbar.collapsed .dropdown-menu {
+    display: none;
+  }
+
   .dropdown-toggle {
     background: none;
     border: none;
@@ -453,11 +462,17 @@
   }
 
   .dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
     background-color: #222;
     border-left: 3px solid #c81b00;
     padding: 0;
     margin: 0;
     animation: slideDown 0.2s ease-out;
+    z-index: 1001;
+    min-width: 100%;
   }
 
   @keyframes slideDown {
