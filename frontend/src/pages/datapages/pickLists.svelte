@@ -4,7 +4,7 @@
   import { onMount } from "svelte";
   import { writable } from "svelte/store";
   import Team from "../../components/Team.svelte";
-  import TeamHoverCard from "../../components/TeamHoverCard.svelte";
+  import TeamHoverCard from "../../components/teamHoverCard.svelte";
   import {
       fetchEventEpas,
       fetchOPR,
@@ -81,6 +81,7 @@
   let editingAllianceSelectionId = $state(null);
   let editingAllianceSelectionName = $state("");
   let allianceImportData = $state("");
+  let isFillingAlliances = $state(false);
 
   // ─── HOVERCARD STATE ─────────────────────────────────────────────────────────
 
@@ -383,6 +384,7 @@
     if (
       eventCode &&
       activeView === "alliances" &&
+      !isFillingAlliances &&
       alliances.every((a) => a.teams.length === 0)
     ) {
       populateAllianceCaptains();
@@ -543,8 +545,9 @@
         }
       });
 
-      if (rankedTeams.length < 8) {
-          alert("Not enough ranked teams to populate all 8 alliance captain spots.");
+      // Only notify if we got some data but not enough — skip when IndexedDB/API returned nothing at all
+      if (rankedTeams.length > 0 && rankedTeams.length < 8) {
+        showNotification("Not enough ranked teams to populate all 8 alliance captain spots.", "error");
       }
     } catch (err) {
       console.error(err);
@@ -555,6 +558,8 @@
   // ─── FILL FUNCTIONS ──────────────────────────────────────────────────────────
 
   async function rankFill() {
+    isFillingAlliances = true;
+    try {
     createAndSwitchToNewAllianceSelection("Rank Filled");
     await populateAllianceCaptains();
 
@@ -583,6 +588,9 @@
     if (isFourTeamAlliance) {
       for (let i = 7; i >= 0; i--) pickNext(alliances[i]);
     }
+    } finally {
+      isFillingAlliances = false;
+    }
   }
 
   async function oprFill() {
@@ -591,6 +599,8 @@
       return;
     }
 
+    isFillingAlliances = true;
+    try {
     createAndSwitchToNewAllianceSelection("OPR Filled");
     await populateAllianceCaptains();
 
@@ -620,6 +630,9 @@
       for (let i = 7; i >= 0; i--)
         pickTeamForAlliance(oprSortedTeams, alliances[i], i);
     }
+    } finally {
+      isFillingAlliances = false;
+    }
   }
 
   async function epaFill() {
@@ -628,6 +641,8 @@
       return;
     }
 
+    isFillingAlliances = true;
+    try {
     createAndSwitchToNewAllianceSelection("EPA Filled");
     await populateAllianceCaptains();
 
@@ -656,6 +671,9 @@
     if (isFourTeamAlliance) {
       for (let i = 7; i >= 0; i--)
         pickTeamForAlliance(epaSortedTeams, alliances[i], i);
+    }
+    } finally {
+      isFillingAlliances = false;
     }
   }
 
@@ -1143,9 +1161,13 @@
 
 <div class="page-wrapper">
   {#if notification}
-    <div class="banner banner-{notification.type}" onclick={() => notification = null}>
-        {notification.message}
-    </div>
+    <button
+      type="button"
+      class="banner banner-{notification.type}"
+      onclick={() => (notification = null)}
+    >
+      {notification.message}
+    </button>
   {/if}
 
   <!-- Header -->
@@ -2055,11 +2077,12 @@
     transform: translateX(-50%);
     padding: 1rem 2rem;
     border-radius: 8px;
+    border: none;
     color: white;
     font-weight: bold;
     z-index: 10000;
     cursor: pointer;
-}
+  }
 
   .banner-success {
       background-color: #4CAF50;

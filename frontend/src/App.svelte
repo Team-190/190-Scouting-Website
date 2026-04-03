@@ -2,6 +2,7 @@
   import { Router } from "@mateothegreat/svelte5-router";
   import { onMount } from "svelte";
   import { isSidebarOpen } from "./stores/sidebarState.js";
+  import { startPeriodicQueueSync } from "./utils/api.js";
 
   import Navbar from "./components/Navbar.svelte";
   import Home from "./pages/Home.svelte";
@@ -14,6 +15,7 @@
   import QualPage from "./pages/datapages/qualPage.svelte";
   import SingleMetric from "./pages/datapages/singleMetric.svelte";
   import TeamView from "./pages/datapages/teamView.svelte";
+  import QualDataView from "./pages/datapages/qualDataView.svelte";
 
   const routes = [
     { path: "/", component: Home },
@@ -26,14 +28,21 @@
     { path: "/marchMadness", component: MarchMadness },
     { path: "/matchPreview", component: MatchPreview },
     { path: "/qualPage", component: QualPage },
+    { path: "/qualDataView", component: QualDataView },
   ];
 
   onMount(() => {
+    const stopQueueSync = startPeriodicQueueSync(15000);
+
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/service_worker.js')
         .then(reg => console.log('SW registered', reg))
         .catch(err => console.error('SW failed', err));
     }
+
+    return () => {
+      stopQueueSync();
+    };
   });
 </script>
 

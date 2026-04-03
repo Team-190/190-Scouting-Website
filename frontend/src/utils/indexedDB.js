@@ -1,10 +1,72 @@
 // @ts-nocheck
 const DB_NAME = "scoutingDB";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let dbInstance = null;
 
-const STORE_LIST = ["matchAlliances", "teams", "eventDetails", "teamStatuses", "OPR", "alliances", "EPA", "elimsStarted", "matchScores"];
+const STORE_CONFIG = {
+    scoutingData: { keyPath: "Id" },
+    matchAlliances: { keyPath: "key" },
+    teams: { keyPath: "key" },
+    eventDetails: { keyPath: "key" },
+    teamStatuses: { keyPath: "key" },
+    OPR: { keyPath: "key" },
+    alliances: { keyPath: "key" },
+    EPA: { keyPath: "key" },
+    elimsStarted: { keyPath: "key" },
+    matchScores: { keyPath: "key" },
+};
+
+const STORE_LIST = Object.keys(STORE_CONFIG).filter((name) => name !== "scoutingData");
+
+function getExpectedKeyPath(storeName) {
+    return STORE_CONFIG[storeName]?.keyPath ?? null;
+}
+
+function normalizeScoutingRow(row) {
+    if (!row || typeof row !== "object") return null;
+
+    const normalized = { ...row };
+    if (normalized.Id == null && normalized.ID != null) normalized.Id = normalized.ID;
+    if (normalized.Id == null && normalized.id != null) normalized.Id = normalized.id;
+
+    if (normalized.Id == null) return null;
+    return normalized;
+}
+
+function normalizeRecordForStore(storeName, row) {
+    if (!row || typeof row !== "object") return null;
+    if (storeName === "scoutingData") return normalizeScoutingRow(row);
+
+    if (row.key == null) return null;
+    return row;
+}
+
+function createStore(db, storeName) {
+    const keyPath = getExpectedKeyPath(storeName);
+    if (!keyPath) return;
+    db.createObjectStore(storeName, { keyPath });
+}
+
+function ensureStoreSchema(db, tx, storeName) {
+    const expectedKeyPath = getExpectedKeyPath(storeName);
+    if (!expectedKeyPath) return;
+
+    if (!db.objectStoreNames.contains(storeName)) {
+        createStore(db, storeName);
+        return;
+    }
+
+    const existingStore = tx.objectStore(storeName);
+    const existingKeyPath = existingStore.keyPath;
+
+    if (existingKeyPath === expectedKeyPath) {
+        return;
+    }
+
+    db.deleteObjectStore(storeName);
+    createStore(db, storeName);
+}
 
 // ─── OPEN / INIT ─────────────────────────────────────────────────────────────
 
@@ -16,12 +78,16 @@ function openDB() {
 
         request.onupgradeneeded = () => {
             const db = request.result;
+            const tx = request.transaction;
+
             for (const name of [...db.objectStoreNames]) {
-                db.deleteObjectStore(name);
+                if (!STORE_CONFIG[name]) {
+                    db.deleteObjectStore(name);
+                }
             }
-            db.createObjectStore("scoutingData", { keyPath: "Id" });
-            for (const store of STORE_LIST) {
-                db.createObjectStore(store, { keyPath: "key" });
+
+            for (const storeName of Object.keys(STORE_CONFIG)) {
+                ensureStoreSchema(db, tx, storeName);
             }
         };
 
@@ -35,6 +101,7 @@ function openDB() {
         };
 
         request.onerror = () => reject(request.error);
+        request.onblocked = () => reject(new Error("IndexedDB upgrade blocked by another open tab"));
     });
 }
 
@@ -46,8 +113,12 @@ export async function setIndexedDBStore(STORE, { rows = null, key = null, value 
         const tx = db.transaction(STORE, "readwrite");
         const store = tx.objectStore(STORE);
 
-        if (rows) {
-            for (const row of rows) store.put(row);
+        if (Array.isArray(rows)) {
+            for (const row of rows) {
+                const normalized = normalizeRecordForStore(STORE, row);
+                if (!normalized) continue;
+                store.put(normalized);
+            }
         } else if (key !== null && value !== null) {
             store.put({ key, value });
         }
@@ -102,6 +173,12 @@ export async function getIndexedDBStore(STORE, key = null) {
 // ─── UTILS ───────────────────────────────────────────────────────────────────
 
 export async function getLastId(data) {
-    if (!data.length) return 0;
-    return Math.max(...data.map(r => r.Id));
+    if (!Array.isArray(data) || data.length === 0) return 0;
+
+    const ids = data
+        .map((row) => Number(row?.Id ?? row?.ID ?? row?.id))
+        .filter((id) => Number.isFinite(id));
+
+    if (ids.length === 0) return 0;
+    return Math.max(...ids);
 }

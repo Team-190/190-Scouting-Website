@@ -1,5 +1,6 @@
 require('dotenv').config({ path: require('path').resolve(__dirname, '../.env'), override: true });
 const TBA_API_KEY = process.env.VITE_AUTH_KEY;
+const database = require("./database.js");
 
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 
@@ -12,107 +13,189 @@ async function tbaFetch(url) {
   return fetch(url, { headers: { "X-TBA-Auth-Key": TBA_API_KEY } });
 }
 
-// ─── THE BLUE ALLIANCE ──────────────────────────────────────────────────────
+// ─── DATA POPULATION ────────────────────────────────────────────────────────
 
 /**
- * Fetches event details from The Blue Alliance API.
+ * Fetches all data for a given event from TBA and Statbotics and writes it
+ * to the appropriate JSON cache files. Called on startup and on a 5-minute
+ * interval from index.js, as well as on-demand when a cache miss is detected.
+ *
+ * Files written (keyed by eventCode):
+ *   matches, teams, eventDetails, teamStatuses, oprs, alliances, epas
+ *
  * @param {string} eventCode - TBA event code (e.g. "2024casj")
- * @returns {Promise<Response>} Raw TBA Response object
- * @throws {Error} If the TBA request fails or returns a non-OK status
+ * @returns {Promise<void>}
+ */
+async function populateEventData(eventCode) {
+  if (!eventCode) return;
+  console.log(`[externalApi] Populating all data for eventCode: ${eventCode}`);
+
+  const fetches = [
+    {
+      filename: "matches",
+      url: `https://www.thebluealliance.com/api/v3/event/${eventCode}/matches`,
+      useTBA: true,
+      fallback: [],
+    },
+    {
+      filename: "teams",
+      url: `https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/simple`,
+      useTBA: true,
+      fallback: [],
+    },
+    {
+      filename: "eventDetails",
+      url: `https://www.thebluealliance.com/api/v3/event/${eventCode}`,
+      useTBA: true,
+      fallback: {},
+    },
+    {
+      filename: "teamStatuses",
+      url: `https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/statuses`,
+      useTBA: true,
+      fallback: {},
+    },
+    {
+      filename: "oprs",
+      url: `https://www.thebluealliance.com/api/v3/event/${eventCode}/oprs`,
+      useTBA: true,
+      fallback: {},
+    },
+    {
+      filename: "alliances",
+      url: `https://www.thebluealliance.com/api/v3/event/${eventCode}/alliances`,
+      useTBA: true,
+      fallback: [],
+    },
+    {
+      filename: "epas",
+      url: `https://api.statbotics.io/v3/team_events?event=${eventCode}`,
+      useTBA: false,
+      fallback: {},
+    },
+  ];
+
+  await Promise.allSettled(
+    fetches.map(async ({ filename, url, useTBA }) => {
+      try {
+        const response = await (useTBA ? tbaFetch(url) : fetch(url));
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const raw = await response.json();
+
+        let fileData = {};
+        try { fileData = await database.readJSONFile(filename); } catch (_) {}
+        fileData[eventCode] = raw;
+        await database.writeJSONFile(filename, fileData);
+        console.log(`[externalApi] Cached ${filename} for ${eventCode}`);
+      } catch (e) {
+        console.error(`[externalApi] Failed to populate ${filename} for ${eventCode}:`, e);
+      }
+    })
+  );
+}
+
+// ─── CACHE HELPERS ──────────────────────────────────────────────────────────
+
+/**
+ * Returns true if the cached value is present and non-empty.
+ * @param {*} value
+ * @returns {boolean}
+ */
+function isCacheValid(value) {
+  return value !== undefined && value !== null;
+}
+
+/**
+ * Reads the cached value for eventCode from a JSON file. If missing, empty,
+ * or corrupt, triggers populateEventData() and reads again.
+ *
+ * @param {string} filename
+ * @param {string} eventCode
+ * @param {*} fallback - Returned if cache is still invalid after re-population
+ * @returns {Promise<*>}
+ */
+async function readFromCache(filename, eventCode, fallback) {
+  let fileData = {};
+  try { fileData = await database.readJSONFile(filename); } catch (_) {}
+
+  if (isCacheValid(fileData[eventCode])) {
+    return fileData[eventCode];
+  }
+
+  console.log(`[externalApi] Cache miss for ${filename}/${eventCode}, re-populating...`);
+  await populateEventData(eventCode);
+
+  try { fileData = await database.readJSONFile(filename); } catch (_) {}
+  return isCacheValid(fileData[eventCode]) ? fileData[eventCode] : fallback;
+}
+
+// ─── PUBLIC API ─────────────────────────────────────────────────────────────
+
+/**
+ * Returns event details for the given event code.
+ * @param {string} eventCode
+ * @returns {Promise<object>}
  */
 async function fetchEventDetails(eventCode) {
-  const response = await tbaFetch(
-    `https://www.thebluealliance.com/api/v3/event/${eventCode}`
-  );
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response;
+  return readFromCache("eventDetails", eventCode, {});
 }
 
 /**
- * Fetches the list of teams attending an event from The Blue Alliance.
- * @param {string} eventCode - TBA event code (e.g. "2024casj")
- * @returns {Promise<Response>} Raw TBA Response object
- * @throws {Error} If the TBA request fails or returns a non-OK status
+ * Returns the list of teams attending an event.
+ * @param {string} eventCode
+ * @returns {Promise<Array>}
  */
 async function fetchTeams(eventCode) {
-  const response = await tbaFetch(
-    `https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/simple`
-  );
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response;
+  return readFromCache("teams", eventCode, []);
 }
 
 /**
- * Fetches qualification ranking statuses for all teams at an event.
- * @param {string} eventCode - TBA event code (e.g. "2024casj")
- * @returns {Promise<Response>} Raw TBA Response object
- * @throws {Error} If the TBA request fails or returns a non-OK status
+ * Returns qualification ranking statuses for all teams at an event.
+ * @param {string} eventCode
+ * @returns {Promise<object>}
  */
 async function fetchTeamStatuses(eventCode) {
-  const response = await tbaFetch(
-    `https://www.thebluealliance.com/api/v3/event/${eventCode}/teams/statuses`
-  );
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response;
+  return readFromCache("teamStatuses", eventCode, {});
 }
 
 /**
- * Fetches raw match data for an event from The Blue Alliance.
- * @param {string} eventCode - TBA event code (e.g. "2024casj")
- * @returns {Promise<Response>} Raw TBA Response object
- * @throws {Error} If the TBA request fails or returns a non-OK status
+ * Returns raw match data for an event.
+ * @param {string} eventCode
+ * @returns {Promise<Array>}
  */
 async function fetchMatchAlliances(eventCode) {
-  const response = await tbaFetch(
-    `https://www.thebluealliance.com/api/v3/event/${eventCode}/matches`
-  );
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response;
+  return readFromCache("matches", eventCode, []);
 }
 
 /**
- * Fetches OPR data for an event from The Blue Alliance.
- * @param {string} eventCode - TBA event code (e.g. "2024casj")
- * @returns {Promise<Response>} Raw TBA Response object
- * @throws {Error} If the TBA request fails or returns a non-OK status
+ * Returns OPR data for an event.
+ * @param {string} eventCode
+ * @returns {Promise<object>}
  */
 async function fetchOPR(eventCode) {
-  const response = await tbaFetch(
-    `https://www.thebluealliance.com/api/v3/event/${eventCode}/oprs`
-  );
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response;
+  return readFromCache("oprs", eventCode, {});
 }
 
 /**
- * Fetches alliance selections for an event from The Blue Alliance.
- * @param {string} eventCode - TBA event code (e.g. "2024casj")
- * @returns {Promise<Response>} Raw TBA Response object
- * @throws {Error} If the TBA request fails or returns a non-OK status
+ * Returns alliance selection data for an event.
+ * @param {string} eventCode
+ * @returns {Promise<Array>}
  */
 async function fetchAlliances(eventCode) {
-  const response = await tbaFetch(
-    `https://www.thebluealliance.com/api/v3/event/${eventCode}/alliances`
-  );
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response;
+  return readFromCache("alliances", eventCode, []);
 }
 
 /**
- * Fetches team EPA data from Statbotics for a given event.
- * @param {string} eventCode - TBA event code (e.g. "2024casj")
- * @returns {Promise<Response>} Raw Statbotics Response object
- * @throws {Error} If the request fails or returns a non-OK status
+ * Returns team EPA data from Statbotics for an event.
+ * @param {string} eventCode
+ * @returns {Promise<object>}
  */
 async function fetchEventEpas(eventCode) {
-  const response = await fetch(
-    `https://api.statbotics.io/v3/team_events?event=${eventCode}`
-  );
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response;
+  return readFromCache("epas", eventCode, {});
 }
 
 module.exports = {
+  populateEventData,
   fetchEventDetails,
   fetchTeams,
   fetchTeamStatuses,
