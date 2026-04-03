@@ -5,165 +5,393 @@ const defaultAPILink = `http://${SERVER}:${VITE_BACKEND_PORT}`;
 
 import { setIndexedDBStore, getIndexedDBStore  } from './indexedDB';
 
+function fetchApi(path, query = {}) {
+    const params = new URLSearchParams();
+
+    for (const [key, value] of Object.entries(query)) {
+        if (value === undefined || value === null) continue;
+        params.set(key, String(value));
+    }
+
+    const queryString = params.toString();
+    const route = `${defaultAPILink}${path}${queryString ? `?${queryString}` : ""}`;
+    return fetch(route);
+}
+
 export function fetchEvents() {
-    const route = `${defaultAPILink}/api/getEvents`;
-    let data = fetch(route);
-    return data;
+    return fetchApi("/api/getEvents");
 }
 
 export function fetchAvailableTeams(eventCode) {
-    const route = `${defaultAPILink}/api/getAvailableTeams?eventCode=` + eventCode;
-    let data = fetch(route);
-    return data;
+    return fetchApi("/api/getAvailableTeams", { eventCode });
 }
 
 export function fetchAllData(eventCode, lastId = 0) {
-    const route = `${defaultAPILink}/api/getAllData?eventCode=${eventCode}&lastId=${lastId}`;
-    let data = fetch(route);
-    return data;
+    return fetchApi("/api/getAllData", { eventCode, lastId });
 }
 
 export function fetchSingleMetric(eventCode) {
-    const route = `${defaultAPILink}/api/getSingleMetric?eventCode=` + eventCode;
-    let data = fetch(route);
-    return data;
+    return fetchApi("/api/getSingleMetric", { eventCode });
 }
 
 export function fetchQualitativeScouting(eventCode, localCounts = {}) {
-    const route = `${defaultAPILink}/api/getQualitativeScouting?eventCode=${eventCode}&localCounts=${encodeURIComponent(JSON.stringify(localCounts))}`;
-    let data = fetch(route);
-    return data;
+    return fetchApi("/api/getQualitativeScouting", {
+        eventCode,
+        localCounts: JSON.stringify(localCounts),
+    });
 }
 
 export function fetchPitScouting(eventCode, localTeams = []) {
-    const route = `${defaultAPILink}/api/getPitScouting?eventCode=${eventCode}&localTeams=${encodeURIComponent(JSON.stringify(localTeams))}`;
-    let data = fetch(route);
-    return data;
+    return fetchApi("/api/getPitScouting", {
+        eventCode,
+        localTeams: JSON.stringify(localTeams),
+    });
 }
 
 export function fetchPitScoutingImage(eventCode, team) {
-    const route = `${defaultAPILink}/api/getPitScoutingImage?eventCode=${eventCode}&teamNumber=${team}`;
-    let data = fetch(route);
-    return data;
+    return fetchApi("/api/getPitScoutingImage", { eventCode, teamNumber: team });
 }
 
 export function fetchGracePage(eventCode) {
-    const route = `${defaultAPILink}/api/getRatings?eventCode=${eventCode}`;
-    let data = fetch(route);
-    return data;
+    return fetchApi("/api/getRatings", { eventCode });
 }
 
 export function fetchAnanthPage(eventCode) {
-    const route = `${defaultAPILink}/api/getHPRatings?eventCode=${eventCode}`;
-    let data = fetch(route);
-    return data;
+    return fetchApi("/api/getHPRatings", { eventCode });
 }
 
 ////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
 ////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
 ////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
 
-function fetchWithTimeout(url, timeoutMs = 5000) {
-    const timeout = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Request timed out")), timeoutMs)
-    );
-    return Promise.race([fetch(url), timeout]);
-}
-async function fetchWithCache(url, storeName, { key = "current", isRows = false, timeoutMs = 5000 } = {}) {
-    // Check if we have cached data before attempting network
-    const cached = await getIndexedDBStore(storeName, isRows ? null : key);
-    const hasCachedData = cached !== null && !(Array.isArray(cached) && cached.length === 0);
-
-    try {
-        // If we have cache, use a short timeout — fall back fast
-        // If we have no cache, wait longer because we have no fallback
-        const timeout = hasCachedData ? timeoutMs : 30000;
-        const response = await fetchWithTimeout(url, timeout);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const data = await response.json();
-
-        if (isRows) {
-            await setIndexedDBStore(storeName, { rows: data });
-        } else {
-            await setIndexedDBStore(storeName, { key, value: data });
-        }
-
-        return data;
-    } catch (e) {
-        if (hasCachedData) {
-            console.warn(`Network failed for ${storeName} (${e.message}), falling back to IndexedDB`);
-            return cached;
-        }
-        throw new Error(`Network failed and no cached data available for ${storeName}: ${e.message}`);
+/**
+ * Read data directly from IndexedDB without hitting the backend.
+ * Data is populated by refreshEventCaches() or the backend's refreshTimer every minute.
+ * If IndexedDB is empty, returns empty object/array (data must be loaded via refreshEventCaches first).
+ */
+async function readFromIndexedDB(storeName, eventCode, isRows = false) {
+    const cached = await getIndexedDBStore(storeName, isRows ? null : eventCode);
+    
+    if (cached === null) {
+        console.warn(`No data found in IndexedDB for ${storeName}/${eventCode}. Call refreshEventCaches() to load data.`);
+        return isRows ? [] : {};
     }
+    
+    return cached;
 }
 
 export async function fetchTeams(eventCode) {
-    return fetchWithCache(
-        `${defaultAPILink}/api/getTeams?eventCode=${eventCode}`,
-        "teams"
-    );
+    return readFromIndexedDB("teams", eventCode, false);
 }
 
 export async function fetchMatchAlliances(eventCode) {
-    return fetchWithCache(
-        `${defaultAPILink}/api/getMatchAlliances?eventCode=${eventCode}`,
-        "matchAlliances",
-        { isRows: true }
-    );
+    return readFromIndexedDB("matchAlliances", eventCode, true);
 }
 
 export async function fetchEventDetails(eventCode) {
-    return fetchWithCache(
-        `${defaultAPILink}/api/getEventDetails?eventCode=${eventCode}`,
-        "eventDetails"
-    );
+    return readFromIndexedDB("eventDetails", eventCode, false);
 }
 
 export async function fetchTeamStatuses(eventCode) {
-    return fetchWithCache(
-        `${defaultAPILink}/api/getTeamStatuses?eventCode=${eventCode}`,
-        "teamStatuses"
-    );
+    return readFromIndexedDB("teamStatuses", eventCode, false);
 }
 
 export async function fetchOPR(eventCode) {
-    return fetchWithCache(
-        `${defaultAPILink}/api/getOPR?eventCode=${eventCode}`,
-        "OPR"
-    );
+    return readFromIndexedDB("OPR", eventCode, false);
 }
 
 export async function fetchAlliances(eventCode) {
-    return fetchWithCache(
-        `${defaultAPILink}/api/getAlliances?eventCode=${eventCode}`,
-        "alliances"
-    );
+    return readFromIndexedDB("alliances", eventCode, false);
 }
 
 export async function fetchEventEpas(eventCode) {
-    return fetchWithCache(
-        `${defaultAPILink}/api/getEventEpas?eventCode=${eventCode}`,
-        "EPA"
-    );
+    return readFromIndexedDB("EPA", eventCode, false);
 }
 
 export async function fetchElimsHaveStarted(eventCode) {
-    const data = await fetchWithCache(
-        `${defaultAPILink}/api/getElimsHaveStarted?eventCode=${eventCode}`,
-        "elimsStarted"
-    );
-    return data.elimsHaveStarted;
+    const data = await readFromIndexedDB("elimsStarted", eventCode, false);
+    return data.elimsHaveStarted ?? false;
+}
+
+/**
+ * Trigger cache refresh by fetching all external API data from the backend
+ * and storing it in IndexedDB for offline access.
+ * Called when a new event is selected.
+ */
+export async function refreshEventCaches(eventCode) {
+    try {
+        // First, trigger the backend to populate its JSON caches
+        await fetch(`${defaultAPILink}/api/postEventCode`, {
+            method: 'POST',
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ eventCode })
+        });
+
+        // Now fetch all the cached data from the backend and store in IndexedDB
+        const results = await Promise.allSettled([
+            (async () => {
+                const data = await fetchApi("/api/getTeams", { eventCode });
+                if (data.ok) {
+                    const json = await data.json();
+                    await setIndexedDBStore("teams", { key: eventCode, value: json });
+                }
+            })(),
+            (async () => {
+                const data = await fetchApi("/api/getMatchAlliances", { eventCode });
+                if (data.ok) {
+                    const json = await data.json();
+                    await setIndexedDBStore("matchAlliances", { rows: json });
+                }
+            })(),
+            (async () => {
+                const data = await fetchApi("/api/getEventDetails", { eventCode });
+                if (data.ok) {
+                    const json = await data.json();
+                    await setIndexedDBStore("eventDetails", { key: eventCode, value: json });
+                }
+            })(),
+            (async () => {
+                const data = await fetchApi("/api/getTeamStatuses", { eventCode });
+                if (data.ok) {
+                    const json = await data.json();
+                    await setIndexedDBStore("teamStatuses", { key: eventCode, value: json });
+                }
+            })(),
+            (async () => {
+                const data = await fetchApi("/api/getOPR", { eventCode });
+                if (data.ok) {
+                    const json = await data.json();
+                    await setIndexedDBStore("OPR", { key: eventCode, value: json });
+                }
+            })(),
+            (async () => {
+                const data = await fetchApi("/api/getAlliances", { eventCode });
+                if (data.ok) {
+                    const json = await data.json();
+                    await setIndexedDBStore("alliances", { key: eventCode, value: json });
+                }
+            })(),
+            (async () => {
+                const data = await fetchApi("/api/getEventEpas", { eventCode });
+                if (data.ok) {
+                    const json = await data.json();
+                    await setIndexedDBStore("EPA", { key: eventCode, value: json });
+                }
+            })(),
+            (async () => {
+                const data = await fetchApi("/api/getElimsHaveStarted", { eventCode });
+                if (data.ok) {
+                    const json = await data.json();
+                    await setIndexedDBStore("elimsStarted", { key: eventCode, value: json });
+                }
+            })(),
+        ]);
+
+        console.log(`Cache refresh completed for event: ${eventCode}`);
+        return {};
+    } catch (error) {
+        console.warn(`Failed to refresh caches: ${error.message}`);
+        return {};
+    }
+}
+
+const PIT_QUEUE_KEY = "pitScouting";
+const QUAL_QUEUE_KEY = "scoutingData";
+
+function canUseLocalStorage() {
+    return typeof window !== "undefined" && typeof localStorage !== "undefined";
+}
+
+function readLocalJson(key, fallback) {
+    if (!canUseLocalStorage()) return fallback;
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    try {
+        return JSON.parse(raw);
+    } catch {
+        return fallback;
+    }
+}
+
+function writeLocalJson(key, value) {
+    if (!canUseLocalStorage()) return;
+    localStorage.setItem(key, JSON.stringify(value));
+}
+
+function readQueue(key) {
+    const queue = readLocalJson(key, []);
+    return Array.isArray(queue) ? queue : [];
+}
+
+function updatePitMirror(team, formData) {
+    const pitData = readLocalJson("retrievePit", {});
+    pitData[String(team)] = formData;
+    writeLocalJson("retrievePit", pitData);
+}
+
+function updateQualMirror(team, match, formData) {
+    const qualData = readLocalJson("retrieveQual", {});
+    const teamKey = String(team).replace(/\D/g, "");
+    qualData[teamKey] ||= {};
+    qualData[teamKey][String(match)] = formData;
+    writeLocalJson("retrieveQual", qualData);
+}
+
+export async function hasServerConnection(timeoutMs = 2500) {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+        return false;
+    }
+
+    try {
+        const timeout = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Request timed out")), timeoutMs)
+        );
+        const response = await Promise.race([
+            fetch(`${defaultAPILink}/api/health`),
+            timeout
+        ]);
+        return response?.ok === true;
+    } catch {
+        return false;
+    }
+}
+
+export function queuePitScoutingForSync(event, team, formData) {
+    const queue = readQueue(PIT_QUEUE_KEY);
+    queue.push({ event, team: String(team), formData });
+    writeLocalJson(PIT_QUEUE_KEY, queue);
+    updatePitMirror(team, formData);
+    return queue.length;
+}
+
+export function queueQualitativeScoutingForSync(event, team, match, formData) {
+    const queue = readQueue(QUAL_QUEUE_KEY);
+    queue.push({ event, team: String(team), match: String(match), formData });
+    writeLocalJson(QUAL_QUEUE_KEY, queue);
+    updateQualMirror(team, match, formData);
+    return queue.length;
+}
+
+export async function flushPitScoutingQueue() {
+    const queue = readQueue(PIT_QUEUE_KEY);
+    if (queue.length === 0) {
+        return { uploaded: 0, remaining: 0 };
+    }
+
+    if (!(await hasServerConnection())) {
+        return { uploaded: 0, remaining: queue.length };
+    }
+
+    const remaining = [];
+    let uploaded = 0;
+
+    for (let i = 0; i < queue.length; i++) {
+        const item = queue[i];
+        const event = item.event || localStorage.getItem("eventCode");
+        const team = item.team || item.teamNumber;
+        const formData = item.formData || item;
+
+        if (!event || !team || !formData) {
+            remaining.push(item);
+            continue;
+        }
+
+        try {
+            const response = await postPitScouting(event, team, formData);
+            if (response.ok) {
+                uploaded += 1;
+                updatePitMirror(team, formData);
+            } else {
+                remaining.push(item);
+            }
+        } catch {
+            remaining.push(item, ...queue.slice(i + 1));
+            break;
+        }
+    }
+
+    writeLocalJson(PIT_QUEUE_KEY, remaining);
+    return { uploaded, remaining: remaining.length };
+}
+
+export async function flushQualitativeScoutingQueue() {
+    const queue = readQueue(QUAL_QUEUE_KEY);
+    if (queue.length === 0) {
+        return { uploaded: 0, remaining: 0 };
+    }
+
+    if (!(await hasServerConnection())) {
+        return { uploaded: 0, remaining: queue.length };
+    }
+
+    const remaining = [];
+    let uploaded = 0;
+
+    for (let i = 0; i < queue.length; i++) {
+        const item = queue[i];
+        const event = item.event || localStorage.getItem("eventCode");
+        const team = item.team || item.Team;
+        const match = item.match || item.Match;
+        const formData = item.formData || item;
+
+        if (!event || !team || !match || !formData) {
+            remaining.push(item);
+            continue;
+        }
+
+        try {
+            const response = await postQualitativeScouting(event, team, match, formData);
+            if (response.ok) {
+                uploaded += 1;
+                updateQualMirror(team, match, formData);
+            } else {
+                remaining.push(item);
+            }
+        } catch {
+            remaining.push(item, ...queue.slice(i + 1));
+            break;
+        }
+    }
+
+    writeLocalJson(QUAL_QUEUE_KEY, remaining);
+    return { uploaded, remaining: remaining.length };
+}
+
+export async function flushOfflineScoutingQueues() {
+    const [pitResult, qualResult] = await Promise.all([
+        flushPitScoutingQueue(),
+        flushQualitativeScoutingQueue(),
+    ]);
+
+    return {
+        pit: pitResult,
+        qual: qualResult,
+    };
+}
+
+export function startPeriodicQueueSync(intervalMs = 15000) {
+    if (typeof window === "undefined") {
+        return () => {};
+    }
+
+    const runSync = () => {
+        flushOfflineScoutingQueues().catch((error) => {
+            console.warn("Periodic scouting queue sync failed", error);
+        });
+    };
+
+    const intervalId = window.setInterval(runSync, intervalMs);
+    window.addEventListener("online", runSync);
+    runSync();
+
+    return () => {
+        window.clearInterval(intervalId);
+        window.removeEventListener("online", runSync);
+    };
 }
 
 export async function fetchRobotClimb(eventCode, teamNumber, matchNumber) {
-  const response = await fetch(
-    `${defaultAPILink}/api/getMatchAlliances?eventCode=${eventCode}`
-  );
-
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  
-  const allMatches = await response.json();
+    const allMatches = await fetchMatchAlliances(eventCode);
   const match = allMatches.find(m => m.match_number === parseInt(matchNumber) && m.comp_level === "qm");
 
   if (!match) return { EndgameClimb: "Match Not Found", AutoClimb: "Match Not Found" };

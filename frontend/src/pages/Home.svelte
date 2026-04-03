@@ -1,11 +1,41 @@
 <script>
     import { onMount, tick } from "svelte";
-    import { fetchAllData, fetchEventDetails, fetchEvents, fetchOPR, fetchPitScouting, fetchQualitativeScouting, postPitScouting, postQualitativeScouting } from "../utils/api";
+    import {
+        fetchAllData,
+        fetchEventDetails,
+        fetchEvents,
+        fetchPitScouting,
+        fetchQualitativeScouting,
+        postEventCode,
+        refreshEventCaches,
+    } from "../utils/api";
     import { clearAllStores, getIndexedDBStore, getLastId, setIndexedDBStore } from '../utils/indexedDB';
 
     let eventCode = localStorage.getItem("eventCode");
     let isLoading = false;
     let notification = null;
+    let isAutoSyncing = false;
+
+    function parseStoredJson(key, fallback) {
+        const raw = localStorage.getItem(key);
+        if (!raw) return fallback;
+        try {
+            return JSON.parse(raw);
+        } catch {
+            return fallback;
+        }
+    }
+
+    async function parseResponseJson(response, fallback = {}) {
+        const responseText = await response.text();
+        if (!responseText) return fallback;
+
+        try {
+            return JSON.parse(responseText);
+        } catch {
+            return fallback;
+        }
+    }
 
     function showNotification(message, type = "success", duration = 3000) {
         notification = { message, type };
@@ -28,76 +58,82 @@
         }
     }
 
-    async function cacheAllData() {
+    async function cacheAllData({ forceFullRefresh = false } = {}) {
         await withLoading(async () => {
-            await clearAllStores();
-        
-            const dataRes = await fetchAllData(eventCode, 0); 
-            const dataText = await dataRes.text();
-            const dataJson = dataText ? JSON.parse(dataText) : {};
-            const newData = dataJson.data || [];
-            await setIndexedDBStore("scoutingData", { rows: newData });
+            if (!eventCode) {
+                throw new Error("No event selected");
+            }
 
-            const localPitStr = localStorage.getItem("retrievePit");
-            const localPit = localPitStr ? JSON.parse(localPitStr) : {};
+            const existingData = forceFullRefresh ? [] : await getIndexedDBStore("scoutingData");
+            const lastId = await getLastId(existingData);
+
+            const dataRes = await fetchAllData(eventCode, lastId);
+            if (!dataRes.ok) {
+                throw new Error(`Failed to fetch scouting data: HTTP ${dataRes.status}`);
+            }
+            const dataJson = await parseResponseJson(dataRes, {});
+            const newData = dataJson.data || [];
+            if (newData.length > 0) {
+                await setIndexedDBStore("scoutingData", { rows: newData });
+            }
+
+            const localPit = forceFullRefresh ? {} : parseStoredJson("retrievePit", {});
             const pitTeams = Object.keys(localPit);
 
             const pitRes = await fetchPitScouting(eventCode, pitTeams);
-            const pitText = await pitRes.text();
-            const newPitData = pitText ? JSON.parse(pitText) : {};
+            if (!pitRes.ok) {
+                throw new Error(`Failed to fetch pit scouting: HTTP ${pitRes.status}`);
+            }
+            const newPitData = await parseResponseJson(pitRes, {});
             
             const combinedPit = { ...localPit, ...newPitData };
             localStorage.setItem("retrievePit", JSON.stringify(combinedPit));
 
-            // Save pit scouting data to backend
-            for (const [teamNum, pitData] of Object.entries(combinedPit)) {
-                try {
-                    await postPitScouting(eventCode, teamNum, pitData);
-                } catch (e) {
-                    console.warn(`Failed to save pit data for team ${teamNum}:`, e);
-                }
-            }
-
-            const localQualStr = localStorage.getItem("retrieveQual");
-            const localQual = localQualStr ? JSON.parse(localQualStr) : {};
+            const localQual = forceFullRefresh ? {} : parseStoredJson("retrieveQual", {});
             const qualCounts = {};
-            for (let team in localQual) {
-                qualCounts[team] = Object.keys(localQual[team]).length;
+            for (const team in localQual) {
+                qualCounts[team] = Object.keys(localQual[team] || {}).length;
             }
 
             const qualRes = await fetchQualitativeScouting(eventCode, qualCounts);
-            const qualText = await qualRes.text();
-            const newQualData = qualText ? JSON.parse(qualText) : {};
+            if (!qualRes.ok) {
+                throw new Error(`Failed to fetch qualitative scouting: HTTP ${qualRes.status}`);
+            }
+            const newQualData = await parseResponseJson(qualRes, {});
             
             const combinedQual = { ...localQual };
-            for (let team in newQualData) {
+            for (const team in newQualData) {
                 combinedQual[team] = { ...(combinedQual[team] || {}), ...newQualData[team] };
             }
             localStorage.setItem("retrieveQual", JSON.stringify(combinedQual));
 
-            // Save qualitative scouting data to backend
-            for (const [teamNum, matchData] of Object.entries(combinedQual)) {
-                for (const [matchNum, qualData] of Object.entries(matchData)) {
-                    try {
-                        await postQualitativeScouting(eventCode, teamNum, matchNum, qualData);
-                    } catch (e) {
-                        console.warn(`Failed to save qual data for team ${teamNum} match ${matchNum}:`, e);
-                    }
-                }
-            }
-
-            // Fetch and cache OPR data
-            const localOprStr = localStorage.getItem("retrieveOPR");
-            const localOpr = localOprStr ? JSON.parse(localOprStr) : {};
-
-            const newOprData = await fetchOPR(eventCode);
-            
-            const combinedOpr = { ...localOpr, ...newOprData };
-            localStorage.setItem("retrieveOPR", JSON.stringify(combinedOpr));
+            await refreshEventCaches(eventCode);
 
             localStorage.setItem("timestamp", new Date(Date.now()).toLocaleString());
             localStorage.setItem("eventCode", eventCode);
         }, "Data loaded successfully!", "Failed to load data.");
+    }
+
+    async function syncEventData() {
+        if (!eventCode || isAutoSyncing) return;
+
+        isAutoSyncing = true;
+        try {
+            const previousEventCode = localStorage.getItem("eventCode");
+            const isNewEvent = previousEventCode !== eventCode;
+
+            if (isNewEvent) {
+                await clearAllStores();
+                localStorage.removeItem("retrievePit");
+                localStorage.removeItem("retrieveQual");
+            }
+
+            localStorage.setItem("eventCode", eventCode);
+            await postEventCode(eventCode);
+            await cacheAllData({ forceFullRefresh: isNewEvent });
+        } finally {
+            isAutoSyncing = false;
+        }
     }
 
     let dbEvents = [];
@@ -108,30 +144,14 @@
             if (res.ok) {
                 const eventsFromDb = await res.json();
                 
-                // Fetch event details from Blue Alliance for each event code
-                // Only fetch for valid TBA event codes (format: YYYY[event-code])
-                const eventsWithNames = await Promise.all(
-                    eventsFromDb.map(async (event) => {
-                        // Check if event code looks like a real TBA event code
-                        const isTbaEventCode = /^\d{4}[a-z0-9]+$/.test(event.eventCode);
-                        
-                        if (isTbaEventCode) {
-                            const details = await fetchEventDetails(event.eventCode);
-                            return {
-                                ...event,
-                                name: details.name || event.eventCode,
-                            };
-                        } else {
-                            // Use eventCode as name for non-TBA event codes
-                            return {
-                                ...event,
-                                name: event.name || event.eventCode,
-                            };
-                        }
-                    })
-                );
+                // Save event code -> name mapping to localStorage for offline reference
+                const eventMapping = {};
+                eventsFromDb.forEach(event => {
+                    eventMapping[event.eventCode] = event.name;
+                });
+                localStorage.setItem("eventCodeToName", JSON.stringify(eventMapping));
                 
-                dbEvents = eventsWithNames;
+                dbEvents = eventsFromDb;
             } else {
                 throw new Error("Failed to fetch events");
             }
@@ -141,19 +161,6 @@
     onMount(async () => {
         await loadDbEvents();
     });
-
-    // Reactive statement to handle event code changes
-    $: if (eventCode && typeof window !== 'undefined') {
-        const previousEventCode = localStorage.getItem("eventCode");
-        if (previousEventCode && previousEventCode !== eventCode) {
-            clearAllStores();
-            localStorage.removeItem("retrievePit");
-            localStorage.removeItem("retrieveQual");
-            localStorage.removeItem("retrieveOPR");
-        }
-        localStorage.setItem("eventCode", eventCode);
-        cacheAllData();
-    }
 </script>
 
 {#if notification}
@@ -174,13 +181,13 @@
     <div class="button-container">
         <div
             class="button-wrapper"
-            onclick={cacheAllData}
+            onclick={syncEventData}
             role="button"
             tabindex="0"
-            onkeydown={(e) => e.key === "Enter" && cacheAllData()}
+            onkeydown={(e) => e.key === "Enter" && syncEventData()}
         >
             <div class="circle">
-                <span class="label">Populate Local Storage</span>
+                <span class="label">Get Data</span>
             </div>
         </div>
     </div>
@@ -214,17 +221,17 @@
         align-items: center;
         justify-content: center;
         min-height: 100vh;
-        padding: 2rem;
+        padding: 1.25rem;
         background: var(--wpi-gray);
         font-family: sans-serif;
+        gap: 2rem;
     }
 
     .button-wrapper {
-        width: 300px;
-        height: 300px;
+        width: 18.75rem;
+        height: 18.75rem;
         cursor: pointer;
         transition: transform 0.2s;
-        margin-bottom: 2rem;
     }
 
     .button-wrapper:hover {
@@ -243,32 +250,63 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 0.625rem 1.875rem rgba(0, 0, 0, 0.5);
+        padding: 1rem;
     }
 
     .label {
         color: white;
-        font-size: 1.5rem;
+        font-size: 1.2rem;
         font-weight: 800;
-        letter-spacing: 2px;
+        letter-spacing: 0.125rem;
         text-align: center;
-        line-height: 1.2;
+        line-height: 1.3;
     }
 
     .event-selector-panel {
         display: flex;
         flex-direction: column;
-        gap: 1rem;
+        gap: 0.75rem;
         width: 100%;
-        max-width: 500px;
+        max-width: 31.25rem;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
     }
 
     h2 {
-        margin: 0;
+        margin: 0 0 0.5rem 0;
+        font-size: 1.3rem;
+        color: var(--frc-190-black);
     }
 
     .select {
-        height: 22px;
+        padding: 0.5rem 0.75rem;
+        font-size: 1rem;
+        border: 0.125rem solid var(--frc-190-red);
+        border-radius: 0.25rem;
+        background: #fff;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .select:hover {
+        border-color: #e02200;
+        box-shadow: 0 0 0 3px rgba(200, 27, 0, 0.1);
+    }
+
+    .select:focus {
+        outline: none;
+        border-color: var(--frc-190-red);
+        box-shadow: 0 0 0 3px rgba(200, 27, 0, 0.2);
+    }
+
+    .selected-event {
+        margin: 0.5rem 0 0 0;
+        font-size: 0.9rem;
+        color: var(--frc-190-black);
+        font-weight: 500;
     }
 
     .loading-spinner-overlay {
@@ -285,11 +323,11 @@
     }
 
     .loading-spinner {
-        border: 8px solid rgba(255, 255, 255, 0.3);
+        border: 0.5rem solid rgba(255, 255, 255, 0.3);
         border-left-color: var(--frc-190-red);
         border-radius: 50%;
-        width: 50px;
-        height: 50px;
+        width: 3.125rem;
+        height: 3.125rem;
         animation: spin 1s linear infinite;
     }
 
@@ -301,31 +339,121 @@
 
     .banner {
         position: fixed;
-        top: 400px;
+        top: 25rem;
         left: 50%;
         transform: translateX(-50%);
-        padding: 1rem 2rem;
-        border-radius: 8px;
+        padding: 1rem 1.5rem;
+        border-radius: 0.5rem;
         color: white;
         font-weight: bold;
         z-index: 10000;
         cursor: pointer;
         transition: top 0.3s ease-in-out;
+        font-size: 0.95rem;
+        max-width: 90vw;
     }
 
     .banner-success {
-        background-color: #4CAF50; /* Green */
+        background-color: #4CAF50;
     }
 
     .banner-error {
-        background-color: #f44336; /* Red */
+        background-color: #f44336;
     }
 
     .button-container {
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 1rem;
-        margin-bottom: 2rem;
+        gap: 0.75rem;
+    }
+
+    /* Tablet Breakpoint (768px) */
+    @media (max-width: 768px) {
+        .container {
+            padding: 1rem;
+            gap: 1.5rem;
+        }
+
+        .button-wrapper {
+            width: 15rem;
+            height: 15rem;
+        }
+
+        .label {
+            font-size: 1rem;
+            letter-spacing: 0.05rem;
+        }
+
+        .event-selector-panel {
+            padding: 1.25rem;
+            gap: 0.6rem;
+        }
+
+        h2 {
+            font-size: 1.1rem;
+            margin-bottom: 0.4rem;
+        }
+
+        .select {
+            font-size: 0.9rem;
+            padding: 0.4rem 0.6rem;
+        }
+
+        .selected-event {
+            font-size: 0.8rem;
+        }
+    }
+
+    /* Mobile Breakpoint (480px) */
+    @media (max-width: 480px) {
+        .container {
+            padding: 0.75rem;
+            gap: 1.25rem;
+            justify-content: flex-start;
+            padding-top: 2rem;
+        }
+
+        .button-wrapper {
+            width: 11.25rem;
+            height: 11.25rem;
+        }
+
+        .circle {
+            padding: 0.75rem;
+        }
+
+        .label {
+            font-size: 0.85rem;
+            letter-spacing: 0.03rem;
+            line-height: 1.2;
+        }
+
+        .event-selector-panel {
+            max-width: 100%;
+            padding: 1rem;
+            gap: 0.5rem;
+        }
+
+        h2 {
+            font-size: 0.95rem;
+            margin-bottom: 0.3rem;
+        }
+
+        .select {
+            font-size: 0.85rem;
+            padding: 0.35rem 0.5rem;
+        }
+
+        .selected-event {
+            font-size: 0.75rem;
+            margin-top: 0.25rem;
+        }
+
+        .banner {
+            top: 5rem;
+            font-size: 0.85rem;
+            padding: 0.75rem 1rem;
+        }
     }
 </style>

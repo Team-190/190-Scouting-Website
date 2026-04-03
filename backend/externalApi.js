@@ -102,10 +102,7 @@ async function populateEventData(eventCode) {
  * @returns {boolean}
  */
 function isCacheValid(value) {
-  if (value === null || value === undefined) return false;
-  if (Array.isArray(value)) return value.length > 0;
-  if (typeof value === "object") return Object.keys(value).length > 0;
-  return true;
+  return value !== undefined && value !== null;
 }
 
 /**

@@ -11,6 +11,7 @@ jest.mock('../database', () => ({
     writeJSONFile: jest.fn()
 }));
 jest.mock('../externalApi', () => ({
+    populateEventData: jest.fn(),
     fetchMatchAlliances: jest.fn(),
     fetchTeams: jest.fn(),
     fetchEventDetails: jest.fn(),
@@ -79,13 +80,10 @@ describe('API Routes', () => {
     });
 
     describe('GET /api/getTeams', () => {
-        it('handles TBA cache hits vs misses', async () => {
-            // Mock a cache miss: database.readJSONFile returns empty object
-            database.readJSONFile.mockResolvedValueOnce({});
-            // Mock TBA fetch success
-            externalApi.fetchTeams.mockResolvedValueOnce({
-                json: async () => [{ team_number: 190, nickname: 'Gompei' }]
-            });
+        it('transforms fetched teams into API payload shape', async () => {
+            externalApi.fetchTeams.mockResolvedValueOnce([
+                { team_number: 190, nickname: 'Gompei' }
+            ]);
 
             const res = await request(appInstance).get('/api/getTeams?eventCode=test');
             expect(res.status).toBe(200);
@@ -93,22 +91,17 @@ describe('API Routes', () => {
                 _teams: { '190': 'Gompei' },
                 _teamNumbers: [190]
             });
-            expect(database.writeJSONFile).toHaveBeenCalledWith('teams', expect.anything());
         });
         
-        it('handles cache hits', async () => {
-            // Mock a cache hit
-            database.readJSONFile.mockResolvedValueOnce({
-                'test': [{ team_number: 200, nickname: 'Test Team' }]
-            });
+        it('returns an empty payload when external API response is malformed', async () => {
+            externalApi.fetchTeams.mockResolvedValueOnce({ not: 'an array' });
 
             const res = await request(appInstance).get('/api/getTeams?eventCode=test');
             expect(res.status).toBe(200);
             expect(res.body).toEqual({
-                _teams: { '200': 'Test Team' },
-                _teamNumbers: [200]
+                _teams: {},
+                _teamNumbers: []
             });
-            expect(externalApi.fetchTeams).not.toHaveBeenCalled();
         });
     });
     

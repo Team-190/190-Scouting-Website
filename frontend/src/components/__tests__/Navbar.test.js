@@ -23,8 +23,8 @@ describe('Navbar Component', () => {
         vi.clearAllMocks();
         // Reset local storage mocks
         Storage.prototype.getItem = vi.fn(() => 'testEvent123');
-
-        api.fetchAlliances.mockResolvedValue(false);
+        
+        api.fetchAlliances.mockResolvedValue({ available: false, alliances: [] });
         api.fetchElimsHaveStarted.mockResolvedValue(false);
 
         isSidebarOpen.set(false);
@@ -68,8 +68,8 @@ describe('Navbar Component', () => {
     });
 
     it('fetches alliances and shows Gompei Madness if available', async () => {
-        api.fetchAlliances.mockResolvedValue(true);
-
+        api.fetchAlliances.mockResolvedValue({ available: true, alliances: [{}] });
+        
         render(Navbar);
 
         // the async fetch should trigger a re-render showing the madness button

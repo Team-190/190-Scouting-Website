@@ -74,6 +74,7 @@
   let avoidanceChartInstance: any = null;
   let isLoading = false;
   let autoOnly = false;
+  let matchAlliancesCache: any = null;
 
   // TeamGrid prop
   let matches: any[] = [];
@@ -282,9 +283,10 @@
   async function estimateTeamPoints(
     teamStr: string,
     matchNumber: number,
+    allMatches?: any[],
   ): Promise<number | null> {
-    const allMatches = await fetchMatchAlliances(eventCode);
-    const tbaMatch = findMatchAlliance(allMatches, matchNumber);
+    const matches = allMatches || (await fetchMatchAlliances(eventCode));
+    const tbaMatch = findMatchAlliance(matches, matchNumber);
     if (!teamViewData || !tbaMatch) return null;
 
     const teamStrClean = String(teamStr).replace(/\D/g, "");
@@ -536,16 +538,21 @@
     });
     if (data.length > 0) {
       data = aggregateMatches(data);
-      for (const match of data) {
-        match.EstimatedPoints = await estimateTeamPoints(
-          teamNumber,
-          match.Match,
-        );
-        let climbData = await fetchRobotClimb(
-          eventCode,
-          teamNumber,
-          match.Match,
-        );
+      
+      // Fetch match alliances once for all matches
+      if (!matchAlliancesCache) {
+        matchAlliancesCache = await fetchMatchAlliances(eventCode);
+      }
+      
+      // Parallelize all API calls using Promise.all
+      const promises = data.map(async (match) => {
+        const [estimatedPoints, climbData] = await Promise.all([
+          estimateTeamPoints(teamNumber, match.Match, matchAlliancesCache),
+          fetchRobotClimb(eventCode, teamNumber, match.Match),
+        ]);
+        
+        match.EstimatedPoints = estimatedPoints;
+        
         if (climbData.EndgameClimb.slice(-1) == "3") {
           match.Climb_State = "L3";
         } else if (climbData.EndgameClimb.slice(-1) == "2") {
@@ -561,7 +568,11 @@
         } else {
           match.Auto_Climb = "No";
         }
-      }
+        return match;
+      });
+      
+      // Wait for all promises to resolve
+      data = await Promise.all(promises);
     }
     cache[teamNumber] = data;
     matches = data; // ← drives TeamGrid reactively
@@ -584,6 +595,67 @@
     const stored = localStorage.getItem("retrievePit");
     const pitScouting = stored ? JSON.parse(stored) : {};
     return pitScouting[String(teamNumber)] ?? null;
+  }
+
+  // ─── Qual Display Helpers ───────────────────────────────────────────────────
+
+  const QUAL_METADATA_KEYS = new Set([
+    "RecordType",
+    "Match",
+    "Team",
+    "ScouterName",
+    "Alliance",
+    "AutoPath",
+  ]);
+
+  const QUAL_LABEL_OVERRIDES: Record<string, string> = {
+    fuelScored: "Fuel Scored",
+    trenchFeedVolume: "Trench Feed Volume",
+    defenseEffectiveness: "Defense Effectiveness",
+    defenseAvoidance: "Defense Avoidance",
+    intakeEfficiency: "Intake Efficiency",
+    matchEvents: "Match Events",
+    otherNotes: "Notes",
+  };
+
+  function humanizeKey(key: string): string {
+    if (QUAL_LABEL_OVERRIDES[key]) return QUAL_LABEL_OVERRIDES[key];
+    return key
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      .replace(/[_-]+/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+      .trim();
+  }
+
+  function hasRenderableValue(value: any): boolean {
+    if (value === null || value === undefined) return false;
+    if (typeof value === "string") return value.trim() !== "";
+    if (Array.isArray(value)) return value.length > 0;
+    return true;
+  }
+
+  function formatSliderValue(value: any): string {
+    const num = Number(value);
+    if (!isFinite(num) || num <= 0) return "None (0)";
+    if (num <= 2) return `A little (${num})`;
+    if (num <= 5) return `Moderate (${num})`;
+    if (num <= 8) return `A lot (${num})`;
+    return `Tons (${num})`;
+  }
+
+  function formatQualValue(key: string, value: any): string {
+    if (key === "fuelScored") return formatSliderValue(value);
+    if (typeof value === "boolean") return value ? "Yes" : "No";
+    if (Array.isArray(value) || typeof value === "object") {
+      return JSON.stringify(value);
+    }
+    return String(value);
+  }
+
+  function getQualMetricEntries(row: Record<string, any>): Array<[string, string]> {
+    return Object.entries(row)
+      .filter(([key, value]) => !QUAL_METADATA_KEYS.has(key) && hasRenderableValue(value))
+      .map(([key, value]) => [humanizeKey(key), formatQualValue(key, value)]);
   }
 
   // ─── Event Handlers ───────────────────────────────────────────────────────────
@@ -1196,8 +1268,7 @@
       }
 
       if (allTeams.length > 0) {
-        selectedTeam =
-          allTeams.find((t) => t.toString() === "190") ?? allTeams[0];
+        selectedTeam = allTeams[0];
         await loadTeamData(String(selectedTeam));
       }
 
@@ -1275,7 +1346,7 @@
         src=""
         alt=""
         id="grace-rating"
-        style="height: 50px; width: auto; border-radius: 6px;"
+        style="height: 3.125rem; width: auto; border-radius: 0.375rem;"
       />
     </div>
     <div>
@@ -1283,14 +1354,14 @@
         src=""
         alt=""
         id="ananth-rating"
-        style="height: 50px; width: auto; border-radius: 6px;"
+        style="height: 3.125rem; width: auto; border-radius: 0.375rem;"
       />
     </div>
   </div>
 
   {#if selectedTeam}
     <p class="team-name-display">
-      {teamsMap.get(selectedTeam) ? `${teamsMap.get(selectedTeam)}` : ""}
+      {teamsMap.get(selectedTeam) ? `${selectedTeam} - ${teamsMap.get(selectedTeam)}` : ""}
     </p>
   {/if}
 
@@ -1304,11 +1375,11 @@
         <img
           src={robotPicturePreview}
           alt="Robot {selectedTeam}"
-          style="height: 300px; width: auto; border-radius: 6px; border: 2px solid var(--frc-190-red); object-fit: contain;"
+          style="height: 18.75rem; width: auto; border-radius: 0.375rem; border: 2px solid var(--frc-190-red); object-fit: contain;"
         />
       </button>
     {:else}
-      <span style="color: #888; font-size: 12px;">No photo</span>
+      <span style="color: #888; font-size: 0.75rem;">No photo</span>
     {/if}
   </div>
 
@@ -1385,7 +1456,7 @@
         {#each teamQualData as row}
           <div class="qual-card">
             <div class="qual-card-header">Match {row.Match}</div>
-            {#each [["Trench Feed Volume", row.trenchFeedVolume], ["Defense Effectiveness", row.defenseEffectiveness], ["Defense Avoidance", row.defenseAvoidance], ["Intake Efficiency", row.intakeEfficiency], ["Match Events", row.matchEvents], ["Notes", row.otherNotes]] as [label, value]}
+            {#each getQualMetricEntries(row) as [label, value]}
               {#if value}
                 <div class="qual-row">
                   <span class="qual-label">{label}</span>
@@ -1587,11 +1658,11 @@
     z-index: 9999;
   }
   .loading-spinner {
-    border: 8px solid rgba(255, 255, 255, 0.3);
+    border: 0.5rem solid rgba(255, 255, 255, 0.3);
     border-left-color: var(--frc-190-red);
     border-radius: 50%;
-    width: 50px;
-    height: 50px;
+    width: 3.125rem;
+    height: 3.125rem;
     animation: spin 1s linear infinite;
   }
   @keyframes spin {
@@ -1618,28 +1689,28 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    max-width: 95vw;
-    max-height: 95vh;
+    max-width: calc(100vw - 2rem);
+    max-height: calc(100vh - 2rem);
     cursor: default;
   }
   .modal-image {
-    max-width: 95vw;
-    max-height: 95vh;
+    max-width: calc(100vw - 2rem);
+    max-height: calc(100vh - 2rem);
     object-fit: contain;
-    border-radius: 8px;
-    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.7);
+    border-radius: 0.5rem;
+    box-shadow: 0 0.5rem 2.5rem rgba(0, 0, 0, 0.7);
   }
   .modal-close-btn {
     position: absolute;
-    top: 15px;
-    right: 15px;
-    width: 45px;
-    height: 45px;
+    top: 0.9rem;
+    right: 0.9rem;
+    width: 2.8rem;
+    height: 2.8rem;
     border-radius: 50%;
     border: none;
     background: var(--frc-190-red);
     color: white;
-    font-size: 32px;
+    font-size: 2rem;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -1661,8 +1732,9 @@
   }
 
   .map-section {
-    width: 80vw;
-    margin-top: 30px;
+    width: 100%;
+    max-width: 75rem;
+    margin-top: 1.9rem;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -1670,28 +1742,28 @@
   .map-controls {
     display: flex;
     align-items: center;
-    gap: 10px;
-    margin-bottom: 16px;
+    gap: 0.6rem;
+    margin-bottom: 1rem;
     color: white;
-    font-size: 16px;
+    font-size: 1rem;
     font-weight: 600;
   }
   .map-wrapper {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 12px;
+    gap: 0.75rem;
     width: 100%;
   }
   .map-container {
     position: relative;
     width: 100%;
-    max-width: 860px;
+    max-width: 53.75rem;
     aspect-ratio: 2 / 1;
-    border-radius: 12px;
+    border-radius: 0.75rem;
     overflow: hidden;
-    border: 3px solid var(--frc-190-red);
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+    border: 0.1875rem solid var(--frc-190-red);
+    box-shadow: 0 0.5rem 1.875rem rgba(0, 0, 0, 0.5);
   }
   .field-img {
     position: absolute;
@@ -1707,8 +1779,8 @@
     display: grid;
     grid-template-columns: 0fr 1fr 1fr 1fr;
     grid-template-rows: 1fr 1fr;
-    gap: 4px;
-    padding: 8px;
+    gap: 0.25rem;
+    padding: 0.5rem;
   }
   .zone-cell {
     --zone-intensity: 0;
@@ -1716,31 +1788,31 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    border-radius: 8px;
-    padding: 8px 4px 6px;
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.25rem 0.375rem;
     transition:
       transform 0.15s ease,
       box-shadow 0.15s ease;
   }
   .zone-cell:hover {
     transform: scale(1.03);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 0.25rem 1rem rgba(0, 0, 0, 0.5);
     z-index: 2;
   }
   .far-red-zone,
   .near-red-zone {
     background: rgba(200, 27, 0, calc(0.25 + var(--zone-intensity) * 0.45));
-    border: 1.5px solid rgba(255, 100, 80, 0.5);
+    border: 0.09375rem solid rgba(255, 100, 80, 0.5);
   }
   .far-neutral-zone,
   .near-neutral-zone {
     background: rgba(100, 100, 100, calc(0.25 + var(--zone-intensity) * 0.45));
-    border: 1.5px solid rgba(180, 180, 180, 0.4);
+    border: 0.09375rem solid rgba(180, 180, 180, 0.4);
   }
   .far-blue-zone,
   .near-blue-zone {
     background: rgba(30, 100, 220, calc(0.25 + var(--zone-intensity) * 0.45));
-    border: 1.5px solid rgba(100, 160, 255, 0.5);
+    border: 0.09375rem solid rgba(100, 160, 255, 0.5);
   }
   .far-red-zone {
     grid-row: 1;
@@ -1767,16 +1839,16 @@
     grid-column: 4;
   }
   .zone-name {
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: rgba(255, 255, 255, 0.75);
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
-    margin-bottom: 2px;
+    margin-bottom: 0.125rem;
   }
   .zone-value {
-    font-size: 1.6rem;
+    font-size: 1.1rem;
     font-weight: 900;
     color: #ffffff;
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.9);
@@ -1784,35 +1856,35 @@
   }
   .map-legend {
     display: flex;
-    gap: 24px;
+    gap: 1.5rem;
     flex-wrap: wrap;
     justify-content: center;
   }
   .legend-item {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: 0.4375rem;
     color: rgba(255, 255, 255, 0.85);
     font-size: 0.82rem;
     font-weight: 600;
   }
   .legend-swatch {
-    width: 14px;
-    height: 14px;
-    border-radius: 3px;
+    width: 0.875rem;
+    height: 0.875rem;
+    border-radius: 0.1875rem;
     display: inline-block;
   }
   .red-swatch {
     background: rgba(200, 27, 0, 0.8);
-    border: 1px solid rgba(255, 100, 80, 0.6);
+    border: 0.0625rem solid rgba(255, 100, 80, 0.6);
   }
   .neutral-swatch {
     background: rgba(120, 120, 120, 0.8);
-    border: 1px solid rgba(200, 200, 200, 0.4);
+    border: 0.0625rem solid rgba(200, 200, 200, 0.4);
   }
   .blue-swatch {
     background: rgba(30, 100, 220, 0.8);
-    border: 1px solid rgba(100, 160, 255, 0.6);
+    border: 0.0625rem solid rgba(100, 160, 255, 0.6);
   }
 
   :global(html),
@@ -1833,24 +1905,25 @@
     align-items: center;
     justify-content: flex-start;
     min-height: 100vh;
-    padding: 20px;
+    padding: 1.25rem;
     background: var(--wpi-gray);
+    width: 100%;
   }
 
   :global(select option:checked) {
     background: var(--frc-190-red);
     color: white;
-    font-size: 18px;
+    font-size: 1.125rem;
   }
   :global(select option) {
     background: #333;
     color: white;
-    padding: 8px;
+    padding: 0.5rem;
   }
   :global(.ag-header-cell) {
     background: var(--frc-190-red) !important;
     color: white !important;
-    font-size: 18px;
+    font-size: 1.125rem;
     font-weight: bold;
   }
   :global(.ag-header-cell.header-center .ag-header-cell-label) {
@@ -1858,26 +1931,26 @@
     text-align: center;
     width: 100%;
     color: white !important;
-    font-size: 18px;
+    font-size: 1.125rem;
   }
   :global(.cell-center) {
     text-align: center !important;
   }
   :global(.ag-theme-quartz .ag-root-wrapper) {
-    --ag-font-size: 20px;
-    border: 3px solid var(--frc-190-red);
-    border-radius: 8px;
+    --ag-font-size: 1.25rem;
+    border: 0.1875rem solid var(--frc-190-red);
+    border-radius: 0.5rem;
     overflow: hidden;
   }
   :global(.ag-tooltip) {
     white-space: pre-line;
-    max-width: 400px;
-    font-size: 14px;
-    padding: 8px 12px;
+    max-width: 25rem;
+    font-size: 0.875rem;
+    padding: 0.5rem 0.75rem;
     background: #222;
     color: #fff;
-    border: 1px solid #555;
-    border-radius: 4px;
+    border: 0.0625rem solid #555;
+    border-radius: 0.25rem;
     z-index: 99999;
     pointer-events: none;
   }
@@ -1886,17 +1959,17 @@
     overflow-x: auto !important;
   }
   :global(.ag-body-viewport::-webkit-scrollbar) {
-    width: 12px;
-    height: 12px;
+    width: 0.75rem;
+    height: 0.75rem;
   }
   :global(.ag-body-viewport::-webkit-scrollbar-track) {
     background: var(--frc-190-black);
-    border-radius: 6px;
+    border-radius: 0.375rem;
   }
   :global(.ag-body-viewport::-webkit-scrollbar-thumb) {
     background: var(--frc-190-red);
-    border-radius: 6px;
-    border: 2px solid var(--frc-190-black);
+    border-radius: 0.375rem;
+    border: 0.125rem solid var(--frc-190-black);
   }
   :global(.ag-body-viewport::-webkit-scrollbar-thumb:hover) {
     background: #e02200;
@@ -1904,41 +1977,43 @@
 
   .header-section {
     text-align: center;
-    margin-bottom: 20px;
+    margin-bottom: 1.25rem;
   }
   .header-section h1 {
     color: var(--frc-190-red);
-    font-size: 2.5rem;
+    font-size: 1.8rem;
     font-weight: 800;
-    margin: 0 0 5px;
+    margin: 0 0 0.3rem;
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-    letter-spacing: 1px;
+    letter-spacing: 0.8px;
   }
   .header-section .subtitle {
     color: var(--frc-190-black);
-    font-size: 1rem;
+    font-size: 0.9rem;
     margin: 0;
   }
 
   .top-controls {
-    padding: 15px 25px;
+    padding: 1rem 1.5rem;
     background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
     color: white;
-    font-size: 18px;
+    font-size: 1.1rem;
     display: flex;
-    gap: 30px;
+    flex-wrap: wrap;
+    gap: 1.875rem;
     align-items: center;
     justify-content: center;
-    width: 80%;
-    max-width: 1200px;
-    border-radius: 10px;
-    margin-bottom: 20px;
+    width: 100%;
+    max-width: 75rem;
+    border-radius: 0.625rem;
+    margin-bottom: 1.25rem;
     border: 2px solid var(--frc-190-red);
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
   }
   .top-controls label {
     font-weight: 600;
     color: #fff;
+    font-size: 0.9rem;
   }
   .auto-only-toggle {
     display: flex;
@@ -1947,26 +2022,26 @@
   .auto-only-toggle label {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 0.5rem;
     cursor: pointer;
     font-weight: 600;
     color: #fff;
   }
   .auto-only-toggle input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
+    width: 1.1rem;
+    height: 1.1rem;
     accent-color: var(--frc-190-red);
     cursor: pointer;
   }
 
   select {
-    margin-left: 10px;
-    padding: 8px 15px;
+    margin-left: 0.6rem;
+    padding: 0.5rem 0.9rem;
     background: linear-gradient(135deg, #333 0%, #444 100%);
     color: white;
-    font-size: 16px;
+    font-size: 1rem;
     border: 2px solid var(--frc-190-red);
-    border-radius: 6px;
+    border-radius: 0.4rem;
     cursor: pointer;
     transition: all 0.3s ease;
   }
@@ -1980,12 +2055,12 @@
   }
 
   button {
-    padding: 8px 15px;
+    padding: 0.5rem 0.9rem;
     background: linear-gradient(135deg, #333 0%, #444 100%);
     color: white;
-    font-size: 16px;
+    font-size: 1rem;
     border: 2px solid var(--frc-190-red);
-    border-radius: 6px;
+    border-radius: 0.4rem;
     cursor: pointer;
     transition: all 0.3s ease;
   }
@@ -1995,28 +2070,29 @@
   }
 
   .graph-section {
-    width: 80vw;
-    margin-top: 30px;
+    width: 100%;
+    max-width: 75rem;
+    margin-top: 1.9rem;
     display: flex;
     flex-direction: column;
     align-items: center;
   }
   .section-title {
     color: var(--frc-190-red);
-    font-size: 1.8rem;
+    font-size: 1.2rem;
     font-weight: 700;
-    margin-bottom: 20px;
+    margin-bottom: 1.25rem;
     text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.2);
   }
   .dropdown-container {
     position: relative;
-    margin-bottom: 20px;
+    margin-bottom: 1.25rem;
   }
   .robot-pic-display {
     display: flex;
     justify-content: center;
     width: 100%;
-    margin-bottom: 20px;
+    margin-bottom: 1.25rem;
   }
   .robot-pic-btn {
     all: unset;
@@ -2025,21 +2101,21 @@
   }
   .team-name-display {
     color: var(--frc-190-red);
-    font-size: 1.8rem;
+    font-size: 1.2rem;
     font-weight: 700;
     text-align: center;
-    margin-bottom: 15px;
+    margin-bottom: 1rem;
     text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
   }
 
   .plus-btn {
-    width: 50px;
-    height: 50px;
+    width: 3.125rem;
+    height: 3.125rem;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 2rem;
+    font-size: 1.25rem;
     font-weight: 600;
     border: 2px solid var(--frc-190-red);
     background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
@@ -2055,16 +2131,16 @@
 
   .dropdown {
     position: absolute;
-    top: 60px;
+    top: 3.75rem;
     left: 50%;
     transform: translateX(-50%);
     background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
     border: 2px solid var(--frc-190-red);
-    border-radius: 8px;
+    border-radius: 0.5rem;
     list-style: none;
     padding: 0;
     margin: 0;
-    width: 150px;
+    width: 9.375rem;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
     z-index: 10;
     overflow: hidden;
@@ -2085,18 +2161,19 @@
     all: unset;
     display: block;
     width: 100%;
-    padding: 12px 15px;
+    padding: 0.75rem 0.9rem;
     cursor: pointer;
     text-align: center;
     color: white;
     font-weight: 500;
     text-transform: capitalize;
+    font-size: 0.9rem;
   }
 
   .charts-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
+    gap: 1.25rem;
     width: 100%;
   }
   .chart-wrapper {
@@ -2107,24 +2184,24 @@
     width: 100%;
     background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
     border: 2px solid var(--frc-190-red);
-    border-radius: 8px;
-    padding: 15px;
+    border-radius: 0.5rem;
+    padding: 1rem;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
   }
   .chart-container {
     width: 100%;
-    height: 300px;
+    height: 18.75rem;
     flex-grow: 1;
     background: rgba(255, 255, 255, 0.05);
-    border-radius: 6px;
+    border-radius: 0.4rem;
   }
   .chart-label {
-    margin-top: 10px;
+    margin-top: 0.6rem;
     font-weight: bold;
     text-transform: capitalize;
     text-align: center;
     color: white;
-    font-size: 1rem;
+    font-size: 0.9rem;
   }
 
   .opr-display {
@@ -2133,20 +2210,20 @@
   }
   .opr-label {
     color: white;
-    font-size: 18px;
+    font-size: 1.1rem;
     font-weight: 600;
-    padding: 8px 15px;
+    padding: 0.5rem 0.9rem;
     background: linear-gradient(135deg, #2d2d2d 0%, #1a1a1a 100%);
     border: 2px solid var(--frc-190-red);
-    border-radius: 6px;
+    border-radius: 0.4rem;
   }
 
   .remove-btn {
     position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 28px;
-    height: 28px;
+    top: 0.5rem;
+    right: 0.5rem;
+    width: 1.75rem;
+    height: 1.75rem;
     border-radius: 50%;
     border: none;
     background: var(--frc-190-red);
@@ -2157,35 +2234,83 @@
     z-index: 10;
     transition: background 0.2s ease;
     padding: 0;
+    font-size: 0.9rem;
   }
   .remove-btn:hover {
     background: #e02200;
   }
   .metric-select {
-    margin-top: 10px;
+    margin-top: 0.6rem;
   }
 
   @media (max-width: 1024px) {
     .charts-grid {
       grid-template-columns: repeat(2, 1fr);
     }
+    .header-section h1 { font-size: 1.5rem; }
+    .top-controls { font-size: 1rem; gap: 1.25rem; padding: 0.8rem 1.25rem; }
+    .section-title { font-size: 1.1rem; margin-bottom: 1rem; }
   }
-  @media (max-width: 700px) {
-    .charts-grid {
-      grid-template-columns: 1fr;
-    }
+
+  @media (max-width: 768px) {
+    .page-wrapper { padding: 0.75rem; }
+    .header-section { margin-bottom: 1rem; }
+    .header-section h1 { font-size: 1.2rem; }
+    .header-section .subtitle { font-size: 0.8rem; }
+    .top-controls { gap: 0.75rem; padding: 0.6rem 1rem; font-size: 0.9rem; flex-direction: column; }
+    .top-controls label { font-size: 0.8rem; }
+    .auto-only-toggle label { gap: 0.4rem; }
+    .auto-only-toggle input { width: 1rem; height: 1rem; }
+    select { margin-left: 0.4rem; font-size: 0.8rem; padding: 0.4rem 0.7rem; }
+    .graph-section { margin-top: 1.5rem; max-width: 100%; }
+    .section-title { font-size: 1rem; margin-bottom: 0.8rem; }
+    .team-name-display { font-size: 1rem; margin-bottom: 0.8rem; }
+    .charts-grid { grid-template-columns: 1fr; gap: 1rem; }
+    .chart-wrapper { padding: 0.6rem; }
+    .chart-container { height: 15rem; }
+    .chart-label { font-size: 0.8rem; margin-top: 0.5rem; }
+    .qual-section { width: 100%; max-width: 100%; margin-top: 1.5rem; }
+    .qual-grid { gap: 1rem; }
+    .auto-path-section { width: 100%; max-width: 100%; margin-top: 1.5rem; }
+    .auto-path-controls { gap: 0.75rem; margin-bottom: 1rem; }
+    .map-section { width: 100%; max-width: 100%; margin-top: 1.5rem; }
+    .map-controls { gap: 0.75rem; margin-bottom: 1rem; font-size: 0.9rem; }
+    .pit-section { width: 100%; max-width: 100%; margin-top: 1.5rem; }
+    .pit-grid { gap: 1rem; }
+    .avoidance-section { width: 100%; max-width: 100%; margin-top: 1.5rem; }
+    .avoidance-chart { height: 20rem; }
+  }
+
+  @media (max-width: 480px) {
+    .page-wrapper { padding: 0.5rem; }
+    .header-section h1 { font-size: 1rem; }
+    .header-section .subtitle { font-size: 0.7rem; }
+    .top-controls { gap: 0.5rem; padding: 0.4rem 0.75rem; font-size: 0.85rem; }
+    select { margin-left: 0.25rem; font-size: 0.75rem; padding: 0.3rem 0.6rem; }
+    .team-name-display { font-size: 0.95rem; }
+    .plus-btn { width: 2.5rem; height: 2.5rem; font-size: 1rem; }
+    .dropdown { width: 7.5rem; top: 3rem; }
+    .dropdown-item-btn { padding: 0.5rem; font-size: 0.75rem; }
+    .charts-grid { gap: 0.75rem; }
+    .chart-wrapper { padding: 0.5rem; }
+    .chart-container { height: 12rem; }
+    .qual-grid { gap: 0.75rem; }
+    .pit-grid { gap: 0.75rem; }
+    .avoidance-chart { height: 15rem; }
   }
 
   .qual-section {
-    width: 80vw;
-    margin-top: 30px;
+    width: 100%;
+    max-width: 75rem;
+    margin-top: 1.9rem;
     display: flex;
     flex-direction: column;
     align-items: center;
   }
   .auto-path-section {
-    width: 80vw;
-    margin-top: 30px;
+    width: 100%;
+    max-width: 75rem;
+    margin-top: 1.9rem;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -2193,19 +2318,21 @@
   .auto-path-controls {
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 16px;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
     color: white;
     font-weight: 600;
+    font-size: 0.9rem;
   }
   .auto-path-controls select {
     margin-left: 0;
-    padding: 8px 12px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
   }
   .auto-path-wrapper {
     position: relative;
     border: 2px solid var(--frc-190-red);
-    border-radius: 8px;
+    border-radius: 0.5rem;
     overflow: hidden;
     background: #111;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
@@ -2221,35 +2348,35 @@
   }
   .path-legend {
     display: flex;
-    gap: 24px;
+    gap: 1.5rem;
     flex-wrap: wrap;
     justify-content: center;
-    margin-top: 16px;
+    margin-top: 1rem;
   }
   .legend-item {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 0.5rem;
     color: rgba(255, 255, 255, 0.85);
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     font-weight: 600;
   }
   .legend-color {
-    width: 18px;
-    height: 18px;
-    border-radius: 4px;
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 0.25rem;
   }
 
   .qual-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
+    gap: 1rem;
     width: 100%;
   }
   .qual-card {
     background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
     border: 2px solid var(--frc-190-red);
-    border-radius: 8px;
+    border-radius: 0.5rem;
     overflow: hidden;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
   }
@@ -2257,29 +2384,29 @@
     background: var(--frc-190-red);
     color: white;
     font-weight: 700;
-    font-size: 1rem;
-    padding: 8px 14px;
+    font-size: 0.9rem;
+    padding: 0.5rem 0.9rem;
     letter-spacing: 0.5px;
   }
   .qual-row {
     display: flex;
     flex-direction: column;
-    padding: 10px 14px;
+    padding: 0.6rem 0.9rem;
     border-bottom: 1px solid #333;
   }
   .qual-row:last-child {
     border-bottom: none;
   }
   .qual-label {
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     font-weight: 700;
     color: var(--frc-190-red);
     text-transform: uppercase;
     letter-spacing: 0.8px;
-    margin-bottom: 3px;
+    margin-bottom: 0.2rem;
   }
   .qual-value {
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     color: #ddd;
     line-height: 1.4;
   }
@@ -2288,15 +2415,16 @@
       grid-template-columns: repeat(2, 1fr);
     }
   }
-  @media (max-width: 700px) {
+  @media (max-width: 768px) {
     .qual-grid {
       grid-template-columns: 1fr;
     }
   }
 
   .avoidance-section {
-    width: 80vw;
-    margin-top: 30px;
+    width: 100%;
+    max-width: 75rem;
+    margin-top: 1.9rem;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -2305,19 +2433,20 @@
     width: 100%;
     background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
     border: 2px solid var(--frc-190-red);
-    border-radius: 8px;
-    padding: 15px;
+    border-radius: 0.5rem;
+    padding: 1rem;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
   }
   .avoidance-chart {
     width: 100%;
-    height: 350px;
-    border-radius: 6px;
+    height: 22rem;
+    border-radius: 0.4rem;
   }
 
   .pit-section {
-    width: 80vw;
-    margin-top: 30px;
+    width: 100%;
+    max-width: 75rem;
+    margin-top: 1.9rem;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -2325,13 +2454,13 @@
   .pit-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
+    gap: 1rem;
     width: 100%;
   }
   .pit-card {
     background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
     border: 2px solid var(--frc-190-red);
-    border-radius: 8px;
+    border-radius: 0.5rem;
     overflow: hidden;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
   }
@@ -2339,8 +2468,8 @@
     background: var(--frc-190-red);
     color: white;
     font-weight: 700;
-    font-size: 1rem;
-    padding: 8px 14px;
+    font-size: 0.9rem;
+    padding: 0.5rem 0.9rem;
     letter-spacing: 0.5px;
   }
   @media (max-width: 1024px) {
@@ -2348,7 +2477,7 @@
       grid-template-columns: repeat(2, 1fr);
     }
   }
-  @media (max-width: 700px) {
+  @media (max-width: 768px) {
     .pit-grid {
       grid-template-columns: 1fr;
     }

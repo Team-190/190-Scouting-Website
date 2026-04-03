@@ -1,72 +1,88 @@
+jest.mock('../database', () => ({
+  readJSONFile: jest.fn(),
+  writeJSONFile: jest.fn(),
+}));
+
+const database = require('../database');
 const externalApi = require('../externalApi');
 
-// Mock node-fetch
 global.fetch = jest.fn();
+
+function response(ok, body, status = 200) {
+  return {
+    ok,
+    status,
+    json: async () => body,
+  };
+}
 
 describe('External API Utils', () => {
   const eventCode = '2024test';
-  
+
   beforeEach(() => {
     jest.clearAllMocks();
+    process.env.VITE_AUTH_KEY ||= 'test-key';
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    jest.spyOn(console, 'log').mockImplementation(() => {});
   });
 
-  describe('TBA standard auth fetches', () => {
-    const testCases = [
-      { func: externalApi.fetchEventDetails, urlSegment: `event/${eventCode}` },
-      { func: externalApi.fetchTeams, urlSegment: `event/${eventCode}/teams/simple` },
-      { func: externalApi.fetchTeamStatuses, urlSegment: `event/${eventCode}/teams/statuses` },
-      { func: externalApi.fetchMatchAlliances, urlSegment: `event/${eventCode}/matches` },
-      { func: externalApi.fetchOPR, urlSegment: `event/${eventCode}/oprs` },
-      { func: externalApi.fetchAlliances, urlSegment: `event/${eventCode}/alliances` },
-    ];
-
-    testCases.forEach(({ func, urlSegment }) => {
-      it(`should fetch successfully securely for ${func.name}`, async () => {
-        global.fetch.mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ success: true })
-        });
-
-        const res = await func(eventCode);
-        expect(res.ok).toBe(true);
-        expect(global.fetch).toHaveBeenCalledWith(
-          `https://www.thebluealliance.com/api/v3/${urlSegment}`,
-          { headers: { "X-TBA-Auth-Key": process.env.VITE_AUTH_KEY } }
-        );
-      });
-
-      it(`should throw an error on non-ok status for ${func.name}`, async () => {
-        global.fetch.mockResolvedValueOnce({
-          ok: false,
-          status: 404
-        });
-
-        await expect(func(eventCode)).rejects.toThrow('HTTP 404');
-      });
-    });
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
-  describe('Statbotics fetches', () => {
-    it('should fetch successfully for fetchEventEpas without TBA auth', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ success: true })
-      });
+  it('returns cached values without network fetch', async () => {
+    const cached = { name: 'Cached Event' };
+    database.readJSONFile.mockResolvedValueOnce({ [eventCode]: cached });
 
-      const res = await externalApi.fetchEventEpas(eventCode);
-      expect(res.ok).toBe(true);
-      expect(global.fetch).toHaveBeenCalledWith(
-        `https://api.statbotics.io/v3/team_events?event=${eventCode}`
-      ); // Second argument (options) should be undefined
+    const data = await externalApi.fetchEventDetails(eventCode);
+
+    expect(data).toEqual(cached);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('re-populates cache on miss and returns refreshed value', async () => {
+    let teamsReads = 0;
+    database.readJSONFile.mockImplementation(async (filename) => {
+      if (filename === 'teams') {
+        teamsReads += 1;
+        // 1st read: initial miss, 2nd read: populate write path, 3rd read: post-populate read
+        if (teamsReads >= 3) {
+          return { [eventCode]: [{ team_number: 190, nickname: 'Gompei' }] };
+        }
+      }
+      return {};
     });
 
-    it('should throw an error on non-ok status for fetchEventEpas', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 500
-      });
-
-      await expect(externalApi.fetchEventEpas(eventCode)).rejects.toThrow('HTTP 500');
+    global.fetch.mockImplementation((url) => {
+      if (String(url).includes('statbotics')) {
+        return Promise.resolve(response(true, []));
+      }
+      return Promise.resolve(response(true, []));
     });
+
+    const data = await externalApi.fetchTeams(eventCode);
+
+    expect(data).toEqual([{ team_number: 190, nickname: 'Gompei' }]);
+    expect(global.fetch).toHaveBeenCalledTimes(7);
+
+    const tbaTeamsCall = global.fetch.mock.calls.find(
+      (call) => String(call[0]).includes(`/event/${eventCode}/teams/simple`)
+    );
+    expect(tbaTeamsCall[1]).toEqual({ headers: { 'X-TBA-Auth-Key': process.env.VITE_AUTH_KEY } });
+
+    const statboticsCall = global.fetch.mock.calls.find(
+      (call) => String(call[0]).includes('api.statbotics.io')
+    );
+    expect(statboticsCall.length).toBe(1);
+  });
+
+  it('returns fallbacks instead of throwing when fetch fails and cache stays empty', async () => {
+    database.readJSONFile.mockResolvedValue({});
+    global.fetch.mockRejectedValue(new Error('offline'));
+
+    await expect(externalApi.fetchTeams(eventCode)).resolves.toEqual([]);
+    await expect(externalApi.fetchEventDetails(eventCode)).resolves.toEqual({});
+    await expect(externalApi.fetchAlliances(eventCode)).resolves.toEqual([]);
+    await expect(externalApi.fetchEventEpas(eventCode)).resolves.toEqual({});
   });
 });

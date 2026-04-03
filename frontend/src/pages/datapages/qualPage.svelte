@@ -1,6 +1,10 @@
 <script>
   import fieldImageSrc from "../../images/FieldImage.png";
-  import { postQualitativeScouting } from "../../utils/api";
+  import {
+    flushQualitativeScoutingQueue,
+    hasServerConnection,
+    queueQualitativeScoutingForSync,
+  } from "../../utils/api";
   import { getEventCode, MATCH_NUMBERS } from "../../utils/pageUtils";
 
   // ─── Constants ────────────────────────────────────────────────────────────────
@@ -235,26 +239,10 @@
       ...teleopAnswers,
     };
 
-    const existing = JSON.parse(localStorage.getItem("scoutingData") || "[]");
-    existing.push(record);
-    localStorage.setItem("scoutingData", JSON.stringify(existing));
+    queueQualitativeScoutingForSync(eventCode, record.Team, record.Match, record);
 
-    try {
-      for (let i = 0; i < existing.length; i++) {
-        const response = await postQualitativeScouting(eventCode, existing[i].Team, existing[i].Match, existing[i]);
-        if (response.ok) {
-          const qualData = JSON.parse(localStorage.getItem("retrieveQual") || "{}");
-          const teamKey = String(existing[i].Team).replace(/\D/g, "");
-          if (!qualData[teamKey]) qualData[teamKey] = {};
-          qualData[teamKey][existing[i].Match] = existing[i];
-          localStorage.setItem("retrieveQual", JSON.stringify(qualData));
-          existing.splice(i, 1);
-          i--;
-          localStorage.setItem("scoutingData", JSON.stringify(existing));
-        }
-      }
-    } catch (e) {
-      console.log("No internet, saving data later...");
+    if (await hasServerConnection()) {
+      await flushQualitativeScoutingQueue();
     }
 
     phase = "done";
@@ -454,71 +442,70 @@
 
   .page-wrapper {
     display: flex; flex-direction: column; align-items: center;
-    min-height: 100vh; padding: 20px 16px 60px;
+    min-height: 100vh; padding: 1.25rem 1rem 3.75rem;
   }
 
   /* Header */
-  .header-section { text-align: center; margin-bottom: 16px; }
+  .header-section { text-align: center; margin-bottom: 1rem; }
   .header-section h1 {
-    color: var(--frc-red); font-size: 2.4rem; font-weight: 800;
-    margin: 0 0 4px; text-shadow: 2px 2px 4px rgba(0,0,0,0.25);
+    color: var(--frc-red); font-size: 1.5rem; font-weight: 800;
+    margin: 0 0 0.25rem; text-shadow: 2px 2px 4px rgba(0,0,0,0.25);
   }
-  .header-section .subtitle { color: #4d4d4d; font-size: 0.95rem; margin: 0; }
+  .header-section .subtitle { color: #4d4d4d; font-size: 0.85rem; margin: 0; }
 
   /* Auto layout */
   .auto-layout {
     display: flex;
     align-items: stretch;
-    gap: 12px;
+    gap: 0.75rem;
     width: 100%;
-    max-width: 1200px;
+    max-width: 75rem;
   }
 
   /* Card */
   .card {
     flex: 1;
     background: linear-gradient(135deg, #1a1a1a, #2a2a2a);
-    border: 2px solid var(--frc-red); border-radius: 12px; padding: 28px;
+    border: 2px solid var(--frc-red); border-radius: 0.75rem; padding: 1.75rem;
     box-shadow: 0 8px 30px rgba(0,0,0,0.4); color: white;
   }
 
   .card-title {
-    font-size: 1.4rem; font-weight: 700; margin: 0 0 24px;
-    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    font-size: 1rem; font-weight: 700; margin: 0 0 1.5rem;
+    display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
   }
-  .title-badge { font-size: 0.75rem; font-weight: 800; letter-spacing: 1.5px; padding: 4px 10px; border-radius: 4px; }
+  .title-badge { font-size: 0.65rem; font-weight: 800; letter-spacing: 1px; padding: 0.25rem 0.6rem; border-radius: 0.25rem; }
   .auto-badge   { background: #e68000; color: white; }
   .teleop-badge { background: #003087; color: white; }
-  .match-tag { font-size: 0.85rem; font-weight: 400; color: #aaa; margin-left: auto; }
+  .match-tag { font-size: 0.75rem; font-weight: 400; color: #aaa; margin-left: auto; }
 
   /* Setup grid */
-  .setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
-  @media (max-width: 560px) { .setup-grid { grid-template-columns: 1fr; } }
-  .field-group { display: flex; flex-direction: column; gap: 6px; }
-  .field-group label { font-size: 0.82rem; font-weight: 600; color: #ccc; text-transform: uppercase; letter-spacing: 0.5px; }
+  .setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
+  .field-group { display: flex; flex-direction: column; gap: 0.4rem; }
+  .field-group label { font-size: 0.7rem; font-weight: 600; color: #ccc; text-transform: uppercase; letter-spacing: 0.5px; }
   .text-input {
-    padding: 10px 14px; background: #2d2d2d; border: 2px solid #444;
-    border-radius: 6px; color: white; font-size: 15px; transition: border-color 0.2s;
+    padding: 0.6rem 0.9rem; background: #2d2d2d; border: 2px solid #444;
+    border-radius: 0.4rem; color: white; font-size: 0.9rem; transition: border-color 0.2s;
   }
   .text-input:focus { outline: none; border-color: var(--frc-red); }
   .styled-select {
-    padding: 10px 14px; background: #333; border: 2px solid #555;
-    border-radius: 6px; color: white; font-size: 15px; cursor: pointer;
+    padding: 0.6rem 0.9rem; background: #333; border: 2px solid #555;
+    border-radius: 0.4rem; color: white; font-size: 0.9rem; cursor: pointer;
     appearance: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23aaa' stroke-width='2' fill='none'/%3E%3C/svg%3E");
-    background-repeat: no-repeat; background-position: right 12px center; padding-right: 36px;
+    background-repeat: no-repeat; background-position: right 0.75rem center; padding-right: 2.25rem;
     transition: border-color 0.2s;
   }
   .styled-select:focus { outline: none; border-color: var(--frc-red); }
 
   /* Canvas */
-  .canvas-section { margin-bottom: 28px; }
-  .canvas-header h3 { font-size: 1.05rem; font-weight: 700; margin: 0 0 4px; }
-  .canvas-hint { font-size: 0.82rem; color: #888; margin: 0 0 12px; }
-  .canvas-tools { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .canvas-section { margin-bottom: 1.75rem; }
+  .canvas-header h3 { font-size: 0.9rem; font-weight: 700; margin: 0 0 0.25rem; }
+  .canvas-hint { font-size: 0.7rem; color: #888; margin: 0 0 0.75rem; }
+  .canvas-tools { display: flex; gap: 0.6rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
   .tool-btn {
-    padding: 7px 16px; border: 2px solid #555; border-radius: 6px;
-    background: #2d2d2d; color: #ccc; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+    padding: 0.4rem 1rem; border: 2px solid #555; border-radius: 0.4rem;
+    background: #2d2d2d; color: #ccc; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.2s;
   }
   .tool-btn:hover { border-color: #888; color: white; }
   .tool-btn.tool-active { border-color: var(--frc-red); background: rgba(255,255,255,0.07); color: white; }
@@ -553,16 +540,16 @@
   }
 
   .side-teleop-btn {
-    width: 260px;
+    width: 16.25rem;
     flex-shrink: 0;
     flex-direction: column;
-    gap: 14px;
-    padding: 24px 12px;
-    border-radius: 12px;
+    gap: 0.9rem;
+    padding: 1.5rem 0.75rem;
+    border-radius: 0.75rem;
     border: 2px solid var(--frc-red);
     letter-spacing: 0.5px;
     text-align: center;
-    font-size: 13px;
+    font-size: 0.8rem;
   }
   .side-teleop-btn svg { flex-shrink: 0; }
 
@@ -574,25 +561,25 @@
   .submit-btn:hover { filter: brightness(1.15); transform: translateY(-2px); }
 
   /* Teleop questions */
-  .questions-grid { display: grid; grid-template-columns: 1fr; gap: 18px; margin-bottom: 28px; }
+  .questions-grid { display: grid; grid-template-columns: 1fr; gap: 1.1rem; margin-bottom: 1.75rem; }
   .question-card {
     background: rgba(255,255,255,0.04); border: 1px solid #333;
-    border-radius: 8px; padding: 16px 18px;
-    display: flex; flex-direction: column; gap: 8px;
+    border-radius: 0.5rem; padding: 1rem 1.1rem;
+    display: flex; flex-direction: column; gap: 0.5rem;
   }
   .question-label {
-    font-size: 0.75rem; font-weight: 800; color: var(--frc-red);
-    text-transform: uppercase; letter-spacing: 1px;
+    font-size: 0.65rem; font-weight: 800; color: var(--frc-red);
+    text-transform: uppercase; letter-spacing: 0.8px;
   }
   .question-hint {
-    font-size: 0.92rem; color: #ccc; margin: 0; line-height: 1.5;
-    border-left: 3px solid rgba(200,27,0,0.45); padding-left: 10px;
+    font-size: 0.8rem; color: #ccc; margin: 0; line-height: 1.5;
+    border-left: 3px solid rgba(200,27,0,0.45); padding-left: 0.6rem;
   }
   .notes-area {
-    width: 100%; padding: 10px 12px; background: #2a2a2a;
-    border: 2px solid #444; border-radius: 6px; color: white;
-    font-size: 14px; font-family: inherit; resize: vertical; transition: border-color 0.2s;
-    margin-top: 4px;
+    width: 100%; padding: 0.6rem 0.75rem; background: #2a2a2a;
+    border: 2px solid #444; border-radius: 0.4rem; color: white;
+    font-size: 0.85rem; font-family: inherit; resize: vertical; transition: border-color 0.2s;
+    margin-top: 0.25rem;
   }
   .notes-area:focus { outline: none; border-color: var(--frc-red); }
 
@@ -600,19 +587,19 @@
   .slider-wrapper {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    margin-top: 8px;
-    padding: 4px 0;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    padding: 0.25rem 0;
   }
 
   .slider-track-labels {
     display: flex;
     justify-content: space-between;
-    padding: 0 2px;
+    padding: 0 0.15rem;
   }
 
   .track-label {
-    font-size: 11px;
+    font-size: 0.65rem;
     color: #666;
     font-weight: 500;
     text-align: center;
@@ -620,7 +607,7 @@
 
   .slider-track-container {
     position: relative;
-    height: 24px;
+    height: 1.5rem;
     display: flex;
     align-items: center;
   }
@@ -628,9 +615,9 @@
   .slider-fill {
     position: absolute;
     left: 0;
-    height: 6px;
+    height: 0.4rem;
     background: var(--frc-red);
-    border-radius: 3px 0 0 3px;
+    border-radius: 0.2rem 0 0 0.2rem;
     pointer-events: none;
     transition: width 0.05s;
     z-index: 1;
@@ -642,8 +629,8 @@
     position: relative;
     z-index: 2;
     width: 100%;
-    height: 6px;
-    border-radius: 3px;
+    height: 0.4rem;
+    border-radius: 0.2rem;
     background: #444;
     outline: none;
     cursor: pointer;
@@ -652,20 +639,20 @@
 
   .fuel-slider::-webkit-slider-runnable-track {
     background: transparent;
-    height: 6px;
-    border-radius: 3px;
+    height: 0.4rem;
+    border-radius: 0.2rem;
   }
 
   .fuel-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
-    width: 24px;
-    height: 24px;
+    width: 1.5rem;
+    height: 1.5rem;
     border-radius: 50%;
     background: white;
-    border: 3px solid var(--frc-red);
+    border: 2px solid var(--frc-red);
     cursor: grab;
     box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-    margin-top: -9px;
+    margin-top: -0.55rem;
     transition: transform 0.1s, box-shadow 0.1s;
   }
 
@@ -677,50 +664,108 @@
 
   .fuel-slider::-moz-range-track {
     background: transparent;
-    height: 6px;
-    border-radius: 3px;
+    height: 0.4rem;
+    border-radius: 0.2rem;
   }
 
   .fuel-slider::-moz-range-thumb {
-    width: 24px;
-    height: 24px;
+    width: 1.5rem;
+    height: 1.5rem;
     border-radius: 50%;
     background: white;
-    border: 3px solid var(--frc-red);
+    border: 2px solid var(--frc-red);
     cursor: grab;
     box-shadow: 0 2px 8px rgba(0,0,0,0.5);
   }
 
   .fuel-slider::-moz-range-progress {
     background: var(--frc-red);
-    height: 6px;
-    border-radius: 3px;
+    height: 0.4rem;
+    border-radius: 0.2rem;
   }
 
   .slider-value-pill {
     text-align: center;
-    font-size: 13px;
+    font-size: 0.8rem;
     font-weight: 800;
     color: var(--frc-red);
-    letter-spacing: 1px;
+    letter-spacing: 0.8px;
     text-transform: uppercase;
-    min-height: 18px;
+    min-height: 1.1rem;
   }
 
   /* Teleop actions */
-  .teleop-actions { display: flex; gap: 12px; align-items: center; }
+  .teleop-actions { display: flex; gap: 0.75rem; align-items: center; }
   .back-btn {
-    padding: 18px 20px; border: 2px solid #555; border-radius: 10px;
-    background: transparent; color: #aaa; font-size: 14px; font-weight: 600;
+    padding: 1.1rem 1.25rem; border: 2px solid #555; border-radius: 0.6rem;
+    background: transparent; color: #aaa; font-size: 0.85rem; font-weight: 600;
     cursor: pointer; white-space: nowrap; transition: all 0.2s; flex-shrink: 0;
   }
   .back-btn:hover { border-color: #888; color: white; }
-  .teleop-actions .phase-btn { flex: 1; padding: 18px 24px; border-radius: 10px; }
+  .teleop-actions .phase-btn { flex: 1; padding: 1.1rem 1.5rem; border-radius: 0.6rem; }
 
   /* Done */
-  .done-card { text-align: center; padding: 48px 28px; }
-  .done-icon  { font-size: 4rem; line-height: 1; margin-bottom: 16px; color: #00cc44; text-shadow: 0 0 20px rgba(0,200,68,0.5); }
-  .done-title { font-size: 2rem; font-weight: 800; margin: 0 0 8px; }
-  .done-subtitle { color: #aaa; font-size: 1rem; margin: 0 0 8px; }
-  .done-body  { color: #777; font-size: 0.9rem; margin: 0 0 32px; }
+  .done-card { text-align: center; padding: 3rem 1.75rem; }
+  .done-icon  { font-size: 2.5rem; line-height: 1; margin-bottom: 1rem; color: #00cc44; text-shadow: 0 0 20px rgba(0,200,68,0.5); }
+  .done-title { font-size: 1.3rem; font-weight: 800; margin: 0 0 0.5rem; }
+  .done-subtitle { color: #aaa; font-size: 0.9rem; margin: 0 0 0.5rem; }
+  .done-body  { color: #777; font-size: 0.8rem; margin: 0 0 2rem; }
+
+  /* Responsive Design */
+  @media (max-width: 1024px) {
+    .header-section h1 { font-size: 1.3rem; }
+    .auto-layout { flex-direction: column; gap: 0.5rem; }
+    .side-teleop-btn { width: 100%; }
+    .card-title { font-size: 0.9rem; gap: 0.5rem; }
+    .setup-grid { grid-template-columns: 1fr; }
+    .canvas-header h3 { font-size: 0.8rem; }
+    .question-card { padding: 0.75rem 0.8rem; }
+  }
+
+  @media (max-width: 768px) {
+    .page-wrapper { padding: 0.75rem 0.5rem 2.5rem; }
+    .header-section { margin-bottom: 0.75rem; }
+    .header-section h1 { font-size: 1.1rem; }
+    .header-section .subtitle { font-size: 0.75rem; }
+    .card { padding: 1rem; border-radius: 0.5rem; }
+    .card-title { font-size: 0.8rem; gap: 0.4rem; margin-bottom: 1rem; }
+    .setup-grid { gap: 0.75rem; margin-bottom: 1rem; }
+    .field-group label { font-size: 0.6rem; }
+    .text-input { padding: 0.5rem 0.6rem; font-size: 0.8rem; }
+    .styled-select { padding: 0.5rem 0.6rem; font-size: 0.8rem; }
+    .canvas-section { margin-bottom: 1rem; }
+    .canvas-header h3 { font-size: 0.75rem; }
+    .canvas-hint { font-size: 0.65rem; margin-bottom: 0.5rem; }
+    .canvas-tools { gap: 0.4rem; margin-bottom: 0.5rem; }
+    .tool-btn { padding: 0.3rem 0.75rem; font-size: 0.65rem; }
+    .path-count { font-size: 0.7rem; margin-top: 0.3rem; gap: 0.4rem; }
+    .questions-grid { gap: 0.8rem; margin-bottom: 1rem; }
+    .question-card { padding: 0.7rem 0.8rem; gap: 0.35rem; }
+    .question-label { font-size: 0.6rem; }
+    .question-hint { font-size: 0.7rem; }
+    .teleop-actions { gap: 0.5rem; flex-direction: column; }
+    .back-btn { width: 100%; padding: 0.8rem 1rem; font-size: 0.8rem; }
+    .teleop-actions .phase-btn { width: 100%; padding: 0.8rem 1rem; font-size: 0.8rem; }
+  }
+
+  @media (max-width: 480px) {
+    .page-wrapper { padding: 0.5rem 0.4rem 2rem; }
+    .header-section h1 { font-size: 1rem; }
+    .card { padding: 0.75rem; }
+    .card-title { font-size: 0.75rem; margin-bottom: 0.8rem; }
+    .setup-grid { gap: 0.5rem; margin-bottom: 0.8rem; }
+    .text-input { padding: 0.4rem 0.5rem; font-size: 0.75rem; }
+    .styled-select { padding: 0.4rem 0.5rem; font-size: 0.75rem; }
+    .canvas-header h3 { font-size: 0.7rem; }
+    .canvas-hint { font-size: 0.6rem; }
+    .tool-btn { padding: 0.25rem 0.6rem; font-size: 0.6rem; }
+    .questions-grid { gap: 0.6rem; }
+    .question-card { padding: 0.6rem; }
+    .question-label { font-size: 0.55rem; }
+    .question-hint { font-size: 0.65rem; padding-left: 0.4rem; }
+    .notes-area { font-size: 0.75rem; padding: 0.4rem 0.5rem; }
+    .done-card { padding: 2rem 1rem; }
+    .done-icon { font-size: 2rem; margin-bottom: 0.75rem; }
+    .done-title { font-size: 1.1rem; }
+  }
 </style>

@@ -21,10 +21,55 @@ async function getEvents() {
         await sql.connect(config);
         // Query system databases to get a list of all database names, excluding system ones
         const result = await sql.query("SELECT name FROM sys.databases WHERE name NOT IN ('master', 'tempdb', 'model', 'msdb')");
-        return result.recordset.map(row => ({
-            eventCode: row.name,
-            name: row.name
-        }));
+        const eventCodes = result.recordset.map(row => row.name);
+        
+        // Try to load event names from the cached eventDetails JSON
+        let eventDetails = {};
+        try {
+            eventDetails = await readJSONFile("eventDetails");
+        } catch (e) {
+            console.warn("Could not load eventDetails cache:", e.message);
+        }
+        
+        // Fetch event names, trying cache first, then TBA API for missing ones
+        const TBA_API_KEY = process.env.VITE_AUTH_KEY;
+        
+        const eventsWithNames = await Promise.all(
+            eventCodes.map(async (code) => {
+                // Check if we have the name in cache
+                if (eventDetails[code]?.name) {
+                    return {
+                        eventCode: code,
+                        name: eventDetails[code].name
+                    };
+                }
+                
+                // Try to fetch from TBA API
+                try {
+                    const response = await fetch(
+                        `https://www.thebluealliance.com/api/v3/event/${code}`,
+                        { headers: { "X-TBA-Auth-Key": TBA_API_KEY } }
+                    );
+                    if (response.ok) {
+                        const data = await response.json();
+                        return {
+                            eventCode: code,
+                            name: data.name || code
+                        };
+                    }
+                } catch (e) {
+                    console.warn(`Could not fetch event name for ${code}:`, e.message);
+                }
+                
+                // Fallback to code if all else fails
+                return {
+                    eventCode: code,
+                    name: code
+                };
+            })
+        );
+        
+        return eventsWithNames;
     } catch (err) {
         console.error("Error fetching events:", err);
         return [];
@@ -347,12 +392,16 @@ async function writeJSONFile(filename, data) {
     if (!fs.existsSync('./data')) {
         fs.mkdirSync('./data', { recursive: true });
     }
-    fs.writeFile(fullPath, JSON.stringify(data, null, 4), "utf8", (err) => {
-        if (err) {
-            console.error("Error writing to file", err);
-        } else {
-            console.log("Data written to " + fullPath + " successfully");
-        }
+
+    return new Promise((resolve, reject) => {
+        fs.writeFile(fullPath, JSON.stringify(data, null, 4), "utf8", (err) => {
+            if (err) {
+                console.error("Error writing to file", err);
+                reject(err);
+            } else {
+                resolve(true);
+            }
+        });
     });
 }
 
