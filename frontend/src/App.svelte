@@ -14,6 +14,7 @@
   import QualPage from "./pages/datapages/qualPage.svelte";
   import SingleMetric from "./pages/datapages/singleMetric.svelte";
   import TeamView from "./pages/datapages/teamView.svelte";
+  import QualDataView from "./pages/datapages/qualDataView.svelte";
 
   const routes = [
     { path: "/", component: Home },
@@ -26,13 +27,15 @@
     { path: "/marchMadness", component: MarchMadness },
     { path: "/matchPreview", component: MatchPreview },
     { path: "/qualPage", component: QualPage },
+    { path: "/qualDataView", component: QualDataView },
   ];
 
   onMount(() => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/service_worker.js')
-        .then(reg => console.log('SW registered', reg))
-        .catch(err => console.error('SW failed', err));
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker
+        .register("/service_worker.js")
+        .then((reg) => console.log("SW registered yippeeeeee!", reg))
+        .catch((err) => console.error("SW failed skibidi", err));
     }
   });
 </script>

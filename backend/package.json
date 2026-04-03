@@ -7,14 +7,18 @@
   "type": "commonjs",
   "main": "index.js",
   "nodemonConfig": {
-    "ignore": ["**/*.json"],
-    "watch": ["*.js"],
+    "ignore": [
+      "**/*.json"
+    ],
+    "watch": [
+      "*.js"
+    ],
     "ext": "js"
   },
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest --coverage --testPathIgnorePatterns=legacy"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -27,6 +31,8 @@
     "pg": "^8.16.3"
   },
   "devDependencies": {
-    "@types/node": "^25.5.0"
+    "@types/node": "^25.5.0",
+    "jest": "^30.3.0",
+    "supertest": "^7.2.2"
   }
 }

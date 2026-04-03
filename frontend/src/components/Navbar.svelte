@@ -81,6 +81,9 @@
       <button on:click={() => navigate("/qualPage")} disabled={!$isSidebarOpen}>
         <span class="label">Qual Scouting</span>
       </button>
+      <button on:click={() => navigate("/qualDataView")} disabled={!$isSidebarOpen}>
+        <span class="label">Qual Data View (sigma)</span>
+      </button>
 
       {#if alliancesAvailable}
         <div class="madness-wrapper">
