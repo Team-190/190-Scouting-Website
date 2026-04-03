@@ -68,13 +68,8 @@ describe('Navbar Component', () => {
     });
 
     it('fetches alliances and shows Gompei Madness if available', async () => {
-<<<<<<< HEAD
         api.fetchAlliances.mockResolvedValue({ available: true, alliances: [{}] });
         
-=======
-        api.fetchAlliances.mockResolvedValue(true);
-
->>>>>>> dc2cdb676eca62db6ab1b81b48b164563cebc90d
         render(Navbar);
 
         // the async fetch should trigger a re-render showing the madness button
