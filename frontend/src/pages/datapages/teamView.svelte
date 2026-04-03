@@ -1300,7 +1300,7 @@
 
   {#if selectedTeam}
     <p class="team-name-display">
-      {teamsMap.get(selectedTeam) ? `${teamsMap.get(selectedTeam)}` : ""}
+      {teamsMap.get(selectedTeam) ? `${selectedTeam} - ${teamsMap.get(selectedTeam)}` : ""}
     </p>
   {/if}
 
