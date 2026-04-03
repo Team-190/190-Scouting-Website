@@ -6,19 +6,24 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^6.2.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/svelte": "^5.3.1",
     "@types/node": "^25.2.0",
     "@types/pako": "^2.0.4",
+    "@vitest/coverage-v8": "^4.1.2",
+    "jsdom": "^29.0.1",
     "svelte": "^5.39.6",
-    "vite": "^7.1.7"
+    "vite": "^7.1.7",
+    "vitest": "^4.1.2"
   },
   "dependencies": {
     "@mateothegreat/svelte5-router": "^2.16.19",
-    "@supabase/ssr": "^0.7.0",
-    "@supabase/supabase-js": "^2.80.0",
     "ag-grid-community": "^34.3.1",
     "base-x": "^5.0.1",
     "dotenv": "^17.2.3",
