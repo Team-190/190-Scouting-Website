@@ -287,6 +287,7 @@
         border: 0.125rem solid var(--frc-190-red);
         border-radius: 0.25rem;
         background: #fff;
+        color: #000000;
         cursor: pointer;
         transition: all 0.3s ease;
     }
@@ -305,7 +306,7 @@
     .selected-event {
         margin: 0.5rem 0 0 0;
         font-size: 0.9rem;
-        color: var(--frc-190-black);
+        color: #000000;
         font-weight: 500;
     }
 
