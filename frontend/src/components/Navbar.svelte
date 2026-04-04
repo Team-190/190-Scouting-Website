@@ -36,6 +36,10 @@
 
   function toggleMenu(menuName) {
     expandedMenu = expandedMenu === menuName ? null : menuName;
+    // On mobile, close navbar after toggling menu if not pinned
+    if (!isPinnedOpen && typeof window !== 'undefined' && window.innerWidth < 768) {
+      isSidebarOpen.set(false);
+    }
   }
 
   async function checkAlliances() {
