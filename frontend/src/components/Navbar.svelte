@@ -27,11 +27,11 @@
   }
 
   function navigate(path) {
-    goto(path);
     // Always hide navbar when clicking a link
+    expandedMenu = null;
     isPinnedOpen = false;
     isSidebarOpen.set(false);
-    expandedMenu = null;
+    goto(path);
   }
 
   function toggleMenu(menuName) {
