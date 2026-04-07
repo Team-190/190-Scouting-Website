@@ -6,7 +6,7 @@
     hasServerConnection,
     queueQualitativeScoutingForSync,
   } from "../../utils/api";
-  import { getEventCode, MATCH_NUMBERS } from "../../utils/pageUtils";
+  import { getEventCode } from "../../utils/pageUtils";
   import { getIndexedDBStore } from "../../utils/indexedDB";
 
   // ─── Constants ────────────────────────────────────────────────────────────────
@@ -81,6 +81,7 @@
 
   let phase = "auto";
   let matchNumber = loadSavedMatchNumber();
+  let availableMatchNumbers = [1];
   let alliance = "Red";
   let teamNumber = "";
   let scouterName = loadSavedScouterInitials();
@@ -134,7 +135,7 @@
   function loadSavedMatchNumber() {
     try {
       const saved = Number(localStorage.getItem(MATCH_NUMBER_KEY));
-      return MATCH_NUMBERS.includes(saved) ? saved : 1;
+      return Number.isInteger(saved) && saved > 0 ? saved : 1;
     } catch {
       return 1;
     }
@@ -142,7 +143,7 @@
 
   function saveMatchNumber(value) {
     try {
-      if (!MATCH_NUMBERS.includes(Number(value))) return;
+      if (!Number.isInteger(Number(value)) || Number(value) <= 0) return;
       localStorage.setItem(MATCH_NUMBER_KEY, String(value));
     } catch {
       // Ignore storage errors and keep form usable.
@@ -175,8 +176,17 @@
   async function loadMatchAlliances() {
     try {
       matchAlliances = (await getIndexedDBStore("matchAlliances")) || [];
+      const totalEntries = matchAlliances.length;
+      availableMatchNumbers = totalEntries > 0
+        ? Array.from({ length: totalEntries }, (_, i) => i + 1)
+        : [1];
+
+      if (!availableMatchNumbers.includes(Number(matchNumber))) {
+        matchNumber = availableMatchNumbers[0];
+      }
     } catch {
       matchAlliances = [];
+      availableMatchNumbers = [1];
     } finally {
       loadingAssignments = false;
     }
@@ -416,7 +426,7 @@
           <div class="field-group">
             <label for="match-select">Match Number</label>
             <select id="match-select" bind:value={matchNumber} class="styled-select">
-              {#each MATCH_NUMBERS as num}
+              {#each availableMatchNumbers as num}
                 <option value={num}>Match {num}</option>
               {/each}
             </select>
