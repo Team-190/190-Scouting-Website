@@ -11,6 +11,7 @@
 
   const ROBOT_COLORS = "#FFFFFF";
   const eventCode = getEventCode();
+  const SCOUTER_INITIALS_KEY = "qualScouterInitials";
 
   const TELEOP_QUESTIONS = [
     {
@@ -69,7 +70,7 @@
   let matchNumber = 1;
   let alliance = "Red";
   let teamNumber = "";
-  let scouterName = "";
+  let scouterName = loadSavedScouterInitials();
 
   let canvasEl = null;
   let ctx = null;
@@ -83,6 +84,28 @@
   TELEOP_QUESTIONS.forEach((q) => {
     teleopAnswers[q.id] = q.type === "slider" ? 0 : "";
   });
+
+  function loadSavedScouterInitials() {
+    try {
+      return localStorage.getItem(SCOUTER_INITIALS_KEY) || "";
+    } catch {
+      return "";
+    }
+  }
+
+  function saveScouterInitials(value) {
+    try {
+      if (!value || !value.trim()) {
+        localStorage.removeItem(SCOUTER_INITIALS_KEY);
+        return;
+      }
+      localStorage.setItem(SCOUTER_INITIALS_KEY, value);
+    } catch {
+      // Ignore storage errors and keep form usable.
+    }
+  }
+
+  $: saveScouterInitials(scouterName);
 
   // ─── Canvas bootstrap (Svelte action) ────────────────────────────────────────
   function initCanvas(node) {
@@ -253,7 +276,6 @@
     drawnPaths = [];
     currentPath = [];
     teamNumber = "";
-    scouterName = "";
     teleopAnswers = {};
     matchNumber += 1;
     TELEOP_QUESTIONS.forEach((q) => {
