@@ -15,6 +15,7 @@
   const eventCode = getEventCode();
   const SCOUTER_INITIALS_KEY = "qualScouterInitials";
   const SCOUT_STATION_KEY = "qualScoutStation";
+  const MATCH_NUMBER_KEY = "qualMatchNumber";
   const SCOUT_STATIONS = ["R1", "R2", "R3", "B1", "B2", "B3"];
   const STATION_LOOKUP = {
     R1: { alliance: "red", index: 0 },
@@ -79,7 +80,7 @@
   // ─── State ────────────────────────────────────────────────────────────────────
 
   let phase = "auto";
-  let matchNumber = 1;
+  let matchNumber = loadSavedMatchNumber();
   let alliance = "Red";
   let teamNumber = "";
   let scouterName = loadSavedScouterInitials();
@@ -130,6 +131,24 @@
     }
   }
 
+  function loadSavedMatchNumber() {
+    try {
+      const saved = Number(localStorage.getItem(MATCH_NUMBER_KEY));
+      return MATCH_NUMBERS.includes(saved) ? saved : 1;
+    } catch {
+      return 1;
+    }
+  }
+
+  function saveMatchNumber(value) {
+    try {
+      if (!MATCH_NUMBERS.includes(Number(value))) return;
+      localStorage.setItem(MATCH_NUMBER_KEY, String(value));
+    } catch {
+      // Ignore storage errors and keep form usable.
+    }
+  }
+
   function saveScoutStation(value) {
     try {
       localStorage.setItem(SCOUT_STATION_KEY, value);
@@ -138,11 +157,11 @@
     }
   }
 
-  function resolveAssignedTeam(matchNum, station) {
+  function resolveAssignedTeam(matchNum, station, allMatches) {
     const stationConfig = STATION_LOOKUP[station];
-    if (!stationConfig || !Array.isArray(matchAlliances) || matchAlliances.length === 0) return "";
+    if (!stationConfig || !Array.isArray(allMatches) || allMatches.length === 0) return "";
 
-    const qualMatch = matchAlliances.find(
+    const qualMatch = allMatches.find(
       (m) => m?.comp_level === "qm" && Number(m?.match_number) === Number(matchNum),
     );
     if (!qualMatch) return "";
@@ -169,7 +188,8 @@
 
   $: saveScouterInitials(scouterName);
   $: saveScoutStation(selectedStation);
-  $: assignedTeamNumber = resolveAssignedTeam(matchNumber, selectedStation);
+  $: saveMatchNumber(matchNumber);
+  $: assignedTeamNumber = resolveAssignedTeam(matchNumber, selectedStation, matchAlliances);
   $: teamNumber = assignedTeamNumber || "";
   $: alliance = selectedStation.startsWith("B") ? "Blue" : "Red";
 
