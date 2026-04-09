@@ -16,6 +16,7 @@
   const SCOUTER_INITIALS_KEY = "qualScouterInitials";
   const SCOUT_STATION_KEY = "qualScoutStation";
   const MATCH_NUMBER_KEY = "qualMatchNumber";
+  const PHASE_KEY = "qualPagePhase";
   const SCOUT_STATIONS = ["R1", "R2", "R3", "B1", "B2", "B3"];
   const STATION_LOOKUP = {
     R1: { alliance: "red", index: 0 },
@@ -79,7 +80,7 @@
 
   // ─── State ────────────────────────────────────────────────────────────────────
 
-  let phase = "auto";
+  let phase = loadSavedPhase();
   let matchNumber = loadSavedMatchNumber();
   let availableMatchNumbers = [1];
   let alliance = "Red";
@@ -150,6 +151,24 @@
     }
   }
 
+  function loadSavedPhase() {
+    try {
+      const saved = localStorage.getItem(PHASE_KEY);
+      return ["auto", "teleop", "done"].includes(saved) ? saved : "auto";
+    } catch {
+      return "auto";
+    }
+  }
+
+  function savePhase(value) {
+    try {
+      if (!["auto", "teleop", "done"].includes(value)) return;
+      localStorage.setItem(PHASE_KEY, value);
+    } catch {
+      // Ignore storage errors and keep form usable.
+    }
+  }
+
   function saveScoutStation(value) {
     try {
       localStorage.setItem(SCOUT_STATION_KEY, value);
@@ -199,6 +218,7 @@
   $: saveScouterInitials(scouterName);
   $: saveScoutStation(selectedStation);
   $: saveMatchNumber(matchNumber);
+  $: savePhase(phase);
   $: assignedTeamNumber = resolveAssignedTeam(matchNumber, selectedStation, matchAlliances);
   $: teamNumber = assignedTeamNumber || "";
   $: alliance = selectedStation.startsWith("B") ? "Blue" : "Red";
