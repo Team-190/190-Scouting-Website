@@ -871,8 +871,16 @@
       });
       for (const listData of decompressed.split(";")) {
         if (!listData) continue;
-        const [name, teamNumbersStr] = listData.split(":");
-        if (!name) continue;
+        const [rawName, teamNumbersStr] = listData.split(":");
+        if (!rawName) continue;
+
+        let name = rawName;
+        let counter = 1;
+        const existingNames = Object.values(picklists).map((p) => p.name);
+        while (existingNames.includes(name)) {
+          name = `${rawName} (${counter++})`;
+        }
+
         const teamNumbers = teamNumbersStr ? teamNumbersStr.split(",") : [];
         const teams = teamNumbers
           .map((numStr) => {
@@ -881,12 +889,10 @@
             return team.nickname ? team : null;
           })
           .filter(Boolean);
-        picklists[`picklist_${Date.now()}_${Math.random()}`] = {
-          name,
-          teams,
-        };
+
+        picklists[`picklist_${Date.now()}_${Math.random()}`] = { name, teams };
       }
-      picklists = {...picklists};
+      picklists = { ...picklists };
       importData = "";
     } catch (error) {
       alert("Failed to parse import data. Please check the format.");
