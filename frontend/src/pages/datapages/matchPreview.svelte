@@ -12,7 +12,13 @@
   import * as pieGraph from "../../pages/graphcode/pie.js";
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
-  import { fetchAnanthPage, fetchGracePage, fetchMatchAlliances, fetchOPR } from "../../utils/api.js";
+  import {
+      fetchAnanthPage,
+      fetchGracePage,
+      fetchMatchAlliances,
+      fetchOPR,
+      fetchStatboticsMatchPrediction,
+  } from "../../utils/api.js";
   import {
       BOOLEAN_METRICS,
       CLIMBSTATE_METRIC,
@@ -52,6 +58,7 @@
   let cache: Record<string, any[]> = {};
   let allMatches: any[] = [];
   let selectedMatch = "";
+  let statboticsRedWinProb: number | null = null;
   let redAlliance: string[] = ["", "", ""];
   let blueAlliance: string[] = ["", "", ""];
 
@@ -256,16 +263,18 @@
   // ─── Rating Helpers ───────────────────────────────────────────────────────────
 
   /** Returns the src URL for the most recent grace rating image, defaulting to horse. */
-  function fetchGraceRating(team: number): string {
-    if (!graceData || graceData[team] === undefined) return GraceRating[GraceRating.length - 1];
-    const entry = graceData[team];
+  function fetchGraceRating(team: number | string): string {
+    const teamKey = String(team);
+    if (!graceData || graceData[teamKey] === undefined) return GraceRating[GraceRating.length - 1];
+    const entry = graceData[teamKey];
     return GraceRating[entry[Object.keys(entry)[Object.keys(entry).length - 1]]];
   }
 
   /** Returns the src URL for the most recent ananth rating image, defaulting to horse. */
-  function fetchAnanthRating(team: number): string {
-    if (!ananthData || ananthData[team] === undefined) return AnanthRating[AnanthRating.length - 1];
-    const entry = ananthData[team];
+  function fetchAnanthRating(team: number | string): string {
+    const teamKey = String(team);
+    if (!ananthData || ananthData[teamKey] === undefined) return AnanthRating[AnanthRating.length - 1];
+    const entry = ananthData[teamKey];
     return AnanthRating[entry[Object.keys(entry)[Object.keys(entry).length - 1]]];
   }
 
@@ -360,6 +369,29 @@
 
     await tick();
     loadAllAllianceTeams();
+  }
+
+  /**
+   * Fetches Statbotics prediction for the currently selected match.
+   * Stores the red alliance win probability as a [0,1] fraction.
+   */
+  async function loadStatboticsWinProb(matchKey: string) {
+    if (!matchKey) {
+      statboticsRedWinProb = null;
+      return;
+    }
+
+    try {
+      const data = await fetchStatboticsMatchPrediction(matchKey);
+      const redProb = Number(data?.pred?.red_win_prob);
+
+      statboticsRedWinProb = Number.isFinite(redProb)
+        ? Math.max(0, Math.min(1, redProb))
+        : null;
+    } catch (e) {
+      console.error("Failed to fetch Statbotics win probability:", e);
+      statboticsRedWinProb = null;
+    }
   }
 
   // ─── Match Aggregation ────────────────────────────────────────────────────────
@@ -594,7 +626,10 @@
     isLoading = true;
     try {
       selectedMatch = (e.target as HTMLSelectElement).value;
-      await loadMatchData(selectedMatch);
+      await Promise.all([
+        loadMatchData(selectedMatch),
+        loadStatboticsWinProb(selectedMatch),
+      ]);
     } finally {
       isLoading = false;
     }
@@ -780,7 +815,10 @@
       if (allMatches?.length) {
         selectedMatch = allMatches[0].key;
         await tick();
-        await loadMatchData(selectedMatch);
+        await Promise.all([
+          loadMatchData(selectedMatch),
+          loadStatboticsWinProb(selectedMatch),
+        ]);
       }
     } finally {
       isLoading = false;
@@ -829,6 +867,20 @@
         {/each}
       </select>
     </div>
+  </div>
+
+  <div class="statbotics-banner">
+    <span class="statbotics-label">Statbotics Win%</span>
+    {#if statboticsRedWinProb !== null}
+      <span class:favorite={statboticsRedWinProb >= 0.5} class="statbotics-red">
+        Red: {(statboticsRedWinProb * 100).toFixed(1)}%
+      </span>
+      <span class:favorite={statboticsRedWinProb < 0.5} class="statbotics-blue">
+        Blue: {((1 - statboticsRedWinProb) * 100).toFixed(1)}%
+      </span>
+    {:else}
+      <span class="statbotics-na">Unavailable</span>
+    {/if}
   </div>
 
   <div class="grid-wrapper">
@@ -935,6 +987,14 @@
   .controls { padding: 1rem; background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); color: white; font-size: 1rem; display: flex; gap: 1.5rem; align-items: center; justify-content: center; width: 100%; max-width: 1200px; border-radius: 10px; margin-bottom: 1rem; border: 2px solid var(--frc-190-red); box-shadow: 0 4px 15px rgba(0,0,0,0.3); flex-wrap: wrap; }
   .controls label { font-weight: 600; color: #fff; font-size: 0.95rem; }
 
+  .statbotics-banner { width: 100%; max-width: 1200px; display: flex; gap: 0.75rem; align-items: center; justify-content: center; flex-wrap: wrap; margin-bottom: 1rem; padding: 0.65rem 0.9rem; border-radius: 10px; border: 2px solid #1f4a6a; background: linear-gradient(135deg, #0f2435 0%, #18374f 100%); color: #fff; font-weight: 700; }
+  .statbotics-label { text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.8rem; color: #b9d9ef; }
+  .statbotics-red, .statbotics-blue, .statbotics-na { padding: 0.2rem 0.7rem; border-radius: 999px; font-size: 0.85rem; }
+  .statbotics-red { background: rgba(200, 27, 0, 0.35); border: 1px solid rgba(200, 27, 0, 0.65); }
+  .statbotics-blue { background: rgba(0, 102, 204, 0.35); border: 1px solid rgba(0, 102, 204, 0.7); }
+  .statbotics-na { background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); }
+  .favorite { box-shadow: 0 0 0 2px rgba(255,255,255,0.28) inset; }
+
   select { margin-left: 0.5rem; padding: 0.5rem 1rem; background: linear-gradient(135deg, #333 0%, #444 100%); color: white; font-size: 0.9rem; border: 2px solid var(--frc-190-red); border-radius: 6px; cursor: pointer; transition: all 0.3s ease; }
   select:hover { background: linear-gradient(135deg, #444 0%, #555 100%); border-color: #e02200; }
   select:focus { outline: none; box-shadow: 0 0 0 3px rgba(200, 27, 0, 0.4); }
@@ -957,6 +1017,7 @@
     .header-section h1 { font-size: 1.5rem; }
     .header-section .subtitle { font-size: 0.8rem; }
     .controls { gap: 1rem; padding: 0.75rem; }
+    .statbotics-banner { padding: 0.55rem 0.75rem; }
     .grid-wrapper { gap: 0.75rem; }
     .grid-column { min-width: 280px; }
     .team-label { font-size: 0.9rem; min-height: 45px; padding: 0.4rem 0.8rem; }
@@ -971,6 +1032,9 @@
     .header-section .subtitle { font-size: 0.75rem; }
     .controls { gap: 0.75rem; padding: 0.6rem; font-size: 0.85rem; flex-direction: column; }
     .controls label { font-size: 0.8rem; }
+    .statbotics-banner { padding: 0.5rem 0.6rem; gap: 0.45rem; }
+    .statbotics-label { font-size: 0.72rem; }
+    .statbotics-red, .statbotics-blue, .statbotics-na { font-size: 0.75rem; }
     select { margin-left: 0; margin-top: 0.3rem; padding: 0.4rem 0.8rem; font-size: 0.8rem; width: 100%; }
     .grid-wrapper { flex-direction: column; gap: 0.5rem; }
     .grid-column { min-width: auto; width: 100%; }
@@ -987,6 +1051,9 @@
     .header-section .subtitle { font-size: 0.7rem; }
     .controls { gap: 0.5rem; padding: 0.5rem; font-size: 0.75rem; }
     .controls label { font-size: 0.7rem; }
+    .statbotics-banner { padding: 0.45rem 0.5rem; }
+    .statbotics-label { font-size: 0.66rem; }
+    .statbotics-red, .statbotics-blue, .statbotics-na { font-size: 0.68rem; padding: 0.15rem 0.5rem; }
     select { margin-left: 0; padding: 0.3rem 0.6rem; font-size: 0.7rem; }
     .grid-wrapper { gap: 0.4rem; }
     .team-label { font-size: 0.7rem; min-height: 35px; padding: 0.25rem 0.5rem; }
