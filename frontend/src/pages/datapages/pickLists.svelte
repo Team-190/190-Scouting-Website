@@ -82,6 +82,8 @@
   let editingAllianceSelectionName = $state("");
   let allianceImportData = $state("");
   let isFillingAlliances = $state(false);
+  let draggedPicklistKey = $state(null);
+  let dragOverPicklistKey = $state(null);
 
   // ─── HOVERCARD STATE ─────────────────────────────────────────────────────────
 
@@ -345,8 +347,10 @@
   let notification = $state(null);
 
   function showNotification(message, type = "success", duration = 3000) {
-      notification = { message, type };
-      setTimeout(() => { notification = null; }, duration);
+    notification = { message, type };
+    setTimeout(() => {
+      notification = null;
+    }, duration);
   }
 
   // ─── EFFECTS ─────────────────────────────────────────────────────────────────
@@ -550,7 +554,10 @@
 
       // Only notify if we got some data but not enough — skip when IndexedDB/API returned nothing at all
       if (rankedTeams.length > 0 && rankedTeams.length < 8) {
-        showNotification("Not enough ranked teams to populate all 8 alliance captain spots.", "error");
+        showNotification(
+          "Not enough ranked teams to populate all 8 alliance captain spots.",
+          "error",
+        );
       }
     } catch (err) {
       console.error(err);
@@ -563,34 +570,36 @@
   async function rankFill() {
     isFillingAlliances = true;
     try {
-    createAndSwitchToNewAllianceSelection("Rank Filled");
-    await populateAllianceCaptains();
+      createAndSwitchToNewAllianceSelection("Rank Filled");
+      await populateAllianceCaptains();
 
-    if (rankedTeams.length === 0) {
-      alert(
-        "Please ensure team rankings are loaded. The new selection may be empty.",
+      if (rankedTeams.length === 0) {
+        alert(
+          "Please ensure team rankings are loaded. The new selection may be empty.",
+        );
+        return;
+      }
+
+      const occupied = () =>
+        new Set(alliances.flatMap((a) => a.teams.map((t) => t.team_number)));
+
+      let available = rankedTeams.filter(
+        (rt) => !occupied().has(rt.team_number),
       );
-      return;
-    }
 
-    const occupied = () =>
-      new Set(alliances.flatMap((a) => a.teams.map((t) => t.team_number)));
+      const pickNext = (alliance) => {
+        const maxTeams = isFourTeamAlliance ? 4 : 3;
+        if (alliance.teams.length >= maxTeams || available.length === 0) return;
+        const next = available.shift();
+        const team = teamFromStore(next.team_number);
+        if (team.nickname) alliance.teams.push(team);
+      };
 
-    let available = rankedTeams.filter((rt) => !occupied().has(rt.team_number));
-
-    const pickNext = (alliance) => {
-      const maxTeams = isFourTeamAlliance ? 4 : 3;
-      if (alliance.teams.length >= maxTeams || available.length === 0) return;
-      const next = available.shift();
-      const team = teamFromStore(next.team_number);
-      if (team.nickname) alliance.teams.push(team);
-    };
-
-    for (let i = 7; i >= 0; i--) pickNext(alliances[i]);
-    for (let i = 7; i >= 0; i--) pickNext(alliances[i]);
-    if (isFourTeamAlliance) {
       for (let i = 7; i >= 0; i--) pickNext(alliances[i]);
-    }
+      for (let i = 7; i >= 0; i--) pickNext(alliances[i]);
+      if (isFourTeamAlliance) {
+        for (let i = 7; i >= 0; i--) pickNext(alliances[i]);
+      }
     } finally {
       isFillingAlliances = false;
     }
@@ -604,35 +613,35 @@
 
     isFillingAlliances = true;
     try {
-    createAndSwitchToNewAllianceSelection("OPR Filled");
-    await populateAllianceCaptains();
+      createAndSwitchToNewAllianceSelection("OPR Filled");
+      await populateAllianceCaptains();
 
-    if (!alliances.every((a) => a.teams.length > 0)) {
-      alert(
-        "Could not populate all alliance captains. The new selection may be incomplete.",
-      );
-      return;
-    }
+      if (!alliances.every((a) => a.teams.length > 0)) {
+        alert(
+          "Could not populate all alliance captains. The new selection may be incomplete.",
+        );
+        return;
+      }
 
-    const { oprs } = await fetchOPR(eventCode);
-    if (!oprs || Object.keys(oprs).length === 0) {
-      alert("OPRs not available for this event.");
-      return;
-    }
+      const { oprs } = await fetchOPR(eventCode);
+      if (!oprs || Object.keys(oprs).length === 0) {
+        alert("OPRs not available for this event.");
+        return;
+      }
 
-    const oprSortedTeams = Object.entries(oprs)
-      .sort(([, a], [, b]) => b - a)
-      .map(([teamKey]) => teamFromStore(parseInt(teamKey.replace("frc", ""))))
-      .filter((t) => t.nickname != null);
+      const oprSortedTeams = Object.entries(oprs)
+        .sort(([, a], [, b]) => b - a)
+        .map(([teamKey]) => teamFromStore(parseInt(teamKey.replace("frc", ""))))
+        .filter((t) => t.nickname != null);
 
-    for (let i = 0; i < 8; i++)
-      pickTeamForAlliance(oprSortedTeams, alliances[i], i);
-    for (let i = 7; i >= 0; i--)
-      pickTeamForAlliance(oprSortedTeams, alliances[i], i);
-    if (isFourTeamAlliance) {
+      for (let i = 0; i < 8; i++)
+        pickTeamForAlliance(oprSortedTeams, alliances[i], i);
       for (let i = 7; i >= 0; i--)
         pickTeamForAlliance(oprSortedTeams, alliances[i], i);
-    }
+      if (isFourTeamAlliance) {
+        for (let i = 7; i >= 0; i--)
+          pickTeamForAlliance(oprSortedTeams, alliances[i], i);
+      }
     } finally {
       isFillingAlliances = false;
     }
@@ -646,35 +655,35 @@
 
     isFillingAlliances = true;
     try {
-    createAndSwitchToNewAllianceSelection("EPA Filled");
-    await populateAllianceCaptains();
+      createAndSwitchToNewAllianceSelection("EPA Filled");
+      await populateAllianceCaptains();
 
-    if (!alliances.every((a) => a.teams.length > 0)) {
-      alert(
-        "Could not populate all alliance captains. The new selection may be incomplete.",
-      );
-      return;
-    }
+      if (!alliances.every((a) => a.teams.length > 0)) {
+        alert(
+          "Could not populate all alliance captains. The new selection may be incomplete.",
+        );
+        return;
+      }
 
-    const epas = await fetchEventEpas(eventCode);
-    if (epas.length === 0) {
-      alert("EPAs not available for this event.");
-      return;
-    }
+      const epas = await fetchEventEpas(eventCode);
+      if (epas.length === 0) {
+        alert("EPAs not available for this event.");
+        return;
+      }
 
-    const epaSortedTeams = epas
-      .sort((a, b) => b.epa.total_points.mean - a.epa.total_points.mean)
-      .map((stat) => teamFromStore(stat.team))
-      .filter((t) => t.nickname != null);
+      const epaSortedTeams = epas
+        .sort((a, b) => b.epa.total_points.mean - a.epa.total_points.mean)
+        .map((stat) => teamFromStore(stat.team))
+        .filter((t) => t.nickname != null);
 
-    for (let i = 0; i < 8; i++)
-      pickTeamForAlliance(epaSortedTeams, alliances[i], i);
-    for (let i = 7; i >= 0; i--)
-      pickTeamForAlliance(epaSortedTeams, alliances[i], i);
-    if (isFourTeamAlliance) {
+      for (let i = 0; i < 8; i++)
+        pickTeamForAlliance(epaSortedTeams, alliances[i], i);
       for (let i = 7; i >= 0; i--)
         pickTeamForAlliance(epaSortedTeams, alliances[i], i);
-    }
+      if (isFourTeamAlliance) {
+        for (let i = 7; i >= 0; i--)
+          pickTeamForAlliance(epaSortedTeams, alliances[i], i);
+      }
     } finally {
       isFillingAlliances = false;
     }
@@ -791,59 +800,45 @@
 
   async function copyToClipboard(text) {
     if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(text);
     } else {
-        const el = document.createElement("textarea");
-        el.value = text;
-        el.style.position = "fixed";
-        el.style.opacity = "0";
-        document.body.appendChild(el);
-        el.focus();
-        el.select();
-        document.execCommand("copy");
-        document.body.removeChild(el);
+      const el = document.createElement("textarea");
+      el.value = text;
+      el.style.position = "fixed";
+      el.style.opacity = "0";
+      document.body.appendChild(el);
+      el.focus();
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
     }
-}
-  
-  async function copySinglePicklist(list) {
-      const dataString = `${list.name}:${list.teams.map((t) => t.team_number).join(",")}`;
-      try {
-          await copyToClipboard(bs85.encode(pako.deflate(dataString)));
-          showNotification("✓ Picklist copied to clipboard!");
-      } catch (err) {
-          console.error("Failed to copy text:", err);
-          showNotification("Failed to copy picklist.", "error");
-      }
-  } 
-
-  async function exportPicklists() {
-      const dataString = Object.values(picklists)
-          .map((list) => `${list.name}:${list.teams.map((t) => t.team_number).join(",")}`)
-          .join(";");
-      try {
-          await copyToClipboard(bs85.encode(pako.deflate(dataString)));
-          showNotification("✓ All picklists copied to clipboard!");
-      } catch (err) {
-          console.error("Failed to copy text:", err);
-          showNotification("Failed to copy picklists.", "error");
-      }
   }
 
-  async function copyAllianceSelection() {
-      const selection = allianceSelections[activeAllianceSelectionId];
-      if (!selection) return;
-      const dataString = [
-          selection.name,
-          selection.isFourTeamAlliance ? "1" : "0",
-          selection.alliances.map((a) => a.teams.map((t) => t.team_number).join(",")).join(";"),
-      ].join("|");
-      try {
-          await copyToClipboard(bs85.encode(pako.deflate(dataString)));
-          showNotification("✓ Alliance selection copied to clipboard!");
-      } catch (err) {
-          console.error("Failed to copy:", err);
-          showNotification("Failed to copy alliance selection.", "error");
-      }
+  async function copySinglePicklist(list) {
+    const dataString = `${list.name}:${list.teams.map((t) => t.team_number).join(",")}`;
+    try {
+      await copyToClipboard(dataString);
+      showNotification("✓ Picklist copied to clipboard!");
+    } catch (err) {
+      console.error("Failed to copy text:", err);
+      showNotification("Failed to copy picklist.", "error");
+    }
+  }
+
+  async function exportPicklists() {
+    const dataString = Object.values(picklists)
+      .map(
+        (list) =>
+          `${list.name}:${list.teams.map((t) => t.team_number).join(",")}`,
+      )
+      .join(";");
+    try {
+      await copyToClipboard(dataString);
+      showNotification("✓ All picklists copied to clipboard!");
+    } catch (err) {
+      console.error("Failed to copy text:", err);
+      showNotification("Failed to copy picklists.", "error");
+    }
   }
 
   function importPicklists() {
@@ -852,32 +847,56 @@
       return;
     }
     try {
-      const decompressed = pako.inflate(bs85.decode(importData), {
-        to: "string",
-      });
-      const newPicklists = {};
-      for (const listData of decompressed.split(";")) {
-        if (!listData) continue;
-        const [name, teamNumbersStr] = listData.split(":");
-        if (!name) continue;
+      for (const listData of importData.split(";")) {
+        if (!listData.trim()) continue;
+        const colonIdx = listData.indexOf(":");
+        if (colonIdx === -1) continue;
+        const rawName = listData.slice(0, colonIdx).trim();
+        const teamNumbersStr = listData.slice(colonIdx + 1).trim();
+        if (!rawName) continue;
+
+        let name = rawName;
+        let counter = 1;
+        const existingNames = Object.values(picklists).map((p) => p.name);
+        while (existingNames.includes(name)) {
+          name = `${rawName} (${counter++})`;
+        }
+
         const teamNumbers = teamNumbersStr ? teamNumbersStr.split(",") : [];
         const teams = teamNumbers
           .map((numStr) => {
-            const num = parseInt(numStr);
+            const num = parseInt(numStr.trim());
             const team = teamFromStore(num);
             return team.nickname ? team : null;
           })
           .filter(Boolean);
-        newPicklists[`picklist_${Date.now()}_${Math.random()}`] = {
-          name,
-          teams,
-        };
+
+        picklists[`picklist_${Date.now()}_${Math.random()}`] = { name, teams };
       }
-      picklists = newPicklists;
+      picklists = { ...picklists };
       importData = "";
     } catch (error) {
       alert("Failed to parse import data. Please check the format.");
       console.error("Import error:", error);
+    }
+  }
+
+  async function copyAllianceSelection() {
+    const selection = allianceSelections[activeAllianceSelectionId];
+    if (!selection) return;
+    const dataString = [
+      selection.name,
+      selection.isFourTeamAlliance ? "1" : "0",
+      selection.alliances
+        .map((a) => a.teams.map((t) => t.team_number).join(","))
+        .join(";"),
+    ].join("|");
+    try {
+      await copyToClipboard(bs85.encode(pako.deflate(dataString)));
+      showNotification("✓ Alliance selection copied to clipboard!");
+    } catch (err) {
+      console.error("Failed to copy:", err);
+      showNotification("Failed to copy alliance selection.", "error");
     }
   }
 
@@ -905,15 +924,17 @@
     const targetNumber = Number(targetElement.dataset.teamNumber);
     if (!targetNumber) return;
 
-    const draggedIndex = list.findIndex(t => t.team_number === item.team_number);
-    const dropIndex = list.findIndex(t => t.team_number === targetNumber);
+    const draggedIndex = list.findIndex(
+      (t) => t.team_number === item.team_number,
+    );
+    const dropIndex = list.findIndex((t) => t.team_number === targetNumber);
 
     if (draggedIndex !== -1 && dropIndex !== -1 && draggedIndex !== dropIndex) {
-        const [moved] = list.splice(draggedIndex, 1);
-        list.splice(dropIndex, 0, moved);
-        picklists = { ...picklists }; // force reactivity
+      const [moved] = list.splice(draggedIndex, 1);
+      list.splice(dropIndex, 0, moved);
+      picklists = { ...picklists }; // force reactivity
     }
-}
+  }
 
   function handleDrop(targetListKey) {
     if (!draggedItem) return;
@@ -1018,6 +1039,32 @@
     draggedItem = null;
   }
 
+  function handlePicklistDragStart(key, e) {
+    draggedPicklistKey = key;
+    e.dataTransfer.effectAllowed = "move";
+  }
+
+  function handlePicklistDragOver(key, e) {
+    e.preventDefault();
+    if (draggedPicklistKey && draggedPicklistKey !== key) {
+      dragOverPicklistKey = key;
+      const keys = Object.keys(picklists);
+      const fromIdx = keys.indexOf(draggedPicklistKey);
+      const toIdx = keys.indexOf(key);
+      if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+      const reordered = {};
+      const reorderedKeys = [...keys];
+      reorderedKeys.splice(fromIdx, 1);
+      reorderedKeys.splice(toIdx, 0, draggedPicklistKey);
+      for (const k of reorderedKeys) reordered[k] = picklists[k];
+      picklists = reordered;
+    }
+  }
+
+  function handlePicklistDragEnd() {
+    draggedPicklistKey = null;
+    dragOverPicklistKey = null;
+  }
   // ─── ALLIANCE MANAGEMENT ─────────────────────────────────────────────────────
 
   async function updateAllianceCaptains() {
@@ -1265,7 +1312,15 @@
 
           <div class="container">
             {#each Object.entries(picklists) as [key, list]}
-              <div class="picklist">
+              <div
+                role="application"
+                class="picklist"
+                class:dragging={draggedPicklistKey === key}
+                draggable="true"
+                ondragstart={(e) => handlePicklistDragStart(key, e)}
+                ondragover={(e) => handlePicklistDragOver(key, e)}
+                ondragend={handlePicklistDragEnd}
+              >
                 <h2>
                   <div style="display: flex; gap: 8px; align-items: center;">
                     <button
@@ -1572,6 +1627,16 @@
   :global(*) {
     box-sizing: border-box;
   }
+  .picklist[draggable="true"] {
+    cursor: grab;
+  }
+  .picklist[draggable="true"]:active {
+    cursor: grabbing;
+  }
+  .picklist.dragging {
+    opacity: 0.4;
+    border-style: dashed;
+  }
 
   button {
     cursor: pointer;
@@ -1688,25 +1753,50 @@
 
   /* Tablet Responsive */
   @media (max-width: 1024px) {
-    .header-section h1 { font-size: 1.5rem; }
-    .team-list-container { width: 240px; }
-    .picklist, .alliance-list { min-height: 280px; }
-    .alliances-container { grid-template-columns: repeat(2, 1fr); gap: 0.4rem; }
-    .container { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; }
+    .header-section h1 {
+      font-size: 1.5rem;
+    }
+    .team-list-container {
+      width: 240px;
+    }
+    .picklist,
+    .alliance-list {
+      min-height: 280px;
+    }
+    .alliances-container {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.4rem;
+    }
+    .container {
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 1rem;
+    }
   }
 
   /* Mobile Responsive */
   @media (max-width: 768px) {
-    .page-wrapper { padding-bottom: 6rem; }
-    .header-section { padding: 0.75rem 0; margin-bottom: 0.3rem; }
-    .header-section h1 { font-size: 1.2rem; }
+    .page-wrapper {
+      padding-bottom: 6rem;
+    }
+    .header-section {
+      padding: 0.75rem 0;
+      margin-bottom: 0.3rem;
+    }
+    .header-section h1 {
+      font-size: 1.2rem;
+    }
     .top-controls {
       padding: 0.5rem 0.75rem;
       gap: 0.5rem;
     }
-    .top-left-group { gap: 0.5rem; }
-    .tabs button { padding: 0.5rem 0.75rem; font-size: 0.8rem; }
-    
+    .top-left-group {
+      gap: 0.5rem;
+    }
+    .tabs button {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8rem;
+    }
+
     .main-content {
       flex-direction: column;
       padding: 0 0.3rem;
@@ -1718,24 +1808,38 @@
       position: static;
       margin-bottom: 1rem;
     }
-    .team-list { padding: 0.5rem; }
-    
-    .view-container { min-height: 0; }
-    .picklist-view { height: auto; max-height: 60vh; padding-right: 0.5rem; }
-    
+    .team-list {
+      padding: 0.5rem;
+    }
+
+    .view-container {
+      min-height: 0;
+    }
+    .picklist-view {
+      height: auto;
+      max-height: 60vh;
+      padding-right: 0.5rem;
+    }
+
     .container {
       grid-template-columns: 1fr;
       gap: 1rem;
       margin-top: 1rem;
     }
-    .picklist, .alliance-list { min-height: 250px; }
-    
-    .alliance-controls { margin-bottom: 1rem; padding: 0.75rem; }
-    .alliances-container { 
+    .picklist,
+    .alliance-list {
+      min-height: 250px;
+    }
+
+    .alliance-controls {
+      margin-bottom: 1rem;
+      padding: 0.75rem;
+    }
+    .alliances-container {
       grid-template-columns: 1fr;
       gap: 0.4rem;
     }
-    
+
     .picklists-sidebar {
       width: 100%;
       height: auto;
@@ -1743,22 +1847,31 @@
       position: static;
       margin-bottom: 1rem;
     }
-    .picklists-scroll { padding: 0.5rem; }
-    
+    .picklists-scroll {
+      padding: 0.5rem;
+    }
+
     .share-container {
       flex-direction: column;
       gap: 1rem;
       padding: 1rem;
     }
-    .share-controls { min-width: auto; }
-    
+    .share-controls {
+      min-width: auto;
+    }
+
     .bottom-bar {
       padding: 0.75rem 1rem;
       overflow-x: auto;
     }
-    .alliance-management { gap: 0.75rem; padding: 0.6rem 1rem; }
-    .current-selection-display { font-size: 0.85rem; }
-    
+    .alliance-management {
+      gap: 0.75rem;
+      padding: 0.6rem 1rem;
+    }
+    .current-selection-display {
+      font-size: 0.85rem;
+    }
+
     .fixed-buttons {
       bottom: 5rem;
       right: 1rem;
@@ -1768,27 +1881,67 @@
 
   /* Small Mobile */
   @media (max-width: 480px) {
-    .page-wrapper { padding-bottom: 5.5rem; }
-    .header-section h1 { font-size: 1rem; }
-    .top-controls { 
+    .page-wrapper {
+      padding-bottom: 5.5rem;
+    }
+    .header-section h1 {
+      font-size: 1rem;
+    }
+    .top-controls {
       padding: 0.4rem 0.5rem;
       gap: 0.3rem;
     }
-    .top-left-group { gap: 0.3rem; }
-    button { padding: 0.5rem 0.8rem; font-size: 0.8rem; }
-    input[type="text"], textarea, select { padding: 0.5rem 0.7rem; font-size: 0.8rem; }
-    
-    .team-list-container { max-height: 150px; }
-    .container { grid-template-columns: 1fr; gap: 0.8rem; margin-top: 0.8rem; }
-    .picklist, .alliance-list { min-height: 220px; }
-    .alliances-container { grid-template-columns: 1fr; gap: 0.3rem; }
-    
-    .share-container { margin-top: 1.5rem; padding: 0.75rem; gap: 0.75rem; }
-    .bottom-bar { padding: 0.5rem 0.75rem; }
-    .alliance-management { padding: 0.5rem 0.75rem; gap: 0.5rem; }
-    .current-selection-display { font-size: 0.75rem; }
-    
-    .fixed-buttons { bottom: 4.75rem; right: 0.75rem; }
+    .top-left-group {
+      gap: 0.3rem;
+    }
+    button {
+      padding: 0.5rem 0.8rem;
+      font-size: 0.8rem;
+    }
+    input[type="text"],
+    textarea,
+    select {
+      padding: 0.5rem 0.7rem;
+      font-size: 0.8rem;
+    }
+
+    .team-list-container {
+      max-height: 150px;
+    }
+    .container {
+      grid-template-columns: 1fr;
+      gap: 0.8rem;
+      margin-top: 0.8rem;
+    }
+    .picklist,
+    .alliance-list {
+      min-height: 220px;
+    }
+    .alliances-container {
+      grid-template-columns: 1fr;
+      gap: 0.3rem;
+    }
+
+    .share-container {
+      margin-top: 1.5rem;
+      padding: 0.75rem;
+      gap: 0.75rem;
+    }
+    .bottom-bar {
+      padding: 0.5rem 0.75rem;
+    }
+    .alliance-management {
+      padding: 0.5rem 0.75rem;
+      gap: 0.5rem;
+    }
+    .current-selection-display {
+      font-size: 0.75rem;
+    }
+
+    .fixed-buttons {
+      bottom: 4.75rem;
+      right: 0.75rem;
+    }
   }
 
   .main-content {
@@ -2087,34 +2240,59 @@
   }
 
   .banner-success {
-      background-color: #4CAF50;
+    background-color: #4caf50;
   }
 
   .banner-error {
-      background-color: #f44336;
+    background-color: #f44336;
   }
 
   /* Tablet Responsive */
   @media (max-width: 1024px) {
-    .header-section h1 { font-size: 1.5rem; }
-    .team-list-container { width: 240px; }
-    .picklist, .alliance-list { min-height: 280px; }
-    .alliances-container { grid-template-columns: repeat(2, 1fr); gap: 0.4rem; }
-    .container { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; }
+    .header-section h1 {
+      font-size: 1.5rem;
+    }
+    .team-list-container {
+      width: 240px;
+    }
+    .picklist,
+    .alliance-list {
+      min-height: 280px;
+    }
+    .alliances-container {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.4rem;
+    }
+    .container {
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 1rem;
+    }
   }
 
   /* Mobile Responsive */
   @media (max-width: 768px) {
-    .page-wrapper { padding-bottom: 6rem; }
-    .header-section { padding: 0.75rem 0; margin-bottom: 0.3rem; }
-    .header-section h1 { font-size: 1.2rem; }
+    .page-wrapper {
+      padding-bottom: 6rem;
+    }
+    .header-section {
+      padding: 0.75rem 0;
+      margin-bottom: 0.3rem;
+    }
+    .header-section h1 {
+      font-size: 1.2rem;
+    }
     .top-controls {
       padding: 0.5rem 0.75rem;
       gap: 0.5rem;
     }
-    .top-left-group { gap: 0.5rem; }
-    .tabs button { padding: 0.5rem 0.75rem; font-size: 0.8rem; }
-    
+    .top-left-group {
+      gap: 0.5rem;
+    }
+    .tabs button {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8rem;
+    }
+
     .main-content {
       flex-direction: column;
       padding: 0 0.3rem;
@@ -2126,24 +2304,38 @@
       position: static;
       margin-bottom: 1rem;
     }
-    .team-list { padding: 0.5rem; }
-    
-    .view-container { min-height: 0; }
-    .picklist-view { height: auto; max-height: 60vh; padding-right: 0.5rem; }
-    
+    .team-list {
+      padding: 0.5rem;
+    }
+
+    .view-container {
+      min-height: 0;
+    }
+    .picklist-view {
+      height: auto;
+      max-height: 60vh;
+      padding-right: 0.5rem;
+    }
+
     .container {
       grid-template-columns: 1fr;
       gap: 1rem;
       margin-top: 1rem;
     }
-    .picklist, .alliance-list { min-height: 250px; }
-    
-    .alliance-controls { margin-bottom: 1rem; padding: 0.75rem; }
-    .alliances-container { 
+    .picklist,
+    .alliance-list {
+      min-height: 250px;
+    }
+
+    .alliance-controls {
+      margin-bottom: 1rem;
+      padding: 0.75rem;
+    }
+    .alliances-container {
       grid-template-columns: 1fr;
       gap: 0.4rem;
     }
-    
+
     .picklists-sidebar {
       width: 100%;
       height: auto;
@@ -2151,22 +2343,31 @@
       position: static;
       margin-bottom: 1rem;
     }
-    .picklists-scroll { padding: 0.5rem; }
-    
+    .picklists-scroll {
+      padding: 0.5rem;
+    }
+
     .share-container {
       flex-direction: column;
       gap: 1rem;
       padding: 1rem;
     }
-    .share-controls { min-width: auto; }
-    
+    .share-controls {
+      min-width: auto;
+    }
+
     .bottom-bar {
       padding: 0.75rem 1rem;
       overflow-x: auto;
     }
-    .alliance-management { gap: 0.75rem; padding: 0.6rem 1rem; }
-    .current-selection-display { font-size: 0.85rem; }
-    
+    .alliance-management {
+      gap: 0.75rem;
+      padding: 0.6rem 1rem;
+    }
+    .current-selection-display {
+      font-size: 0.85rem;
+    }
+
     .fixed-buttons {
       bottom: 5rem;
       right: 1rem;
@@ -2176,27 +2377,66 @@
 
   /* Small Mobile */
   @media (max-width: 480px) {
-    .page-wrapper { padding-bottom: 5.5rem; }
-    .header-section h1 { font-size: 1rem; }
-    .top-controls { 
+    .page-wrapper {
+      padding-bottom: 5.5rem;
+    }
+    .header-section h1 {
+      font-size: 1rem;
+    }
+    .top-controls {
       padding: 0.4rem 0.5rem;
       gap: 0.3rem;
     }
-    .top-left-group { gap: 0.3rem; }
-    button { padding: 0.5rem 0.8rem; font-size: 0.8rem; }
-    input[type="text"], textarea, select { padding: 0.5rem 0.7rem; font-size: 0.8rem; }
-    
-    .team-list-container { max-height: 150px; }
-    .container { grid-template-columns: 1fr; gap: 0.8rem; margin-top: 0.8rem; }
-    .picklist, .alliance-list { min-height: 220px; }
-    .alliances-container { grid-template-columns: 1fr; gap: 0.3rem; }
-    
-    .share-container { margin-top: 1.5rem; padding: 0.75rem; gap: 0.75rem; }
-    .bottom-bar { padding: 0.5rem 0.75rem; }
-    .alliance-management { padding: 0.5rem 0.75rem; gap: 0.5rem; }
-    .current-selection-display { font-size: 0.75rem; }
-    
-    .fixed-buttons { bottom: 4.75rem; right: 0.75rem; }
-  }
+    .top-left-group {
+      gap: 0.3rem;
+    }
+    button {
+      padding: 0.5rem 0.8rem;
+      font-size: 0.8rem;
+    }
+    input[type="text"],
+    textarea,
+    select {
+      padding: 0.5rem 0.7rem;
+      font-size: 0.8rem;
+    }
 
+    .team-list-container {
+      max-height: 150px;
+    }
+    .container {
+      grid-template-columns: 1fr;
+      gap: 0.8rem;
+      margin-top: 0.8rem;
+    }
+    .picklist,
+    .alliance-list {
+      min-height: 220px;
+    }
+    .alliances-container {
+      grid-template-columns: 1fr;
+      gap: 0.3rem;
+    }
+
+    .share-container {
+      margin-top: 1.5rem;
+      padding: 0.75rem;
+      gap: 0.75rem;
+    }
+    .bottom-bar {
+      padding: 0.5rem 0.75rem;
+    }
+    .alliance-management {
+      padding: 0.5rem 0.75rem;
+      gap: 0.5rem;
+    }
+    .current-selection-display {
+      font-size: 0.75rem;
+    }
+
+    .fixed-buttons {
+      bottom: 4.75rem;
+      right: 0.75rem;
+    }
+  }
 </style>
