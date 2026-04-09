@@ -13,11 +13,12 @@
   let qualDataByTeam: Record<string, any[]> = {};
   let pitDataByTeam: Record<string, any> = {};
   let fieldImg: HTMLImageElement | null = null;
-  let selectedMatch: string = "all";
 
-  // ─── Filter dropdown ──────────────────────────────────────────────────────────
+  // ─── Filter dropdowns ─────────────────────────────────────────────────────────
   let showFilterDropdown = false;
+  let showMatchDropdown = false;
   let hiddenTeams: Set<number> = new Set();
+  let selectedMatches: Set<string> = new Set();
 
   function toggleTeamVisibility(team: number) {
     const next = new Set(hiddenTeams);
@@ -26,14 +27,22 @@
     hiddenTeams = next;
   }
 
+  function toggleMatchVisibility(m: string) {
+    const next = new Set(selectedMatches);
+    if (next.has(m)) next.delete(m);
+    else next.add(m);
+    selectedMatches = next;
+  }
+
   function showAll() { hiddenTeams = new Set(); }
   function hideAll() { hiddenTeams = new Set(teamsWithData); }
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   function handleOutsideClick(e: MouseEvent) {
     const target = e.target as HTMLElement;
     if (!target.closest(".filter-dropdown-wrapper")) {
       showFilterDropdown = false;
+      showMatchDropdown = false;
     }
   }
 
@@ -172,12 +181,6 @@
     return "cap-neutral";
   }
 
-  function getFilteredQual(team: number): any[] {
-  const rows = qualDataByTeam[team] ?? [];
-  if (selectedMatch === "all") return rows;
-  return rows.filter(r => String(r.Match ?? r.match) === selectedMatch);
-  }
-
   // ─── Mount ────────────────────────────────────────────────────────────────────
   onMount(async () => {
     isLoading = true;
@@ -204,8 +207,6 @@
 
       const qualResponse = await fetchQualitativeScouting(eventCode, localCounts);
       const qualRaw = await qualResponse.json();
-      console.log("qualRaw structure:", JSON.stringify(qualRaw).slice(0, 500));
-      console.log(qualRaw)
       const pitResponse = await fetchPitScouting(eventCode, pitTeams);
       const pitRaw = await pitResponse.json();
 
@@ -230,11 +231,9 @@
               (a, b) => Number(a.Match ?? a.match ?? 0) - Number(b.Match ?? b.match ?? 0)
             );
           } else if (val && typeof val === "object") {
-            // Check if val is a single match object (has Match/Team fields directly)
-            if (val.Match !== undefined || val.match !== undefined) {
+            if ((val as any).Match !== undefined || (val as any).match !== undefined) {
               qualDataByTeam[teamKey] = [val];
             } else {
-              // It's a nested { matchNum: matchData } structure
               qualDataByTeam[teamKey] = Object.entries(val as Record<string, any>)
                 .map(([matchNum, matchData]) => ({ Match: matchNum, ...(matchData as object) }))
                 .sort((a, b) => Number(a.Match) - Number(b.Match));
@@ -276,11 +275,9 @@
     (t) => qualDataByTeam[t]?.length > 0 || !!pitDataByTeam[t]
   );
 
-  // Initialise / sync card order when teamsWithData changes
   $: {
     const existing = new Set(cardOrder);
     const incoming = teamsWithData;
-    // Add new teams at the end, preserve existing order, remove teams no longer present
     const updated = [
       ...cardOrder.filter(t => incoming.includes(t)),
       ...incoming.filter(t => !existing.has(t)),
@@ -291,16 +288,26 @@
   $: visibleCards = cardOrder.filter(t => !hiddenTeams.has(t));
   $: hiddenCount = hiddenTeams.size;
 
-  // For selecting matches and viewing team data for that match
   $: availableMatches = (() => {
-  const nums = new Set<number>();
-  for (const rows of Object.values(qualDataByTeam)) {
-    for (const row of rows) {
-      const m = Number(row.Match ?? row.match ?? 0);
-      if (m) nums.add(m);
+    const nums = new Set<number>();
+    for (const rows of Object.values(qualDataByTeam)) {
+      for (const row of rows) {
+        const m = Number(row.Match ?? row.match ?? 0);
+        if (m) nums.add(m);
+      }
     }
+    return [...nums].sort((a, b) => a - b);
+  })();
+
+  $: filteredQualByTeam = (() => {
+  const result: Record<number, any[]> = {};
+  for (const team of visibleCards) {
+    const rows = qualDataByTeam[team] ?? [];
+    result[team] = selectedMatches.size === 0
+      ? rows
+      : rows.filter(r => !selectedMatches.has(String(r.Match ?? r.match)));
   }
-  return [...nums].sort((a, b) => a - b);
+  return result;
 })();
 
 </script>
@@ -325,6 +332,7 @@
   {#if !isLoading}
     <!-- Controls bar -->
     <div class="controls-bar">
+
       <!-- Team filter dropdown -->
       <div class="filter-dropdown-wrapper">
         <button
@@ -367,12 +375,41 @@
         {/if}
       </div>
 
-      <select bind:value={selectedMatch} class="match-select">
-        <option value="all">All Matches</option>
-        {#each availableMatches as m}
-          <option value={String(m)}>Match {m}</option>
-        {/each}
-      </select>
+      <!-- Match filter dropdown -->
+      <div class="filter-dropdown-wrapper">
+        <button
+          class="filter-btn"
+          on:click|stopPropagation={() => (showMatchDropdown = !showMatchDropdown)}
+        >
+          <span class="filter-icon">▼</span>
+          {selectedMatches.size === 0 ? "All Matches" : `${availableMatches.length - selectedMatches.size} match${availableMatches.length - selectedMatches.size !== 1 ? "es" : ""}`}
+        </button>
+
+        {#if showMatchDropdown}
+          <div class="filter-dropdown">
+            <div class="filter-dropdown-header">
+              <span class="filter-dropdown-title">Filter Matches</span>
+              <div class="filter-actions">
+                <button class="action-link" on:click={() => selectedMatches = new Set()}>All</button>
+                <span class="action-divider">·</span>
+                <button class="action-link" on:click={() => selectedMatches = new Set(availableMatches.map(String))}>None</button>
+              </div>
+            </div>
+            <div class="filter-list">
+              {#each availableMatches as m}
+                <label class="filter-item">
+                  <input
+                    type="checkbox"
+                    checked={!selectedMatches.has(String(m))}
+                    on:change={() => toggleMatchVisibility(String(m))}
+                  />
+                  <span class="filter-team-num">Match {m}</span>
+                </label>
+              {/each}
+            </div>
+          </div>
+        {/if}
+      </div>
 
       <span class="count-label">
         {visibleCards.length} of {teamsWithData.length} teams · drag cards to reorder
@@ -389,7 +426,6 @@
         {#each visibleCards as team (team)}
           {@const teamName = teamsMap.get(team)}
           {@const qual = qualDataByTeam[team] ?? []}
-          {@const filteredQual = getFilteredQual(team)}
           {@const pit = pitDataByTeam[team]}
           <!-- svelte-ignore a11y-no-static-element-interactions -->
           <div
@@ -498,13 +534,13 @@
             {/if}
 
             <!-- Qualitative Notes + Auto Paths -->
-            {#if qual.length > 0}
+            {#if filteredQualByTeam[team]?.length > 0}
               <div class="card-section">
                 <div class="section-label">
                   <span class="section-icon">📝</span> Qualitative Notes
                 </div>
                 <div class="qual-matches">
-                  {#each qual as matchRow}
+                  {#each (filteredQualByTeam[team] ?? []) as matchRow}
                     <div class="qual-match-block">
                       <div class="qual-match-header">Match {matchRow.Match ?? matchRow.match}</div>
 
@@ -546,7 +582,7 @@
               </div>
             {/if}
 
-            {#if !pit && qual.length === 0}
+            {#if !pit && !filteredQualByTeam[team]?.length}
               <div class="card-empty">No data collected yet.</div>
             {/if}
           </div>
@@ -786,7 +822,6 @@
     transform: scale(1.01);
   }
 
-  /* Drag handle — top-right braille dots */
   .drag-handle {
     position: absolute;
     top: 10px;
@@ -803,7 +838,7 @@
 
   .card-header {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 14px 36px 12px 16px; /* right padding leaves room for drag handle */
+    padding: 14px 36px 12px 16px;
     background: linear-gradient(90deg, rgba(200,27,0,0.18) 0%, transparent 100%);
     border-bottom: 1px solid rgba(200,27,0,0.25);
   }
@@ -869,21 +904,6 @@
     border-bottom: 1px solid rgba(200,27,0,0.25);
     color: #ff9980; font-size: 0.72rem; font-weight: 800;
     letter-spacing: 0.8px; text-transform: uppercase; padding: 5px 10px;
-  }
-
-  .match-select {
-  padding: 8px 12px;
-  background: linear-gradient(135deg, var(--dark) 0%, var(--dark2) 100%);
-  border: 2px solid var(--red);
-  border-radius: 8px;
-  color: white;
-  font-size: 0.9rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-  .match-select option {
-    background: var(--dark2);
-    color: white;
   }
 
   .auto-path-wrapper {
