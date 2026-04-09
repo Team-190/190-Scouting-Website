@@ -414,6 +414,27 @@ export async function fetchRobotClimb(eventCode, teamNumber, matchNumber) {
     AutoClimb: scoreBreakdown[`autoTowerRobot${robotIndex}`] ||"Skibidi"
   };
 }
+
+/**
+ * Fetches Statbotics prediction data for a single TBA match key.
+ * @param {string} matchKey
+ * @returns {Promise<any|null>}
+ */
+export async function fetchStatboticsMatchPrediction(matchKey) {
+    if (!matchKey) return null;
+
+    try {
+        const response = await fetch(`https://api.statbotics.io/v3/match/${encodeURIComponent(matchKey)}`);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.warn(`Failed to fetch Statbotics match prediction for ${matchKey}:`, error);
+        return null;
+    }
+}
+
 ////////////// POST Methods \\\\\\\\\\\\\\
 ////////////// POST Methods \\\\\\\\\\\\\\
 ////////////// POST Methods \\\\\\\\\\\\\\

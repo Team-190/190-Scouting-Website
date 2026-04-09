@@ -1,17 +1,30 @@
 <script>
+  import { onMount } from "svelte";
   import fieldImageSrc from "../../images/FieldImage.png";
   import {
     flushQualitativeScoutingQueue,
     hasServerConnection,
     queueQualitativeScoutingForSync,
   } from "../../utils/api";
-  import { getEventCode, MATCH_NUMBERS } from "../../utils/pageUtils";
+  import { getEventCode } from "../../utils/pageUtils";
+  import { getIndexedDBStore } from "../../utils/indexedDB";
 
   // ─── Constants ────────────────────────────────────────────────────────────────
 
   const ROBOT_COLORS = "#FFFFFF";
   const eventCode = getEventCode();
   const SCOUTER_INITIALS_KEY = "qualScouterInitials";
+  const SCOUT_STATION_KEY = "qualScoutStation";
+  const MATCH_NUMBER_KEY = "qualMatchNumber";
+  const SCOUT_STATIONS = ["R1", "R2", "R3", "B1", "B2", "B3"];
+  const STATION_LOOKUP = {
+    R1: { alliance: "red", index: 0 },
+    R2: { alliance: "red", index: 1 },
+    R3: { alliance: "red", index: 2 },
+    B1: { alliance: "blue", index: 0 },
+    B2: { alliance: "blue", index: 1 },
+    B3: { alliance: "blue", index: 2 },
+  };
 
   const TELEOP_QUESTIONS = [
     {
@@ -67,10 +80,15 @@
   // ─── State ────────────────────────────────────────────────────────────────────
 
   let phase = "auto";
-  let matchNumber = 1;
+  let matchNumber = loadSavedMatchNumber();
+  let availableMatchNumbers = [1];
   let alliance = "Red";
   let teamNumber = "";
   let scouterName = loadSavedScouterInitials();
+  let selectedStation = loadSavedScoutStation();
+  let assignedTeamNumber = "";
+  let matchAlliances = [];
+  let loadingAssignments = true;
 
   let canvasEl = null;
   let ctx = null;
@@ -105,7 +123,85 @@
     }
   }
 
+  function loadSavedScoutStation() {
+    try {
+      const saved = localStorage.getItem(SCOUT_STATION_KEY);
+      return SCOUT_STATIONS.includes(saved) ? saved : "R1";
+    } catch {
+      return "R1";
+    }
+  }
+
+  function loadSavedMatchNumber() {
+    try {
+      const saved = Number(localStorage.getItem(MATCH_NUMBER_KEY));
+      return Number.isInteger(saved) && saved > 0 ? saved : 1;
+    } catch {
+      return 1;
+    }
+  }
+
+  function saveMatchNumber(value) {
+    try {
+      if (!Number.isInteger(Number(value)) || Number(value) <= 0) return;
+      localStorage.setItem(MATCH_NUMBER_KEY, String(value));
+    } catch {
+      // Ignore storage errors and keep form usable.
+    }
+  }
+
+  function saveScoutStation(value) {
+    try {
+      localStorage.setItem(SCOUT_STATION_KEY, value);
+    } catch {
+      // Ignore storage errors and keep form usable.
+    }
+  }
+
+  function resolveAssignedTeam(matchNum, station, allMatches) {
+    const stationConfig = STATION_LOOKUP[station];
+    if (!stationConfig || !Array.isArray(allMatches) || allMatches.length === 0) return "";
+
+    const qualMatch = allMatches.find(
+      (m) => m?.comp_level === "qm" && Number(m?.match_number) === Number(matchNum),
+    );
+    if (!qualMatch) return "";
+
+    const teamKey = qualMatch?.alliances?.[stationConfig.alliance]?.team_keys?.[stationConfig.index];
+    if (typeof teamKey !== "string") return "";
+
+    return teamKey.replace(/^frc/i, "");
+  }
+
+  async function loadMatchAlliances() {
+    try {
+      matchAlliances = (await getIndexedDBStore("matchAlliances")) || [];
+      const totalEntries = matchAlliances.length;
+      availableMatchNumbers = totalEntries > 0
+        ? Array.from({ length: totalEntries }, (_, i) => i + 1)
+        : [1];
+
+      if (!availableMatchNumbers.includes(Number(matchNumber))) {
+        matchNumber = availableMatchNumbers[0];
+      }
+    } catch {
+      matchAlliances = [];
+      availableMatchNumbers = [1];
+    } finally {
+      loadingAssignments = false;
+    }
+  }
+
+  onMount(() => {
+    loadMatchAlliances();
+  });
+
   $: saveScouterInitials(scouterName);
+  $: saveScoutStation(selectedStation);
+  $: saveMatchNumber(matchNumber);
+  $: assignedTeamNumber = resolveAssignedTeam(matchNumber, selectedStation, matchAlliances);
+  $: teamNumber = assignedTeamNumber || "";
+  $: alliance = selectedStation.startsWith("B") ? "Blue" : "Red";
 
   // ─── Canvas bootstrap (Svelte action) ────────────────────────────────────────
   function initCanvas(node) {
@@ -257,6 +353,7 @@
       Match: matchNumber,
       Team: teamNumber,
       ScouterName: scouterName,
+      ScoutStation: selectedStation,
       Alliance: alliance,
       AutoPath: drawnPaths,
       ...teleopAnswers,
@@ -310,13 +407,26 @@
             <input id="scouter-name" type="text" bind:value={scouterName} placeholder="RK…" class="text-input" />
           </div>
           <div class="field-group">
-            <label for="team-number">Team Number</label>
-            <input id="team-number" type="number" bind:value={teamNumber} placeholder="e.g. 190" class="text-input" />
+            <label for="scout-station">Scout Station</label>
+            <select id="scout-station" bind:value={selectedStation} class="styled-select">
+              {#each SCOUT_STATIONS as station}
+                <option value={station}>{station}</option>
+              {/each}
+            </select>
+            <p class="assignment-note">
+              {#if loadingAssignments}
+                Looking up assigned robot...
+              {:else if assignedTeamNumber}
+                Scout {selectedStation} - Team {assignedTeamNumber}
+              {:else}
+                No assigned robot found for Match {matchNumber} ({selectedStation}).
+              {/if}
+            </p>
           </div>
           <div class="field-group">
             <label for="match-select">Match Number</label>
             <select id="match-select" bind:value={matchNumber} class="styled-select">
-              {#each MATCH_NUMBERS as num}
+              {#each availableMatchNumbers as num}
                 <option value={num}>Match {num}</option>
               {/each}
             </select>
@@ -505,6 +615,12 @@
   .setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.5rem; }
   .field-group { display: flex; flex-direction: column; gap: 0.4rem; }
   .field-group label { font-size: 0.7rem; font-weight: 600; color: #ccc; text-transform: uppercase; letter-spacing: 0.5px; }
+  .assignment-note {
+    margin: 0.25rem 0 0;
+    font-size: 0.75rem;
+    color: #cfcfcf;
+    min-height: 1rem;
+  }
   .text-input {
     padding: 0.6rem 0.9rem; background: #2d2d2d; border: 2px solid #444;
     border-radius: 0.4rem; color: white; font-size: 0.9rem; transition: border-color 0.2s;
