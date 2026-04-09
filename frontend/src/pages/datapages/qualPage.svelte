@@ -79,6 +79,7 @@
   let currentPath = [];
   let tool = "draw";
   let fieldImg = null;
+  let fieldFlipped = false;
 
   let teleopAnswers = {};
   TELEOP_QUESTIONS.forEach((q) => {
@@ -207,9 +208,14 @@
     if (!ctx || !canvasEl) return;
     const W = canvasEl.width;
     const H = canvasEl.height;
-    const color = ROBOT_COLORS;
 
     ctx.clearRect(0, 0, W, H);
+
+    if (fieldFlipped) {
+      ctx.save();
+      ctx.translate(W, 0);
+      ctx.scale(-1, 1);
+    }
 
     if (fieldImg && fieldImg.complete && fieldImg.naturalWidth > 0) {
       const imgW = fieldImg.naturalWidth;
@@ -238,7 +244,7 @@
       ctx.beginPath();
       ctx.moveTo(path[0].x, path[0].y);
       for (let i = 1; i < path.length; i++) ctx.lineTo(path[i].x, path[i].y);
-      ctx.strokeStyle = color;
+      ctx.strokeStyle = ROBOT_COLORS;
       ctx.lineWidth = 3;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
@@ -246,6 +252,10 @@
       ctx.stroke();
       drawArrow(path);
     });
+
+    if (fieldFlipped) {
+      ctx.restore();
+    }
   }
 
   // ─── Phase transitions ────────────────────────────────────────────────────────
@@ -261,6 +271,10 @@
       AutoPath: drawnPaths,
       ...teleopAnswers,
     };
+
+    AutoPath: fieldFlipped
+  ? drawnPaths.map(path => path.map(pt => ({ x: 1200 - pt.x, y: pt.y })))
+  : drawnPaths,
 
     queueQualitativeScoutingForSync(eventCode, record.Team, record.Match, record);
 
@@ -284,6 +298,7 @@
   }
 
   $: allianceColor = ROBOT_COLORS[alliance] || "#C81B00";
+  $: fieldFlipped, redrawCanvas();
 </script>
 
 <!-- ─── Template ──────────────────────────────────────────────────────────────── -->
@@ -331,6 +346,9 @@
               <button class="tool-btn {tool === 'draw'  ? 'tool-active' : ''}" on:click={() => (tool = 'draw')}>✏️ Draw</button>
               <button class="tool-btn {tool === 'erase' ? 'tool-active' : ''}" on:click={() => (tool = 'erase')}>🧹 Erase</button>
               <button class="tool-btn clear-btn" on:click={clearCanvas}>🗑 Clear All</button>
+              <button class="tool-btn" on:click={() => (fieldFlipped = !fieldFlipped)}>
+                ⇄ {fieldFlipped ? "Flipped" : "Normal"}
+              </button>
             </div>
           </div>
 
@@ -347,6 +365,7 @@
               on:touchmove={onPointerMove}
               on:touchend={onPointerUp}
             ></canvas>
+            <div class="canvas-wrapper" style="--alliance-color: {allianceColor}; transform: {fieldFlipped ? 'scaleX(-1)' : 'none'}"></div>
           </div>
 
           <p class="path-count">
