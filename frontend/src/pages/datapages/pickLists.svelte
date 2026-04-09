@@ -869,7 +869,6 @@
       const decompressed = pako.inflate(bs85.decode(importData), {
         to: "string",
       });
-      const newPicklists = {};
       for (const listData of decompressed.split(";")) {
         if (!listData) continue;
         const [name, teamNumbersStr] = listData.split(":");
@@ -882,12 +881,12 @@
             return team.nickname ? team : null;
           })
           .filter(Boolean);
-        newPicklists[`picklist_${Date.now()}_${Math.random()}`] = {
+        picklists[`picklist_${Date.now()}_${Math.random()}`] = {
           name,
           teams,
         };
       }
-      picklists = newPicklists;
+      picklists = {...picklists};
       importData = "";
     } catch (error) {
       alert("Failed to parse import data. Please check the format.");
