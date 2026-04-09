@@ -20,6 +20,10 @@
   let hiddenTeams: Set<number> = new Set();
   let selectedMatches: Set<string> = new Set();
 
+  let showDataDropdown = false;
+  let showPit = true;
+  let showQual = true;
+
   function toggleTeamVisibility(team: number) {
     const next = new Set(hiddenTeams);
     if (next.has(team)) next.delete(team);
@@ -43,6 +47,7 @@
     if (!target.closest(".filter-dropdown-wrapper")) {
       showFilterDropdown = false;
       showMatchDropdown = false;
+      showDataDropdown = false;
     }
   }
 
@@ -411,6 +416,40 @@
         {/if}
       </div>
 
+      <!-- Data type filter dropdown -->
+      <div class="filter-dropdown-wrapper">
+        <button
+          class="filter-btn"
+          on:click|stopPropagation={() => (showDataDropdown = !showDataDropdown)}
+        >
+          <span class="filter-icon">▼</span>
+          {showPit && showQual ? "Pit & Qual" : showPit ? "Pit Only" : showQual ? "Qual Only" : "No Data"}
+        </button>
+
+        {#if showDataDropdown}
+          <div class="filter-dropdown">
+            <div class="filter-dropdown-header">
+              <span class="filter-dropdown-title">Data to Show</span>
+              <div class="filter-actions">
+                <button class="action-link" on:click={() => { showPit = true; showQual = true; }}>All</button>
+                <span class="action-divider">·</span>
+                <button class="action-link" on:click={() => { showPit = false; showQual = false; }}>None</button>
+              </div>
+            </div>
+            <div class="filter-list">
+              <label class="filter-item">
+                <input type="checkbox" bind:checked={showPit} />
+                <span class="filter-team-num">Pit Scouting</span>
+              </label>
+              <label class="filter-item">
+                <input type="checkbox" bind:checked={showQual} />
+                <span class="filter-team-num">Qual Notes</span>
+              </label>
+            </div>
+          </div>
+        {/if}
+      </div>
+
       <span class="count-label">
         {visibleCards.length} of {teamsWithData.length} teams · drag cards to reorder
       </span>
@@ -460,7 +499,7 @@
             </div>
 
             <!-- Pit Scouting -->
-            {#if pit}
+            {#if pit && showPit}
               <div class="card-section">
                 <div class="section-label">
                   <span class="section-icon">🔧</span> Pit Scouting
@@ -534,7 +573,7 @@
             {/if}
 
             <!-- Qualitative Notes + Auto Paths -->
-            {#if filteredQualByTeam[team]?.length > 0}
+            {#if filteredQualByTeam[team]?.length > 0 && showQual}
               <div class="card-section">
                 <div class="section-label">
                   <span class="section-icon">📝</span> Qualitative Notes
@@ -582,7 +621,7 @@
               </div>
             {/if}
 
-            {#if !pit && !filteredQualByTeam[team]?.length}
+            {#if (!pit || !showPit) && (!filteredQualByTeam[team]?.length || !showQual)}
               <div class="card-empty">No data collected yet.</div>
             {/if}
           </div>
