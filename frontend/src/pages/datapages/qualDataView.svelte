@@ -13,6 +13,7 @@
   let qualDataByTeam: Record<string, any[]> = {};
   let pitDataByTeam: Record<string, any> = {};
   let fieldImg: HTMLImageElement | null = null;
+  let selectedMatch: string = "all";
 
   // ─── Filter dropdown ──────────────────────────────────────────────────────────
   let showFilterDropdown = false;
@@ -171,6 +172,12 @@
     return "cap-neutral";
   }
 
+  function getFilteredQual(team: number): any[] {
+  const rows = qualDataByTeam[team] ?? [];
+  if (selectedMatch === "all") return rows;
+  return rows.filter(r => String(r.Match ?? r.match) === selectedMatch);
+  }
+
   // ─── Mount ────────────────────────────────────────────────────────────────────
   onMount(async () => {
     isLoading = true;
@@ -190,16 +197,15 @@
 
       const localQualStr = localStorage.getItem("retrieveQual");
       const localQual = localQualStr ? JSON.parse(localQualStr) : {};
-      const localCounts: Record<string, Record<string, number>> = {};
+      const localCounts: Record<string, number> = {};
       for (const [team, matches] of Object.entries(localQual)) {
-        localCounts[team] = {};
-        for (const matchKey of Object.keys(matches as object)) {
-          localCounts[team][matchKey] = 1;
-        }
+        localCounts[team] = Object.keys(matches as object).length;
       }
 
       const qualResponse = await fetchQualitativeScouting(eventCode, localCounts);
       const qualRaw = await qualResponse.json();
+      console.log("qualRaw structure:", JSON.stringify(qualRaw).slice(0, 500));
+      console.log(qualRaw)
       const pitResponse = await fetchPitScouting(eventCode, pitTeams);
       const pitRaw = await pitResponse.json();
 
@@ -220,13 +226,19 @@
       } else if (qualRaw && typeof qualRaw === "object") {
         for (const [teamKey, val] of Object.entries(qualRaw)) {
           if (Array.isArray(val)) {
-            qualDataByTeam[teamKey] = (val as any[]).sort(
+            qualDataByTeam[teamKey] = val.sort(
               (a, b) => Number(a.Match ?? a.match ?? 0) - Number(b.Match ?? b.match ?? 0)
             );
           } else if (val && typeof val === "object") {
-            qualDataByTeam[teamKey] = Object.entries(val as Record<string, any>)
-              .map(([matchNum, matchData]) => ({ Match: matchNum, ...(matchData as object) }))
-              .sort((a, b) => Number(a.Match) - Number(b.Match));
+            // Check if val is a single match object (has Match/Team fields directly)
+            if (val.Match !== undefined || val.match !== undefined) {
+              qualDataByTeam[teamKey] = [val];
+            } else {
+              // It's a nested { matchNum: matchData } structure
+              qualDataByTeam[teamKey] = Object.entries(val as Record<string, any>)
+                .map(([matchNum, matchData]) => ({ Match: matchNum, ...(matchData as object) }))
+                .sort((a, b) => Number(a.Match) - Number(b.Match));
+            }
           }
         }
       }
@@ -242,6 +254,12 @@
       } else if (pitRaw && typeof pitRaw === "object") {
         for (const [teamKey, val] of Object.entries(pitRaw)) {
           pitDataByTeam[teamKey] = val;
+        }
+      }
+
+      for (const team of Object.keys(qualDataByTeam)) {
+        if (!Array.isArray(qualDataByTeam[team])) {
+          qualDataByTeam[team] = Object.values(qualDataByTeam[team]);
         }
       }
 
@@ -272,6 +290,19 @@
 
   $: visibleCards = cardOrder.filter(t => !hiddenTeams.has(t));
   $: hiddenCount = hiddenTeams.size;
+
+  // For selecting matches and viewing team data for that match
+  $: availableMatches = (() => {
+  const nums = new Set<number>();
+  for (const rows of Object.values(qualDataByTeam)) {
+    for (const row of rows) {
+      const m = Number(row.Match ?? row.match ?? 0);
+      if (m) nums.add(m);
+    }
+  }
+  return [...nums].sort((a, b) => a - b);
+})();
+
 </script>
 
 <svelte:window on:click={handleOutsideClick} />
@@ -336,6 +367,13 @@
         {/if}
       </div>
 
+      <select bind:value={selectedMatch} class="match-select">
+        <option value="all">All Matches</option>
+        {#each availableMatches as m}
+          <option value={String(m)}>Match {m}</option>
+        {/each}
+      </select>
+
       <span class="count-label">
         {visibleCards.length} of {teamsWithData.length} teams · drag cards to reorder
       </span>
@@ -351,6 +389,7 @@
         {#each visibleCards as team (team)}
           {@const teamName = teamsMap.get(team)}
           {@const qual = qualDataByTeam[team] ?? []}
+          {@const filteredQual = getFilteredQual(team)}
           {@const pit = pitDataByTeam[team]}
           <!-- svelte-ignore a11y-no-static-element-interactions -->
           <div
@@ -830,6 +869,21 @@
     border-bottom: 1px solid rgba(200,27,0,0.25);
     color: #ff9980; font-size: 0.72rem; font-weight: 800;
     letter-spacing: 0.8px; text-transform: uppercase; padding: 5px 10px;
+  }
+
+  .match-select {
+  padding: 8px 12px;
+  background: linear-gradient(135deg, var(--dark) 0%, var(--dark2) 100%);
+  border: 2px solid var(--red);
+  border-radius: 8px;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+  .match-select option {
+    background: var(--dark2);
+    color: white;
   }
 
   .auto-path-wrapper {
