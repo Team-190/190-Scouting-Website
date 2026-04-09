@@ -817,7 +817,7 @@
   async function copySinglePicklist(list) {
     const dataString = `${list.name}:${list.teams.map((t) => t.team_number).join(",")}`;
     try {
-      await copyToClipboard(bs85.encode(pako.deflate(dataString)));
+      await copyToClipboard(dataString);
       showNotification("✓ Picklist copied to clipboard!");
     } catch (err) {
       console.error("Failed to copy text:", err);
@@ -833,11 +833,51 @@
       )
       .join(";");
     try {
-      await copyToClipboard(bs85.encode(pako.deflate(dataString)));
+      await copyToClipboard(dataString);
       showNotification("✓ All picklists copied to clipboard!");
     } catch (err) {
       console.error("Failed to copy text:", err);
       showNotification("Failed to copy picklists.", "error");
+    }
+  }
+
+  function importPicklists() {
+    if (!importData) {
+      alert("Please paste the data to import.");
+      return;
+    }
+    try {
+      for (const listData of importData.split(";")) {
+        if (!listData.trim()) continue;
+        const colonIdx = listData.indexOf(":");
+        if (colonIdx === -1) continue;
+        const rawName = listData.slice(0, colonIdx).trim();
+        const teamNumbersStr = listData.slice(colonIdx + 1).trim();
+        if (!rawName) continue;
+
+        let name = rawName;
+        let counter = 1;
+        const existingNames = Object.values(picklists).map((p) => p.name);
+        while (existingNames.includes(name)) {
+          name = `${rawName} (${counter++})`;
+        }
+
+        const teamNumbers = teamNumbersStr ? teamNumbersStr.split(",") : [];
+        const teams = teamNumbers
+          .map((numStr) => {
+            const num = parseInt(numStr.trim());
+            const team = teamFromStore(num);
+            return team.nickname ? team : null;
+          })
+          .filter(Boolean);
+
+        picklists[`picklist_${Date.now()}_${Math.random()}`] = { name, teams };
+      }
+      picklists = { ...picklists };
+      importData = "";
+    } catch (error) {
+      alert("Failed to parse import data. Please check the format.");
+      console.error("Import error:", error);
     }
   }
 
@@ -857,46 +897,6 @@
     } catch (err) {
       console.error("Failed to copy:", err);
       showNotification("Failed to copy alliance selection.", "error");
-    }
-  }
-
-  function importPicklists() {
-    if (!importData) {
-      alert("Please paste the data to import.");
-      return;
-    }
-    try {
-      const decompressed = pako.inflate(bs85.decode(importData), {
-        to: "string",
-      });
-      for (const listData of decompressed.split(";")) {
-        if (!listData) continue;
-        const [rawName, teamNumbersStr] = listData.split(":");
-        if (!rawName) continue;
-
-        let name = rawName;
-        let counter = 1;
-        const existingNames = Object.values(picklists).map((p) => p.name);
-        while (existingNames.includes(name)) {
-          name = `${rawName} (${counter++})`;
-        }
-
-        const teamNumbers = teamNumbersStr ? teamNumbersStr.split(",") : [];
-        const teams = teamNumbers
-          .map((numStr) => {
-            const num = parseInt(numStr);
-            const team = teamFromStore(num);
-            return team.nickname ? team : null;
-          })
-          .filter(Boolean);
-
-        picklists[`picklist_${Date.now()}_${Math.random()}`] = { name, teams };
-      }
-      picklists = { ...picklists };
-      importData = "";
-    } catch (error) {
-      alert("Failed to parse import data. Please check the format.");
-      console.error("Import error:", error);
     }
   }
 
