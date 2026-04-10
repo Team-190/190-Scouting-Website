@@ -129,33 +129,51 @@
     const scaleY = H / RECORDED_H;
 
     if (matchRow?.AutoPath && Array.isArray(matchRow.AutoPath)) {
-      matchRow.AutoPath.forEach((path: any[]) => {
-        if (!Array.isArray(path) || path.length < 2) return;
-        const px = (p: any) => p.x * scaleX;
-        const py = (p: any) => p.y * scaleY;
+      const allPaths = matchRow.AutoPath.filter((path: any[]) => Array.isArray(path) && path.length >= 2);
+      if (allPaths.length === 0) return;
+      
+      const px = (p: any) => p.x * scaleX;
+      const py = (p: any) => p.y * scaleY;
+      
+      // Flatten all points into single array
+      const allPoints: any[] = [];
+      allPaths.forEach((path: any[]) => {
+        allPoints.push(...path);
+      });
+      
+      // Calculate cumulative distances
+      const distances = [0];
+      for (let i = 1; i < allPoints.length; i++) {
+        const p1 = allPoints[i - 1];
+        const p2 = allPoints[i];
+        const dx = px(p2) - px(p1);
+        const dy = py(p2) - py(p1);
+        distances.push(distances[distances.length - 1] + Math.sqrt(dx * dx + dy * dy));
+      }
+      const totalDist = distances[distances.length - 1];
+      
+      // Function to interpolate color
+      const lerpColor = (t: number) => {
+        const r1 = 0, g1 = 255, b1 = 0; // green
+        const r2 = 255, g2 = 0, b2 = 0; // red
+        const r = Math.round(r1 + (r2 - r1) * t);
+        const g = Math.round(g1 + (g2 - g1) * t);
+        const b = Math.round(b1 + (b2 - b1) * t);
+        return `rgb(${r},${g},${b})`;
+      };
+      
+      // Draw path segments with interpolated colors
+      for (let i = 1; i < allPoints.length; i++) {
+        const t = totalDist > 0 ? distances[i] / totalDist : 0;
         ctx.beginPath();
-        ctx.moveTo(px(path[0]), py(path[0]));
-        for (let i = 1; i < path.length; i++) ctx.lineTo(px(path[i]), py(path[i]));
-        ctx.strokeStyle = "#FFFFFF";
+        ctx.moveTo(px(allPoints[i - 1]), py(allPoints[i - 1]));
+        ctx.lineTo(px(allPoints[i]), py(allPoints[i]));
+        ctx.strokeStyle = lerpColor(t);
         ctx.lineWidth = 2;
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
         ctx.stroke();
-        if (path.length >= 2) {
-          const last = path[path.length - 1];
-          const prev = path[path.length - 2];
-          const angle = Math.atan2(py(last) - py(prev), px(last) - px(prev));
-          const sz = 7;
-          ctx.beginPath();
-          ctx.moveTo(px(last), py(last));
-          ctx.lineTo(px(last) - sz * Math.cos(angle - Math.PI / 6), py(last) - sz * Math.sin(angle - Math.PI / 6));
-          ctx.moveTo(px(last), py(last));
-          ctx.lineTo(px(last) - sz * Math.cos(angle + Math.PI / 6), py(last) - sz * Math.sin(angle + Math.PI / 6));
-          ctx.strokeStyle = "#FFFFFF";
-          ctx.lineWidth = 2;
-          ctx.stroke();
-        }
-      });
+      }
     }
   }
 
