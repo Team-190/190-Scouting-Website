@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { fetchTeams, fetchQualitativeScouting, fetchPitScouting } from "../../utils/api.js";
-  import { getEventCode } from "../../utils/pageUtils.js";
+  import { COLOR_MODES, getColorblindMode, getEventCode } from "../../utils/pageUtils.js";
   import fieldImageSrc from "../../images/FieldImage.png";
 
   let eventCode = getEventCode();
@@ -13,6 +13,8 @@
   let qualDataByTeam: Record<string, any[]> = {};
   let pitDataByTeam: Record<string, any> = {};
   let fieldImg: HTMLImageElement | null = null;
+  let colorblindMode = getColorblindMode();
+  let canvasesByTeamMatch: Map<string, HTMLCanvasElement> = new Map();
 
   // ─── Filter dropdowns ─────────────────────────────────────────────────────────
   let showFilterDropdown = false;
@@ -89,9 +91,14 @@
     dragOverTeam = null;
   }
 
+  // ─── Auto Path Animation ──────────────────────────────────────────────────────
+  let animationState: Map<HTMLCanvasElement, { isAnimating: boolean; progress: number; frameId: number | null; lastTime: number }> = new Map();
+  let animationDuration = 5000; // 5 seconds for full path
+  let progressByCanvasId: Record<string, number> = {};
+
   // ─── Auto Path Canvas ─────────────────────────────────────────────────────────
 
-  function drawAutoPath(canvas: HTMLCanvasElement, matchRow: any) {
+  function drawAutoPath(canvas: HTMLCanvasElement, matchRow: any, progress: number = 1) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const W = canvas.width;
@@ -151,42 +158,132 @@
         distances.push(distances[distances.length - 1] + Math.sqrt(dx * dx + dy * dy));
       }
       const totalDist = distances[distances.length - 1];
+      const targetDist = totalDist * Math.max(0, Math.min(1, progress));
       
       // Function to interpolate color
+      const modeColors = COLOR_MODES[colorblindMode] || COLOR_MODES.normal;
+      const [r1, g1, b1] = modeColors.below;
+      const [r2, g2, b2] = modeColors.above;
       const lerpColor = (t: number) => {
-        const r1 = 0, g1 = 119, b1 = 190; // blue
-        const r2 = 255, g2 = 214, b2 = 10; // yellow
         const r = Math.round(r1 + (r2 - r1) * t);
         const g = Math.round(g1 + (g2 - g1) * t);
         const b = Math.round(b1 + (b2 - b1) * t);
         return `rgb(${r},${g},${b})`;
       };
       
-      // Draw path segments with interpolated colors
+      // Draw path segments up to current progress with interpolated colors
+      let currentPathIndex = -1;
       for (let i = 1; i < allPoints.length; i++) {
-        const t = totalDist > 0 ? distances[i] / totalDist : 0;
+        if (distances[i] <= targetDist) {
+          const t = totalDist > 0 ? distances[i] / totalDist : 0;
+          ctx.beginPath();
+          ctx.moveTo(px(allPoints[i - 1]), py(allPoints[i - 1]));
+          ctx.lineTo(px(allPoints[i]), py(allPoints[i]));
+          ctx.strokeStyle = lerpColor(t);
+          ctx.lineWidth = 2;
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+          ctx.stroke();
+          currentPathIndex = i;
+        } else if (distances[i - 1] < targetDist && distances[i] > targetDist) {
+          // Partial segment to current progress point
+          const segmentProgress = (targetDist - distances[i - 1]) / (distances[i] - distances[i - 1]);
+          const partialX = px(allPoints[i - 1]) + (px(allPoints[i]) - px(allPoints[i - 1])) * segmentProgress;
+          const partialY = py(allPoints[i - 1]) + (py(allPoints[i]) - py(allPoints[i - 1])) * segmentProgress;
+          const t = totalDist > 0 ? targetDist / totalDist : 0;
+          ctx.beginPath();
+          ctx.moveTo(px(allPoints[i - 1]), py(allPoints[i - 1]));
+          ctx.lineTo(partialX, partialY);
+          ctx.strokeStyle = lerpColor(t);
+          ctx.lineWidth = 2;
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+          ctx.stroke();
+          currentPathIndex = i;
+          
+          // Draw current point as small circle
+          ctx.beginPath();
+          ctx.arc(partialX, partialY, 4, 0, Math.PI * 2);
+          ctx.fillStyle = lerpColor(t);
+          ctx.fill();
+          break;
+        }
+      }
+      
+      // Draw final point if at end
+      if (currentPathIndex >= allPoints.length - 1) {
+        const lastPoint = allPoints[allPoints.length - 1];
         ctx.beginPath();
-        ctx.moveTo(px(allPoints[i - 1]), py(allPoints[i - 1]));
-        ctx.lineTo(px(allPoints[i]), py(allPoints[i]));
-        ctx.strokeStyle = lerpColor(t);
-        ctx.lineWidth = 2;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        ctx.stroke();
+        ctx.arc(px(lastPoint), py(lastPoint), 4, 0, Math.PI * 2);
+        ctx.fillStyle = lerpColor(1);
+        ctx.fill();
       }
     }
   }
 
   function initMatchCanvas(canvas: HTMLCanvasElement, matchRow: any) {
-    const tryDraw = () => drawAutoPath(canvas, matchRow);
+    const canvasId = `canvas-${Math.random()}`;
+    animationState.set(canvas, { isAnimating: false, progress: 1, frameId: null, lastTime: Date.now() });
+    progressByCanvasId[canvasId] = 1;
+    (canvas as any).animationCanvasId = canvasId;
+    (canvas as any).matchRowData = matchRow;
+    canvasesByTeamMatch.set(`${matchRow.Team}-${matchRow.Match}`, canvas);
+    
+    const tryDraw = () => drawAutoPath(canvas, matchRow, animationState.get(canvas)?.progress ?? 0);
     if (fieldImg && fieldImg.complete && fieldImg.naturalWidth > 0) {
       tryDraw();
     } else if (fieldImg) {
       fieldImg.addEventListener("load", tryDraw, { once: true });
     }
+    
+    // Start animation loop
+    const animate = () => {
+      const state = animationState.get(canvas);
+      if (!state) return;
+      
+      const now = Date.now();
+      const elapsed = now - state.lastTime;
+      state.lastTime = now;
+      
+      if (state.isAnimating) {
+        state.progress += elapsed / animationDuration;
+        if (state.progress >= 1) {
+          state.progress = 0; // Loop back to start
+        }
+        progressByCanvasId[canvasId] = state.progress;
+      }
+      
+      drawAutoPath(canvas, matchRow, state.progress);
+      state.frameId = requestAnimationFrame(animate);
+    };
+    
+    // Toggle play/pause on click
+    const handleClick = () => {
+      const animState = animationState.get(canvas);
+      if (animState) {
+        animState.isAnimating = !animState.isAnimating;
+        animState.lastTime = Date.now();
+        
+        // Start animation loop if not already running
+        if (animState.isAnimating && !animState.frameId) {
+          animState.frameId = requestAnimationFrame(animate);
+        }
+      }
+    };
+    
+    canvas.addEventListener("click", handleClick);
+    
     return {
-      update(newRow: any) { drawAutoPath(canvas, newRow); },
-      destroy() {}
+      update(newRow: any) { matchRow = newRow; },
+      destroy() {
+        const animState = animationState.get(canvas);
+        if (animState && animState.frameId !== null) {
+          cancelAnimationFrame(animState.frameId);
+        }
+        canvas.removeEventListener("click", handleClick);
+        animationState.delete(canvas);
+        delete progressByCanvasId[canvasId];
+      }
     };
   }
 
@@ -333,6 +430,16 @@
   return result;
 })();
 
+  $: if (colorblindMode) {
+    // Redraw all canvases when colorblind mode changes
+    for (const canvas of canvasesByTeamMatch.values()) {
+      const state = animationState.get(canvas);
+      if (state) {
+        drawAutoPath(canvas, (canvas as any).matchRowData, state.progress);
+      }
+    }
+  }
+
 </script>
 
 <svelte:window on:click={handleOutsideClick} />
@@ -468,6 +575,22 @@
         {/if}
       </div>
 
+      <!-- Colorblind mode dropdown -->
+      <select
+        bind:value={colorblindMode}
+        on:change={(e) => {
+          colorblindMode = (e.target as HTMLSelectElement).value;
+          localStorage.setItem("colorblindMode", colorblindMode);
+        }}
+        class="colorblind-select"
+      >
+        <option value="normal">Gradient</option>
+        <option value="protanopia">Protanopia (Red Blind)</option>
+        <option value="deuteranopia">Deuteranopia (Green Blind)</option>
+        <option value="tritanopia">Tritanopia (Blue-Yellow Blind)</option>
+        <option value="alex">Alex Coloring</option>
+      </select>
+
       <span class="count-label">
         {visibleCards.length} of {teamsWithData.length} teams · drag cards to reorder
       </span>
@@ -602,7 +725,10 @@
                       <div class="qual-match-header">Match {matchRow.Match ?? matchRow.match}</div>
 
                       {#if matchRow?.AutoPath && Array.isArray(matchRow.AutoPath) && matchRow.AutoPath.length > 0}
-                        <div class="auto-path-wrapper">
+                        <div class="auto-path-wrapper" key={matchRow.Match}>
+                          <div class="progress-bar-container" style="--progress: {progressByCanvasId[`canvas-${team}-${matchRow.Match}`] ?? 0}">
+                            <div class="progress-bar-fill"></div>
+                          </div>
                           <canvas
                             use:initMatchCanvas={matchRow}
                             width={300}
@@ -610,8 +736,10 @@
                             class="auto-path-canvas"
                           ></canvas>
                           <div class="path-legend-inline">
-                            <div class="legend-gradient"></div>
-                            <span class="legend-text">Blue (Start) → Yellow (End)</span>
+                            <span class="legend-label">Start</span>
+                            <div class="legend-gradient" style="--start-color: rgb({COLOR_MODES[colorblindMode].below.join(',')}); --end-color: rgb({COLOR_MODES[colorblindMode].above.join(',')});"></div>
+                            <span class="legend-label">End</span>
+                            <span class="legend-mode-name">{COLOR_MODES[colorblindMode].name}</span>
                           </div>
                         </div>
                       {/if}
@@ -713,6 +841,28 @@
     color: #666;
     font-size: 0.8rem;
     font-weight: 600;
+  }
+
+  .colorblind-select {
+    padding: 8px 12px;
+    background: linear-gradient(135deg, var(--dark) 0%, var(--dark2) 100%);
+    border: 2px solid var(--red);
+    border-radius: 8px;
+    color: white;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s, box-shadow 0.2s;
+  }
+
+  .colorblind-select:hover {
+    background: linear-gradient(135deg, var(--dark2) 0%, var(--dark3) 100%);
+    box-shadow: 0 0 0 3px rgba(200,27,0,0.25);
+  }
+
+  .colorblind-select option {
+    background: #1a1a1a;
+    color: white;
   }
 
   /* ── Filter Dropdown ── */
@@ -969,6 +1119,20 @@
     border-bottom: 1px solid rgba(255,255,255,0.06);
     user-select: none;
   }
+  .progress-bar-container {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: rgba(255,255,255,0.1);
+    z-index: 10;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: #ffffff;
+    width: calc(var(--progress, 0) * 100%);
+    transition: width 0.05s linear;
+  }
   .auto-path-canvas {
     display: block;
     width: 100%;
@@ -977,18 +1141,29 @@
   .path-legend-inline {
     position: absolute;
     bottom: 6px; right: 8px;
-    display: flex; align-items: center; gap: 5px;
+    display: flex; align-items: center; gap: 8px;
     font-size: 0.65rem; font-weight: 700;
     color: rgba(255,255,255,0.7);
     letter-spacing: 0.5px; text-transform: uppercase;
     pointer-events: none;
   }
-  .legend-gradient { 
-    width: 40px; height: 3px; 
-    background: linear-gradient(to right, #0077BE, #FFD60A);
-    border-radius: 2px;
+  .legend-label {
+    font-size: 0.65rem;
+    opacity: 0.8;
+    min-width: 28px;
+    text-align: center;
   }
-  .legend-text { white-space: nowrap; }
+  .legend-gradient { 
+    width: 60px; height: 6px; 
+    background: linear-gradient(to right, var(--start-color, #0077BE), var(--end-color, #FFD60A));
+    border-radius: 3px;
+  }
+  .legend-mode-name {
+    color: rgba(255,255,255,0.7);
+    font-size: 0.65rem;
+    font-weight: 700;
+    margin-left: 4px;
+  }
 
   .qual-rows { padding: 6px 8px; display: flex; flex-direction: column; gap: 3px; }
   .qual-row-item {
