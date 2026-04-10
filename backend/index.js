@@ -10,6 +10,7 @@
 
 const express = require("express");
 const path = require("path");
+const compression = require("compression");
 const database = require("./database.js");
 const externalAPI = require("./externalApi.js");
 const session = require("express-session");
@@ -97,6 +98,11 @@ if (typeof refreshTimer.unref === "function") {
 }
 
 app.use(express.json());
+
+app.use(compression({
+    level: 9, // Balance between compression ratio and speed
+    threshold: 500 // Compresses files above this size
+}));
 
 app.use(
     session({
