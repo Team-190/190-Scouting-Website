@@ -10,6 +10,7 @@
 
 const express = require("express");
 const path = require("path");
+const compression = require("compression");
 const fs = require("fs");
 const https = require("https");
 const database = require("./database.js");
@@ -99,6 +100,11 @@ if (typeof refreshTimer.unref === "function") {
 }
 
 app.use(express.json());
+
+app.use(compression({
+    level: 9, // Balance between compression ratio and speed
+    threshold: 500 // Compresses files above this size
+}));
 
 app.use(
     session({
