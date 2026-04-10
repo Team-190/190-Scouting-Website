@@ -6,7 +6,7 @@ export default defineConfig({
   envDir: "../",
   server: {
     host: true,
-    port: 5173
+    port: 80
   },
   plugins: [svelte()],
 })
