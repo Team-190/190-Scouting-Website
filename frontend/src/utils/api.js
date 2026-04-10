@@ -218,23 +218,71 @@ function writeLocalJson(key, value) {
     localStorage.setItem(key, JSON.stringify(value));
 }
 
+/**
+ * Read pit scouting data from IndexedDB
+ */
+export async function readPitScoutingFromIDB(fallback = {}) {
+    try {
+        const data = await getIndexedDBStore("retrievePit", "data");
+        return data || fallback;
+    } catch (error) {
+        console.warn("Failed to read pit scouting from IndexedDB:", error);
+        return fallback;
+    }
+}
+
+/**
+ * Write pit scouting data to IndexedDB
+ */
+export async function writePitScoutingToIDB(data) {
+    try {
+        await setIndexedDBStore("retrievePit", { key: "data", value: data });
+    } catch (error) {
+        console.warn("Failed to write pit scouting to IndexedDB:", error);
+    }
+}
+
+/**
+ * Read qualitative scouting data from IndexedDB
+ */
+export async function readQualScoutingFromIDB(fallback = {}) {
+    try {
+        const data = await getIndexedDBStore("retrieveQual", "data");
+        return data || fallback;
+    } catch (error) {
+        console.warn("Failed to read qualitative scouting from IndexedDB:", error);
+        return fallback;
+    }
+}
+
+/**
+ * Write qualitative scouting data to IndexedDB
+ */
+export async function writeQualScoutingToIDB(data) {
+    try {
+        await setIndexedDBStore("retrieveQual", { key: "data", value: data });
+    } catch (error) {
+        console.warn("Failed to write qualitative scouting to IndexedDB:", error);
+    }
+}
+
 function readQueue(key) {
     const queue = readLocalJson(key, []);
     return Array.isArray(queue) ? queue : [];
 }
 
-function updatePitMirror(team, formData) {
-    const pitData = readLocalJson("retrievePit", {});
+async function updatePitMirror(team, formData) {
+    const pitData = await readPitScoutingFromIDB({});
     pitData[String(team)] = formData;
-    writeLocalJson("retrievePit", pitData);
+    await writePitScoutingToIDB(pitData);
 }
 
-function updateQualMirror(team, match, formData) {
-    const qualData = readLocalJson("retrieveQual", {});
+async function updateQualMirror(team, match, formData) {
+    const qualData = await readQualScoutingFromIDB({});
     const teamKey = String(team).replace(/\D/g, "");
     qualData[teamKey] ||= {};
     qualData[teamKey][String(match)] = formData;
-    writeLocalJson("retrieveQual", qualData);
+    await writeQualScoutingToIDB(qualData);
 }
 
 export async function hasServerConnection(timeoutMs = 2500) {
@@ -256,19 +304,19 @@ export async function hasServerConnection(timeoutMs = 2500) {
     }
 }
 
-export function queuePitScoutingForSync(event, team, formData) {
+export async function queuePitScoutingForSync(event, team, formData) {
     const queue = readQueue(PIT_QUEUE_KEY);
     queue.push({ event, team: String(team), formData });
     writeLocalJson(PIT_QUEUE_KEY, queue);
-    updatePitMirror(team, formData);
+    await updatePitMirror(team, formData);
     return queue.length;
 }
 
-export function queueQualitativeScoutingForSync(event, team, match, formData) {
+export async function queueQualitativeScoutingForSync(event, team, match, formData) {
     const queue = readQueue(QUAL_QUEUE_KEY);
     queue.push({ event, team: String(team), match: String(match), formData });
     writeLocalJson(QUAL_QUEUE_KEY, queue);
-    updateQualMirror(team, match, formData);
+    await updateQualMirror(team, match, formData);
     return queue.length;
 }
 
@@ -300,7 +348,7 @@ export async function flushPitScoutingQueue() {
             const response = await postPitScouting(event, team, formData);
             if (response.ok) {
                 uploaded += 1;
-                updatePitMirror(team, formData);
+                await updatePitMirror(team, formData);
             } else {
                 remaining.push(item);
             }
@@ -343,7 +391,7 @@ export async function flushQualitativeScoutingQueue() {
             const response = await postQualitativeScouting(event, team, match, formData);
             if (response.ok) {
                 uploaded += 1;
-                updateQualMirror(team, match, formData);
+                await updateQualMirror(team, match, formData);
             } else {
                 remaining.push(item);
             }

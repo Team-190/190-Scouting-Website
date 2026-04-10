@@ -401,7 +401,7 @@
     if (!connected) {
       submitStatus = {
         type: "local",
-        message: `✓ Saved to local queue (localStorage → "retrieveQual"). No server connection — will auto-upload when back online.`,
+        message: `✓ Data saved offline. Will upload when you're back online.`,
       };
       phase = "done";
       return;
@@ -411,17 +411,17 @@
     if (result.uploaded > 0 && result.remaining === 0) {
       submitStatus = {
         type: "server",
-        message: `✓ Pushed to server → qualitativeScoutingData.json under event "${eventCode}", team ${teamNumber}, match ${matchNumber}.`,
+        message: `✓ Success! Team ${teamNumber} match ${matchNumber} scouting data uploaded.`,
       };
     } else if (result.uploaded > 0) {
       submitStatus = {
         type: "partial",
-        message: `⚠ Partially uploaded. ${result.uploaded} record(s) pushed to server, ${result.remaining} remain in local queue.`,
+        message: `✓ Saved! ${result.uploaded} record(s) uploaded, ${result.remaining} saved offline. Will sync automatically.`,
       };
     } else {
       submitStatus = {
         type: "local",
-        message: `✓ Saved to local queue (localStorage → "retrieveQual"). Server upload failed — will retry automatically.`,
+        message: `✓ Data saved. Will upload when connection is restored.`,
       };
     }
 

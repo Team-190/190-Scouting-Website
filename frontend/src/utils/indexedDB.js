@@ -15,6 +15,8 @@ const STORE_CONFIG = {
     EPA: { keyPath: "key" },
     elimsStarted: { keyPath: "key" },
     matchScores: { keyPath: "key" },
+    retrievePit: { keyPath: "key" },
+    retrieveQual: { keyPath: "key" },
 };
 
 const STORE_LIST = Object.keys(STORE_CONFIG).filter((name) => name !== "scoutingData");

@@ -8,6 +8,10 @@
         fetchQualitativeScouting,
         postEventCode,
         refreshEventCaches,
+        readPitScoutingFromIDB,
+        writePitScoutingToIDB,
+        readQualScoutingFromIDB,
+        writeQualScoutingToIDB,
     } from "../utils/api";
     import { clearAllStores, getIndexedDBStore, getLastId, setIndexedDBStore } from '../utils/indexedDB';
 
@@ -77,7 +81,7 @@
                 await setIndexedDBStore("scoutingData", { rows: newData });
             }
 
-            const localPit = forceFullRefresh ? {} : parseStoredJson("retrievePit", {});
+            const localPit = forceFullRefresh ? {} : await readPitScoutingFromIDB({});
             const pitTeams = Object.keys(localPit);
 
             const pitRes = await fetchPitScouting(eventCode, pitTeams);
@@ -87,9 +91,9 @@
             const newPitData = await parseResponseJson(pitRes, {});
             
             const combinedPit = { ...localPit, ...newPitData };
-            localStorage.setItem("retrievePit", JSON.stringify(combinedPit));
+            await writePitScoutingToIDB(combinedPit);
 
-            const localQual = forceFullRefresh ? {} : parseStoredJson("retrieveQual", {});
+            const localQual = forceFullRefresh ? {} : await readQualScoutingFromIDB({});
             const qualCounts = {};
             for (const team in localQual) {
                 qualCounts[team] = Object.keys(localQual[team] || {}).length;
@@ -105,7 +109,7 @@
             for (const team in newQualData) {
                 combinedQual[team] = { ...(combinedQual[team] || {}), ...newQualData[team] };
             }
-            localStorage.setItem("retrieveQual", JSON.stringify(combinedQual));
+            await writeQualScoutingToIDB(combinedQual);
 
             await refreshEventCaches(eventCode);
 
@@ -124,8 +128,6 @@
 
             if (isNewEvent) {
                 await clearAllStores();
-                localStorage.removeItem("retrievePit");
-                localStorage.removeItem("retrieveQual");
             }
 
             localStorage.setItem("eventCode", eventCode);
