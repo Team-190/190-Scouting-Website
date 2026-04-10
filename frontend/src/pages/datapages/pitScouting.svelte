@@ -26,8 +26,7 @@
     let imageSize = ""; // Display compressed image size
 
     let submitting = false;
-    let submitMessage = "";
-    let submitError = false;
+    let submitStatus: { type: "server" | "local" | "partial" | "error"; message: string } | null = null;
 
     let fileInputNode;
 
@@ -83,9 +82,8 @@
                 .catch((error) => {
                     console.error("Image compression failed:", error);
                     imageCompressionStatus = "error";
-                    submitMessage = "Failed to compress image. Please try another file.";
-                    submitError = true;
-                    setTimeout(() => { submitMessage = ""; }, 3000);
+                    submitStatus = { type: "error", message: "Failed to compress image. Please try another file." };
+                    setTimeout(() => { submitStatus = null; }, 3000);
                 });
         }
     }
@@ -101,8 +99,7 @@
 
     async function handleSubmit() {
         if (!selectedTeam || selectedTeam === "Select a team") {
-            submitMessage = "Please enter a team number";
-            submitError = true;
+            submitStatus = { type: "error", message: "Please select a team number." };
             return;
         }
 
@@ -136,30 +133,23 @@
 
         const connected = await hasServerConnection();
         if (!connected) {
-            submitMessage = "No internet detected. Pit scouting data was saved locally and will auto-upload when connection returns.";
-            submitError = false;
+            submitStatus = { type: "local", message: `✓ Saved to local queue (localStorage → "pitScouting"). No server connection — will auto-upload when back online.` };
             clearForm();
-            setTimeout(() => { submitMessage = ""; }, 3500);
             submitting = false;
             return;
         }
 
         const result = await flushPitScoutingQueue();
-        if (result.remaining === 0) {
-            submitMessage = "✓ Pit scouting data submitted to server successfully!";
-            submitError = false;
+        if (result.remaining === 0 && result.uploaded > 0) {
+            submitStatus = { type: "server", message: `✓ Pushed to server → pitScoutingData.json under event "${eventCode}", team ${selectedTeam}.` };
         } else if (result.uploaded > 0) {
-            submitMessage = "Partial upload complete. Remaining entries were kept locally.";
-            submitError = true;
+            submitStatus = { type: "partial", message: `⚠ Partially uploaded. ${result.uploaded} record(s) pushed to server, ${result.remaining} remain in local queue (localStorage → "pitScouting").` };
         } else {
-            submitMessage = "Could not upload right now. Data remains safely queued locally.";
-            submitError = true;
+            submitStatus = { type: "local", message: `✓ Saved to local queue (localStorage → "pitScouting"). Server upload failed — will retry automatically.` };
         }
-
         clearForm();
-        setTimeout(() => { submitMessage = ""; }, 3500);
         submitting = false;
-    }
+            }
 </script>
 
 <div class="mobile-container">
@@ -171,9 +161,10 @@
 
     <!-- Form -->
     <div class="form-container">
-        {#if submitMessage}
-            <div class="message {submitError ? 'error' : 'success'}">
-                {submitMessage}
+        {#if submitStatus}
+            <div class="push-status {submitStatus.type}">
+                <span class="push-label">Data destination</span>
+                <span class="push-message">{submitStatus.message}</span>
             </div>
         {/if}
 
@@ -882,26 +873,13 @@
         background: rgba(200, 27, 0, 0.05);
     }
 
-    /* Message */
-    .message {
-        padding: 1rem 1.2rem;
-        border-radius: 8px;
-        margin-bottom: 1.2rem;
-        font-weight: 600;
-        text-align: center;
-    }
-
-    .message.success {
-        background: #d4edda;
-        color: #155724;
-        border: 2px solid #c3e6cb;
-    }
-
-    .message.error {
-        background: #f8d7da;
-        color: #721c24;
-        border: 2px solid #f5c6cb;
-    }
+    .push-status { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 1.2rem; padding: 0.9rem 1.1rem; border-radius: 8px; }
+    .push-status.server { background: #d4edda; border: 2px solid #c3e6cb; }
+    .push-status.local  { background: #fff3cd; border: 2px solid #ffeeba; }
+    .push-status.partial { background: #fff3cd; border: 2px solid #ffc107; }
+    .push-status.error  { background: #f8d7da; border: 2px solid #f5c6cb; }
+    .push-label { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase; color: #555; }
+    .push-message { font-size: 0.82rem; font-weight: 600; line-height: 1.5; color: #333; }
 
     /* Loading Spinner */
     .spinner {
@@ -964,7 +942,8 @@
         .bool-btn { padding: 0.7rem; font-size: 0.85rem; }
         .upload-icon { font-size: 1.3rem; }
         .upload-text { font-size: 0.75rem; }
-        .message { padding: 0.8rem 1rem; margin-bottom: 1rem; font-size: 0.85rem; }
+        .push-status { padding: 0.75rem; }
+        .push-message { font-size: 0.75rem; }
         .submit-section { padding: 1rem; }
         .submit-btn { padding: 0.9rem; font-size: 0.85rem; letter-spacing: 0; }
         .clear-btn { padding: 0.75rem; font-size: 0.8rem; margin-top: 0.5rem; }
