@@ -113,7 +113,10 @@ app.use(cors({
     origin: [
         `http://${SERVER}:${VITE_FRONTEND_PORT}`,
         `http://localhost:${VITE_FRONTEND_PORT}`,
-        `http://127.0.0.1:${VITE_FRONTEND_PORT}`
+        `http://127.0.0.1:${VITE_FRONTEND_PORT}`,
+        `http://${SERVER}`,
+        `http://localhost`,
+        `http://127.0.0.1`
     ],
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type"],
