@@ -37,6 +37,7 @@
     median,
     METADATA_KEYS,
     METRIC_DISPLAY_NAMES,
+    normalizeClimbData,
     percentile,
     ROW_HEIGHT,
     sd,
@@ -568,6 +569,10 @@
         } else {
           match.Auto_Climb = "No";
         }
+
+        // Normalize climb time to 0 if climb state is "None"
+        normalizeClimbData(match);
+
         return match;
       });
       
