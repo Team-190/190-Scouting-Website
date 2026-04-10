@@ -222,7 +222,7 @@
   }
 
   function initMatchCanvas(canvas: HTMLCanvasElement, matchRow: any) {
-    const canvasId = `canvas-${Math.random()}`;
+    const canvasId = `canvas-${matchRow.Team}-${matchRow.Match}`;
     animationState.set(canvas, { isAnimating: false, progress: 1, frameId: null, lastTime: Date.now() });
     progressByCanvasId[canvasId] = 1;
     (canvas as any).animationCanvasId = canvasId;
