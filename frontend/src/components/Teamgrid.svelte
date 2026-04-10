@@ -384,8 +384,8 @@
         headerName: "MatchNum",
         field: "metric",
         pinned: "left",
-        flex: 1,
-        minWidth: 120,
+        minWidth: 160,
+        width: 180,
         headerClass: "header-center",
         cellClass: "cell-center",
         cellStyle: {
@@ -397,8 +397,8 @@
       ...qLabels.map((q, i) => ({
         headerName: matchNums[i],
         field: q,
-        flex: 1,
         minWidth: 80,
+        width: 100,
         headerClass: "header-center",
         cellClass: "cell-center",
         cellStyle: qCellStyle,
@@ -462,22 +462,22 @@
 
     if (gridInstance) gridInstance.destroy();
     gridInstance = createGrid(domNode, {
-      rowData,
-      columnDefs,
-      rowHeight: ROW_HEIGHT,
-      headerHeight: HEADER_HEIGHT,
-      domLayout: "autoHeight",
-      tooltipShowDelay: 200,
-      popupParent: document.body,
-      defaultColDef: {
-        resizable: false,
-        sortable: false,
-        suppressMovable: true,
-        cellStyle: { fontSize: "18px" },
-      },
-      suppressColumnVirtualisation: true,
-      suppressHorizontalScroll: true,
-    });
+  rowData,
+  columnDefs,
+  rowHeight: ROW_HEIGHT,
+  headerHeight: HEADER_HEIGHT,
+  domLayout: "autoHeight",
+  tooltipShowDelay: 200,
+  popupParent: document.body,
+  defaultColDef: {
+    resizable: false,
+    sortable: false,
+    suppressMovable: true,
+    cellStyle: { fontSize: "18px" },
+  },
+  suppressColumnVirtualisation: true,
+  suppressHorizontalScroll: false,
+});
 
     dispatch("gridReady", { api: gridInstance });
 

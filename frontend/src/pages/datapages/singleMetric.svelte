@@ -970,7 +970,7 @@
       ...efsQLabels.map((q) => ({
         headerName: q,
         field: q,
-        flex: 1,
+        width: 90,
         minWidth: 70,
         headerClass: "header-center",
         cellClass: "cell-center",
@@ -983,8 +983,8 @@
       {
         headerName: "Mean",
         field: "mean",
-        flex: 1,
-        minWidth: 80,
+        width: 100,
+        minWidth: 100,
         headerClass: "header-center",
         cellClass: "cell-center",
         cellStyle: (params) => efsStatStyle(params.value, "3px solid #C81B00"),
@@ -996,8 +996,8 @@
       {
         headerName: "Med.",
         field: "median",
-        flex: 1,
-        minWidth: 80,
+        width: 100,
+        minWidth: 100,
         headerClass: "header-center",
         cellClass: "cell-center",
         cellStyle: (params) => efsStatStyle(params.value, "2px solid #555"),

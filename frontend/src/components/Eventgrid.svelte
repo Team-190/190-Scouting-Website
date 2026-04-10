@@ -317,8 +317,8 @@
     return {
       headerName: q,
       field: q,
-      flex: 1,
-      minWidth: 70,
+      width: 80,
+      minWidth: 80,
       headerClass: "header-center",
       cellClass: "cell-center",
       cellStyle: (params: any) => {
@@ -437,8 +437,8 @@
     return {
       headerName: "Mean",
       field: "mean",
-      flex: 1,
-      minWidth: 80,
+      width: 100,
+      minWidth: 100,
       hide,
       headerClass: "header-center",
       cellClass: "cell-center",
@@ -461,7 +461,7 @@
     return {
       headerName: "Med.",
       field: "median",
-      flex: 1,
+      width: 80,
       minWidth: 80,
       hide,
       headerClass: "header-center",
@@ -485,7 +485,7 @@
     return {
       headerName: "Per.",
       field: "alexPercentile",
-      flex: 1,
+      width: 100,
       minWidth: 100,
       hide,
       headerClass: "header-center",
