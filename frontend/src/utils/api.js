@@ -1,7 +1,10 @@
 const VITE_TESTING = import.meta.env.VITE_TESTING || 1;
 const VITE_BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT || 8000;
 const SERVER = !parseInt(VITE_TESTING) ? import.meta.env.VITE_SERVER_IP : "localhost";
-const defaultAPILink = `http://${SERVER}:${VITE_BACKEND_PORT}`;
+
+// Detect protocol based on current window location to support both HTTP and HTTPS
+const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https' : 'http';
+const defaultAPILink = `${protocol}://${SERVER}:${VITE_BACKEND_PORT}`;
 
 import { setIndexedDBStore, getIndexedDBStore  } from './indexedDB';
 

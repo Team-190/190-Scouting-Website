@@ -11,6 +11,8 @@
 const express = require("express");
 const path = require("path");
 const compression = require("compression");
+const fs = require("fs");
+const https = require("https");
 const database = require("./database.js");
 const externalAPI = require("./externalApi.js");
 const session = require("express-session");
@@ -120,9 +122,11 @@ app.use(cors({
         `http://${SERVER}:${VITE_FRONTEND_PORT}`,
         `http://localhost:${VITE_FRONTEND_PORT}`,
         `http://127.0.0.1:${VITE_FRONTEND_PORT}`,
-        `http://${SERVER}`,
-        `http://localhost`,
-        `http://127.0.0.1`
+        VITE_FRONTEND_PORT === "80" ? `http://${SERVER}` : null,
+        VITE_FRONTEND_PORT === "80" ? `http://localhost` : null,
+        VITE_FRONTEND_PORT === "80" ? `http://127.0.0.1` : null,
+        "http://190scouting.com",
+        "https://190scouting.com",
     ],
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type"],
@@ -465,6 +469,21 @@ app.post("/api/postGompeiMadnessBracket", async (req, res) => {
     }
 });
 
-app.listen(VITE_BACKEND_PORT, () => {
-    console.log("Listening on port " + VITE_BACKEND_PORT);
-});
+// Check if SSL certificates exist for HTTPS
+const certPath = path.join(__dirname, '../certificate.crt');
+const keyPath = path.join(__dirname, '../certificate.key');
+const useHttps = fs.existsSync(certPath) && fs.existsSync(keyPath);
+
+if (useHttps) {
+    const httpsOptions = {
+        cert: fs.readFileSync(certPath),
+        key: fs.readFileSync(keyPath)
+    };
+    https.createServer(httpsOptions, app).listen(VITE_BACKEND_PORT, () => {
+        console.log("Backend listening on HTTPS port " + VITE_BACKEND_PORT);
+    });
+} else {
+    app.listen(VITE_BACKEND_PORT, () => {
+        console.log("Backend listening on HTTP port " + VITE_BACKEND_PORT);
+    });
+}
