@@ -1215,8 +1215,8 @@
           
           // Function to interpolate color
           const lerpColor = (t: number) => {
-            const r1 = 0, g1 = 255, b1 = 0; // green
-            const r2 = 255, g2 = 0, b2 = 0; // red
+            const r1 = 0, g1 = 119, b1 = 190; // blue
+            const r2 = 255, g2 = 214, b2 = 10; // yellow
             const r = Math.round(r1 + (r2 - r1) * t);
             const g = Math.round(g1 + (g2 - g1) * t);
             const b = Math.round(b1 + (b2 - b1) * t);
@@ -1454,8 +1454,8 @@
       </div>
       <div class="path-legend">
         <div class="legend-item">
-          <div class="legend-color" style="background: #FFFFFF;"></div>
-          <span>Autonomous Path</span>
+          <div class="legend-gradient"></div>
+          <span>Blue (Start) → Yellow (End)</span>
         </div>
       </div>
     </div>
@@ -2371,10 +2371,11 @@
     font-size: 0.8rem;
     font-weight: 600;
   }
-  .legend-color {
-    width: 1.1rem;
-    height: 1.1rem;
-    border-radius: 0.25rem;
+  .legend-gradient {
+    width: 60px;
+    height: 8px;
+    background: linear-gradient(to right, #0077BE, #FFD60A);
+    border-radius: 4px;
   }
 
   .qual-grid {
