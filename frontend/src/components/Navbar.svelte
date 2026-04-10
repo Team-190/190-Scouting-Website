@@ -36,9 +36,10 @@
 
   function toggleMenu(menuName) {
     expandedMenu = expandedMenu === menuName ? null : menuName;
-    // On mobile, close navbar after toggling menu if not pinned
-    if (!isPinnedOpen && typeof window !== 'undefined' && window.innerWidth < 768) {
+    // On mobile, close navbar after clicking any button
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
       isSidebarOpen.set(false);
+      isPinnedOpen = false;
     }
   }
 
@@ -279,12 +280,15 @@
     background: white;
     position: relative;
     transition: transform 0.3s ease;
+    left: 0;
+    margin: 0 auto;
   }
 
   .toggle-icon::before,
   .toggle-icon::after {
     content: "";
     position: absolute;
+    left: 0;
     width: 20px;
     height: 2px;
     background: white;
@@ -328,6 +332,7 @@
     margin-bottom: 1rem;
     cursor: pointer;
     transition: background-color 0.2s;
+    width: 100%;
   }
 
   .logo-section:hover {
@@ -338,9 +343,14 @@
     background-color: #666;
   }
 
+  .navbar.collapsed .logo-section {
+    padding: 1rem 0;
+  }
+
   .logo {
     height: 40px;
     width: auto;
+    display: block;
   }
 
   .logo-text {
