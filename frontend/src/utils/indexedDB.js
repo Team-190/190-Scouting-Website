@@ -2,7 +2,7 @@
 import { compressData, decompressData } from './compression.js';
 
 const DB_NAME = "scoutingDB";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 let dbInstance = null;
 
@@ -19,6 +19,7 @@ const STORE_CONFIG = {
     matchScores: { keyPath: "key" },
     retrievePit: { keyPath: "key" },
     retrieveQual: { keyPath: "key" },
+    COPR: { keyPath: "key" },
 };
 
 const STORE_LIST = Object.keys(STORE_CONFIG).filter((name) => name !== "scoutingData");
