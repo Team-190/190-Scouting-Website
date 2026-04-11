@@ -1,4 +1,7 @@
 @echo off
+setlocal
+
+cd /d "%~dp0"
 
 echo Starting backend server...
 if not exist backend\node_modules (

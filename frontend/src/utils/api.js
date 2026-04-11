@@ -2,9 +2,17 @@ const VITE_TESTING = import.meta.env.VITE_TESTING || 1;
 const VITE_BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT || 8000;
 const SERVER = !parseInt(VITE_TESTING) ? import.meta.env.VITE_SERVER_IP : "localhost";
 
-// Detect protocol based on current window location to support both HTTP and HTTPS
-const protocol = typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https' : 'http';
-const defaultAPILink = `${protocol}://${SERVER}:${VITE_BACKEND_PORT}`;
+// Determine API endpoint based on access method
+// Local dev (http://localhost:5173): Call backend directly on http://localhost:8000
+// Nginx proxy (https://190scouting.com): Use empty string (routes already have /api prefix)
+const getAPILink = () => {
+  if (typeof window === 'undefined') return '';
+  
+  const isLocalDev = window.location.hostname === 'localhost' && window.location.port === '5173';
+  return isLocalDev ? `http://localhost:${VITE_BACKEND_PORT}` : '';
+};
+
+const defaultAPILink = getAPILink();
 
 import { setIndexedDBStore, getIndexedDBStore  } from './indexedDB';
 

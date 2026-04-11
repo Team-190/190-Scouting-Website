@@ -149,6 +149,7 @@
         clearForm();
         submitting = false;
     }
+
 </script>
 
 <div class="mobile-container">
