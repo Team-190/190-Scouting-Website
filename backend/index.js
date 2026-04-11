@@ -122,9 +122,15 @@ app.use(cors({
         `http://${SERVER}:${VITE_FRONTEND_PORT}`,
         `http://localhost:${VITE_FRONTEND_PORT}`,
         `http://127.0.0.1:${VITE_FRONTEND_PORT}`,
+        `https://${SERVER}:${VITE_FRONTEND_PORT}`,
+        `https://localhost:${VITE_FRONTEND_PORT}`,
+        `https://127.0.0.1:${VITE_FRONTEND_PORT}`,
         VITE_FRONTEND_PORT === "80" ? `http://${SERVER}` : null,
         VITE_FRONTEND_PORT === "80" ? `http://localhost` : null,
         VITE_FRONTEND_PORT === "80" ? `http://127.0.0.1` : null,
+        VITE_FRONTEND_PORT === "443" ? `https://${SERVER}` : null,
+        VITE_FRONTEND_PORT === "443" ? `https://localhost` : null,
+        VITE_FRONTEND_PORT === "443" ? `https://127.0.0.1` : null,
         "http://190scouting.com",
         "https://190scouting.com",
     ],
@@ -472,7 +478,7 @@ app.post("/api/postGompeiMadnessBracket", async (req, res) => {
 // Check if SSL certificates exist for HTTPS
 const certPath = path.join(__dirname, '../certificate.crt');
 const keyPath = path.join(__dirname, '../certificate.key');
-const useHttps = fs.existsSync(certPath) && fs.existsSync(keyPath);
+const useHttps = false; // Nginx handles HTTPS - backend runs on HTTP only
 
 if (useHttps) {
     const httpsOptions = {
