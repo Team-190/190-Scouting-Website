@@ -89,6 +89,11 @@
   let selectedAutoPathMatch: number | null = null;
   let teamsMap: Map<number, string> = new Map();
 
+  // Auto path animation
+  let autoPathAnimationState: { isAnimating: boolean; progress: number; frameId: number | null; lastTime: number } = { isAnimating: true, progress: 0, frameId: null, lastTime: Date.now() };
+  let autoPathAnimationDuration = 5000;
+  let autoPathProgress = 0;
+
   // ─── Value Helpers ────────────────────────────────────────────────────────────
 
   function extractValues(data: any[], useAuto: boolean): any[] {
@@ -790,6 +795,10 @@
     colorblindMode = (e.target as HTMLSelectElement).value;
     localStorage.setItem("colorblindMode", colorblindMode);
     if (selectedTeam) loadTeamData(String(selectedTeam));
+    // Redraw auto path with new colors
+    if (selectedAutoPathMatch !== null) {
+      redrawAutoPathCanvas(autoPathAnimationState.progress);
+    }
   }
 
   // ─── Reactive ─────────────────────────────────────────────────────────────────
@@ -855,7 +864,14 @@
   }
 
   $: if (selectedAutoPathMatch !== null) {
-    redrawAutoPathCanvas();
+    redrawAutoPathCanvas(autoPathAnimationState.progress);
+    
+    // Initialize animation state if not already done
+    if (!autoPathAnimationState.frameId) {
+      autoPathAnimationState.isAnimating = false;
+      autoPathAnimationState.progress = 1;
+      autoPathAnimationState.lastTime = Date.now();
+    }
   }
 
   // ─── Charts ───────────────────────────────────────────────────────────────────
@@ -1155,7 +1171,7 @@
     };
   }
 
-  function redrawAutoPathCanvas() {
+  function redrawAutoPathCanvas(progress: number = 1) {
     if (!autoPathCtx || !autoPathCanvasEl) return;
     const W = autoPathCanvasEl.width;
     const H = autoPathCanvasEl.height;
@@ -1199,38 +1215,87 @@
     if (teamQualData && selectedAutoPathMatch !== null) {
       const match = teamQualData.find((m) => m.Match === selectedAutoPathMatch);
       if (match?.AutoPath && Array.isArray(match.AutoPath)) {
-        match.AutoPath.forEach((path: any[]) => {
-          if (!Array.isArray(path) || path.length < 2) return;
-          autoPathCtx.beginPath();
-          autoPathCtx.moveTo(path[0].x, path[0].y);
-          for (let i = 1; i < path.length; i++)
-            autoPathCtx.lineTo(path[i].x, path[i].y);
-          autoPathCtx.strokeStyle = "#FFFFFF";
-          autoPathCtx.lineWidth = 3;
-          autoPathCtx.lineCap = "round";
-          autoPathCtx.lineJoin = "round";
-          autoPathCtx.stroke();
-          if (path.length >= 2) {
-            const last = path[path.length - 1];
-            const prev = path[path.length - 2];
-            const angle = Math.atan2(last.y - prev.y, last.x - prev.x);
-            const sz = 12;
-            autoPathCtx.beginPath();
-            autoPathCtx.moveTo(last.x, last.y);
-            autoPathCtx.lineTo(
-              last.x - sz * Math.cos(angle - Math.PI / 6),
-              last.y - sz * Math.sin(angle - Math.PI / 6),
-            );
-            autoPathCtx.moveTo(last.x, last.y);
-            autoPathCtx.lineTo(
-              last.x - sz * Math.cos(angle + Math.PI / 6),
-              last.y - sz * Math.sin(angle + Math.PI / 6),
-            );
-            autoPathCtx.strokeStyle = "#FFFFFF";
-            autoPathCtx.lineWidth = 3;
-            autoPathCtx.stroke();
+        const allPaths = match.AutoPath.filter((path: any[]) => Array.isArray(path) && path.length >= 2);
+        if (allPaths.length > 0) {
+          // Flatten all points into single array
+          const allPoints: any[] = [];
+          allPaths.forEach((path: any[]) => {
+            allPoints.push(...path);
+          });
+          
+          // Calculate cumulative distances
+          const distances = [0];
+          for (let i = 1; i < allPoints.length; i++) {
+            const p1 = allPoints[i - 1];
+            const p2 = allPoints[i];
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            distances.push(distances[distances.length - 1] + Math.sqrt(dx * dx + dy * dy));
           }
-        });
+          const totalDist = distances[distances.length - 1];
+          const targetDist = totalDist * Math.max(0, Math.min(1, progress));
+          
+          // Get colors based on colorblind mode
+          const modeColors = COLOR_MODES[colorblindMode] || COLOR_MODES.normal;
+          const [r1, g1, b1] = modeColors.below; // Start color
+          const [r2, g2, b2] = modeColors.above; // End color
+          
+          // Function to interpolate color
+          const lerpColor = (t: number) => {
+            const r = Math.round(r1 + (r2 - r1) * t);
+            const g = Math.round(g1 + (g2 - g1) * t);
+            const b = Math.round(b1 + (b2 - b1) * t);
+            return `rgb(${r},${g},${b})`;
+          };
+          
+          // Draw path segments up to current progress with interpolated colors
+          let currentPathIndex = -1;
+          for (let i = 1; i < allPoints.length; i++) {
+            if (distances[i] <= targetDist) {
+              const t = totalDist > 0 ? distances[i] / totalDist : 0;
+              autoPathCtx.beginPath();
+              autoPathCtx.moveTo(allPoints[i - 1].x, allPoints[i - 1].y);
+              autoPathCtx.lineTo(allPoints[i].x, allPoints[i].y);
+              autoPathCtx.strokeStyle = lerpColor(t);
+              autoPathCtx.lineWidth = 3;
+              autoPathCtx.lineCap = "round";
+              autoPathCtx.lineJoin = "round";
+              autoPathCtx.stroke();
+              currentPathIndex = i;
+            } else if (distances[i - 1] < targetDist && distances[i] > targetDist) {
+              // Partial segment to current progress point
+              const segmentProgress = (targetDist - distances[i - 1]) / (distances[i] - distances[i - 1]);
+              const partialX = allPoints[i - 1].x + (allPoints[i].x - allPoints[i - 1].x) * segmentProgress;
+              const partialY = allPoints[i - 1].y + (allPoints[i].y - allPoints[i - 1].y) * segmentProgress;
+              const t = totalDist > 0 ? targetDist / totalDist : 0;
+              autoPathCtx.beginPath();
+              autoPathCtx.moveTo(allPoints[i - 1].x, allPoints[i - 1].y);
+              autoPathCtx.lineTo(partialX, partialY);
+              autoPathCtx.strokeStyle = lerpColor(t);
+              autoPathCtx.lineWidth = 3;
+              autoPathCtx.lineCap = "round";
+              autoPathCtx.lineJoin = "round";
+              autoPathCtx.stroke();
+              currentPathIndex = i;
+              
+              // Draw current point as small circle
+              autoPathCtx.beginPath();
+              autoPathCtx.arc(partialX, partialY, 6, 0, Math.PI * 2);
+              autoPathCtx.fillStyle = lerpColor(t);
+              autoPathCtx.fill();
+              break;
+            }
+          }
+          
+          // Draw final point if at end
+          if (currentPathIndex >= allPoints.length - 1) {
+            const lastPoint = allPoints[allPoints.length - 1];
+            autoPathCtx.beginPath();
+            autoPathCtx.arc(lastPoint.x, lastPoint.y, 6, 0, Math.PI * 2);
+            autoPathCtx.fillStyle = lerpColor(1);
+            autoPathCtx.fill();
+          }
+        }
       }
     }
   }
@@ -1439,19 +1504,48 @@
           {/each}
         </select>
       </div>
-      <div class="auto-path-wrapper">
+      <div class="auto-path-wrapper" style="--auto-progress: {autoPathProgress}">
+        <div class="progress-bar-container">
+          <div class="progress-bar-fill"></div>
+        </div>
         <canvas
           use:initAutoPathCanvas
           width={1200}
           height={600}
           class="auto-path-canvas"
+          on:click={() => {
+            if (!autoPathAnimationState.frameId) {
+              // Start animation loop on first click
+              const animate = () => {
+                const now = Date.now();
+                const elapsed = now - autoPathAnimationState.lastTime;
+                autoPathAnimationState.lastTime = now;
+                
+                if (autoPathAnimationState.isAnimating) {
+                  autoPathAnimationState.progress += elapsed / autoPathAnimationDuration;
+                  if (autoPathAnimationState.progress >= 1) {
+                    autoPathAnimationState.progress = 0; // Loop back to start
+                  }
+                  autoPathProgress = autoPathAnimationState.progress;
+                }
+                
+                redrawAutoPathCanvas(autoPathAnimationState.progress);
+                autoPathAnimationState.frameId = requestAnimationFrame(animate);
+              };
+              autoPathAnimationState.frameId = requestAnimationFrame(animate);
+            }
+            autoPathAnimationState.isAnimating = !autoPathAnimationState.isAnimating;
+            autoPathAnimationState.lastTime = Date.now();
+          }}
         ></canvas>
       </div>
       <div class="path-legend">
         <div class="legend-item">
-          <div class="legend-color" style="background: #FFFFFF;"></div>
-          <span>Autonomous Path</span>
+          <span class="legend-label">Start</span>
+          <div class="legend-gradient" style="--start-color: rgb({COLOR_MODES[colorblindMode].below.join(',')}); --end-color: rgb({COLOR_MODES[colorblindMode].above.join(',')})"></div>
+          <span class="legend-label">End</span>
         </div>
+        <span class="legend-mode-name">{COLOR_MODES[colorblindMode].name}</span>
       </div>
     </div>
 
@@ -2346,6 +2440,20 @@
     max-width: 100%;
     width: 100%;
   }
+  .progress-bar-container {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: rgba(255,255,255,0.1);
+    z-index: 10;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: #ffffff;
+    width: calc(var(--auto-progress, 0) * 100%);
+    transition: width 0.05s linear;
+  }
   .auto-path-canvas {
     display: block;
     width: 100%;
@@ -2361,15 +2469,27 @@
   .legend-item {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.75rem;
     color: rgba(255, 255, 255, 0.85);
     font-size: 0.8rem;
     font-weight: 600;
   }
-  .legend-color {
-    width: 1.1rem;
-    height: 1.1rem;
-    border-radius: 0.25rem;
+  .legend-label {
+    font-size: 0.75rem;
+    opacity: 0.8;
+    min-width: 35px;
+    text-align: center;
+  }
+  .legend-gradient {
+    width: 80px;
+    height: 8px;
+    background: linear-gradient(to right, var(--start-color, #0077BE), var(--end-color, #FFD60A));
+    border-radius: 4px;
+  }
+  .legend-mode-name {
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.8rem;
+    font-weight: 600;
   }
 
   .qual-grid {
