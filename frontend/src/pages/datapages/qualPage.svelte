@@ -26,8 +26,22 @@
     B2: { alliance: "blue", index: 1 },
     B3: { alliance: "blue", index: 2 },
   };
-
   const TELEOP_QUESTIONS = [
+    {
+      id: "autoActions",
+      label: "Autonomous Actions",
+      hint: "Describe what this team did in auto (in addition to path)? (i.e. Did they shoot preloads?)",
+    },  
+    {
+      id: "travelMethod",
+      label: "Travel Method",
+      hint: "How do they travel: trench or bump?",
+    },
+    {
+      id: "travelTroubles",
+      label: "Travel Troubles",
+      hint: "Did they have any trouble with going under trench or over bump?",
+    },
     {
       id: "fuelScored",
       label: "Fuel Scored",
@@ -37,24 +51,55 @@
       max: 10,
     },
     {
+      id: "fuelCollectionPosition",
+      label: "Fuel Collection Position",
+      hint: "Is there a place they like to collect fuel from?(Be specific)",
+    },
+    {
+      id: "shooterEfficiency",
+      label: "Shooter Efficiency",
+      hint: "How efficient is their shooter? Do they consistently score, or do they miss frequently? How consistent is their shooting?",
+    },
+    {
+      id: "inactivePeriod",
+      label: "Inactive Period",
+      hint: "What do they do during an inactive period?",
+    },
+
+    {
       id: "trenchFeedVolume",
       label: "Trench Feed Volume",
       hint: "If this robot trench feeds, roughly how many balls do they move per trench feed?",
     },
     {
+      id: "bumpFeedVolume",
+      label: "Bump Feed Volume",
+      hint: "If this robot bump feeds, roughly how many balls do they move per bump feed?",
+    },
+    {
       id: "defenseEffectiveness",
       label: "Defense Effectiveness",
-      hint: "How effective is this team's defense? Do they consistently impede opponents, or do they mostly get bypassed?",
+      hint: "How effective is this team's defense? Do they consistently impede opponents, or do they mostly get bypassed? Who did they play defense against?",
     },
     {
       id: "defenseAvoidance",
       label: "Defense Avoidance",
-      hint: "How good is this team at avoiding defense? Do they escape pressure well, or do they get pinned easily?",
+      hint: "How did the robot avoid defense (if defended against)? If it gets shut down then note the type of defense that was played against it.",
     },
     {
       id: "intakeEfficiency",
       label: "Intake Efficiency",
-      hint: "How efficient is their intake? Do they chase nearby balls decisively, or do they look indecisive and waste time?",
+      hint: "How efficient is their intake? Do they chase nearby balls decisively, or do they look indecisive and waste time? How consistent is their intake?",
+    },
+    {
+      id: "penalties",
+      label: "Penalties",
+      hint: "Did they get penalties? If so, how many? What type of penalties?",
+    },
+    {
+      id: "drivingQuality",
+      label: "Driving Quality",
+      hint: "Driving quality? (Choppy driving/slow?)",
     },
     {
       id: "matchEvents",
@@ -66,8 +111,12 @@
       label: "Other Notes",
       hint: "Any additional observations or notes about this team.",
     },
+    {
+      id: "climbQuality",
+      label: "Climb Quality",
+      hint: "Did they climb? If yes, what's their climbing quality? (Consistency, stability, does it look like it’s going to fall?)",
+    },
   ];
-
   const SLIDER_LABELS = ["None", "A little", "Moderate", "A lot", "Tons"];
 
   function getSliderLabel(val) {
