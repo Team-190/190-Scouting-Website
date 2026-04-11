@@ -90,6 +90,31 @@ export function saveToStorage(key, value) {
   }
 }
 
+// ─── Climb Data Normalization ─────────────────────────────────────────────────
+
+/**
+ * Normalizes climb time fields to 0 when climb state is "None"
+ * @param {Object} row - Data row to normalize
+ * @returns {Object} Normalized row
+ */
+export function normalizeClimbData(row) {
+  if (!row || typeof row !== "object") return row;
+  
+  const climbState = String(row.Climb_State ?? "").toLowerCase().trim();
+  
+  // Check if climb state indicates no climb
+  if (["no", "no_climb", "no climb", "none"].includes(climbState)) {
+    if (typeof row.TimeOfClimb !== "undefined" && row.TimeOfClimb !== null) {
+      row.TimeOfClimb = 0;
+    }
+    if (typeof row.ClimbTime !== "undefined" && row.ClimbTime !== null) {
+      row.ClimbTime = 0;
+    }
+  }
+  
+  return row;
+}
+
 // ─── Math Helpers ─────────────────────────────────────────────────────────────
 
 /**

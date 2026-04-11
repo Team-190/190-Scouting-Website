@@ -5,6 +5,7 @@
         flushPitScoutingQueue,
         hasServerConnection,
         queuePitScoutingForSync,
+        readPitScoutingFromIDB,
     } from "../../utils/api";
     import { compressImage, formatBytes, getBase64Size } from "../../utils/imageCompression";
     import { getEventCode } from "../../utils/pageUtils";
@@ -39,7 +40,7 @@
         const { _teamNumbers } = await fetchTeams(eventCode);
         console.log("_teamNumbers sample:", _teamNumbers[0]);
         
-        const retrievePit = JSON.parse(localStorage.getItem("retrievePit") || "{}");
+        const retrievePit = await readPitScoutingFromIDB({});
         const pitScouting = JSON.parse(localStorage.getItem("pitScouting") || "[]");
         
         const scoutedTeams = new Set([
@@ -104,8 +105,6 @@
         }
 
         submitting = true;
-        submitMessage = "";
-        submitError = false;
 
         // Helper to convert boolean to Y/N
         const boolToYN = (val) => val === true ? "Y" : val === false ? "N" : "";
@@ -123,7 +122,7 @@
                 : { robotPicturePreview: "" })
         };
 
-        queuePitScoutingForSync(eventCode, selectedTeam, apiFormDataWithImage);
+        await queuePitScoutingForSync(eventCode, selectedTeam, apiFormDataWithImage);
 
         allTeams = allTeams.map((team) =>
             String(team.number) === String(selectedTeam)
@@ -133,7 +132,7 @@
 
         const connected = await hasServerConnection();
         if (!connected) {
-            submitStatus = { type: "local", message: `✓ Saved to local queue (localStorage → "pitScouting"). No server connection — will auto-upload when back online.` };
+            submitStatus = { type: "local", message: `✓ Data saved offline. Will upload when you're back online.` };
             clearForm();
             submitting = false;
             return;
@@ -141,15 +140,16 @@
 
         const result = await flushPitScoutingQueue();
         if (result.remaining === 0 && result.uploaded > 0) {
-            submitStatus = { type: "server", message: `✓ Pushed to server → pitScoutingData.json under event "${eventCode}", team ${selectedTeam}.` };
+            submitStatus = { type: "server", message: `✓ Success! Team ${selectedTeam} pit scouting data uploaded.` };
         } else if (result.uploaded > 0) {
-            submitStatus = { type: "partial", message: `⚠ Partially uploaded. ${result.uploaded} record(s) pushed to server, ${result.remaining} remain in local queue (localStorage → "pitScouting").` };
+            submitStatus = { type: "partial", message: `✓ Saved! ${result.uploaded} record(s) uploaded, ${result.remaining} saved offline. Will sync automatically.` };
         } else {
-            submitStatus = { type: "local", message: `✓ Saved to local queue (localStorage → "pitScouting"). Server upload failed — will retry automatically.` };
+            submitStatus = { type: "local", message: `✓ Data saved. Will upload when connection is restored.` };
         }
         clearForm();
         submitting = false;
-            }
+    }
+
 </script>
 
 <div class="mobile-container">

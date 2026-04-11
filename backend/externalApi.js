@@ -76,7 +76,7 @@ async function populateEventData(eventCode) {
   ];
 
   await Promise.allSettled(
-    fetches.map(async ({ filename, url, useTBA }) => {
+    fetches.map(async ({ filename, url, useTBA, fallback }) => {
       try {
         const response = await (useTBA ? tbaFetch(url) : fetch(url));
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -89,6 +89,12 @@ async function populateEventData(eventCode) {
         console.log(`[externalApi] Cached ${filename} for ${eventCode}`);
       } catch (e) {
         console.error(`[externalApi] Failed to populate ${filename} for ${eventCode}:`, e);
+        // Use fallback if fetch fails
+        let fileData = {};
+        try { fileData = await database.readJSONFile(filename); } catch (_) {}
+        fileData[eventCode] = fallback;
+        await database.writeJSONFile(filename, fileData);
+        console.log(`[externalApi] Cached ${filename} for ${eventCode} with fallback`);
       }
     })
   );

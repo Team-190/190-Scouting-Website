@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { fetchTeams, fetchQualitativeScouting, fetchPitScouting } from "../../utils/api.js";
   import { COLOR_MODES, getColorblindMode, getEventCode } from "../../utils/pageUtils.js";
+  import { fetchTeams, fetchQualitativeScouting, fetchPitScouting, readPitScoutingFromIDB, readQualScoutingFromIDB } from "../../utils/api.js";
   import fieldImageSrc from "../../images/FieldImage.png";
 
   let eventCode = getEventCode();
@@ -314,12 +314,10 @@
       );
       teamNumbers = teamsResult._teamNumbers as number[];
 
-      const localPitStr = localStorage.getItem("retrievePit");
-      const localPit = localPitStr ? JSON.parse(localPitStr) : {};
+      const localPit = await readPitScoutingFromIDB({});
       const pitTeams = Object.keys(localPit);
 
-      const localQualStr = localStorage.getItem("retrieveQual");
-      const localQual = localQualStr ? JSON.parse(localQualStr) : {};
+      const localQual = await readQualScoutingFromIDB({});
       const localCounts: Record<string, number> = {};
       for (const [team, matches] of Object.entries(localQual)) {
         localCounts[team] = Object.keys(matches as object).length;

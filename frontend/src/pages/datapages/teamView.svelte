@@ -20,6 +20,8 @@
     fetchOPR,
     fetchTeams,
     fetchRobotClimb,
+    readPitScoutingFromIDB,
+    readQualScoutingFromIDB,
   } from "../../utils/api.js";
   import {
     BOOLEAN_METRICS,
@@ -37,6 +39,7 @@
     median,
     METADATA_KEYS,
     METRIC_DISPLAY_NAMES,
+    normalizeClimbData,
     percentile,
     ROW_HEIGHT,
     sd,
@@ -573,6 +576,10 @@
         } else {
           match.Auto_Climb = "No";
         }
+
+        // Normalize climb time to 0 if climb state is "None"
+        normalizeClimbData(match);
+
         return match;
       });
       
@@ -585,9 +592,8 @@
 
   // ─── Local Data Helpers ───────────────────────────────────────────────────────
 
-  function getQualDataForTeam(teamNumber: number): any[] {
-    const stored = localStorage.getItem("retrieveQual");
-    const qualData = stored ? JSON.parse(stored) : {};
+  async function getQualDataForTeam(teamNumber: number): Promise<any[]> {
+    const qualData = await readQualScoutingFromIDB({});
     const teamKey = String(teamNumber).replace(/\D/g, "");
     const teamMatches = qualData[teamKey];
     if (!teamMatches) return [];
@@ -596,9 +602,8 @@
     );
   }
 
-  function getPitDataForTeam(teamNumber: number): any {
-    const stored = localStorage.getItem("retrievePit");
-    const pitScouting = stored ? JSON.parse(stored) : {};
+  async function getPitDataForTeam(teamNumber: number): Promise<any> {
+    const pitScouting = await readPitScoutingFromIDB({});
     return pitScouting[String(teamNumber)] ?? null;
   }
 
@@ -672,8 +677,8 @@
       await loadTeamData(teamStr);
       fetchTeamOPR(teamStr);
       populateMatchDropdown(selectedTeam);
-      teamQualData = getQualDataForTeam(selectedTeam);
-      teamPitData = getPitDataForTeam(selectedTeam);
+      teamQualData = await getQualDataForTeam(selectedTeam);
+      teamPitData = await getPitDataForTeam(selectedTeam);
 
       const graceEl = document.getElementById(
         "grace-rating",
@@ -1337,8 +1342,8 @@
         await loadTeamData(String(selectedTeam));
       }
 
-      teamQualData = getQualDataForTeam(selectedTeam);
-      teamPitData = getPitDataForTeam(selectedTeam);
+      teamQualData = await getQualDataForTeam(selectedTeam);
+      teamPitData = await getPitDataForTeam(selectedTeam);
 
       await fetchTeamOPR(String(selectedTeam));
       await fetchRobotPicture(selectedTeam);

@@ -1,4 +1,6 @@
 // @ts-nocheck
+import { compressData, decompressData } from './compression.js';
+
 const DB_NAME = "scoutingDB";
 const DB_VERSION = 3;
 
@@ -15,6 +17,8 @@ const STORE_CONFIG = {
     EPA: { keyPath: "key" },
     elimsStarted: { keyPath: "key" },
     matchScores: { keyPath: "key" },
+    retrievePit: { keyPath: "key" },
+    retrieveQual: { keyPath: "key" },
 };
 
 const STORE_LIST = Object.keys(STORE_CONFIG).filter((name) => name !== "scoutingData");
@@ -112,15 +116,29 @@ export async function setIndexedDBStore(STORE, { rows = null, key = null, value 
     return new Promise((resolve, reject) => {
         const tx = db.transaction(STORE, "readwrite");
         const store = tx.objectStore(STORE);
+        const keyPath = getExpectedKeyPath(STORE);
 
         if (Array.isArray(rows)) {
             for (const row of rows) {
                 const normalized = normalizeRecordForStore(STORE, row);
                 if (!normalized) continue;
-                store.put(normalized);
+                
+                // Compress complex data while preserving key fields
+                const toStore = { ...normalized };
+                for (const [prop, val] of Object.entries(toStore)) {
+                    // Skip the key path property to keep indexing working
+                    if (prop === keyPath) continue;
+                    // Compress objects and complex values
+                    if (typeof val === 'object' && val !== null) {
+                        toStore[prop] = compressData(val);
+                    }
+                }
+                store.put(toStore);
             }
         } else if (key !== null && value !== null) {
-            store.put({ key, value });
+            // For key/value stores, compress the value
+            const compressedValue = typeof value === 'object' && value !== null ? compressData(value) : value;
+            store.put({ key, value: compressedValue });
         }
 
         tx.oncomplete = () => resolve();
@@ -151,6 +169,21 @@ export async function clearAllStores() {
 
 // ─── READ ────────────────────────────────────────────────────────────────────
 
+/**
+ * Recursively decompress any compressed properties in an object
+ */
+function decompressObject(obj) {
+    if (!obj || typeof obj !== 'object') return obj;
+    
+    const decompressed = { ...obj };
+    for (const [key, val] of Object.entries(decompressed)) {
+        if (val && typeof val === 'object' && val.__compressed) {
+            decompressed[key] = decompressData(val);
+        }
+    }
+    return decompressed;
+}
+
 export async function getIndexedDBStore(STORE, key = null) {
     const db = await openDB();
     return new Promise((resolve, reject) => {
@@ -160,10 +193,27 @@ export async function getIndexedDBStore(STORE, key = null) {
 
         if (key !== null) {
             request = store.get(key);
-            request.onsuccess = () => resolve(request.result?.value ?? null);
+            request.onsuccess = () => {
+                const result = request.result?.value ?? null;
+                // Decompress if it's stored in compressed format
+                resolve(result ? decompressData(result) : null);
+            };
         } else {
             request = store.getAll();
-            request.onsuccess = () => resolve(request.result ?? []);
+            request.onsuccess = () => {
+                const results = request.result ?? [];
+                // Decompress each item - handle both key/value and row formats
+                const decompressed = results.map(item => {
+                    if (item.value !== undefined) {
+                        // Key/value format - decompress the value property
+                        return { ...item, value: decompressData(item.value) };
+                    } else {
+                        // Row format - decompress any compressed properties
+                        return decompressObject(item);
+                    }
+                });
+                resolve(decompressed);
+            };
         }
 
         request.onerror = () => reject(request.error);

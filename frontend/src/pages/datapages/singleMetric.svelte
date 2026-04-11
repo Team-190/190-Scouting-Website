@@ -18,6 +18,7 @@
     median,
     METADATA_KEYS,
     METRIC_DISPLAY_NAMES,
+    normalizeClimbData,
     percentile,
     ROW_HEIGHT,
     sd,
@@ -508,6 +509,9 @@
                 "No"
               const auto = climbData.AutoClimb ?? "";
               row.Auto_Climb = String(auto).slice(-1) === "1" ? "Yes" : "No";
+              
+              // Normalize climb time to 0 if climb state is "None"
+              normalizeClimbData(row);
             } catch {
               row.Climb_State = null;
               row.Auto_Climb = null;

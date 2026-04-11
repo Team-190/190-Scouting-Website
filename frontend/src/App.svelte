@@ -56,8 +56,8 @@
   /* Adjust for sidebar navbar */
   .page-content {
     margin-left: 0;
-    padding: 20px;
-    min-height: 100vh;
+    padding: 0px;
+    min-height: 0vh;
   }
 
   main {
