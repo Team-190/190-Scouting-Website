@@ -20,6 +20,7 @@
         ...Object.fromEntries(plainFields.map(f => [f, ""])) as Record<typeof plainFields[number], string>,
         robotPicture: null,
         robotPicturePreview: null,
+        otherNotes: "",
     };
 
     let formData = structuredClone(defaultFormData);
@@ -523,8 +524,22 @@
                 {/if}
             </div>
         </div>
-    </div>
+    <!-- Other Notes -->
+            <div class="form-section">
+                <h2 class="section-title">Other Notes</h2>
 
+                <div class="form-group">
+                    <label for="other-notes">Additional observations about the team</label>
+                    <input
+                        type="text"
+                        id="other-notes"
+                        value={formData.otherNotes}
+                        on:input={(e) => handleInput("otherNotes", e)}
+                        placeholder="Enter any additional notes or observations about this team"
+                    />
+                </div>
+            </div>
+    </div>
     <!-- Submit Section -->
     <div class="submit-section">
         <button
