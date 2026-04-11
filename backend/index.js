@@ -1,12 +1,10 @@
 // REQUIRED .env PARAMETERS:
-// VITE_BACKEND_PORT - Port on which the backend runs
-// VITE_FRONTEND_PORT - Port on which the frontend runs
 // SESSION_SECRET - Random string to sign off session cookies
 // VITE_AUTH_KEY - TBA API key
 // DB_USER - Database user to access data
 // DB_PASSWORD - Database password to access data
 // VITE_SERVER_IP - IP of where the backend/frontend are running
-// VITE_TESTING - Binary value to indicate whether the code is in testing or production
+// VITE_TESTING - Binary value to indicate whether runtime is local (1) or server (0)
 
 const express = require("express");
 const path = require("path");
@@ -17,6 +15,7 @@ const database = require("./database.js");
 const externalAPI = require("./externalApi.js");
 const session = require("express-session");
 const cors = require("cors");
+const runtimeConstants = require("../runtime/constants");
 require('dotenv').config({ path: path.resolve(__dirname, '../.env'), override: true });
 
 const app = express();
@@ -83,10 +82,14 @@ async function postRatingHelper(req, res, filename) {
     res.sendStatus(200);
 }
 
-const VITE_BACKEND_PORT = process.env.VITE_BACKEND_PORT || 8000;
-const VITE_FRONTEND_PORT = process.env.VITE_FRONTEND_PORT || 5173;
-const VITE_TESTING = process.env.VITE_TESTING || 1;
-const SERVER = !parseInt(VITE_TESTING) ? process.env.VITE_SERVER_IP : "localhost";
+const VITE_BACKEND_PORT = Number(runtimeConstants.ports.backend);
+const VITE_FRONTEND_PORT = Number(runtimeConstants.ports.frontend);
+const VITE_TESTING = String(process.env.VITE_TESTING ?? "1");
+const SHOULD_SERVE_FRONTEND = VITE_TESTING === "0";
+const SERVER = VITE_TESTING === "0"
+    ? (process.env.VITE_SERVER_IP || runtimeConstants.server.host)
+    : "localhost";
+const FRONTEND_DIST = process.env.FRONTEND_DIST || path.resolve(__dirname, "../frontend/dist");
 
 refreshTimer = setInterval(() => {
     if (eventCode && eventCode.trim()) {
@@ -125,12 +128,12 @@ app.use(cors({
         `https://${SERVER}:${VITE_FRONTEND_PORT}`,
         `https://localhost:${VITE_FRONTEND_PORT}`,
         `https://127.0.0.1:${VITE_FRONTEND_PORT}`,
-        VITE_FRONTEND_PORT === "80" ? `http://${SERVER}` : null,
-        VITE_FRONTEND_PORT === "80" ? `http://localhost` : null,
-        VITE_FRONTEND_PORT === "80" ? `http://127.0.0.1` : null,
-        VITE_FRONTEND_PORT === "443" ? `https://${SERVER}` : null,
-        VITE_FRONTEND_PORT === "443" ? `https://localhost` : null,
-        VITE_FRONTEND_PORT === "443" ? `https://127.0.0.1` : null,
+        VITE_FRONTEND_PORT === 80 ? `http://${SERVER}` : null,
+        VITE_FRONTEND_PORT === 80 ? `http://localhost` : null,
+        VITE_FRONTEND_PORT === 80 ? `http://127.0.0.1` : null,
+        VITE_FRONTEND_PORT === 443 ? `https://${SERVER}` : null,
+        VITE_FRONTEND_PORT === 443 ? `https://localhost` : null,
+        VITE_FRONTEND_PORT === 443 ? `https://127.0.0.1` : null,
         "http://190scouting.com",
         "https://190scouting.com",
     ],
@@ -138,13 +141,30 @@ app.use(cors({
     allowedHeaders: ["Content-Type"],
 }));    
 
-app.get("/", async (req, res) => {
-    res.renderHtml("file.html");
-});
+if (SHOULD_SERVE_FRONTEND) {
+    app.use(express.static(FRONTEND_DIST));
 
-app.get("/login", (req, res) => {
-    res.renderHtml("login.html");
-});
+    app.get("*", (req, res, next) => {
+        if (req.path.startsWith("/api")) {
+            return next();
+        }
+
+        const indexPath = path.join(FRONTEND_DIST, "index.html");
+        if (!fs.existsSync(indexPath)) {
+            return res.status(500).send(`Missing frontend build output at ${indexPath}`);
+        }
+
+        return res.sendFile(indexPath);
+    });
+} else {
+    app.get("/", async (req, res) => {
+        res.renderHtml("file.html");
+    });
+
+    app.get("/login", (req, res) => {
+        res.renderHtml("login.html");
+    });
+}
 
 app.get("/api/getEvents", async (req, res) => {
     try {

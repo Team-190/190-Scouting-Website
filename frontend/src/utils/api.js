@@ -1,15 +1,23 @@
-const VITE_TESTING = import.meta.env.VITE_TESTING || 1;
-const VITE_BACKEND_PORT = import.meta.env.VITE_BACKEND_PORT || 8000;
-const SERVER = !parseInt(VITE_TESTING) ? import.meta.env.VITE_SERVER_IP : "localhost";
+const VITE_BACKEND_PORT = 8000;
+const VITE_FRONTEND_PORT = 5173;
+const VITE_TESTING = String(import.meta.env.VITE_TESTING ?? "1");
+const DEFAULT_SERVER_HOST = import.meta.env.VITE_SERVER_IP || "localhost";
+const SERVER = VITE_TESTING === "0"
+    ? DEFAULT_SERVER_HOST
+    : "localhost";
 
 // Determine API endpoint based on access method
 // Local dev (http://localhost:5173): Call backend directly on http://localhost:8000
 // Nginx proxy (https://190scouting.com): Use empty string (routes already have /api prefix)
 const getAPILink = () => {
   if (typeof window === 'undefined') return '';
-  
-  const isLocalDev = window.location.hostname === 'localhost' && window.location.port === '5173';
-  return isLocalDev ? `http://localhost:${VITE_BACKEND_PORT}` : '';
+
+    const isFrontendRuntime = window.location.port === String(VITE_FRONTEND_PORT);
+    if (!isFrontendRuntime) {
+        return '';
+    }
+
+    return `http://${SERVER}:${VITE_BACKEND_PORT}`;
 };
 
 const defaultAPILink = getAPILink();
