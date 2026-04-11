@@ -317,25 +317,25 @@
       if (isClimb) {
         const attemptRow = rowData.find((r) => r.metric === "AttemptClimb");
         const bg = getClimbStateColor(val, attemptRow?.[params.colDef.field]);
-        return { background: bg, color: textColorForBg(bg), fontSize: "18px", fontWeight: 600, textAlign: "center" };
+        return { background: bg, color: textColorForBg(bg), fontSize: "14px", fontWeight: 600, textAlign: "center" };
       }
       if (isBool) {
         const bg = getBooleanColor(val);
-        return { background: bg, color: textColorForBg(bg), fontSize: "18px", fontWeight: 600, textAlign: "center" };
+        return { background: bg, color: textColorForBg(bg), fontSize: "14px", fontWeight: 600, textAlign: "center" };
       }
 
       const num = isNumeric(val) ? Number(val) : 0;
       const inv = INVERTED_METRICS.includes(metric);
-      if (num === -1) return { background: "#4D4D4D", color: "white", fontSize: "18px", fontWeight: 600, textAlign: "center" };
-      if (num === 0)  return { background: "black",   color: "white", fontSize: "18px", fontWeight: 600, textAlign: "center" };
+      if (num === -1) return { background: "#4D4D4D", color: "white", fontSize: "14px", fontWeight: 600, textAlign: "center" };
+      if (num === 0)  return { background: "black",   color: "white", fontSize: "14px", fontWeight: 600, textAlign: "center" };
 
       if (colorblindMode === "alex") {
         const vp = getAlexValuePercentile(num, stats, inv);
         const bg = getAlexBgColor(vp, true);
-        return { background: bg, color: textColorForBg(bg), fontSize: "18px", fontWeight: 600, textAlign: "center" };
+        return { background: bg, color: textColorForBg(bg), fontSize: "14px", fontWeight: 600, textAlign: "center" };
       }
       const bg = colorFromStats(num, stats, inv, isBool, isClimb);
-      return { background: bg, color: textColorForBg(bg), fontSize: "18px", fontWeight: 600, textAlign: "center" };
+      return { background: bg, color: textColorForBg(bg), fontSize: "14px", fontWeight: 600, textAlign: "center" };
     };
 
     const qValueFormatter = (params: any) => {
@@ -353,7 +353,7 @@
       const isBool  = BOOLEAN_METRICS.includes(metric);
       const isClimb = metric === CLIMBSTATE_METRIC;
       const v       = params.value;
-      const base    = { fontSize: "18px", fontWeight: "bold", textAlign: "center", borderLeft: border };
+      const base    = { fontSize: "14px", fontWeight: "bold", textAlign: "center", borderLeft: border };
 
       if (v === undefined || v === null || v === "" || isBool || isClimb)
         return { background: "#4D4D4D", color: "white", ...base };
@@ -390,7 +390,7 @@
         cellClass: "cell-center",
         cellStyle: {
           background: "#C81B00", color: "white",
-          fontSize: "18px", fontWeight: "bold", textAlign: "center",
+          fontSize: "14px", fontWeight: "bold", textAlign: "center",
         },
         valueFormatter: (params: any) => METRIC_DISPLAY_NAMES.get(params.value) || params.value,
       },
@@ -398,7 +398,7 @@
         headerName: matchNums[i],
         field: q,
         minWidth: 80,
-        width: 100,
+        flex: 1,
         headerClass: "header-center",
         cellClass: "cell-center",
         cellStyle: qCellStyle,
@@ -449,7 +449,7 @@
           const bg = getAlexBgColor(params.value, false);
           return {
             background: bg, color: textColorForBg(bg),
-            fontSize: "18px", fontWeight: "bold",
+            fontSize: "14px", fontWeight: "bold",
             textAlign: "center", borderLeft: "2px solid #555",
           };
         },
@@ -473,7 +473,13 @@
     resizable: false,
     sortable: false,
     suppressMovable: true,
-    cellStyle: { fontSize: "18px" },
+    wrapText: true,
+    cellStyle: { 
+      fontSize: "12px",
+      whiteSpace: "normal",
+      wordWrap: "break-word",
+      overflow: "visible",
+    },
   },
   suppressColumnVirtualisation: true,
   suppressHorizontalScroll: false,
@@ -541,7 +547,7 @@
   :global(.ag-header-cell) {
     background: var(--frc-190-red, #c81b00) !important;
     color: white !important;
-    font-size: 18px;
+    font-size: 14px;
     font-weight: bold;
   }
   :global(.ag-header-cell.header-center .ag-header-cell-label) {
@@ -549,7 +555,7 @@
     text-align: center;
     width: 100%;
     color: white !important;
-    font-size: 18px;
+    font-size: 14px;
   }
   :global(.cell-center) {
     text-align: center !important;
