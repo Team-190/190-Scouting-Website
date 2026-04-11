@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount } from "svelte";
+  import { onDestroy, onMount, tick } from "svelte";
   import { v4 as uuidv4 } from "uuid";
   import * as barGraph from "../../pages/graphcode/bar.js";
   import * as lineGraph from "../../pages/graphcode/line.js";
@@ -772,6 +772,8 @@
   }
 
   async function buildEFSGrid() {
+    if (efsGridApi) { efsGridApi.destroy?.(); efsGridApi = null; }
+  await tick();
     if (!availableTeams.length) return;
     efsLoading = true;
 
@@ -947,6 +949,8 @@
   }
 
   async function buildEFS2Grid() {
+    if (efsGridApi) { efsGridApi.destroy?.(); efsGridApi = null; }
+  await tick();
     if (!availableTeams.length) return;
     efsLoading = true;
 
@@ -1122,21 +1126,19 @@
     efsLoading = false;
   }
 
-  function buildOPRGrid() {
-    if (!Object.keys(teamOPRs).length) {
-      applyEFSOPRGrid(
-        [
-          {
-            headerName: "Message",
-            field: "message",
-            flex: 1,
-            cellStyle: { textAlign: "center", padding: "20px", color: "white" },
-          },
-        ],
-        [{ message: "No OPR data available for this event" }],
-      );
-      return;
-    }
+  async function buildOPRGrid() {
+      if (efsGridApi) { efsGridApi.destroy?.(); efsGridApi = null; }
+
+  await tick();
+
+  if (!Object.keys(teamOPRs).length) {
+    applyEFSOPRGrid(
+      [{ headerName: "Message", field: "message", flex: 1,
+         cellStyle: { textAlign: "center", padding: "20px", color: "white" } }],
+      [{ message: "No OPR data available for this event" }],
+    );
+    return;
+  }
 
     rowData = assignAlexPercentiles(
       Object.entries(teamOPRs)
