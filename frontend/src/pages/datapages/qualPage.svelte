@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import { onMount } from "svelte";
   import fieldImageSrc from "../../images/FieldImage.png";
   import {
