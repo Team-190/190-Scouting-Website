@@ -73,6 +73,12 @@ async function populateEventData(eventCode) {
       useTBA: false,
       fallback: {},
     },
+    {
+      filename: "coprs",
+      url: `https://www.thebluealliance.com/api/v3/event/${eventCode}/coprs`,
+      useTBA: true,
+      fallback: {},
+    }
   ];
 
   await Promise.allSettled(

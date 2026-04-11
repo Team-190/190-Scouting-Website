@@ -286,3 +286,197 @@ export const HEADER_HEIGHT = 32;
  * Number of auto/match numbers for generating ranges
  */
 export const MATCH_NUMBERS = Array.from({ length: 100 }, (_, i) => i + 1);
+
+
+/**
+ * Estimates a team's fuel-scoring points for a given match.
+ * @param {string} teamStr - Team number
+ * @param {number} matchNumber - Match number
+ * @param {any[]} alliances - Preloaded alliance data from fetchMatchAlliances
+ * @param {any[]} data - Preloaded scouting rows
+ * @returns {number|null} Estimated points or null
+ * thanks copilot
+ */
+export function estimateTeamPoints(teamStr, matchNumber, alliances, data) {
+  const tbaMatch = alliances.find(
+    (m) => m.comp_level === "qm" && m.match_number === matchNumber,
+  );
+  if (!data || !tbaMatch) return null;
+
+  const teamStrClean = String(teamStr).replace(/\D/g, "");
+  const teamRows = data.filter((row) => {
+    if (row.RecordType === "Match_Event") return false;
+    return (
+      String(row.Team || row.team || "").replace(/\D/g, "") === teamStrClean &&
+      Number(row.Match) === matchNumber
+    );
+  });
+  if (!teamRows.length) return null;
+
+  const redKeys = tbaMatch.alliances.red.team_keys.map((k) =>
+    k.replace("frc", ""),
+  );
+  const onRed = redKeys.includes(teamStrClean);
+  const allianceScoreBreakdown = onRed
+    ? tbaMatch.score_breakdown?.red
+    : tbaMatch.score_breakdown?.blue;
+  if (!allianceScoreBreakdown) return null;
+
+  const phases = [
+    { name: "Auto",       start: 0,   end: 20,  scoreKey: "autoPoints" },
+    { name: "Transition", start: 20,  end: 30,  scoreKey: "transitionPoints" },
+    { name: "Phase1",     start: 30,  end: 55,  scoreKey: "shift1Points" },
+    { name: "Phase2",     start: 55,  end: 80,  scoreKey: "shift2Points" },
+    { name: "Phase3",     start: 80,  end: 105, scoreKey: "shift3Points" },
+    { name: "Phase4",     start: 105, end: 130, scoreKey: "shift4Points" },
+    { name: "Endgame",    start: 130, end: 160, scoreKey: "endgamePoints" },
+  ];
+
+  let teamFuelShootingTime = 0;
+  teamRows.forEach((row) => {
+    if (isNumeric(row.FuelShootingTime))
+      teamFuelShootingTime += Number(row.FuelShootingTime);
+  });
+
+  const allianceTeams = onRed
+    ? tbaMatch.alliances.red.team_keys
+    : tbaMatch.alliances.blue.team_keys;
+  const allianceTeamNumbers = allianceTeams.map((k) => String(k).replace("frc", ""));
+
+  let totalAllianceShootingTime = 0;
+  for (const allyTeamNum of allianceTeamNumbers) {
+    const allyRows = data.filter((row) => {
+      if (row.RecordType === "Match_Event") return false;
+      return (
+        String(row.Team || row.team || "").replace(/\D/g, "") === allyTeamNum &&
+        Number(row.Match) === matchNumber
+      );
+    });
+    allyRows.forEach((row) => {
+      if (isNumeric(row.FuelShootingTime))
+        totalAllianceShootingTime += Number(row.FuelShootingTime);
+    });
+  }
+
+  const teamShootingPercentage =
+    totalAllianceShootingTime > 0
+      ? teamFuelShootingTime / totalAllianceShootingTime
+      : 0;
+
+  let estimatedPoints = 0;
+  const hubScore = allianceScoreBreakdown.hubScore;
+  if (hubScore) {
+    phases.forEach((phase) => {
+      const phaseScore = hubScore[phase.scoreKey] || 0;
+      if (phaseScore > 0 && teamShootingPercentage > 0) {
+        estimatedPoints += phaseScore * teamShootingPercentage;
+      }
+    });
+  }
+
+  return estimatedPoints > 0 ? Math.round(estimatedPoints * 10) / 10 : null;
+}
+
+export function isNumeric(n) {
+  if (n === null || n === undefined || n === "" || typeof n === "boolean") return false;
+  return !isNaN(parseFloat(n)) && isFinite(n);
+}
+
+const EFS2_PHASES = [
+  { coprKey: "Hub Auto Fuel Count",       shootingField: "FuelShootingTime" },
+  { coprKey: "Hub Transition Fuel Count", shootingField: "FuelShootingTime" },
+  { coprKey: "Hub Shift 1 Fuel Count",    shootingField: "FuelShootingTime" },
+  { coprKey: "Hub Shift 2 Fuel Count",    shootingField: "FuelShootingTime" },
+  { coprKey: "Hub Shift 3 Fuel Count",    shootingField: "FuelShootingTime" },
+  { coprKey: "Hub Shift 4 Fuel Count",    shootingField: "FuelShootingTime" },
+  { coprKey: "Hub Endgame Fuel Count",    shootingField: "FuelShootingTime" },
+];
+
+/**
+ * Estimates a team's fuel-scoring contribution using COPR data scaled by
+ * per-match shooting time share.
+ *
+ * @param {string} teamStr - Team number (e.g. "190")
+ * @param {number} matchNumber - Match number
+ * @param {Object} coprs - COPR data from fetchCOPRs (keyed by phase name → { frcXXX: value })
+ * @param {any[]} allRows - All scouting rows for the event
+ * @param {any[]} alliances - Preloaded alliance data from fetchMatchAlliances
+ * @returns {number|null} Estimated points for this team in this match, or null
+ */
+export function estimateTeamPoints2(teamStr, matchNumber, coprs, allRows, alliances) {
+  if (!coprs || !allRows || !alliances) return null;
+
+  const teamStrClean = String(teamStr).replace(/\D/g, "");
+  const tbaKey = `frc${teamStrClean}`;
+
+  // Find this match in TBA data
+  const tbaMatch = alliances.find(
+    (m) => m.comp_level === "qm" && m.match_number === matchNumber,
+  );
+  if (!tbaMatch) return null;
+
+  const redKeys = tbaMatch.alliances.red.team_keys.map((k) => k.replace("frc", ""));
+  const blueKeys = tbaMatch.alliances.blue.team_keys.map((k) => k.replace("frc", ""));
+  const onRed = redKeys.includes(teamStrClean);
+  const onBlue = blueKeys.includes(teamStrClean);
+  if (!onRed && !onBlue) return null;
+
+  const allianceKeys = onRed ? redKeys : blueKeys;
+  const scoreBreakdown = onRed
+    ? tbaMatch.score_breakdown?.red
+    : tbaMatch.score_breakdown?.blue;
+  if (!scoreBreakdown) return null;
+
+  const phases = [
+    { coprKey: "Hub Auto Fuel Count",       scoreKey: "autoPoints"      },
+    { coprKey: "Hub Transition Fuel Count", scoreKey: "transitionPoints"},
+    { coprKey: "Hub Shift 1 Fuel Count",    scoreKey: "shift1Points"    },
+    { coprKey: "Hub Shift 2 Fuel Count",    scoreKey: "shift2Points"    },
+    { coprKey: "Hub Shift 3 Fuel Count",    scoreKey: "shift3Points"    },
+    { coprKey: "Hub Shift 4 Fuel Count",    scoreKey: "shift4Points"    },
+    { coprKey: "Hub Endgame Fuel Count",    scoreKey: "endgamePoints"   },
+  ];
+
+  function getAvgShootingTime(teamNum) {
+    const rows = allRows.filter(
+      (row) =>
+        row.RecordType !== "Match_Event" &&
+        String(row.Team || row.team || "").replace(/\D/g, "") === teamNum,
+    );
+    if (!rows.length) return 0;
+    const times = rows.map((r) =>
+      isNumeric(r.FuelShootingTime) ? Number(r.FuelShootingTime) : 0,
+    );
+    return times.reduce((a, b) => a + b, 0) / times.length;
+  }
+
+  const teamRates = {};
+  for (const allyNum of allianceKeys) {
+    const avgTime = getAvgShootingTime(allyNum);
+    teamRates[allyNum] = {};
+    for (const phase of phases) {
+      const phaseCoprs = coprs[phase.coprKey];
+      const copr = phaseCoprs?.[`frc${allyNum}`] ?? 0;
+      teamRates[allyNum][phase.coprKey] =
+        avgTime > 0 ? Math.max(0, copr) / avgTime : 0;
+    }
+  }
+
+  let total = 0;
+  for (const phase of phases) {
+    const actualPhaseScore = scoreBreakdown.hubScore?.[phase.scoreKey] ?? 0;
+    if (actualPhaseScore <= 0) continue;
+
+    const allianceTotalRate = allianceKeys.reduce(
+      (sum, allyNum) => sum + (teamRates[allyNum][phase.coprKey] ?? 0),
+      0,
+    );
+    if (allianceTotalRate === 0) continue;
+
+    const teamRate = teamRates[teamStrClean][phase.coprKey] ?? 0;
+    const teamShare = teamRate / allianceTotalRate;
+    total += teamShare * actualPhaseScore;
+  }
+
+  return total > 0 ? Math.round(total * 10) / 10 : null;
+}

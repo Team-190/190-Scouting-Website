@@ -361,6 +361,14 @@ app.get("/api/getOPR", validateEventCode, async (req, res) => {
     res.send(result);
 });
 
+app.get("/api/getCOPR", validateEventCode, async (req, res) => {
+    eventCode = req.query.eventCode;
+    console.log("COPR requested, eventCode: " + eventCode);
+    await ensureEventCodeExists("coprs", eventCode);
+    const raw = await getEventData("coprs", eventCode);
+    res.send(raw);
+});
+
 app.get("/api/getAlliances", validateEventCode, async (req, res) => {
     eventCode = req.query.eventCode;
     console.log("alliances requested, eventCode: " + eventCode);
