@@ -17,7 +17,7 @@
   },
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon server.js",
+    "dev": "nodemon index.js",
     "test": "jest --coverage --testPathIgnorePatterns=legacy"
   },
   "dependencies": {
