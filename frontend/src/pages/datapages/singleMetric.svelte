@@ -164,7 +164,33 @@
   }
 
   // ─── Color Helpers (kept for chart builders) ──────────────────────────────────
-
+  function makeTeamColumnDef() {
+    return {
+      headerName: "Team",
+      field: "team",
+      pinned: "left",
+      width: 120,
+      flex: 0.3,
+      minWidth: 100,
+      headerClass: "header-center",
+      cellClass: "cell-center",
+      cellStyle: (params) => ({
+        background: params.value === highlightedTeam ? "#FFD700" : "#C81B00",
+        color: params.value === highlightedTeam ? "black" : "white",
+        fontWeight: "bold",
+        fontSize: "18px",
+        textAlign: "center",
+        cursor: "pointer",
+      }),
+      onCellClicked: (params) => {
+        if (!params.value) return;
+        highlightedTeam =
+          highlightedTeam === params.value ? null : params.value;
+        broadcastHighlightedTeam(highlightedTeam);
+        efsGridApi?.redrawRows();
+      },
+    };
+  }
   function textColorForBg(bg: string): string {
     if (!bg) return "black";
     const darkColors = [
@@ -624,6 +650,7 @@
     qLabels = Array.from({ length: maxMatchCount }, (_, i) => `Q${i + 1}`);
 
     rowData = availableTeams
+    
       .map((team) => {
         const rows = teamData[team] ?? [];
         const row: any = {
@@ -736,32 +763,6 @@
           : params.value != null
             ? params.value.toString()
             : "",
-    };
-  }
-
-  function makeTeamColumnDef() {
-    return {
-      headerName: "Team",
-      field: "team",
-      pinned: "left",
-      width: 150,
-      headerClass: "header-center",
-      cellClass: "cell-center",
-      cellStyle: (params) => ({
-        background: params.value === highlightedTeam ? "#FFD700" : "#C81B00",
-        color: params.value === highlightedTeam ? "black" : "white",
-        fontWeight: "bold",
-        fontSize: "18px",
-        textAlign: "center",
-        cursor: "pointer",
-      }),
-      onCellClicked: (params) => {
-        if (!params.value) return;
-        highlightedTeam =
-          highlightedTeam === params.value ? null : params.value;
-        broadcastHighlightedTeam(highlightedTeam);
-        efsGridApi?.redrawRows();
-      },
     };
   }
 
@@ -1054,7 +1055,7 @@
         headerName: "OPR",
         field: "mean",
         flex: 1,
-        minWidth: 150,
+        minWidth: 90,
         headerClass: "header-center",
         cellClass: "cell-center",
         cellStyle: (params) => {
