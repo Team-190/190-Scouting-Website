@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
     import { onMount } from "svelte";
     import { fetchMatchAlliances, fetchElimsHaveStarted } from "../../utils/api";
     import { getEventCode } from "../../utils/pageUtils";

@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import baseX from "base-x";
   import pako from "pako";
   import { onMount } from "svelte";
