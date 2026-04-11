@@ -288,7 +288,8 @@
       headerName: "Team",
       field: "team",
       pinned: "left",
-      width: 150,
+      width: 100,
+      minwidth: 100,
       headerClass: "header-center",
       cellClass: "cell-center",
       cellStyle: (params: any) => ({
@@ -317,8 +318,8 @@
     return {
       headerName: q,
       field: q,
-      width: 80,
-      minWidth: 80,
+      flex: 1,
+      minWidth: 60,
       headerClass: "header-center",
       cellClass: "cell-center",
       cellStyle: (params: any) => {
@@ -328,7 +329,7 @@
             background: "#333",
             color: "white",
             fontWeight: 600,
-            fontSize: "16px",
+            fontSize: "14px",
             textAlign: "center",
             border: "1px solid #555",
           };
@@ -339,7 +340,7 @@
             background: bg,
             color: textColorForBg(bg),
             fontWeight: 600,
-            fontSize: "18px",
+            fontSize: "12px",
             textAlign: "center",
           };
         }
@@ -349,7 +350,7 @@
             background: bg,
             color: textColorForBg(bg),
             fontWeight: 600,
-            fontSize: "18px",
+            fontSize: "14px",
             textAlign: "center",
           };
         }
@@ -358,7 +359,7 @@
             background: "#333",
             color: "white",
             fontWeight: 600,
-            fontSize: "16px",
+            fontSize: "14px",
             textAlign: "center",
             border: "1px solid #555",
           };
@@ -369,7 +370,7 @@
             background: "#4D4D4D",
             color: "white",
             fontWeight: 600,
-            fontSize: "18px",
+            fontSize: "14px",
             textAlign: "center",
           };
         if (val === 0)
@@ -377,7 +378,7 @@
             background: "black",
             color: "white",
             fontWeight: 600,
-            fontSize: "18px",
+            fontSize: "14px",
             textAlign: "center",
           };
         const bg = colorFromStats(val, globalStats, inverted, dataMetric);
@@ -385,7 +386,7 @@
           background: bg,
           color: textColorForBg(bg),
           fontWeight: 600,
-          fontSize: "18px",
+          fontSize: "14px",
           textAlign: "center",
         };
       },
@@ -426,7 +427,7 @@
       background: bg,
       color,
       fontWeight: "bold",
-      fontSize: "18px",
+      fontSize: "14px",
       textAlign: "center",
       ...(extraBorder ? { borderLeft: extraBorder } : {}),
     };
@@ -437,8 +438,8 @@
     return {
       headerName: "Mean",
       field: "mean",
-      width: 100,
-      minWidth: 100,
+      width: 80,
+      minWidth: 80,
       hide,
       headerClass: "header-center",
       cellClass: "cell-center",
@@ -485,8 +486,8 @@
     return {
       headerName: "Per.",
       field: "alexPercentile",
-      width: 100,
-      minWidth: 100,
+      width: 80,
+      minWidth: 80,
       hide,
       headerClass: "header-center",
       cellClass: "cell-center",
@@ -537,7 +538,11 @@
           resizable: false,
           sortable: false,
           suppressMovable: true,
-          cellStyle: { fontSize: "18px" },
+          cellStyle: { fontSize: "12px", whiteSpace: "normal", wordWrap: "break-word" },
+          wrapText: true,
+        },
+        autoSizeStrategy: {
+          type: 'fitCellContents',
         },
         suppressColumnVirtualisation: true,
         suppressHorizontalScroll: true,
