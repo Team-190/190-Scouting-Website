@@ -30,56 +30,56 @@ let refreshTimer;
  * Middleware to validate eventCode parameter
  */
 const validateEventCode = (req, res, next) => {
-    eventCode = req.query.eventCode || req.body.event;
-    if (!eventCode) return res.sendStatus(403);
-    next();
+  eventCode = req.query.eventCode || req.body.event;
+  if (!eventCode) return res.sendStatus(403);
+  next();
 };
 
 /**
  * Helper to read JSON file and get event-scoped data
  */
 async function getEventData(filename, eventCode) {
-    let data = await database.readJSONFile(filename);
-    return data[eventCode] || {};
+  let data = await database.readJSONFile(filename);
+  return data[eventCode] || {};
 }
 
 /**
  * Helper to ensure event code exists in a JSON file
  */
 async function ensureEventCodeExists(filename, eventCode) {
-    let data = await database.readJSONFile(filename);
-    if (!data[eventCode]) {
-        data[eventCode] = {};
-        await database.writeJSONFile(filename, data);
-        console.log(`Initialized event code ${eventCode} in ${filename}`);
-    }
-    return data;
+  let data = await database.readJSONFile(filename);
+  if (!data[eventCode]) {
+    data[eventCode] = {};
+    await database.writeJSONFile(filename, data);
+    console.log(`Initialized event code ${eventCode} in ${filename}`);
+  }
+  return data;
 }
 
 /**
  * Helper to post rating data (generic for driver/HP ratings)
  */
 async function postRatingHelper(req, res, filename) {
-    const { event, rating, team } = req.body;
-    
-    if (rating == null || team == null || event == null) {
-        console.log("One or more fields could not be retrieved");
-        console.log(`${rating} ${team} ${event}`);
-        return res.sendStatus(400);
-    }
+  const { event, rating, team } = req.body;
 
-    let fileData = await ensureEventCodeExists(filename, event);
-    fileData[event] ||= {};
+  if (rating == null || team == null || event == null) {
+    console.log("One or more fields could not be retrieved");
+    console.log(`${rating} ${team} ${event}`);
+    return res.sendStatus(400);
+  }
 
-    if (fileData[event][team]) {
-        let nextRating = Object.keys(fileData[event][team]).length;
-        fileData[event][team][nextRating] = rating;
-    } else {
-        fileData[event][team] = { 0: rating };
-    }
+  let fileData = await ensureEventCodeExists(filename, event);
+  fileData[event] ||= {};
 
-    database.writeJSONFile(filename, fileData);
-    res.sendStatus(200);
+  if (fileData[event][team]) {
+    let nextRating = Object.keys(fileData[event][team]).length;
+    fileData[event][team][nextRating] = rating;
+  } else {
+    fileData[event][team] = { 0: rating };
+  }
+
+  database.writeJSONFile(filename, fileData);
+  res.sendStatus(200);
 }
 
 const VITE_BACKEND_PORT = Number(runtimeConstants.ports.backend);
@@ -91,36 +91,42 @@ const SERVER = VITE_TESTING === "0"
     : "localhost";
 const FRONTEND_DIST = process.env.FRONTEND_DIST || path.resolve(__dirname, "../frontend/dist");
 
-refreshTimer = setInterval(() => {
+refreshTimer = setInterval(
+  () => {
     if (eventCode && eventCode.trim()) {
-        console.log(`[RefreshTimer] Refreshing data for event: ${eventCode}`);
-        externalAPI.populateEventData(eventCode);
+      console.log(`[RefreshTimer] Refreshing data for event: ${eventCode}`);
+      externalAPI.populateEventData(eventCode);
     }
-}, 1000 * 60 * 1);
+  },
+  1000 * 60 * 1,
+);
 
 if (typeof refreshTimer.unref === "function") {
-    refreshTimer.unref();
+  refreshTimer.unref();
 }
 
 app.use(express.json());
 
-app.use(compression({
-    level: 9, // Balance between compression ratio and speed
-    threshold: 500 // Compresses files above this size
-}));
-
 app.use(
-    session({
-        secret: process.env.SESSION_SECRET || "ffyufytfytfuytftfhgfhgfhfhgfhgfhgf",
-        resave: false,
-        saveUninitialized: false,
-        cookie: {
-            maxAge: 1000 * 60 * 60,
-        }
-    })
+  compression({
+    level: 9, // Balance between compression ratio and speed
+    threshold: 500, // Compresses files above this size
+  }),
 );
 
-app.use(cors({
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "ffyufytfytfuytftfhgfhgfhfhgfhgfhgf",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      maxAge: 1000 * 60 * 60,
+    },
+  }),
+);
+
+app.use(
+  cors({
     origin: [
         `http://${SERVER}:${VITE_FRONTEND_PORT}`,
         `http://localhost:${VITE_FRONTEND_PORT}`,
@@ -139,7 +145,8 @@ app.use(cors({
     ],
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type"],
-}));    
+  }),
+);
 
 if (SHOULD_SERVE_FRONTEND) {
     app.use(express.static(FRONTEND_DIST));
@@ -167,357 +174,387 @@ if (SHOULD_SERVE_FRONTEND) {
 }
 
 app.get("/api/getEvents", async (req, res) => {
-    try {
-        const events = await database.getEvents();
-        console.log("GOT EVENTS:\n" + JSON.stringify(events, null, 2));
-        res.json(events);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: "Failed to fetch events" });
-    }
+  try {
+    const events = await database.getEvents();
+    console.log("GOT EVENTS:\n" + JSON.stringify(events, null, 2));
+    res.json(events);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to fetch events" });
+  }
 });
 
 app.get("/api/health", (req, res) => {
-    res.json({ ok: true, timestamp: Date.now() });
+  res.json({ ok: true, timestamp: Date.now() });
 });
 
 app.get("/api/getAvailableTeams", validateEventCode, async (req, res) => {
-    eventCode = req.query.eventCode;
-    let result = await database.getAvailableTeams(eventCode);
-    res.send(result);
+  eventCode = req.query.eventCode;
+  let result = await database.getAvailableTeams(eventCode);
+  res.send(result);
 });
 
 app.get("/api/getQualitativeScouting", validateEventCode, async (req, res) => {
-    eventCode = req.query.eventCode;
+  eventCode = req.query.eventCode;
 
-    let localCounts = {};
-    try {
-        if (req.query.localCounts) localCounts = JSON.parse(decodeURIComponent(req.query.localCounts));
-    } catch(e) {}
+  let localCounts = {};
+  try {
+    if (req.query.localCounts)
+      localCounts = JSON.parse(decodeURIComponent(req.query.localCounts));
+  } catch (e) {}
 
-    await ensureEventCodeExists("qualitativeScoutingData", eventCode);
-    let result = await getEventData("qualitativeScoutingData", eventCode);
+  await ensureEventCodeExists("qualitativeScoutingData", eventCode);
+  let result = await getEventData("qualitativeScoutingData", eventCode);
 
-    let filtered = {};
-    for (let team in result) {
-        let backendCount = Object.keys(result[team]).length;
-        if (!localCounts[team] || localCounts[team] < backendCount) {
-            filtered[team] = result[team];
-        }
+  let filtered = {};
+  for (let team in result) {
+    let backendCount = Object.keys(result[team]).length;
+    if (!localCounts[team] || localCounts[team] < backendCount) {
+      filtered[team] = result[team];
     }
+  }
 
-    res.send(filtered);
+  res.send(filtered);
 });
 
 app.get("/api/getPitScouting", validateEventCode, async (req, res) => {
-    eventCode = req.query.eventCode;
+  eventCode = req.query.eventCode;
 
-    let localTeams = [];
-    try {
-        if (req.query.localTeams) localTeams = JSON.parse(decodeURIComponent(req.query.localTeams));
-    } catch(e) {}
+  let localTeams = [];
+  try {
+    if (req.query.localTeams)
+      localTeams = JSON.parse(decodeURIComponent(req.query.localTeams));
+  } catch (e) {}
 
-    await ensureEventCodeExists("pitScoutingData", eventCode);
-    let result = await getEventData("pitScoutingData", eventCode);
+  await ensureEventCodeExists("pitScoutingData", eventCode);
+  let result = await getEventData("pitScoutingData", eventCode);
 
-    let filtered = {};
-    for (const [team, data] of Object.entries(result)) {
-        if (!localTeams.includes(team)) {
-            const { robotPicturePreview, ...rest } = data;
-            filtered[team] = rest;
-        }
+  let filtered = {};
+  for (const [team, data] of Object.entries(result)) {
+    if (!localTeams.includes(team)) {
+      const { robotPicturePreview, ...rest } = data;
+      filtered[team] = rest;
     }
+  }
 
-    res.send(filtered);
+  res.send(filtered);
 });
 
 app.get("/api/getPitScoutingImage", validateEventCode, async (req, res) => {
-    const { eventCode, teamNumber } = req.query;
-    if (!teamNumber) return res.sendStatus(403);
+  const { eventCode, teamNumber } = req.query;
+  if (!teamNumber) return res.sendStatus(403);
 
-    try {
-        let data = await getEventData("pitScoutingData", eventCode);
-        const result = data[teamNumber]?.["robotPicturePreview"];
-        if (!result) return res.sendStatus(404);
-        res.send(result);
-    } catch (e) {
-        return res.sendStatus(404);
-    }
+  try {
+    let data = await getEventData("pitScoutingData", eventCode);
+    const result = data[teamNumber]?.["robotPicturePreview"];
+    if (!result) return res.sendStatus(404);
+    res.send(result);
+  } catch (e) {
+    return res.sendStatus(404);
+  }
 });
 
 app.get("/api/getAllData", validateEventCode, async (req, res) => {
-    eventCode = req.query.eventCode;
-    const lastId = parseInt(req.query.lastId || "0");
-    let result = await database.getAllData(eventCode, lastId);
-    res.send(result);
+  eventCode = req.query.eventCode;
+  const lastId = parseInt(req.query.lastId || "0");
+  let result = await database.getAllData(eventCode, lastId);
+  res.send(result);
+});
+
+app.get("/api/getTransactionTimers", validateEventCode, async (req, res) => {
+  eventCode = req.query.eventCode;
+  const matchNumber = req.query.matchNumber
+    ? parseInt(req.query.matchNumber)
+    : null;
+  const team = req.query.team || null;
+  const scouter = req.query.scouter || null;
+
+  if (!matchNumber) return res.sendStatus(400);
+
+  let result = await database.getTransactionTimers(
+    eventCode,
+    matchNumber,
+    team,
+    scouter,
+  );
+  res.send(result);
 });
 
 app.get("/api/getSingleMetric", validateEventCode, async (req, res) => {
-    eventCode = req.query.eventCode;
-    console.log("single metric data requested, eventCode: " + eventCode);
+  eventCode = req.query.eventCode;
+  console.log("single metric data requested, eventCode: " + eventCode);
 
-    let result = await database.getAllData(eventCode);
-    result = result.data;
-    let teams = {};
+  let result = await database.getAllData(eventCode);
+  result = result.data;
+  let teams = {};
 
-    for (let datapoint of result) {
-        let strippedTeam = datapoint.Team.replace(/\s+/g, "");
-        let match = datapoint.Match;
+  for (let datapoint of result) {
+    let strippedTeam = datapoint.Team.replace(/\s+/g, "");
+    let match = datapoint.Match;
 
-        if (!teams[strippedTeam]) teams[strippedTeam] = {};
-        if (!teams[strippedTeam][match]) teams[strippedTeam][match] = [];
+    if (!teams[strippedTeam]) teams[strippedTeam] = {};
+    if (!teams[strippedTeam][match]) teams[strippedTeam][match] = [];
 
-        teams[strippedTeam][match].push(datapoint);
-    }
+    teams[strippedTeam][match].push(datapoint);
+  }
 
-    res.send(teams);
+  res.send(teams);
 });
 
 app.get("/api/getRatings", validateEventCode, async (req, res) => {
-    eventCode = req.query.eventCode;
-    await ensureEventCodeExists("driverRatings", eventCode);
-    let fileData = await getEventData("driverRatings", eventCode);
-    res.send(fileData);
+  eventCode = req.query.eventCode;
+  await ensureEventCodeExists("driverRatings", eventCode);
+  let fileData = await getEventData("driverRatings", eventCode);
+  res.send(fileData);
 });
 
 app.get("/api/getHPRatings", validateEventCode, async (req, res) => {
-    eventCode = req.query.eventCode;
-    await ensureEventCodeExists("HPRatings", eventCode);
-    let fileData = await getEventData("HPRatings", eventCode);
-    res.send(fileData);
+  eventCode = req.query.eventCode;
+  await ensureEventCodeExists("HPRatings", eventCode);
+  let fileData = await getEventData("HPRatings", eventCode);
+  res.send(fileData);
 });
-
 
 ////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
 ////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
 ////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
 
 app.get("/api/getMatchAlliances", validateEventCode, async (req, res) => {
-    eventCode = req.query.eventCode;
-    console.log("matches requested, eventCode: " + eventCode);
-    await ensureEventCodeExists("matches", eventCode);
-    const raw = await getEventData("matches", eventCode);
-    res.send(raw);
+  eventCode = req.query.eventCode;
+  console.log("matches requested, eventCode: " + eventCode);
+  await ensureEventCodeExists("matches", eventCode);
+  const raw = await getEventData("matches", eventCode);
+  res.send(raw);
 });
 
 app.get("/api/getTeams", validateEventCode, async (req, res) => {
-    eventCode = req.query.eventCode;
-    console.log("teams requested, eventCode: " + eventCode);
-    await ensureEventCodeExists("teams", eventCode);
-    const raw = await getEventData("teams", eventCode);
-    const teamList = Array.isArray(raw) ? raw : [];
+  eventCode = req.query.eventCode;
+  console.log("teams requested, eventCode: " + eventCode);
+  await ensureEventCodeExists("teams", eventCode);
+  const raw = await getEventData("teams", eventCode);
+  const teamList = Array.isArray(raw) ? raw : [];
 
-    const result = {
-        _teams: Object.fromEntries(teamList.map((team) => [team.team_number, team.nickname])),
-        _teamNumbers: teamList.map((t) => t.team_number).sort((a, b) => a - b),
-    };
+  const result = {
+    _teams: Object.fromEntries(
+      teamList.map((team) => [team.team_number, team.nickname]),
+    ),
+    _teamNumbers: teamList.map((t) => t.team_number).sort((a, b) => a - b),
+  };
 
-    res.send(result);
+  res.send(result);
 });
 
 app.get("/api/getEventDetails", validateEventCode, async (req, res) => {
-    eventCode = req.query.eventCode;
-    console.log("event details requested, eventCode: " + eventCode);
-    await ensureEventCodeExists("eventDetails", eventCode);
-    const raw = await getEventData("eventDetails", eventCode);
+  eventCode = req.query.eventCode;
+  console.log("event details requested, eventCode: " + eventCode);
+  await ensureEventCodeExists("eventDetails", eventCode);
+  const raw = await getEventData("eventDetails", eventCode);
 
-    const result = {
-        name: raw?.name || "",
-        short_name: raw?.short_name || "",
-        location: raw?.location || "",
-    };
+  const result = {
+    name: raw?.name || "",
+    short_name: raw?.short_name || "",
+    location: raw?.location || "",
+  };
 
-    res.send(result);
+  res.send(result);
 });
 
 app.get("/api/getTeamStatuses", validateEventCode, async (req, res) => {
-    eventCode = req.query.eventCode;
-    console.log("team statuses requested, eventCode: " + eventCode);
-    await ensureEventCodeExists("teamStatuses", eventCode);
-    const raw = await getEventData("teamStatuses", eventCode);
+  eventCode = req.query.eventCode;
+  console.log("team statuses requested, eventCode: " + eventCode);
+  await ensureEventCodeExists("teamStatuses", eventCode);
+  const raw = await getEventData("teamStatuses", eventCode);
 
-    const result = Object.fromEntries(
-        Object.entries(raw).map(([teamKey, status]) => [
-            parseInt(teamKey.replace("frc", "")),
-            status?.qual?.ranking?.rank ?? null,
-        ])
-    );
+  const result = Object.fromEntries(
+    Object.entries(raw).map(([teamKey, status]) => [
+      parseInt(teamKey.replace("frc", "")),
+      status?.qual?.ranking?.rank ?? null,
+    ]),
+  );
 
-    res.send(result);
+  res.send(result);
 });
 
 app.get("/api/getOPR", validateEventCode, async (req, res) => {
-    eventCode = req.query.eventCode;
-    console.log("OPR requested, eventCode: " + eventCode);
-    await ensureEventCodeExists("oprs", eventCode);
-    const raw = await getEventData("oprs", eventCode);
+  eventCode = req.query.eventCode;
+  console.log("OPR requested, eventCode: " + eventCode);
+  await ensureEventCodeExists("oprs", eventCode);
+  const raw = await getEventData("oprs", eventCode);
 
-    const result = {
-        oprs:  raw.oprs  ?? {},
-        dprs:  raw.dprs  ?? {},
-        ccwms: raw.ccwms ?? {},
-    };
+  const result = {
+    oprs: raw.oprs ?? {},
+    dprs: raw.dprs ?? {},
+    ccwms: raw.ccwms ?? {},
+  };
 
-    res.send(result);
+  res.send(result);
 });
 
 app.get("/api/getCOPR", validateEventCode, async (req, res) => {
-    eventCode = req.query.eventCode;
-    console.log("COPR requested, eventCode: " + eventCode);
-    await ensureEventCodeExists("coprs", eventCode);
-    const raw = await getEventData("coprs", eventCode);
-    res.send(raw);
+  eventCode = req.query.eventCode;
+  console.log("COPR requested, eventCode: " + eventCode);
+  await ensureEventCodeExists("coprs", eventCode);
+  const raw = await getEventData("coprs", eventCode);
+  res.send(raw);
 });
 
 app.get("/api/getAlliances", validateEventCode, async (req, res) => {
-    eventCode = req.query.eventCode;
-    console.log("alliances requested, eventCode: " + eventCode);
-    await ensureEventCodeExists("alliances", eventCode);
-    const raw = await getEventData("alliances", eventCode);
+  eventCode = req.query.eventCode;
+  console.log("alliances requested, eventCode: " + eventCode);
+  await ensureEventCodeExists("alliances", eventCode);
+  const raw = await getEventData("alliances", eventCode);
 
-    const available = Array.isArray(raw) && raw.length > 0 && raw[0]?.picks?.length > 0;
+  const available =
+    Array.isArray(raw) && raw.length > 0 && raw[0]?.picks?.length > 0;
 
-    res.send({ alliances: raw, available });
+  res.send({ alliances: raw, available });
 });
 
 app.get("/api/getEventEpas", validateEventCode, async (req, res) => {
-    eventCode = req.query.eventCode;
-    console.log("EPAs requested, eventCode: " + eventCode);
-    await ensureEventCodeExists("epas", eventCode);
-    const raw = await getEventData("epas", eventCode);
-    res.send(raw);
+  eventCode = req.query.eventCode;
+  console.log("EPAs requested, eventCode: " + eventCode);
+  await ensureEventCodeExists("epas", eventCode);
+  const raw = await getEventData("epas", eventCode);
+  res.send(raw);
 });
 
 app.get("/api/getElimsHaveStarted", validateEventCode, async (req, res) => {
-    eventCode = req.query.eventCode;
-    console.log("elims check requested, eventCode: " + eventCode);
-    await ensureEventCodeExists("matches", eventCode);
-    const raw = await getEventData("matches", eventCode);
+  eventCode = req.query.eventCode;
+  console.log("elims check requested, eventCode: " + eventCode);
+  await ensureEventCodeExists("matches", eventCode);
+  const raw = await getEventData("matches", eventCode);
 
-    // raw might be an empty object {} if data hasn't been loaded yet
-    const matchesArray = Array.isArray(raw) ? raw : [];
-    const result = matchesArray.some(
-        (m) => ["sf", "ef", "f"].includes(m.comp_level)
-            && m.winning_alliance !== ""
-            && m.winning_alliance !== null
-    );
+  // raw might be an empty object {} if data hasn't been loaded yet
+  const matchesArray = Array.isArray(raw) ? raw : [];
+  const result = matchesArray.some(
+    (m) =>
+      ["sf", "ef", "f"].includes(m.comp_level) &&
+      m.winning_alliance !== "" &&
+      m.winning_alliance !== null,
+  );
 
-    res.send({ elimsHaveStarted: result });
+  res.send({ elimsHaveStarted: result });
 });
 
 app.get("/api/getMatchScores", async (req, res) => {
-    const { eventCode, matchNumber, driveStation } = req.query;
-    if (!eventCode || !matchNumber || !driveStation) return res.sendStatus(403);
-    console.log("match scores requested, eventCode: " + eventCode);
+  const { eventCode, matchNumber, driveStation } = req.query;
+  if (!eventCode || !matchNumber || !driveStation) return res.sendStatus(403);
+  console.log("match scores requested, eventCode: " + eventCode);
 
-    await ensureEventCodeExists("matches", eventCode);
-    const raw = await getEventData("matches", eventCode);
+  await ensureEventCodeExists("matches", eventCode);
+  const raw = await getEventData("matches", eventCode);
 
-    // raw might be an empty object {} if data hasn't been loaded yet
-    const matchesArray = Array.isArray(raw) ? raw : [];
-    const matchKey = `${eventCode}_qm${matchNumber}`;
-    const alliance = driveStation.startsWith("red") ? "red" : "blue";
-    const tbaMatch = matchesArray.find((m) => m.key === matchKey);
+  // raw might be an empty object {} if data hasn't been loaded yet
+  const matchesArray = Array.isArray(raw) ? raw : [];
+  const matchKey = `${eventCode}_qm${matchNumber}`;
+  const alliance = driveStation.startsWith("red") ? "red" : "blue";
+  const tbaMatch = matchesArray.find((m) => m.key === matchKey);
 
-    if (!tbaMatch) {
-        console.warn(`Match ${matchKey} not found in event data`);
-        return res.send({ score: null });
-    }
+  if (!tbaMatch) {
+    console.warn(`Match ${matchKey} not found in event data`);
+    return res.send({ score: null });
+  }
 
-    res.send({ score: tbaMatch.alliances[alliance].score });
+  res.send({ score: tbaMatch.alliances[alliance].score });
 });
-
 
 ////////////// POST Methods \\\\\\\\\\\\\\
 ////////////// POST Methods \\\\\\\\\\\\\\
 ////////////// POST Methods \\\\\\\\\\\\\\
 
 app.post("/api/postEventCode", async (req, res) => {
-    eventCode = req.body.eventCode;
-    if (!eventCode) {
-        console.log("Event code could not be retrieved");
-        res.sendStatus(400);
-    } else {
-        console.log(`Event code retrieved, ${eventCode}`);
-        externalAPI.populateEventData(eventCode);
-        res.sendStatus(200);
-    }
+  eventCode = req.body.eventCode;
+  if (!eventCode) {
+    console.log("Event code could not be retrieved");
+    res.sendStatus(400);
+  } else {
+    console.log(`Event code retrieved, ${eventCode}`);
+    externalAPI.populateEventData(eventCode);
+    res.sendStatus(200);
+  }
 });
 
 app.post("/api/postRatings", (req, res) => {
-    postRatingHelper(req, res, "driverRatings");
+  postRatingHelper(req, res, "driverRatings");
 });
 
 app.post("/api/postHPRatings", (req, res) => {
-    postRatingHelper(req, res, "HPRatings");
+  postRatingHelper(req, res, "HPRatings");
 });
 
 app.post("/api/postPitScouting", validateEventCode, async (req, res) => {
-    let event = req.body.event;
-    let team = req.body.team;
-    let formData = req.body.formData;
+  let event = req.body.event;
+  let team = req.body.team;
+  let formData = req.body.formData;
 
-    if (!formData || !team) {
-        console.log("One or more fields could not be retrieved");
-        console.log(`${formData} ${team} ${event}`);
-        return res.sendStatus(400);
-    }
+  if (!formData || !team) {
+    console.log("One or more fields could not be retrieved");
+    console.log(`${formData} ${team} ${event}`);
+    return res.sendStatus(400);
+  }
 
-    console.log(formData);
-    let fileData = await ensureEventCodeExists("pitScoutingData", event);
-    fileData[event] ||= {};
-    fileData[event][team] = formData;
+  console.log(formData);
+  let fileData = await ensureEventCodeExists("pitScoutingData", event);
+  fileData[event] ||= {};
+  fileData[event][team] = formData;
 
-    database.writeJSONFile("pitScoutingData", fileData);
-    res.sendStatus(200);
+  database.writeJSONFile("pitScoutingData", fileData);
+  res.sendStatus(200);
 });
 
-app.post("/api/postQualitativeScouting", validateEventCode, async (req, res) => {
+app.post(
+  "/api/postQualitativeScouting",
+  validateEventCode,
+  async (req, res) => {
     let event = req.body.event;
     let match = req.body.match;
     let team = req.body.team;
     let formData = req.body.formData;
 
     if (formData == null || team == null || match == null) {
-        console.log("One or more fields could not be retrieved");
-        console.log(`${formData} ${team} ${event} ${match}`);
-        return res.sendStatus(400);
+      console.log("One or more fields could not be retrieved");
+      console.log(`${formData} ${team} ${event} ${match}`);
+      return res.sendStatus(400);
     }
 
     console.log(formData);
-    let fileData = await ensureEventCodeExists("qualitativeScoutingData", event);
+    let fileData = await ensureEventCodeExists(
+      "qualitativeScoutingData",
+      event,
+    );
     fileData[event] ||= {};
     fileData[event][team] ||= {};
     fileData[event][team][match] = formData;
 
     database.writeJSONFile("qualitativeScoutingData", fileData);
     res.sendStatus(200);
-});
+  },
+);
 
 app.post("/api/postGompeiMadnessBracket", async (req, res) => {
-    bracket = req.body.bracket;
-    if (!bracket) {
-        res.sendStatus(400);
-    } else {
-        res.sendStatus(200);
-    }
+  bracket = req.body.bracket;
+  if (!bracket) {
+    res.sendStatus(400);
+  } else {
+    res.sendStatus(200);
+  }
 });
 
 // Check if SSL certificates exist for HTTPS
-const certPath = path.join(__dirname, '../certificate.crt');
-const keyPath = path.join(__dirname, '../certificate.key');
+const certPath = path.join(__dirname, "../certificate.crt");
+const keyPath = path.join(__dirname, "../certificate.key");
 const useHttps = false; // Nginx handles HTTPS - backend runs on HTTP only
 
 if (useHttps) {
-    const httpsOptions = {
-        cert: fs.readFileSync(certPath),
-        key: fs.readFileSync(keyPath)
-    };
-    https.createServer(httpsOptions, app).listen(VITE_BACKEND_PORT, () => {
-        console.log("Backend listening on HTTPS port " + VITE_BACKEND_PORT);
-    });
+  const httpsOptions = {
+    cert: fs.readFileSync(certPath),
+    key: fs.readFileSync(keyPath),
+  };
+  https.createServer(httpsOptions, app).listen(VITE_BACKEND_PORT, () => {
+    console.log("Backend listening on HTTPS port " + VITE_BACKEND_PORT);
+  });
 } else {
-    app.listen(VITE_BACKEND_PORT, () => {
-        console.log("Backend listening on HTTP port " + VITE_BACKEND_PORT);
-    });
+  app.listen(VITE_BACKEND_PORT, () => {
+    console.log("Backend listening on HTTP port " + VITE_BACKEND_PORT);
+  });
 }
