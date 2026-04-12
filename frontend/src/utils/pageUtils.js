@@ -442,18 +442,13 @@ const EFS2_PHASES = [
  * @param {string} teamStr - Team number (e.g. "190")
  * @param {number} matchNumber - Match number
  * @param {Object} coprs - COPR data from fetchCOPRs (keyed by phase name → { frcXXX: value })
- * @param {any[]} allRows - All scouting rows for the event
+ * @param {any[]} autoRows - Auto scouting rows for the event
+ * @param {any[]} teleopRows - Teleop scouting rows for the event
  * @param {any[]} alliances - Preloaded alliance data from fetchMatchAlliances
  * @returns {number|null} Estimated points for this team in this match, or null
  */
-export function estimateTeamPoints2(
-  teamStr,
-  matchNumber,
-  coprs,
-  allRows,
-  alliances,
-) {
-  if (!coprs || !allRows || !alliances) return null;
+export function estimateTeamPoints2(teamStr, matchNumber, coprs, autoRows, teleopRows, alliances) {
+  if (!coprs || !autoRows || !teleopRows || !alliances) return null;
 
   const teamStrClean = String(teamStr).replace(/\D/g, "");
 
@@ -462,12 +457,8 @@ export function estimateTeamPoints2(
   );
   if (!tbaMatch) return null;
 
-  const redKeys = tbaMatch.alliances.red.team_keys.map((k) =>
-    k.replace("frc", ""),
-  );
-  const blueKeys = tbaMatch.alliances.blue.team_keys.map((k) =>
-    k.replace("frc", ""),
-  );
+  const redKeys = tbaMatch.alliances.red.team_keys.map((k) => k.replace("frc", ""));
+  const blueKeys = tbaMatch.alliances.blue.team_keys.map((k) => k.replace("frc", ""));
   const onRed = redKeys.includes(teamStrClean);
   const onBlue = blueKeys.includes(teamStrClean);
   if (!onRed && !onBlue) return null;
@@ -478,43 +469,50 @@ export function estimateTeamPoints2(
     : tbaMatch.score_breakdown?.blue;
   if (!scoreBreakdown) return null;
 
-  // Get shooting time for a specific team in this specific match only
-  function getMatchShootingTime(teamNum) {
-    const rows = allRows.filter(
-      (row) =>
-        row.RecordType !== "Match_Event" &&
-        String(row.Team || row.team || "").replace(/\D/g, "") === teamNum &&
-        Number(row.Match) === matchNumber,
-    );
-    return rows.reduce(
-      (sum, row) =>
-        sum +
-        (isNumeric(row.FuelShootingTime) ? Number(row.FuelShootingTime) : 0),
-      0,
-    );
+  // Get shooting time from a specific row set for a team in this match
+  function getShootingTime(rows, teamNum) {
+    return rows
+      .filter(
+        (row) =>
+          row.RecordType !== "Match_Event" &&
+          String(row.Team || row.team || "").replace(/\D/g, "") === teamNum &&
+          Number(row.Match) === matchNumber,
+      )
+      .reduce(
+        (sum, row) =>
+          sum + (isNumeric(row.FuelShootingTime) ? Number(row.FuelShootingTime) : 0),
+        0,
+      );
   }
 
-  // Precompute this match's shooting time for all 3 alliance robots
-  const matchShootingTimes = {};
+  // Precompute auto and teleop shooting times for all 3 alliance robots
+  const autoShootingTimes = {};
+  const teleopShootingTimes = {};
   for (const allyNum of allianceKeys) {
-    matchShootingTimes[allyNum] = getMatchShootingTime(allyNum);
+    autoShootingTimes[allyNum] = getShootingTime(autoRows, allyNum);
+    // Teleop = full match time minus auto time
+    teleopShootingTimes[allyNum] =
+      Math.max(0, getShootingTime(teleopRows, allyNum) - autoShootingTimes[allyNum]);
   }
 
   const phases = [
     {
       label: "Auto",
+      shootingTimes: autoShootingTimes,
       getCoprs: (allyNum) =>
         Math.max(0, coprs["Hub Auto Fuel Count"]?.[`frc${allyNum}`] ?? 0),
       getScore: () => scoreBreakdown.hubScore?.autoPoints ?? 0,
     },
     {
       label: "Transition",
+      shootingTimes: teleopShootingTimes,
       getCoprs: (allyNum) =>
         Math.max(0, coprs["Hub Transition Fuel Count"]?.[`frc${allyNum}`] ?? 0),
       getScore: () => scoreBreakdown.hubScore?.transitionPoints ?? 0,
     },
     {
       label: "Shift1+2",
+      shootingTimes: teleopShootingTimes,
       getCoprs: (allyNum) =>
         Math.max(0, coprs["Hub Shift 1 Fuel Count"]?.[`frc${allyNum}`] ?? 0) +
         Math.max(0, coprs["Hub Shift 2 Fuel Count"]?.[`frc${allyNum}`] ?? 0),
@@ -524,6 +522,7 @@ export function estimateTeamPoints2(
     },
     {
       label: "Shift3+4",
+      shootingTimes: teleopShootingTimes,
       getCoprs: (allyNum) =>
         Math.max(0, coprs["Hub Shift 3 Fuel Count"]?.[`frc${allyNum}`] ?? 0) +
         Math.max(0, coprs["Hub Shift 4 Fuel Count"]?.[`frc${allyNum}`] ?? 0),
@@ -533,6 +532,7 @@ export function estimateTeamPoints2(
     },
     {
       label: "Endgame",
+      shootingTimes: teleopShootingTimes,
       getCoprs: (allyNum) =>
         Math.max(0, coprs["Hub Endgame Fuel Count"]?.[`frc${allyNum}`] ?? 0),
       getScore: () => scoreBreakdown.hubScore?.endgamePoints ?? 0,
@@ -547,25 +547,21 @@ export function estimateTeamPoints2(
 
     const rates = {};
     for (const allyNum of allianceKeys) {
-      const shootingTime = matchShootingTimes[allyNum];
+      const shootingTime = phase.shootingTimes[allyNum];
       const totalCopr = phase.getCoprs(allyNum);
       rates[allyNum] = shootingTime > 0 ? totalCopr / shootingTime : 0;
     }
 
     console.log(
       `Match ${matchNumber} | Team ${teamStrClean} | Phase: ${phase.label}\n` +
-        allianceKeys
-          .map(
-            (k) =>
-              `  frc${k}: shootingTime=${matchShootingTimes[k].toFixed(2)}  COPR=${phase.getCoprs(k).toFixed(2)}  rate=${rates[k].toFixed(4)}`,
-          )
-          .join("\n") +
-        `\n  actualPhaseScore=${actualPhaseScore}`,
+      allianceKeys.map(k =>
+        `  frc${k}: shootingTime=${phase.shootingTimes[k].toFixed(2)}  COPR=${phase.getCoprs(k).toFixed(2)}  rate=${rates[k].toFixed(4)}`
+      ).join("\n") +
+      `\n  actualPhaseScore=${actualPhaseScore}`
     );
 
     const allianceTotalRate = allianceKeys.reduce(
-      (sum, allyNum) => sum + rates[allyNum],
-      0,
+      (sum, allyNum) => sum + rates[allyNum], 0,
     );
     if (allianceTotalRate === 0) continue;
 

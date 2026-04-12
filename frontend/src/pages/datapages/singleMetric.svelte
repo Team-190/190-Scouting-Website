@@ -967,7 +967,9 @@
     );
 
     const alliances = await fetchMatchAlliances(eventCode);
-    const data = JSON.parse(await fetchAllMetricData());
+    const rawStored = (await getIndexedDBStore("scoutingData")) || [];
+    const dataAuto = extractValues(rawStored, true);  
+    const dataTeleop = extractValues(rawStored, false);
     const maxMatchCount = getMaxMatchCount();
     const efsQLabels = Array.from(
       { length: maxMatchCount },
@@ -985,7 +987,8 @@
               String(team),
               Number(matchRow.Match),
               teamCOPRs,
-              data,
+              dataAuto,
+              dataTeleop,
               alliances
             );
             row[efsQLabels[i]] = efs;
