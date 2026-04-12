@@ -74,6 +74,26 @@ export function fetchAnanthPage(eventCode) {
   return fetchApi("/api/getHPRatings", { eventCode });
 }
 
+export async function fetchTransactionTimers(
+  eventCode,
+  matchNumber,
+  team = null,
+  scouter = null,
+) {
+  const response = await fetchApi("/api/getTransactionTimers", {
+    eventCode,
+    matchNumber,
+    team,
+    scouter,
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch transaction timers: ${response.statusText}`,
+    );
+  }
+  return response.json();
+}
+
 ////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
 ////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
 ////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
