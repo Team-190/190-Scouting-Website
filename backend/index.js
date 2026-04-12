@@ -22,10 +22,6 @@ const app = express();
 
 const logFilePath = "./logs/testing.csv";
 
-/**
- * Logs every request with ip address, method, etc.
- * Placed at the top to make sure every request is parsed by this before anything else.
- */
 app.use((req, res, next) => {
     let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
@@ -51,26 +47,17 @@ let refreshTimer;
 
 // ─── HELPER FUNCTIONS ───────────────────────────────────────────────────────
 
-/**
- * Middleware to validate eventCode parameter
- */
 const validateEventCode = (req, res, next) => {
   eventCode = req.query.eventCode || req.body.event;
   if (!eventCode) return res.sendStatus(403);
   next();
 };
 
-/**
- * Helper to read JSON file and get event-scoped data
- */
 async function getEventData(filename, eventCode) {
   let data = await database.readJSONFile(filename);
   return data[eventCode] || {};
 }
 
-/**
- * Helper to ensure event code exists in a JSON file
- */
 async function ensureEventCodeExists(filename, eventCode) {
   let data = await database.readJSONFile(filename);
   if (!data[eventCode]) {
@@ -81,9 +68,6 @@ async function ensureEventCodeExists(filename, eventCode) {
   return data;
 }
 
-/**
- * Helper to post rating data (generic for driver/HP ratings)
- */
 async function postRatingHelper(req, res, filename) {
   const { event, rating, team } = req.body;
 
@@ -134,8 +118,8 @@ app.use(express.json());
 
 app.use(
   compression({
-    level: 9, // Balance between compression ratio and speed
-    threshold: 500, // Compresses files above this size
+    level: 9,
+    threshold: 500,
   }),
 );
 
@@ -167,35 +151,21 @@ app.use(
         VITE_FRONTEND_PORT === 443 ? `https://127.0.0.1` : null,
         "http://190scouting.com",
         "https://190scouting.com",
-    ],
+    ].filter(Boolean),
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type"],
-}));  
+}));
 
+// Serve static frontend files in production (catch-all is at the bottom)
 if (SHOULD_SERVE_FRONTEND) {
     app.use(express.static(FRONTEND_DIST));
-
-    app.get("*", (req, res, next) => {
-        if (req.path.startsWith("/api")) {
-            return next();
-        }
-
-        const indexPath = path.join(FRONTEND_DIST, "index.html");
-        if (!fs.existsSync(indexPath)) {
-            return res.status(500).send(`Missing frontend build output at ${indexPath}`);
-        }
-
-        return res.sendFile(indexPath);
-    });
-} else {
-    app.get("/", async (req, res) => {
-        res.renderHtml("file.html");
-    });
-
-    app.get("/login", (req, res) => {
-        res.renderHtml("login.html");
-    });
 }
+
+// ─── INTERNAL API ROUTES ────────────────────────────────────────────────────
+
+app.get("/api/health", (req, res) => {
+  res.json({ ok: true, timestamp: Date.now() });
+});
 
 app.get("/api/getEvents", async (req, res) => {
   try {
@@ -206,10 +176,6 @@ app.get("/api/getEvents", async (req, res) => {
     console.error(error);
     res.status(500).json({ error: "Failed to fetch events" });
   }
-});
-
-app.get("/api/health", (req, res) => {
-  res.json({ ok: true, timestamp: Date.now() });
 });
 
 app.get("/api/getAvailableTeams", validateEventCode, async (req, res) => {
@@ -339,9 +305,7 @@ app.get("/api/getHPRatings", validateEventCode, async (req, res) => {
   res.send(fileData);
 });
 
-////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
-////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
-////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
+// ─── EXTERNAL API GET ROUTES ────────────────────────────────────────────────
 
 app.get("/api/getMatchAlliances", validateEventCode, async (req, res) => {
   eventCode = req.query.eventCode;
@@ -448,7 +412,6 @@ app.get("/api/getElimsHaveStarted", validateEventCode, async (req, res) => {
   await ensureEventCodeExists("matches", eventCode);
   const raw = await getEventData("matches", eventCode);
 
-  // raw might be an empty object {} if data hasn't been loaded yet
   const matchesArray = Array.isArray(raw) ? raw : [];
   const result = matchesArray.some(
     (m) =>
@@ -468,7 +431,6 @@ app.get("/api/getMatchScores", async (req, res) => {
   await ensureEventCodeExists("matches", eventCode);
   const raw = await getEventData("matches", eventCode);
 
-  // raw might be an empty object {} if data hasn't been loaded yet
   const matchesArray = Array.isArray(raw) ? raw : [];
   const matchKey = `${eventCode}_qm${matchNumber}`;
   const alliance = driveStation.startsWith("red") ? "red" : "blue";
@@ -482,9 +444,7 @@ app.get("/api/getMatchScores", async (req, res) => {
   res.send({ score: tbaMatch.alliances[alliance].score });
 });
 
-////////////// POST Methods \\\\\\\\\\\\\\
-////////////// POST Methods \\\\\\\\\\\\\\
-////////////// POST Methods \\\\\\\\\\\\\\
+// ─── POST ROUTES ─────────────────────────────────────────────────────────────
 
 app.post("/api/postEventCode", async (req, res) => {
   eventCode = req.body.eventCode;
@@ -526,10 +486,7 @@ app.post("/api/postPitScouting", validateEventCode, async (req, res) => {
   res.sendStatus(200);
 });
 
-app.post(
-  "/api/postQualitativeScouting",
-  validateEventCode,
-  async (req, res) => {
+app.post("/api/postQualitativeScouting", validateEventCode, async (req, res) => {
     let event = req.body.event;
     let match = req.body.match;
     let team = req.body.team;
@@ -542,18 +499,14 @@ app.post(
     }
 
     console.log(formData);
-    let fileData = await ensureEventCodeExists(
-      "qualitativeScoutingData",
-      event,
-    );
+    let fileData = await ensureEventCodeExists("qualitativeScoutingData", event);
     fileData[event] ||= {};
     fileData[event][team] ||= {};
     fileData[event][team][match] = formData;
 
     database.writeJSONFile("qualitativeScoutingData", fileData);
     res.sendStatus(200);
-  },
-);
+});
 
 app.post("/api/postGompeiMadnessBracket", async (req, res) => {
   bracket = req.body.bracket;
@@ -564,10 +517,23 @@ app.post("/api/postGompeiMadnessBracket", async (req, res) => {
   }
 });
 
-// Check if SSL certificates exist for HTTPS
+// ─── SPA CATCH-ALL (must be last) ────────────────────────────────────────────
+
+if (SHOULD_SERVE_FRONTEND) {
+    app.get("/{*path}", (req, res) => {
+        const indexPath = path.join(FRONTEND_DIST, "index.html");
+        if (!fs.existsSync(indexPath)) {
+            return res.status(500).send(`Missing frontend build at ${indexPath}`);
+        }
+        return res.sendFile(indexPath);
+    });
+}
+
+// ─── SERVER LISTEN ────────────────────────────────────────────────────────────
+
 const certPath = path.join(__dirname, "../certificate.crt");
 const keyPath = path.join(__dirname, "../certificate.key");
-const useHttps = false; // Nginx handles HTTPS - backend runs on HTTP only
+const useHttps = false;
 
 if (useHttps) {
   const httpsOptions = {
