@@ -438,7 +438,7 @@
     return {
       headerName: "Mean",
       field: "mean",
-      width: 80,
+      flex: 1,
       minWidth: 80,
       hide,
       headerClass: "header-center",
@@ -462,7 +462,7 @@
     return {
       headerName: "Med.",
       field: "median",
-      width: 80,
+      flex: 1,
       minWidth: 80,
       hide,
       headerClass: "header-center",
@@ -486,7 +486,7 @@
     return {
       headerName: "Per.",
       field: "alexPercentile",
-      width: 80,
+      flex: 1,
       minWidth: 80,
       hide,
       headerClass: "header-center",
@@ -540,9 +540,6 @@
           suppressMovable: true,
           cellStyle: { fontSize: "12px", whiteSpace: "normal", wordWrap: "break-word" },
           wrapText: true,
-        },
-        autoSizeStrategy: {
-          type: 'fitCellContents',
         },
         suppressColumnVirtualisation: true,
         suppressHorizontalScroll: true,

@@ -528,15 +528,49 @@ async function readJSONFile(filename) {
     const fullPath = `./data/${filename}.json`;
     if (!fs.existsSync(fullPath)) {
       fs.writeFileSync(fullPath, "{}", "utf8");
+      return {};
     }
     const rawData = fs.readFileSync(fullPath, { encoding: "utf8", flag: "r" });
     if (!rawData || !rawData.trim()) {
       return {};
     }
-    const fileData = JSON.parse(rawData);
-    return fileData;
+    
+    // Try to parse the JSON, but handle corrupted files gracefully
+    try {
+      const fileData = JSON.parse(rawData);
+      return fileData;
+    } catch (parseError) {
+      // JSON is malformed - try to extract valid JSON from the start
+      console.warn(`Corrupted JSON detected in ${filename}: ${parseError.message}`);
+      
+      // Try to find the end of valid JSON by looking for the last closing brace/bracket
+      let validJSON = rawData;
+      for (let i = rawData.length - 1; i >= 0; i--) {
+        try {
+          const candidate = rawData.slice(0, i).trim();
+          if (candidate && (candidate.endsWith('}') || candidate.endsWith(']'))) {
+            JSON.parse(candidate);
+            validJSON = candidate;
+            console.warn(`Recovered partial JSON from ${filename} (truncated from ${rawData.length} to ${validJSON.length} bytes)`);
+            break;
+          }
+        } catch (e) {
+          // Continue searching backwards
+        }
+      }
+      
+      // If we still can't parse, clear the file and return empty object
+      try {
+        JSON.parse(validJSON);
+        return JSON.parse(validJSON);
+      } catch (e) {
+        console.error(`Failed to recover JSON from ${filename}. Clearing corrupted file.`);
+        fs.writeFileSync(fullPath, "{}", "utf8");
+        return {};
+      }
+    }
   } catch (error) {
-    console.log("Error reading file", error);
+    console.error("Error reading file", filename, error.message);
     return {};
   }
 }
