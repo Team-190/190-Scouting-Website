@@ -61,16 +61,16 @@ if /i "%MODE%"=="production" (
 
 echo Starting local runtime: branch=%CURRENT_BRANCH% mode=%MODE% backend_port=%BACKEND_PORT% frontend_port=%FRONTEND_PORT%
 if /i "%MODE%"=="dev" (
-    call :launch_runtime "MAMS Local Backend Runtime" "%ROOT_DIR%\backend" "npm run dev"
+    call :launch_runtime "Local Backend Runtime" "%ROOT_DIR%\backend" "npm run dev"
 ) else (
-    call :launch_runtime "MAMS Local Backend Runtime" "%ROOT_DIR%\backend" "npm run start"
+    call :launch_runtime "Local Backend Runtime" "%ROOT_DIR%\backend" "npm run start"
 )
 if errorlevel 1 exit /b 1
 
 if /i "%MODE%"=="production" (
-    call :launch_runtime "MAMS Local Frontend Runtime" "%ROOT_DIR%\frontend" "npm run preview"
+    call :launch_runtime "Local Frontend Runtime" "%ROOT_DIR%\frontend" "npm run preview"
 ) else (
-    call :launch_runtime "MAMS Local Frontend Runtime" "%ROOT_DIR%\frontend" "npm run dev"
+    call :launch_runtime "Local Frontend Runtime" "%ROOT_DIR%\frontend" "npm run dev"
 )
 if errorlevel 1 exit /b 1
 
