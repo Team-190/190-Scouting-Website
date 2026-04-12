@@ -466,7 +466,6 @@ app.post("/api/postEventCode", async (req, res) => {
     res.sendStatus(400);
   } else {
     console.log(`Event code retrieved, ${eventCode}`);
-    externalAPI.populateEventData(eventCode);
     res.sendStatus(200);
   }
 });
