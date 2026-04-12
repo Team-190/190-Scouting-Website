@@ -5,7 +5,8 @@ const RUNTIME_CONSTANTS = Object.freeze({
     }),
     server: Object.freeze({
         host: "localhost",
-        gitPollIntervalSeconds: 10,
+        gitPollIntervalSecondsDev: 30,
+        gitPollIntervalSecondsProduction: 60,
     }),
 });
 
