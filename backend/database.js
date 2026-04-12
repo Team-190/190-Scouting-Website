@@ -560,11 +560,28 @@ async function writeJSONFile(filename, data) {
   });
 }
 
+// Get raw SQL data without any processing
+async function getRawSQLData(eventCode, lastId = 0) {
+  try {
+    await sql.connect(config);
+    let query = `SELECT * FROM [${eventCode}].[dbo].[Activities]`;
+    if (lastId > 0) {
+      query += ` WHERE ID > ${lastId}`;
+    }
+    const result = await sql.query(query);
+    return { data: result.recordset, error: null };
+  } catch (err) {
+    console.error("getRawSQLData error:", err);
+    return { data: null, error: err };
+  }
+}
+
 module.exports = {
   connect: () => sql.connect(config),
   sql,
   getEvents,
   getAllData,
+  getRawSQLData,
   getAvailableTeams,
   getTransactionTimers,
   readJSONFile,
