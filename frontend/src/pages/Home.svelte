@@ -24,7 +24,7 @@
     let autoDataRefreshEnabled = Boolean(parseStoredJson("homeAutoDataRefreshEnabled", false));
     let autoDataRefreshTimer = null;
 
-    const OUR_TEAM_KEY = "frc254";
+    const OUR_TEAM_KEY = "frc190";
     let matchSchedule = {
         currentMatch: "—",
         ourMatch: "—",
@@ -140,7 +140,7 @@
                 matchesUntilOurs: matchesUntil,
                 minutesUntilOurMatch: ourNextMatch ? minutesUntil(getScheduledTimestamp(ourNextMatch)) : "—",
                 status: ourNextMatch
-                    ? `Using ${details?.name || eventCode} schedule from TBA cache.`
+                    ? `Using ${details?.name || eventCode} schedule from TBA cache. (Made by Atharv)`
                     : "Team 190 is not in this event schedule.",
             };
         } catch (error) {
