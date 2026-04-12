@@ -175,7 +175,7 @@ app.use(
 if (SHOULD_SERVE_FRONTEND) {
     app.use(express.static(FRONTEND_DIST));
 
-    app.get("*", (req, res, next) => {
+    app.get("/*", (req, res, next) => {
         if (req.path.startsWith("/api")) {
             return next();
         }
