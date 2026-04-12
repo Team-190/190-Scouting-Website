@@ -52,6 +52,7 @@
 
   // ─── Constants ────────────────────────────────────────────────────────────────
 
+  const SELECTED_TEAM_KEY = "teamView_selectedTeam";
   const AnanthRating = getAnanthRatings();
   const GraceRating = getGraceRatings();
 
@@ -674,6 +675,8 @@
     isLoading = true;
     try {
       const teamStr = String(selectedTeam);
+      // Save selected team to localStorage
+      localStorage.setItem(SELECTED_TEAM_KEY, teamStr);
       await loadTeamData(teamStr);
       fetchTeamOPR(teamStr);
       populateMatchDropdown(selectedTeam);
@@ -693,6 +696,22 @@
     } finally {
       isLoading = false;
     }
+  }
+
+  /**
+   * Load the selected team from localStorage, or use first available team
+   */
+  function getInitialTeam(teams: number[]): number | null {
+    if (!teams.length) return null;
+    const saved = localStorage.getItem(SELECTED_TEAM_KEY);
+    // Only use saved team if it's still available
+    if (saved) {
+      const savedTeam = Number(saved);
+      if (teams.includes(savedTeam)) {
+        return savedTeam;
+      }
+    }
+    return teams[0];
   }
 
   async function onAutoOnlyChange() {
@@ -1338,7 +1357,7 @@
       }
 
       if (allTeams.length > 0) {
-        selectedTeam = allTeams[0];
+        selectedTeam = getInitialTeam(allTeams);
         await loadTeamData(String(selectedTeam));
       }
 

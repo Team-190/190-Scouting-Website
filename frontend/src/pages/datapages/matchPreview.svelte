@@ -44,6 +44,7 @@
 
   // ─── Constants ────────────────────────────────────────────────────────────────
 
+  const SELECTED_MATCH_KEY = "matchPreview_selectedMatch";
   const AnanthRating = getAnanthRatings();
   const GraceRating = getGraceRatings();
 
@@ -626,6 +627,8 @@
     isLoading = true;
     try {
       selectedMatch = (e.target as HTMLSelectElement).value;
+      // Save selected match to localStorage
+      localStorage.setItem(SELECTED_MATCH_KEY, selectedMatch);
       await Promise.all([
         loadMatchData(selectedMatch),
         loadStatboticsWinProb(selectedMatch),
@@ -633,6 +636,19 @@
     } finally {
       isLoading = false;
     }
+  }
+
+  /**
+   * Load the selected match from localStorage, or use first available match
+   */
+  function getInitialMatch(matches: any[]): string {
+    if (!matches.length) return "";
+    const saved = localStorage.getItem(SELECTED_MATCH_KEY);
+    // Only use saved match if it's still available
+    if (saved && matches.some((m) => m.key === saved)) {
+      return saved;
+    }
+    return matches[0].key;
   }
 
   function onColorblindChange(e: Event) {
@@ -813,7 +829,7 @@
       }
 
       if (allMatches?.length) {
-        selectedMatch = allMatches[0].key;
+        selectedMatch = getInitialMatch(allMatches);
         await tick();
         await Promise.all([
           loadMatchData(selectedMatch),
