@@ -39,6 +39,7 @@
       sd,
   } from "../../utils/pageUtils.js";
   import { getIndexedDBStore } from '../../utils/indexedDB';
+  import { matchPreviewCache } from '../../stores/matchPreviewCache.js';
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -75,6 +76,7 @@
   let showDropdown = false;
   let isLoading = false;
   let autoOnly = false;
+  let globalStatsCache: Record<string, any> = {};
 
   // Six grid DOM nodes / instances (3 red, 3 blue)
   let domNode, domNode2, domNode3;
@@ -481,7 +483,7 @@
 
   // ─── Grid Building ────────────────────────────────────────────────────────────
 
-  function buildGridForTeam(teamNumber: string, domElement: HTMLElement): any {
+  function buildGridForTeam(teamNumber: string, domElement: HTMLElement, cachedGlobalStats: Record<string, any>): any {
     if (!teamViewData || !domElement) return null;
 
     let data = teamViewData.filter((el) => {
@@ -495,10 +497,7 @@
     const qLabels   = matchNums.map((_, i) => `Q${i + 1}`);
     const displayMetrics = Object.keys(data[0]).filter((k) => !EXCLUDED_FIELDS.has(k));
 
-    const globalStats: Record<string, any> = {};
-    displayMetrics.forEach((metric) => {
-      globalStats[metric] = computeGlobalStats(metric, teamViewData);
-    });
+    const globalStats = cachedGlobalStats;
 
     const rowData = displayMetrics.map((metric) => {
       const row: any = { metric };
@@ -615,10 +614,10 @@
     destroyAllGrids();
 
     [gridInstance, gridInstance2, gridInstance3] = [domNode, domNode2, domNode3]
-      .map((node, i) => node && redAlliance[i] ? buildGridForTeam(redAlliance[i], node) : null);
+      .map((node, i) => node && redAlliance[i] ? buildGridForTeam(redAlliance[i], node, globalStatsCache) : null);
 
     [gridInstanceRight, gridInstance4, gridInstance5] = [domNodeRight, domNode4, domNode5]
-      .map((node, i) => node && blueAlliance[i] ? buildGridForTeam(blueAlliance[i], node) : null);
+      .map((node, i) => node && blueAlliance[i] ? buildGridForTeam(blueAlliance[i], node, globalStatsCache) : null);
   }
 
   // ─── Event Handlers ───────────────────────────────────────────────────────────
@@ -667,6 +666,21 @@
             checkIsNumericMetric(k, teamViewData),
         )
       : [];
+
+  // Compute global stats cache when teamViewData changes (not on every match selection)
+  $: if (teamViewData?.length > 0) {
+    const displayMetrics = Object.keys(teamViewData[0]).filter((k) => !EXCLUDED_FIELDS.has(k));
+    const newCache: Record<string, any> = {};
+    displayMetrics.forEach((metric) => {
+      newCache[metric] = computeGlobalStats(metric, teamViewData);
+    });
+    globalStatsCache = newCache;
+    
+    // Update cache store with new stats
+    if (eventCode && allMatches?.length) {
+      matchPreviewCache.setData(eventCode, teamViewData, allMatches, teamOPRs, graceData, ananthData, globalStatsCache);
+    }
+  }
 
   function addChart(type: string) {
     charts = [
@@ -802,10 +816,35 @@
   onMount(async () => {
     isLoading = true;
     try {
+      eventCode = localStorage.getItem("eventCode") || "";
+
+      // Check if cache is valid for this event
+      if (eventCode && matchPreviewCache.isValid(eventCode)) {
+        const cached = matchPreviewCache.get(eventCode);
+        if (cached) {
+          teamViewData = cached.teamViewData;
+          allMatches = cached.allMatches;
+          teamOPRs = cached.teamOPRs;
+          graceData = cached.graceData;
+          ananthData = cached.ananthData;
+          globalStatsCache = cached.globalStatsCache;
+
+          if (allMatches?.length) {
+            selectedMatch = getInitialMatch(allMatches);
+            await tick();
+            await Promise.all([
+              loadMatchData(selectedMatch),
+              loadStatboticsWinProb(selectedMatch),
+            ]);
+          }
+          return;
+        }
+      }
+
+      // Load fresh data if cache is invalid
       const stored = await getIndexedDBStore("scoutingData") || [];
       const parsed = stored ? stored : [];
       teamViewData = extractValues(parsed, autoOnly);
-      eventCode    = localStorage.getItem("eventCode") || "";
 
       if (eventCode) {
         // Grace / ananth ratings are non-critical — fetch in background
@@ -835,6 +874,11 @@
           loadMatchData(selectedMatch),
           loadStatboticsWinProb(selectedMatch),
         ]);
+      }
+
+      // Save to cache after loading
+      if (eventCode && teamViewData && allMatches) {
+        matchPreviewCache.setData(eventCode, teamViewData, allMatches, teamOPRs, graceData, ananthData, globalStatsCache);
       }
     } finally {
       isLoading = false;
