@@ -198,7 +198,9 @@
                 throw new Error("No event selected");
             }
 
-            const existingData = forceFullRefresh ? [] : await getIndexedDBStore("scoutingData");
+            const existingDataRaw = forceFullRefresh ? [] : await getIndexedDBStore("scoutingData");
+            // Unwrap the value property if it exists (from compressed storage)
+            const existingData = (existingDataRaw || []).map(item => item.value !== undefined ? item.value : item);
             const lastId = await getLastId(existingData);
 
             const dataRes = await fetchAllData(eventCode, lastId);
