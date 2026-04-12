@@ -98,18 +98,6 @@ refreshTimer = setInterval(
     if (eventCode && eventCode.trim()) {
       console.log(`[RefreshTimer] Refreshing data for event: ${eventCode}`);
       externalAPI.populateEventData(eventCode);
-      
-      try {
-        const rawData = await database.getRawSQLData(eventCode);
-        if (rawData.data) {
-          let fileData = await database.readJSONFile("scoutingData");
-          fileData[eventCode] = rawData.data;
-          await database.writeJSONFile("scoutingData", fileData);
-          console.log(`[RefreshTimer] SQL data saved for event: ${eventCode}`);
-        }
-      } catch (error) {
-        console.error(`[RefreshTimer] Error saving SQL data for event ${eventCode}:`, error);
-      }
     }
   },
   1000 * 60 * 1,
