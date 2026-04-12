@@ -105,6 +105,7 @@
     const H = canvas.height;
     ctx.clearRect(0, 0, W, H);
 
+
     if (fieldImg && fieldImg.complete && fieldImg.naturalWidth > 0) {
       const imgW = fieldImg.naturalWidth;
       const imgH = fieldImg.naturalHeight;
@@ -131,95 +132,59 @@
     }
 
     const RECORDED_W = 1200;
-    const RECORDED_H = 600;
-    const scaleX = W / RECORDED_W;
-    const scaleY = H / RECORDED_H;
+  const RECORDED_H = 600;
+  const scaleX = W / RECORDED_W;
+  const scaleY = H / RECORDED_H;
 
-    if (matchRow?.AutoPath && Array.isArray(matchRow.AutoPath)) {
-      const allPaths = matchRow.AutoPath.filter((path: any[]) => Array.isArray(path) && path.length >= 2);
-      if (allPaths.length === 0) return;
-      
-      const px = (p: any) => p.x * scaleX;
-      const py = (p: any) => p.y * scaleY;
-      
-      // Flatten all points into single array
-      const allPoints: any[] = [];
-      allPaths.forEach((path: any[]) => {
-        allPoints.push(...path);
-      });
-      
-      // Calculate cumulative distances
-      const distances = [0];
-      for (let i = 1; i < allPoints.length; i++) {
-        const p1 = allPoints[i - 1];
-        const p2 = allPoints[i];
-        const dx = px(p2) - px(p1);
-        const dy = py(p2) - py(p1);
-        distances.push(distances[distances.length - 1] + Math.sqrt(dx * dx + dy * dy));
-      }
-      const totalDist = distances[distances.length - 1];
-      const targetDist = totalDist * Math.max(0, Math.min(1, progress));
-      
-      // Function to interpolate color
-      const modeColors = COLOR_MODES[colorblindMode] || COLOR_MODES.normal;
-      const [r1, g1, b1] = modeColors.below;
-      const [r2, g2, b2] = modeColors.above;
-      const lerpColor = (t: number) => {
-        const r = Math.round(r1 + (r2 - r1) * t);
-        const g = Math.round(g1 + (g2 - g1) * t);
-        const b = Math.round(b1 + (b2 - b1) * t);
-        return `rgb(${r},${g},${b})`;
-      };
-      
-      // Draw path segments up to current progress with interpolated colors
-      let currentPathIndex = -1;
-      for (let i = 1; i < allPoints.length; i++) {
-        if (distances[i] <= targetDist) {
-          const t = totalDist > 0 ? distances[i] / totalDist : 0;
-          ctx.beginPath();
-          ctx.moveTo(px(allPoints[i - 1]), py(allPoints[i - 1]));
-          ctx.lineTo(px(allPoints[i]), py(allPoints[i]));
-          ctx.strokeStyle = lerpColor(t);
-          ctx.lineWidth = 2;
-          ctx.lineCap = "round";
-          ctx.lineJoin = "round";
-          ctx.stroke();
-          currentPathIndex = i;
-        } else if (distances[i - 1] < targetDist && distances[i] > targetDist) {
-          // Partial segment to current progress point
-          const segmentProgress = (targetDist - distances[i - 1]) / (distances[i] - distances[i - 1]);
-          const partialX = px(allPoints[i - 1]) + (px(allPoints[i]) - px(allPoints[i - 1])) * segmentProgress;
-          const partialY = py(allPoints[i - 1]) + (py(allPoints[i]) - py(allPoints[i - 1])) * segmentProgress;
-          const t = totalDist > 0 ? targetDist / totalDist : 0;
-          ctx.beginPath();
-          ctx.moveTo(px(allPoints[i - 1]), py(allPoints[i - 1]));
-          ctx.lineTo(partialX, partialY);
-          ctx.strokeStyle = lerpColor(t);
-          ctx.lineWidth = 2;
-          ctx.lineCap = "round";
-          ctx.lineJoin = "round";
-          ctx.stroke();
-          currentPathIndex = i;
-          
-          // Draw current point as small circle
-          ctx.beginPath();
-          ctx.arc(partialX, partialY, 4, 0, Math.PI * 2);
-          ctx.fillStyle = lerpColor(t);
-          ctx.fill();
-          break;
-        }
-      }
-      
-      // Draw final point if at end
-      if (currentPathIndex >= allPoints.length - 1) {
-        const lastPoint = allPoints[allPoints.length - 1];
-        ctx.beginPath();
-        ctx.arc(px(lastPoint), py(lastPoint), 4, 0, Math.PI * 2);
-        ctx.fillStyle = lerpColor(1);
-        ctx.fill();
-      }
+  if (matchRow?.AutoPath && Array.isArray(matchRow.AutoPath)) {
+    const allPaths = matchRow.AutoPath.filter((path: any[]) => Array.isArray(path) && path.length >= 2);
+    if (allPaths.length === 0) return;
+
+    const px = (p: any) => p.x * scaleX;
+    const py = (p: any) => p.y * scaleY;
+
+    // Flatten all points into single array
+    const allPoints: any[] = [];
+    allPaths.forEach((path: any[]) => allPoints.push(...path));
+
+    const totalPoints = allPoints.length;
+    // progress (0–1) now maps to point INDEX, not distance
+    const targetIndex = Math.floor(progress * (totalPoints - 1));
+
+    const modeColors = COLOR_MODES[colorblindMode] || COLOR_MODES.normal;
+    const [r1, g1, b1] = modeColors.below;
+    const [r2, g2, b2] = modeColors.above;
+    const lerpColor = (t: number) => {
+      const r = Math.round(r1 + (r2 - r1) * t);
+      const g = Math.round(g1 + (g2 - g1) * t);
+      const b = Math.round(b1 + (b2 - b1) * t);
+      return `rgb(${r},${g},${b})`;
+    };
+
+    // Draw segments up to targetIndex — each segment advances by 1 point = 1 time unit
+    for (let i = 1; i <= targetIndex && i < totalPoints; i++) {
+      const t = (i - 1) / (totalPoints - 1);
+      ctx.beginPath();
+      ctx.moveTo(px(allPoints[i - 1]), py(allPoints[i - 1]));
+      ctx.lineTo(px(allPoints[i]), py(allPoints[i]));
+      ctx.strokeStyle = lerpColor(t);
+      ctx.lineWidth = 2;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.stroke();
+    }
+
+    // Draw current position dot
+    if (targetIndex < totalPoints) {
+      const cur = allPoints[targetIndex];
+      const t = targetIndex / (totalPoints - 1);
+      ctx.beginPath();
+      ctx.arc(px(cur), py(cur), 4, 0, Math.PI * 2);
+      ctx.fillStyle = lerpColor(t);
+      ctx.fill();
     }
   }
+}
 
   function initMatchCanvas(canvas: HTMLCanvasElement, matchRow: any) {
     const canvasId = `canvas-${matchRow.Team}-${matchRow.Match}`;
@@ -381,6 +346,7 @@
       }
 
       qualDataByTeam = { ...qualDataByTeam };
+      (window as any).__qualData = qualDataByTeam;
       pitDataByTeam = { ...pitDataByTeam };
     } catch (error) {
       console.error("Error fetching scouting data:", error);
