@@ -20,6 +20,31 @@ require('dotenv').config({ path: path.resolve(__dirname, '../.env'), override: t
 
 const app = express();
 
+const logFilePath = "./logs/testing.csv";
+
+/**
+ * Logs every request with ip address, method, etc.
+ * Placed at the top to make sure every request is parsed by this before anything else.
+ */
+app.use((req, res, next) => {
+    let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+    if (ip === "::1") {
+        ip = "127.0.0.1";
+    } else if (ip.includes("::ffff:")) {
+        ip = ip.split("::ffff:")[1];
+    }
+
+    const timestamp = new Date().toISOString();
+    const logEntry = `"${ip}","${timestamp}","${req.method}","${req.url}"\n`;
+
+    fs.appendFile(logFilePath, logEntry, (err) => {
+        if (err) console.error("Log write failed", err);
+    });
+
+    next();
+});
+
 let eventCode = "";
 let bracket;
 let refreshTimer;
@@ -145,8 +170,7 @@ app.use(
     ],
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type"],
-  }),
-);
+}));  
 
 if (SHOULD_SERVE_FRONTEND) {
     app.use(express.static(FRONTEND_DIST));
