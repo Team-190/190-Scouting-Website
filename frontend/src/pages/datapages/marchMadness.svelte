@@ -347,6 +347,7 @@
         margin: 1rem auto;
         position: relative;
         padding: 0 0.5rem;
+        overflow-x: auto;
     }
 
     .loading-overlay {
@@ -370,6 +371,7 @@
         margin-bottom: 0.3rem;
         text-transform: uppercase;
         gap: 0.3rem;
+        min-width: 900px;
     }
 
     .bracket-grid {
@@ -378,6 +380,7 @@
         grid-template-rows: repeat(28, 28px);
         position: relative;
         gap: 0.3rem;
+        min-width: 900px;
     }
 
     /* Background Stripes */
@@ -643,6 +646,11 @@
             padding: 0 0.25rem;
         }
 
+        .headers,
+        .bracket-grid {
+            min-width: 760px;
+        }
+
         .headers {
             font-size: 0.65rem;
             margin-bottom: 0.2rem;
@@ -738,6 +746,11 @@
     @media (max-width: 480px) {
         .bracket-app {
             padding: 0;
+        }
+
+        .headers,
+        .bracket-grid {
+            min-width: 700px;
         }
 
         .headers {

@@ -319,7 +319,7 @@
       headerName: q,
       field: q,
       flex: 1,
-      minWidth: 60,
+      minWidth: 72,
       headerClass: "header-center",
       cellClass: "cell-center",
       cellStyle: (params: any) => {
@@ -542,7 +542,7 @@
           wrapText: true,
         },
         suppressColumnVirtualisation: true,
-        suppressHorizontalScroll: true,
+        suppressHorizontalScroll: false,
         theme: /** @type {"legacy"} */ ("legacy"),
       });
       dispatch("gridReady", { api: gridApi });
@@ -636,5 +636,31 @@
   }
   :global(.ag-body-viewport::-webkit-scrollbar-thumb:hover) {
     background: #e02200;
+  }
+
+  @media (max-width: 768px) {
+    :global(.ag-header-cell) {
+      font-size: 12px;
+    }
+
+    :global(.ag-header-cell.header-center .ag-header-cell-label) {
+      font-size: 12px;
+    }
+
+    :global(.ag-header-cell-text) {
+      white-space: nowrap;
+      overflow: visible;
+      text-overflow: clip;
+    }
+
+    :global(.ag-theme-quartz .ag-root-wrapper) {
+      --ag-font-size: 14px;
+      border-width: 2px;
+    }
+
+    :global(.ag-body-viewport::-webkit-scrollbar) {
+      width: 8px;
+      height: 8px;
+    }
   }
 </style>

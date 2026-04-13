@@ -84,4 +84,22 @@
     .details-btn:active {
         background: #003d82;
     }
+
+    @media (max-width: 768px) {
+        .list-item-container {
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+
+        .list-item {
+            padding: 10px;
+            white-space: normal;
+            line-height: 1.3;
+        }
+
+        .details-btn {
+            padding: 6px 10px;
+            font-size: 0.8rem;
+        }
+    }
 </style>

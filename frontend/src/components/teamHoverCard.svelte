@@ -831,4 +831,61 @@
   .close-btn:active {
     background: #9d1c28;
   }
+
+  @media (max-width: 768px) {
+    .team-name {
+      max-width: 130px;
+    }
+
+    .card-header {
+      padding: 8px 10px;
+      gap: 8px;
+    }
+
+    .header-right {
+      gap: 6px;
+    }
+
+    .grid-scroll,
+    .ev-scroll {
+      max-height: 300px;
+    }
+
+    .mini-grid {
+      font-size: 0.62rem;
+    }
+
+    .close-btn {
+      min-width: 40px;
+      height: 30px;
+      font-size: 0.82rem;
+      padding: 4px 10px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .team-name {
+      max-width: 95px;
+      font-size: 0.68rem;
+    }
+
+    .opr-badge {
+      padding: 2px 6px;
+      font-size: 0.64rem;
+    }
+
+    .robot-thumb {
+      height: 24px;
+    }
+
+    .section-label {
+      font-size: 0.56rem;
+      letter-spacing: 0.08em;
+    }
+
+    .mini-grid thead th,
+    .mini-grid tbody td {
+      padding: 2px 3px;
+    }
+  }
 </style>

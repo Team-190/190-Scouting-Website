@@ -595,6 +595,7 @@
       columnDefs,
       rowHeight: ROW_HEIGHT,
       headerHeight: HEADER_HEIGHT,
+      domLayout: "autoHeight",
       defaultColDef: {
         resizable: false, sortable: false, suppressMovable: true,
         cellStyle: { fontSize: "14px" },
@@ -963,11 +964,11 @@
             <img src={fetchAnanthRating(team)} alt="Ananth Rating" style="width: 60px;" />
           </h3>
           {#if i === 0}
-            <div class="grid-container ag-theme-quartz" bind:this={domNode}      style="height: {gridHeight}px;"></div>
+            <div class="grid-container ag-theme-quartz" bind:this={domNode}></div>
           {:else if i === 1}
-            <div class="grid-container ag-theme-quartz" bind:this={domNode2}     style="height: {gridHeight}px;"></div>
+            <div class="grid-container ag-theme-quartz" bind:this={domNode2}></div>
           {:else}
-            <div class="grid-container ag-theme-quartz" bind:this={domNode3}     style="height: {gridHeight}px;"></div>
+            <div class="grid-container ag-theme-quartz" bind:this={domNode3}></div>
           {/if}
         </div>
       {/each}
@@ -991,11 +992,11 @@
             <img src={fetchAnanthRating(team)} alt="Ananth Rating" style="width: 60px;" />
           </h3>
           {#if i === 0}
-            <div class="grid-container ag-theme-quartz" bind:this={domNodeRight} style="height: {gridHeight}px;"></div>
+            <div class="grid-container ag-theme-quartz" bind:this={domNodeRight}></div>
           {:else if i === 1}
-            <div class="grid-container ag-theme-quartz" bind:this={domNode4}     style="height: {gridHeight}px;"></div>
+            <div class="grid-container ag-theme-quartz" bind:this={domNode4}></div>
           {:else}
-            <div class="grid-container ag-theme-quartz" bind:this={domNode5}     style="height: {gridHeight}px;"></div>
+            <div class="grid-container ag-theme-quartz" bind:this={domNode5}></div>
           {/if}
         </div>
       {/each}
@@ -1034,7 +1035,10 @@
   :global(.ag-header-cell.header-center .ag-header-cell-label) { justify-content: center; text-align: center; width: 100%; color: white !important; font-size: 18px; }
   :global(.cell-center) { text-align: center !important; }
   :global(.ag-theme-quartz .ag-root-wrapper) { --ag-font-size: 20px; border: 3px solid var(--frc-190-red); border-radius: 8px; overflow: hidden; }
-  :global(.ag-body-viewport) { overflow-y: scroll !important; overflow-x: auto !important; }
+  :global(.ag-body-viewport) { overflow-y: hidden !important; overflow-x: auto !important; }
+  :global(.ag-center-cols-viewport) { overflow-y: hidden !important; overflow-x: auto !important; }
+  :global(.ag-body-vertical-scroll) { display: none !important; }
+  :global(.ag-body-horizontal-scroll) { display: block !important; }
   :global(.ag-body-viewport::-webkit-scrollbar) { width: 12px; height: 12px; }
   :global(.ag-body-viewport::-webkit-scrollbar-track) { background: var(--frc-190-black); border-radius: 6px; }
   :global(.ag-body-viewport::-webkit-scrollbar-thumb) { background: var(--frc-190-red); border-radius: 6px; border: 2px solid var(--frc-190-black); }
@@ -1086,7 +1090,7 @@
   }
 
   /* Mobile */
-  @media (max-width: 768px) {
+  @media (max-width: 900px), (hover: none) and (pointer: coarse) {
     .page-wrapper { padding: 0.5rem; }
     .header-section { margin-bottom: 0.75rem; }
     .header-section h1 { font-size: 1.2rem; margin-bottom: 0.2rem; }
@@ -1097,8 +1101,25 @@
     .statbotics-label { font-size: 0.72rem; }
     .statbotics-red, .statbotics-blue, .statbotics-na { font-size: 0.75rem; }
     select { margin-left: 0; margin-top: 0.3rem; padding: 0.4rem 0.8rem; font-size: 0.8rem; width: 100%; }
-    .grid-wrapper { flex-direction: column; gap: 0.5rem; }
-    .grid-column { min-width: auto; width: 100%; }
+    .grid-wrapper {
+      display: block !important;
+      width: 100%;
+    }
+    .grid-column {
+      display: block !important;
+      min-width: 0 !important;
+      width: 100% !important;
+    }
+    .grid-column + .grid-column {
+      margin-top: 0.6rem;
+    }
+    .team-box {
+      width: 100%;
+      margin-bottom: 0.6rem;
+    }
+    .team-box:last-child {
+      margin-bottom: 0;
+    }
     .team-label { font-size: 0.8rem; min-height: 40px; padding: 0.3rem 0.6rem; }
     .last-match-badge { font-size: 0.6rem; padding: 0.15rem 0.4rem; }
     .opr-badge { font-size: 0.7rem; margin-left: 0.25rem; padding: 0.15rem 0.5rem; }
