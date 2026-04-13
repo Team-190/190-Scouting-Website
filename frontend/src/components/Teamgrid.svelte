@@ -241,7 +241,8 @@
       "Match", "Team", "Id", "RecordType", "ScouterName", "ScouterError",
       "Time", "Mode", "DriveStation", "FarBlueZoneTime", "FarRedZoneTime",
       "NearBlueZoneTime", "NearRedZoneTime", "NearNeutralZoneTime",
-      "FarNeutralZoneTime", "NearFar", "MatchEvent", "MatchEventDetails", "EndState", "AutoClimb"
+      "FarNeutralZoneTime", "NearFar", "MatchEvent", "MatchEventDetails", "EndState", "AutoClimb",
+      "FuelShootingPhases"
     ]);
 
     const displayMetrics = Object.keys(matches[0]).filter((k) => !EXCLUDED_FIELDS.has(k));
@@ -593,4 +594,30 @@
     border: 2px solid var(--frc-190-black, #4d4d4d);
   }
   :global(.ag-body-viewport::-webkit-scrollbar-thumb:hover) { background: #e02200; }
+
+  @media (max-width: 768px) {
+    .team-grid-container {
+      margin-top: 12px;
+      border-radius: 6px;
+    }
+
+    :global(.ag-header-cell) {
+      font-size: 14px;
+    }
+
+    :global(.ag-header-cell.header-center .ag-header-cell-label) {
+      font-size: 14px;
+    }
+
+    :global(.ag-theme-quartz .ag-root-wrapper) {
+      --ag-font-size: 14px;
+      border-width: 2px;
+      border-radius: 6px;
+    }
+
+    :global(.ag-body-viewport::-webkit-scrollbar) {
+      width: 8px;
+      height: 8px;
+    }
+  }
 </style>

@@ -33,15 +33,18 @@
   } from "../../utils/pageUtils.js";
 
   import { getIndexedDBStore } from "../../utils/indexedDB";
+  import { cacheMetrics, getCachedMetrics } from "../../utils/indexedDB";
+  import { singleMetricCache } from "../../stores/singleMetricCache.js";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
   // ─── Constants ────────────────────────────────────────────────────────────────
 
   const HIGHLIGHTED_TEAM_KEY = "singleMetric_highlightedTeam";
+  const SELECTED_METRIC_KEY = "singleMetric_selectedMetric";
   const OPR_DISPLAY = "OPR (Offensive Power Rating)";
   const EFS_DISPLAY = "EFS (Estimated Fuel Score)";
-  const EFS2_DISPLAY = "EFS2 (EFS but better)";
+  const EFS2_DISPLAY = "EFS2 (More Accurate EFS)";
   const BOOLEAN_METRICS = new Set(["AutoClimb", "AttemptClimb", "Auto_Climb"]);
   const CLIMBSTATE_METRIC = "Climb_State";
 
@@ -131,10 +134,32 @@
   let isClimbStateMetric = false;
   let isNumericMetric = false;
 
+  let allMetricsList: string[] = [];
+
+  $: {
+    allMetricsList = getAllMetrics();
+  }
+
   let charts: any[] = [];
   let chartTypes = ["bar", "line", "pie", "scatter", "radar"];
   let showDropdown = false;
   let autoOnly = false;
+  let metricChangeTimer: any = null;
+  let pendingMetricChange: any = null;
+  let efsWorker: Worker | null = null;
+
+  // Initialize EFS Web Worker if available (for better performance on slow devices)
+  function initEFSWorker() {
+    if (typeof Worker !== "undefined") {
+      try {
+        efsWorker = new Worker("/src/workers/efsWorker.js", { type: "module" });
+        console.log("[EFS Worker] Web Worker initialized");
+      } catch (e) {
+        console.warn("[EFS Worker] Failed to initialize Web Worker:", e);
+        efsWorker = null;
+      }
+    }
+  }
 
   // ─── Value Helpers ────────────────────────────────────────────────────────────
 
@@ -435,54 +460,85 @@
     availableTeams = availableTeams.sort();
 
     // Load climb data in background (non-blocking) to keep initial page load fast
+    // Fetch match alliances once and process all climb data in batch
     if (eventCode) {
-      Promise.all(
-        availableTeams.map(async (team) => {
+      try {
+        const allMatches = await fetchMatchAlliances(eventCode);
+        // Process all team/match combinations in parallel without repeated API calls
+        const batchUpdates: Promise<void>[] = [];
+        for (const team of availableTeams) {
           const rows = teamData[team] ?? [];
-          await Promise.all(
-            rows.map(async (row) => {
-              try {
-                const climbData = await fetchRobotClimb(
-                  eventCode,
-                  team,
-                  row.Match,
-                );
-                const end = climbData.EndgameClimb ?? "";
-                const lastChar = String(end).slice(-1);
-                row.Climb_State =
-                  lastChar === "3"
-                    ? "L3"
-                    : lastChar === "2"
-                      ? "L2"
-                      : lastChar === "1"
-                        ? "L1"
-                        : "No";
-                const auto = climbData.AutoClimb ?? "";
-                row.Auto_Climb = String(auto).slice(-1) === "1" ? "Yes" : "No";
+          for (const row of rows) {
+            batchUpdates.push(
+              (async () => {
+                try {
+                  const match = allMatches.find(
+                    (m) => m.match_number === parseInt(row.Match) && m.comp_level === "qm",
+                  );
+                  if (!match) {
+                    row.Climb_State = null;
+                    row.Auto_Climb = null;
+                    return;
+                  }
 
-                // Normalize climb time to 0 if climb state is "None"
-                normalizeClimbData(row);
-              } catch {
-                row.Climb_State = null;
-                row.Auto_Climb = null;
-              }
-            }),
-          );
-        }),
-      ).catch((e) => console.warn("Background climb data fetch failed:", e));
+                  let allianceColor = null;
+                  let robotIndex = null;
+                  ["red", "blue"].forEach((color) => {
+                    const teamKeys = match.alliances[color].team_keys;
+                    const index = teamKeys.indexOf(`frc${team}`);
+                    if (index !== -1) {
+                      allianceColor = color;
+                      robotIndex = index + 1;
+                    }
+                  });
+
+                  if (!allianceColor) {
+                    row.Climb_State = null;
+                    row.Auto_Climb = null;
+                    return;
+                  }
+
+                  const scoreBreakdown = match.score_breakdown[allianceColor];
+                  const endgameClimb = scoreBreakdown[`endGameTowerRobot${robotIndex}`] || "None";
+                  const autoClimb = scoreBreakdown[`autoChargeStationRobot${robotIndex}`] || "None";
+
+                  const end = endgameClimb ?? "";
+                  const lastChar = String(end).slice(-1);
+                  row.Climb_State =
+                    lastChar === "3"
+                      ? "L3"
+                      : lastChar === "2"
+                        ? "L2"
+                        : lastChar === "1"
+                          ? "L1"
+                          : "No";
+                  const auto = autoClimb ?? "";
+                  row.Auto_Climb = String(auto).slice(-1) === "1" ? "Yes" : "No";
+
+                  // Normalize climb time to 0 if climb state is "None"
+                  normalizeClimbData(row);
+                } catch (e) {
+                  row.Climb_State = null;
+                  row.Auto_Climb = null;
+                }
+              })()
+            );
+          }
+        }
+        await Promise.all(batchUpdates);
+        console.log("[Climb] Batch fetched climb data for all teams");
+      } catch (e) {
+        console.warn("Background batch climb data fetch failed:", e);
+      }
     }
   }
 
   function computeMetrics(): string[] {
     if (!availableTeams.length) return [];
     const set = new Set<string>();
-    if (eventCode || Object.keys(teamOPRs).length) set.add(OPR_DISPLAY);
-    if (eventCode) {
-      set.add(EFS_DISPLAY);
-      set.add(EFS2_DISPLAY);
-      set.add("Climb State");
-      set.add("Auto Climb");
-    }
+    // Note: OPR, EFS, EFS2 are computed metrics and will be added on-demand
+    // This speeds up initial metrics computation significantly
+    
     for (const team of availableTeams) {
       for (const row of teamData[team] ?? []) {
         Object.keys(row).forEach((k) => {
@@ -491,7 +547,26 @@
         });
       }
     }
+    if (eventCode) {
+      set.add("Climb State");
+      set.add("Auto Climb");
+    }
     return Array.from(set).sort();
+  }
+
+  /**
+   * Get all available metrics including computed ones
+   * Computes OPR/EFS/EFS2 on-demand
+   */
+  function getAllMetrics(): string[] {
+    let allMetrics = computeMetrics();
+    if (Object.keys(teamOPRs).length || eventCode) {
+      allMetrics = [OPR_DISPLAY, ...allMetrics];
+    }
+    if (eventCode) {
+      allMetrics = [...allMetrics, EFS_DISPLAY, EFS2_DISPLAY];
+    }
+    return allMetrics;
   }
 
   function resolveDataKey(displayMetric: string): string {
@@ -760,7 +835,10 @@
 
   function applyEFSOPRGrid(columnDefs: any[], data = rowData) {
     if (!efsGridNode) return;
+    // Calculate height to show all rows while maintaining scroll performance
+    // ag-Grid's row virtualization will handle rendering efficiency internally
     efsGridHeight = data.length * ROW_HEIGHT + HEADER_HEIGHT + 6;
+    
     if (efsGridApi) {
       efsGridApi.setGridOption("columnDefs", columnDefs);
       efsGridApi.setGridOption("rowData", data);
@@ -786,6 +864,8 @@
         },
         suppressColumnVirtualisation: true,
         suppressHorizontalScroll: true,
+        suppressRowVirtualisation: false, // Enable row virtualization
+        domLayout: "normal", // Allow scrolling within container
         theme: "legacy",
       });
     }
@@ -822,6 +902,9 @@
         const matches = teamData[team] ?? [];
         const row: any = { team, hasData: false };
         const efsValues: number[] = [];
+        
+        // Note: EFS computation could be offloaded to efsWorker for better UI responsiveness
+        // Currently running on main thread. Consider using worker for large datasets.
         await Promise.all(
           matches.map(async (matchRow, i) => {
             const efs = estimateTeamPoints(
@@ -1265,9 +1348,33 @@
   // ─── Event Handlers ───────────────────────────────────────────────────────────
 
   function onMetricChange(e: Event) {
-    selectedMetric = (e.target as HTMLSelectElement).value;
-    dataMetric = resolveDataKey(selectedMetric);
-    buildGrid();
+    // Debounce metric changes to batch updates (100ms delay)
+    const newMetric = (e.target as HTMLSelectElement).value;
+    
+    clearTimeout(metricChangeTimer);
+    pendingMetricChange = newMetric;
+    
+    metricChangeTimer = setTimeout(() => {
+      selectedMetric = pendingMetricChange;
+      dataMetric = resolveDataKey(selectedMetric);
+      // Save selected metric to localStorage
+      localStorage.setItem(SELECTED_METRIC_KEY, selectedMetric);
+      buildGrid();
+      metricChangeTimer = null;
+    }, 100);
+  }
+
+  /**
+   * Load the selected metric from localStorage, or use default
+   */
+  function getInitialMetric(metrics: string[]): string {
+    if (!metrics.length) return "";
+    const saved = localStorage.getItem(SELECTED_METRIC_KEY);
+    // Only use saved metric if it's still available in current metrics list
+    if (saved && metrics.includes(saved)) {
+      return saved;
+    }
+    return metrics[0];
   }
 
   function onColorblindChange(e: Event) {
@@ -1288,12 +1395,13 @@
         return;
       }
       metrics = computeMetrics();
-      if (!metrics.length) {
+      allMetricsList = getAllMetrics();
+      if (!allMetricsList.length) {
         error = "No metrics found.";
         loading = false;
         return;
       }
-      if (!metrics.includes(selectedMetric)) selectedMetric = metrics[0];
+      if (!allMetricsList.includes(selectedMetric)) selectedMetric = allMetricsList[0];
       dataMetric = resolveDataKey(selectedMetric);
       loading = false;
       buildGrid();
@@ -1663,7 +1771,34 @@
 
   onMount(async () => {
     window.addEventListener("storage", handleStorageEvent);
+    // Initialize Web Worker for EFS computation (optimization for slow devices)
+    initEFSWorker();
+    
     try {
+      // ─── Check cache first ─────────────────────────────────────────────────
+      const cacheData = singleMetricCache.get(eventCode);
+      if (cacheData && singleMetricCache.isValid(eventCode)) {
+        availableTeams = [...cacheData.teamData.availableTeams];
+        teamData = cacheData.teamData.teamData;
+        teamOPRs = { ...cacheData.teamOPRs };
+        teamCOPRs = { ...cacheData.teamCOPRs };
+        metrics = [...cacheData.metrics];
+        allMetricsList = getAllMetrics();
+        
+        if (!allMetricsList.length) {
+          error = "Team data loaded, but no metrics were found.";
+          loading = false;
+          return;
+        }
+        selectedMetric = getInitialMetric(allMetricsList);
+        dataMetric = resolveDataKey(selectedMetric);
+        loading = false;
+        buildGrid();
+        console.log("[Cache] Loaded singleMetric data from cache");
+        return;
+      }
+
+      // ─── Fetch fresh data ──────────────────────────────────────────────────
       const raw = await fetchAllMetricData();
       if (!raw) {
         error = "No scouting data found.";
@@ -1680,13 +1815,38 @@
       teamOPRs = await loadOPRFromCache();
       teamCOPRs = await fetchCOPRs(eventCode);
 
-      metrics = computeMetrics();
-      if (!metrics.length) {
+      // Try to load metrics from IndexedDB cache first (24-hour TTL)
+      const cachedMetrics = await getCachedMetrics(eventCode);
+      if (cachedMetrics && cachedMetrics.length > 0) {
+        metrics = cachedMetrics;
+        console.log("[MetricsCache] Using cached metrics from IndexedDB");
+      } else {
+        // Compute metrics if not cached
+        metrics = computeMetrics();
+        if (metrics.length > 0) {
+          // Cache the newly computed metrics
+          await cacheMetrics(eventCode, metrics);
+        }
+      }
+
+      allMetricsList = getAllMetrics();
+      if (!allMetricsList.length) {
         error = "Team data loaded, but no metrics were found.";
         loading = false;
         return;
       }
-      selectedMetric = metrics[0];
+      
+      // ─── Cache the data ────────────────────────────────────────────────────
+      singleMetricCache.setData(
+        eventCode,
+        { availableTeams, teamData },
+        metrics,
+        teamOPRs,
+        teamCOPRs
+      );
+      console.log("[Cache] Saved singleMetric data to cache");
+      
+      selectedMetric = getInitialMetric(allMetricsList);
       dataMetric = resolveDataKey(selectedMetric);
       loading = false;
       buildGrid();
@@ -1700,6 +1860,10 @@
   onDestroy(() => {
     window.removeEventListener("storage", handleStorageEvent);
     efsGridApi?.destroy?.();
+    if (efsWorker) {
+      efsWorker.terminate();
+      console.log("[EFS Worker] Web Worker terminated");
+    }
   });
 </script>
 
@@ -1717,50 +1881,48 @@
     <p class="subtitle">FRC Team 190 - Scouting Data Analysis</p>
   </div>
 
-  <div style="width: calc(100% - 2.5rem); display: flex; justify-content: center; background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); border: 2px solid var(--frc-190-red); border-radius: 0.625rem; margin-bottom: 1.25rem; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);">
-    <div class="controls">
-      {#if loading}
-        <span style="color: transparent;">Loading team data...</span>
-      {:else if error}
-        {error}
-      {:else}
-        <div>
-          <label for="metric-select">Metric:</label>
-          <select
-            id="metric-select"
-            bind:value={selectedMetric}
-            on:change={onMetricChange}
-          >
-            {#each metrics as m}
-              <option value={m}>{m}</option>
-            {/each}
-          </select>
-        </div>
-        <div>
-          <label for="colorblind-select">Colorblind Mode:</label>
-          <select
-            id="colorblind-select"
-            bind:value={colorblindMode}
-            on:change={onColorblindChange}
-          >
-            {#each Object.entries(COLOR_MODES) as [key, mode]}
-              <option value={key}>{mode.name}</option>
-            {/each}
-          </select>
-        </div>
-        <div class="auto-only-toggle">
-          <label for="auto-only-checkbox">
-            <input
-              type="checkbox"
-              id="auto-only-checkbox"
-              bind:checked={autoOnly}
-              on:change={onAutoOnlyChange}
-            />
-            Auto Only
-          </label>
-        </div>
-      {/if}
-    </div>
+  <div class="controls">
+    {#if loading}
+      <span style="color: transparent;">Loading team data...</span>
+    {:else if error}
+      {error}
+    {:else}
+      <div>
+        <label for="metric-select">Metric:</label>
+        <select
+          id="metric-select"
+          bind:value={selectedMetric}
+          on:change={onMetricChange}
+        >
+          {#each allMetricsList as m}
+            <option value={m}>{m}</option>
+          {/each}
+        </select>
+      </div>
+      <div>
+        <label for="colorblind-select">Colorblind Mode:</label>
+        <select
+          id="colorblind-select"
+          bind:value={colorblindMode}
+          on:change={onColorblindChange}
+        >
+          {#each Object.entries(COLOR_MODES) as [key, mode]}
+            <option value={key}>{mode.name}</option>
+          {/each}
+        </select>
+      </div>
+      <div class="auto-only-toggle">
+        <label for="auto-only-checkbox">
+          <input
+            type="checkbox"
+            id="auto-only-checkbox"
+            bind:checked={autoOnly}
+            on:change={onAutoOnlyChange}
+          />
+          Auto Only
+        </label>
+      </div>
+    {/if}
   </div>
 
   <!-- Normal metric grid via EventGrid component -->

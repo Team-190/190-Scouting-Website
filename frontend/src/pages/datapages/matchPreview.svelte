@@ -39,11 +39,13 @@
       sd,
   } from "../../utils/pageUtils.js";
   import { getIndexedDBStore } from '../../utils/indexedDB';
+  import { matchPreviewCache } from '../../stores/matchPreviewCache.js';
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
   // ─── Constants ────────────────────────────────────────────────────────────────
 
+  const SELECTED_MATCH_KEY = "matchPreview_selectedMatch";
   const AnanthRating = getAnanthRatings();
   const GraceRating = getGraceRatings();
 
@@ -74,6 +76,7 @@
   let showDropdown = false;
   let isLoading = false;
   let autoOnly = false;
+  let globalStatsCache: Record<string, any> = {};
 
   // Six grid DOM nodes / instances (3 red, 3 blue)
   let domNode, domNode2, domNode3;
@@ -480,7 +483,7 @@
 
   // ─── Grid Building ────────────────────────────────────────────────────────────
 
-  function buildGridForTeam(teamNumber: string, domElement: HTMLElement): any {
+  function buildGridForTeam(teamNumber: string, domElement: HTMLElement, cachedGlobalStats: Record<string, any>): any {
     if (!teamViewData || !domElement) return null;
 
     let data = teamViewData.filter((el) => {
@@ -494,10 +497,7 @@
     const qLabels   = matchNums.map((_, i) => `Q${i + 1}`);
     const displayMetrics = Object.keys(data[0]).filter((k) => !EXCLUDED_FIELDS.has(k));
 
-    const globalStats: Record<string, any> = {};
-    displayMetrics.forEach((metric) => {
-      globalStats[metric] = computeGlobalStats(metric, teamViewData);
-    });
+    const globalStats = cachedGlobalStats;
 
     const rowData = displayMetrics.map((metric) => {
       const row: any = { metric };
@@ -595,6 +595,7 @@
       columnDefs,
       rowHeight: ROW_HEIGHT,
       headerHeight: HEADER_HEIGHT,
+      domLayout: "autoHeight",
       defaultColDef: {
         resizable: false, sortable: false, suppressMovable: true,
         cellStyle: { fontSize: "14px" },
@@ -614,10 +615,10 @@
     destroyAllGrids();
 
     [gridInstance, gridInstance2, gridInstance3] = [domNode, domNode2, domNode3]
-      .map((node, i) => node && redAlliance[i] ? buildGridForTeam(redAlliance[i], node) : null);
+      .map((node, i) => node && redAlliance[i] ? buildGridForTeam(redAlliance[i], node, globalStatsCache) : null);
 
     [gridInstanceRight, gridInstance4, gridInstance5] = [domNodeRight, domNode4, domNode5]
-      .map((node, i) => node && blueAlliance[i] ? buildGridForTeam(blueAlliance[i], node) : null);
+      .map((node, i) => node && blueAlliance[i] ? buildGridForTeam(blueAlliance[i], node, globalStatsCache) : null);
   }
 
   // ─── Event Handlers ───────────────────────────────────────────────────────────
@@ -626,6 +627,8 @@
     isLoading = true;
     try {
       selectedMatch = (e.target as HTMLSelectElement).value;
+      // Save selected match to localStorage
+      localStorage.setItem(SELECTED_MATCH_KEY, selectedMatch);
       await Promise.all([
         loadMatchData(selectedMatch),
         loadStatboticsWinProb(selectedMatch),
@@ -633,6 +636,19 @@
     } finally {
       isLoading = false;
     }
+  }
+
+  /**
+   * Load the selected match from localStorage, or use first available match
+   */
+  function getInitialMatch(matches: any[]): string {
+    if (!matches.length) return "";
+    const saved = localStorage.getItem(SELECTED_MATCH_KEY);
+    // Only use saved match if it's still available
+    if (saved && matches.some((m) => m.key === saved)) {
+      return saved;
+    }
+    return matches[0].key;
   }
 
   function onColorblindChange(e: Event) {
@@ -651,6 +667,21 @@
             checkIsNumericMetric(k, teamViewData),
         )
       : [];
+
+  // Compute global stats cache when teamViewData changes (not on every match selection)
+  $: if (teamViewData?.length > 0) {
+    const displayMetrics = Object.keys(teamViewData[0]).filter((k) => !EXCLUDED_FIELDS.has(k));
+    const newCache: Record<string, any> = {};
+    displayMetrics.forEach((metric) => {
+      newCache[metric] = computeGlobalStats(metric, teamViewData);
+    });
+    globalStatsCache = newCache;
+    
+    // Update cache store with new stats
+    if (eventCode && allMatches?.length) {
+      matchPreviewCache.setData(eventCode, teamViewData, allMatches, teamOPRs, graceData, ananthData, globalStatsCache);
+    }
+  }
 
   function addChart(type: string) {
     charts = [
@@ -786,11 +817,36 @@
   onMount(async () => {
     isLoading = true;
     try {
+      eventCode = localStorage.getItem("eventCode") || "";
+
+      // Check if cache is valid for this event
+      if (eventCode && matchPreviewCache.isValid(eventCode)) {
+        const cached = matchPreviewCache.get(eventCode);
+        if (cached) {
+          teamViewData = cached.teamViewData;
+          allMatches = cached.allMatches;
+          teamOPRs = cached.teamOPRs;
+          graceData = cached.graceData;
+          ananthData = cached.ananthData;
+          globalStatsCache = cached.globalStatsCache;
+
+          if (allMatches?.length) {
+            selectedMatch = getInitialMatch(allMatches);
+            await tick();
+            await Promise.all([
+              loadMatchData(selectedMatch),
+              loadStatboticsWinProb(selectedMatch),
+            ]);
+          }
+          return;
+        }
+      }
+
+      // Load fresh data if cache is invalid
       const stored = await getIndexedDBStore("scoutingData") || [];
       // Unwrap the value property if it exists (from compressed storage)
       const parsed = (stored || []).map(item => item.value !== undefined ? item.value : item);
       teamViewData = extractValues(parsed, autoOnly);
-      eventCode    = localStorage.getItem("eventCode") || "";
 
       if (eventCode) {
         // Grace / ananth ratings are non-critical — fetch in background
@@ -814,12 +870,17 @@
       }
 
       if (allMatches?.length) {
-        selectedMatch = allMatches[0].key;
+        selectedMatch = getInitialMatch(allMatches);
         await tick();
         await Promise.all([
           loadMatchData(selectedMatch),
           loadStatboticsWinProb(selectedMatch),
         ]);
+      }
+
+      // Save to cache after loading
+      if (eventCode && teamViewData && allMatches) {
+        matchPreviewCache.setData(eventCode, teamViewData, allMatches, teamOPRs, graceData, ananthData, globalStatsCache);
       }
     } finally {
       isLoading = false;
@@ -903,11 +964,11 @@
             <img src={fetchAnanthRating(team)} alt="Ananth Rating" style="width: 60px;" />
           </h3>
           {#if i === 0}
-            <div class="grid-container ag-theme-quartz" bind:this={domNode}      style="height: {gridHeight}px;"></div>
+            <div class="grid-container ag-theme-quartz" bind:this={domNode}></div>
           {:else if i === 1}
-            <div class="grid-container ag-theme-quartz" bind:this={domNode2}     style="height: {gridHeight}px;"></div>
+            <div class="grid-container ag-theme-quartz" bind:this={domNode2}></div>
           {:else}
-            <div class="grid-container ag-theme-quartz" bind:this={domNode3}     style="height: {gridHeight}px;"></div>
+            <div class="grid-container ag-theme-quartz" bind:this={domNode3}></div>
           {/if}
         </div>
       {/each}
@@ -931,11 +992,11 @@
             <img src={fetchAnanthRating(team)} alt="Ananth Rating" style="width: 60px;" />
           </h3>
           {#if i === 0}
-            <div class="grid-container ag-theme-quartz" bind:this={domNodeRight} style="height: {gridHeight}px;"></div>
+            <div class="grid-container ag-theme-quartz" bind:this={domNodeRight}></div>
           {:else if i === 1}
-            <div class="grid-container ag-theme-quartz" bind:this={domNode4}     style="height: {gridHeight}px;"></div>
+            <div class="grid-container ag-theme-quartz" bind:this={domNode4}></div>
           {:else}
-            <div class="grid-container ag-theme-quartz" bind:this={domNode5}     style="height: {gridHeight}px;"></div>
+            <div class="grid-container ag-theme-quartz" bind:this={domNode5}></div>
           {/if}
         </div>
       {/each}
@@ -974,7 +1035,10 @@
   :global(.ag-header-cell.header-center .ag-header-cell-label) { justify-content: center; text-align: center; width: 100%; color: white !important; font-size: 18px; }
   :global(.cell-center) { text-align: center !important; }
   :global(.ag-theme-quartz .ag-root-wrapper) { --ag-font-size: 20px; border: 3px solid var(--frc-190-red); border-radius: 8px; overflow: hidden; }
-  :global(.ag-body-viewport) { overflow-y: scroll !important; overflow-x: auto !important; }
+  :global(.ag-body-viewport) { overflow-y: hidden !important; overflow-x: auto !important; }
+  :global(.ag-center-cols-viewport) { overflow-y: hidden !important; overflow-x: auto !important; }
+  :global(.ag-body-vertical-scroll) { display: none !important; }
+  :global(.ag-body-horizontal-scroll) { display: block !important; }
   :global(.ag-body-viewport::-webkit-scrollbar) { width: 12px; height: 12px; }
   :global(.ag-body-viewport::-webkit-scrollbar-track) { background: var(--frc-190-black); border-radius: 6px; }
   :global(.ag-body-viewport::-webkit-scrollbar-thumb) { background: var(--frc-190-red); border-radius: 6px; border: 2px solid var(--frc-190-black); }
@@ -1026,7 +1090,7 @@
   }
 
   /* Mobile */
-  @media (max-width: 768px) {
+  @media (max-width: 900px), (hover: none) and (pointer: coarse) {
     .page-wrapper { padding: 0.5rem; }
     .header-section { margin-bottom: 0.75rem; }
     .header-section h1 { font-size: 1.2rem; margin-bottom: 0.2rem; }
@@ -1037,8 +1101,25 @@
     .statbotics-label { font-size: 0.72rem; }
     .statbotics-red, .statbotics-blue, .statbotics-na { font-size: 0.75rem; }
     select { margin-left: 0; margin-top: 0.3rem; padding: 0.4rem 0.8rem; font-size: 0.8rem; width: 100%; }
-    .grid-wrapper { flex-direction: column; gap: 0.5rem; }
-    .grid-column { min-width: auto; width: 100%; }
+    .grid-wrapper {
+      display: block !important;
+      width: 100%;
+    }
+    .grid-column {
+      display: block !important;
+      min-width: 0 !important;
+      width: 100% !important;
+    }
+    .grid-column + .grid-column {
+      margin-top: 0.6rem;
+    }
+    .team-box {
+      width: 100%;
+      margin-bottom: 0.6rem;
+    }
+    .team-box:last-child {
+      margin-bottom: 0;
+    }
     .team-label { font-size: 0.8rem; min-height: 40px; padding: 0.3rem 0.6rem; }
     .last-match-badge { font-size: 0.6rem; padding: 0.15rem 0.4rem; }
     .opr-badge { font-size: 0.7rem; margin-left: 0.25rem; padding: 0.15rem 0.5rem; }
