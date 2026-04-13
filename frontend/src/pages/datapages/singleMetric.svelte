@@ -193,7 +193,32 @@
   }
 
   // ─── Color Helpers (kept for chart builders) ──────────────────────────────────
-
+  function makeTeamColumnDef() {
+    return {
+      headerName: "Team",
+      field: "team",
+      pinned: "left",
+      width: 100,
+      minWidth: 100,
+      headerClass: "header-center",
+      cellClass: "cell-center",
+      cellStyle: (params) => ({
+        background: params.value === highlightedTeam ? "#FFD700" : "#C81B00",
+        color: params.value === highlightedTeam ? "black" : "white",
+        fontWeight: "bold",
+        fontSize: "18px",
+        textAlign: "center",
+        cursor: "pointer",
+      }),
+      onCellClicked: (params) => {
+        if (!params.value) return;
+        highlightedTeam =
+          highlightedTeam === params.value ? null : params.value;
+        broadcastHighlightedTeam(highlightedTeam);
+        efsGridApi?.redrawRows();
+      },
+    };
+  }
   function textColorForBg(bg: string): string {
     if (!bg) return "black";
     const darkColors = [
@@ -397,7 +422,9 @@
   async function fetchAllMetricData(): Promise<string | null> {
     const stored = (await getIndexedDBStore("scoutingData")) || [];
     if (!stored) return null;
-    return JSON.stringify(extractValues(stored, autoOnly));
+    // Unwrap the value property if it exists (from compressed storage)
+    const unwrapped = (stored || []).map(item => item.value !== undefined ? item.value : item);
+    return JSON.stringify(extractValues(unwrapped, autoOnly));
   }
 
   async function loadOPRFromCache(): Promise<Record<string, number>> {
@@ -594,6 +621,12 @@
       return;
     }
 
+    // Destroy the custom grid when switching to a regular metric
+    if (efsGridApi) {
+      efsGridApi.destroy?.();
+      efsGridApi = null;
+    }
+
     isBooleanMetric = BOOLEAN_METRICS.has(dataMetric);
     isClimbStateMetric = dataMetric === CLIMBSTATE_METRIC;
     isNumericMetric =
@@ -627,6 +660,7 @@
     qLabels = Array.from({ length: maxMatchCount }, (_, i) => `Q${i + 1}`);
 
     rowData = availableTeams
+    
       .map((team) => {
         const rows = teamData[team] ?? [];
         const row: any = {
@@ -742,32 +776,6 @@
     };
   }
 
-  function makeTeamColumnDef() {
-    return {
-      headerName: "Team",
-      field: "team",
-      pinned: "left",
-      width: 150,
-      headerClass: "header-center",
-      cellClass: "cell-center",
-      cellStyle: (params) => ({
-        background: params.value === highlightedTeam ? "#FFD700" : "#C81B00",
-        color: params.value === highlightedTeam ? "black" : "white",
-        fontWeight: "bold",
-        fontSize: "18px",
-        textAlign: "center",
-        cursor: "pointer",
-      }),
-      onCellClicked: (params) => {
-        if (!params.value) return;
-        highlightedTeam =
-          highlightedTeam === params.value ? null : params.value;
-        broadcastHighlightedTeam(highlightedTeam);
-        efsGridApi?.redrawRows();
-      },
-    };
-  }
-
   // EFS/OPR grids manage their own ag-grid instance since they have fully custom columns
   let efsGridApi: any = null;
   let efsGridNode: HTMLElement;
@@ -799,7 +807,13 @@
           resizable: false,
           sortable: false,
           suppressMovable: true,
-          cellStyle: { fontSize: "18px" },
+          cellStyle: { 
+            fontSize: "18px",
+            whiteSpace: "normal",
+            wordWrap: "break-word",
+            overflow: "visible",
+          },
+          wrapText: true,
         },
         suppressColumnVirtualisation: true,
         suppressHorizontalScroll: true,
@@ -840,7 +854,13 @@
           resizable: false,
           sortable: false,
           suppressMovable: true,
-          cellStyle: { fontSize: "18px" },
+          cellStyle: { 
+            fontSize: "18px",
+            whiteSpace: "normal",
+            wordWrap: "break-word",
+            overflow: "visible",
+          },
+          wrapText: true,
         },
         suppressColumnVirtualisation: true,
         suppressHorizontalScroll: true,
@@ -946,82 +966,111 @@
       }),
     );
 
-    const efsCellStyle = (v: any) => {
-      if (v === null || v === undefined)
-        return {
-          background: "#333",
-          color: "white",
-          fontWeight: 600,
-          fontSize: "16px",
-          textAlign: "center",
-          border: "1px solid #555",
-        };
-      if (v === 0)
-        return {
-          background: "black",
-          color: "white",
-          fontWeight: 600,
-          fontSize: "18px",
-          textAlign: "center",
-        };
-      const bg = colorFromStats(v, efsGlobalStats, false, "EFS");
-      return {
-        background: bg,
-        color: textColorForBg(bg),
-        fontWeight: 600,
-        fontSize: "18px",
-        textAlign: "center",
-      };
-    };
-
-    const efsStatStyle = (v: any, border?: string) => {
-      if (v === null || v === undefined)
-        return statCellStyle("#4D4D4D", "white", border);
-      if (v === 0) return statCellStyle("black", "white", border);
-      const bg = colorFromStats(v, efsGlobalStats, false, "EFS");
-      return statCellStyle(bg, textColorForBg(bg), border);
-    };
-
     const columnDefs = [
       makeTeamColumnDef(),
       ...efsQLabels.map((q) => ({
         headerName: q,
         field: q,
-        width: 90,
-        minWidth: 70,
+        flex: 1,
+        minWidth: 60,
         headerClass: "header-center",
         cellClass: "cell-center",
-        cellStyle: (params) => efsCellStyle(params.value),
-        valueFormatter: (params) =>
-          params.value !== null && params.value !== undefined
-            ? Number(params.value).toFixed(1)
-            : "",
+        cellStyle: (params: any) => {
+          const v = params.value;
+          if (v === undefined || v === null || v === "") {
+            return {
+              background: "#333",
+              color: "white",
+              fontWeight: 600,
+              fontSize: "14px",
+              textAlign: "center",
+              border: "1px solid #555",
+            };
+          }
+          const val = Number(v ?? 0);
+          if (val === -1)
+            return {
+              background: "#4D4D4D",
+              color: "white",
+              fontWeight: 600,
+              fontSize: "14px",
+              textAlign: "center",
+            };
+          if (val === 0)
+            return {
+              background: "black",
+              color: "white",
+              fontWeight: 600,
+              fontSize: "14px",
+              textAlign: "center",
+            };
+          const bg = colorFromStats(val, efsGlobalStats, false, "EFS");
+          return {
+            background: bg,
+            color: textColorForBg(bg),
+            fontWeight: 600,
+            fontSize: "14px",
+            textAlign: "center",
+          };
+        },
+        valueFormatter: (params: any) => {
+          if (!params.data?.hasData) return "";
+          if (params.value === undefined || params.value === null) return "";
+          const num = Number(params.value ?? 0);
+          return num === -1 ? "False" : num.toFixed(2);
+        },
       })),
       {
         headerName: "Mean",
         field: "mean",
-        width: 100,
-        minWidth: 100,
+        flex: 1,
+        minWidth: 80,
         headerClass: "header-center",
         cellClass: "cell-center",
-        cellStyle: (params) => efsStatStyle(params.value, "3px solid #C81B00"),
-        valueFormatter: (params) =>
-          params.value != null && params.data?.hasData
-            ? Number(params.value).toFixed(2)
-            : "",
+        cellStyle: (params: any) => {
+          const bg =
+            params.value == null
+              ? "#4D4D4D"
+              : colorFromStats(params.value, efsGlobalStats, false, "EFS");
+          return {
+            background: bg,
+            color: textColorForBg(bg),
+            fontWeight: "bold",
+            fontSize: "14px",
+            textAlign: "center",
+            borderLeft: "3px solid #C81B00",
+          };
+        },
+        valueFormatter: (params: any) =>
+          !params.data?.hasData || params.value == null
+            ? ""
+            : Number(params.value).toFixed(2),
       },
       {
         headerName: "Med.",
         field: "median",
-        width: 100,
-        minWidth: 100,
+        flex: 1,
+        minWidth: 80,
         headerClass: "header-center",
         cellClass: "cell-center",
-        cellStyle: (params) => efsStatStyle(params.value, "2px solid #555"),
-        valueFormatter: (params) =>
-          params.value != null && params.data?.hasData
-            ? Number(params.value).toFixed(2)
-            : "",
+        cellStyle: (params: any) => {
+          const bg =
+            params.value == null
+              ? "#4D4D4D"
+              : colorFromStats(params.value, efsGlobalStats, false, "EFS");
+          return {
+            background: bg,
+            color: textColorForBg(bg),
+            fontWeight: "bold",
+            fontSize: "14px",
+            textAlign: "center",
+            borderLeft: "2px solid #555",
+          };
+        },
+        valueFormatter: (params: any) =>
+          !params.data?.hasData || params.value == null
+            ? ""
+            : Number(params.value).toFixed(2),
       },
       makePercentileColumnDef(false),
     ];
@@ -1050,7 +1099,11 @@
     );
 
     const alliances = await fetchMatchAlliances(eventCode);
-    const data = JSON.parse(await fetchAllMetricData());
+    const rawStored = (await getIndexedDBStore("scoutingData")) || [];
+    // Unwrap the value property if it exists (from compressed storage)
+    const unwrapped = (rawStored || []).map(item => item.value !== undefined ? item.value : item);
+    const dataAuto = extractValues(unwrapped, true);  
+    const dataTeleop = extractValues(unwrapped, false);
     const maxMatchCount = getMaxMatchCount();
     const efsQLabels = Array.from(
       { length: maxMatchCount },
@@ -1068,7 +1121,8 @@
               String(team),
               Number(matchRow.Match),
               teamCOPRs,
-              data,
+              dataAuto,
+              dataTeleop,
               alliances
             );
             row[efsQLabels[i]] = efs;
@@ -1124,82 +1178,111 @@
       }),
     );
 
-    const efsCellStyle = (v: any) => {
-      if (v === null || v === undefined)
-        return {
-          background: "#333",
-          color: "white",
-          fontWeight: 600,
-          fontSize: "16px",
-          textAlign: "center",
-          border: "1px solid #555",
-        };
-      if (v === 0)
-        return {
-          background: "black",
-          color: "white",
-          fontWeight: 600,
-          fontSize: "18px",
-          textAlign: "center",
-        };
-      const bg = colorFromStats(v, efsGlobalStats, false, "EFS");
-      return {
-        background: bg,
-        color: textColorForBg(bg),
-        fontWeight: 600,
-        fontSize: "18px",
-        textAlign: "center",
-      };
-    };
-
-    const efsStatStyle = (v: any, border?: string) => {
-      if (v === null || v === undefined)
-        return statCellStyle("#4D4D4D", "white", border);
-      if (v === 0) return statCellStyle("black", "white", border);
-      const bg = colorFromStats(v, efsGlobalStats, false, "EFS");
-      return statCellStyle(bg, textColorForBg(bg), border);
-    };
-
     const columnDefs = [
       makeTeamColumnDef(),
       ...efsQLabels.map((q) => ({
         headerName: q,
         field: q,
-        width: 90,
-        minWidth: 70,
+        flex: 1,
+        minWidth: 60,
         headerClass: "header-center",
         cellClass: "cell-center",
-        cellStyle: (params) => efsCellStyle(params.value),
-        valueFormatter: (params) =>
-          params.value !== null && params.value !== undefined
-            ? Number(params.value).toFixed(1)
-            : "",
+        cellStyle: (params: any) => {
+          const v = params.value;
+          if (v === undefined || v === null || v === "") {
+            return {
+              background: "#333",
+              color: "white",
+              fontWeight: 600,
+              fontSize: "14px",
+              textAlign: "center",
+              border: "1px solid #555",
+            };
+          }
+          const val = Number(v ?? 0);
+          if (val === -1)
+            return {
+              background: "#4D4D4D",
+              color: "white",
+              fontWeight: 600,
+              fontSize: "14px",
+              textAlign: "center",
+            };
+          if (val === 0)
+            return {
+              background: "black",
+              color: "white",
+              fontWeight: 600,
+              fontSize: "14px",
+              textAlign: "center",
+            };
+          const bg = colorFromStats(val, efsGlobalStats, false, "EFS");
+          return {
+            background: bg,
+            color: textColorForBg(bg),
+            fontWeight: 600,
+            fontSize: "14px",
+            textAlign: "center",
+          };
+        },
+        valueFormatter: (params: any) => {
+          if (!params.data?.hasData) return "";
+          if (params.value === undefined || params.value === null) return "";
+          const num = Number(params.value ?? 0);
+          return num === -1 ? "False" : num.toFixed(2);
+        },
       })),
       {
         headerName: "Mean",
         field: "mean",
-        width: 100,
-        minWidth: 100,
+        flex: 1,
+        minWidth: 80,
         headerClass: "header-center",
         cellClass: "cell-center",
-        cellStyle: (params) => efsStatStyle(params.value, "3px solid #C81B00"),
-        valueFormatter: (params) =>
-          params.value != null && params.data?.hasData
-            ? Number(params.value).toFixed(2)
-            : "",
+        cellStyle: (params: any) => {
+          const bg =
+            params.value == null
+              ? "#4D4D4D"
+              : colorFromStats(params.value, efsGlobalStats, false, "EFS");
+          return {
+            background: bg,
+            color: textColorForBg(bg),
+            fontWeight: "bold",
+            fontSize: "14px",
+            textAlign: "center",
+            borderLeft: "3px solid #C81B00",
+          };
+        },
+        valueFormatter: (params: any) =>
+          !params.data?.hasData || params.value == null
+            ? ""
+            : Number(params.value).toFixed(2),
       },
       {
         headerName: "Med.",
         field: "median",
-        width: 100,
-        minWidth: 100,
+        flex: 1,
+        minWidth: 80,
         headerClass: "header-center",
         cellClass: "cell-center",
-        cellStyle: (params) => efsStatStyle(params.value, "2px solid #555"),
-        valueFormatter: (params) =>
-          params.value != null && params.data?.hasData
-            ? Number(params.value).toFixed(2)
-            : "",
+        cellStyle: (params: any) => {
+          const bg =
+            params.value == null
+              ? "#4D4D4D"
+              : colorFromStats(params.value, efsGlobalStats, false, "EFS");
+          return {
+            background: bg,
+            color: textColorForBg(bg),
+            fontWeight: "bold",
+            fontSize: "14px",
+            textAlign: "center",
+            borderLeft: "2px solid #555",
+          };
+        },
+        valueFormatter: (params: any) =>
+          !params.data?.hasData || params.value == null
+            ? ""
+            : Number(params.value).toFixed(2),
       },
       makePercentileColumnDef(false),
     ];
@@ -1243,7 +1326,7 @@
         headerName: "OPR",
         field: "mean",
         flex: 1,
-        minWidth: 150,
+        minWidth: 90,
         headerClass: "header-center",
         cellClass: "cell-center",
         cellStyle: (params) => {
@@ -2092,6 +2175,7 @@
     padding: 1.25rem;
     background: var(--wpi-gray);
     width: 100%;
+    overflow-x: hidden;
   }
 
   :global(select option:checked) {
@@ -2126,6 +2210,7 @@
     border: 3px solid var(--frc-190-red);
     border-radius: 8px;
     overflow: hidden;
+    width: 100%;
   }
   :global(.ag-tooltip) {
     white-space: pre-line;
@@ -2141,7 +2226,7 @@
   }
   :global(.ag-body-viewport) {
     overflow-y: scroll !important;
-    overflow-x: auto !important;
+    overflow-x: hidden !important;
   }
   :global(.ag-body-viewport::-webkit-scrollbar) {
     width: 12px;
@@ -2179,21 +2264,15 @@
   }
 
   .controls {
-    padding: 1rem 1.5rem;
-    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
-    color: white;
-    font-size: 1.1rem;
     display: flex;
     flex-wrap: wrap;
     gap: 1.875rem;
     align-items: center;
     justify-content: center;
     width: 100%;
-    max-width: 75rem;
-    border-radius: 0.625rem;
-    margin-bottom: 1.25rem;
-    border: 2px solid var(--frc-190-red);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    padding: 1rem 1.5rem;
+    color: white;
+    font-size: 1.1rem;
   }
   .controls label {
     font-weight: 600;
@@ -2241,20 +2320,21 @@
 
   .grid-container {
     width: 100%;
-    max-width: 75rem;
     background: var(--frc-190-black);
     border-radius: 0.5rem;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    overflow: hidden;
   }
 
   .graph-section {
     width: 100%;
-    max-width: 75rem;
     margin-top: 1.9rem;
     display: flex;
     flex-direction: column;
     align-items: center;
     padding-bottom: 3.125rem;
+    padding-left: 0;
+    padding-right: 0;
   }
   .section-title {
     color: var(--frc-190-red);
@@ -2324,14 +2404,15 @@
     justify-content: center;
     flex-wrap: wrap;
     width: 100%;
-    max-width: 75rem;
+    gap: 1rem;
   }
   .chart-wrapper {
     position: relative;
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    width: 100%;
+    flex: 1 1 calc(50% - 0.5rem);
+    min-width: 350px;
     background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
     border: 2px solid var(--frc-190-red);
     border-radius: 0.5rem;

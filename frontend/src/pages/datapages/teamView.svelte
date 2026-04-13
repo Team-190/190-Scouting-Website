@@ -256,7 +256,8 @@
     const storedData = await getIndexedDBStore("scoutingData") || [];
     if (!storedData) return [];
     try {
-      const parsed = storedData;
+      // Unwrap the value property if it exists (from compressed storage)
+      const parsed = (storedData || []).map(item => item.value !== undefined ? item.value : item);
       if (!Array.isArray(parsed)) return [];
       const teams: number[] = [];
       for (const el of parsed) {
@@ -266,7 +267,9 @@
         const num = parseInt(String(raw).replace(/\D/g, ""));
         if (!isNaN(num) && !teams.includes(num)) teams.push(num);
       }
-      return teams.sort((a, b) => a - b);
+      const sorted = teams.sort((a, b) => a - b);
+      console.log(`loadTeamNumbers: Found teams:`, sorted);
+      return sorted;
     } catch (e) {
       console.error("Error parsing localStorage data:", e);
       return [];
@@ -536,59 +539,88 @@
   }
 
   async function loadTeamData(teamNumber: string) {
-    if (!teamViewData) return;
-    let data = teamViewData.filter((el) => {
-      if (el.RecordType === "Match_Event") return false;
-      const raw = el.Team || el.team;
-      return (
-        raw &&
-        String(raw).replace(/\D/g, "") === String(teamNumber).replace(/\D/g, "")
-      );
-    });
-    if (data.length > 0) {
-      data = aggregateMatches(data);
-      
-      // Fetch match alliances once for all matches
-      if (!matchAlliancesCache) {
-        matchAlliancesCache = await fetchMatchAlliances(eventCode);
+    try {
+      if (!teamViewData) {
+        console.warn("loadTeamData: teamViewData is null/empty");
+        matches = [];
+        return;
       }
       
-      // Parallelize all API calls using Promise.all
-      const promises = data.map(async (match) => {
-        const [estimatedPoints, climbData] = await Promise.all([
-          estimateTeamPoints(teamNumber, match.Match, matchAlliancesCache),
-          fetchRobotClimb(eventCode, teamNumber, match.Match),
-        ]);
-        
-        match.EstimatedPoints = estimatedPoints;
-        
-        if (climbData.EndgameClimb.slice(-1) == "3") {
-          match.Climb_State = "L3";
-        } else if (climbData.EndgameClimb.slice(-1) == "2") {
-          match.Climb_State = "L2";
-        } else if (climbData.EndgameClimb.slice(-1) == "1") {
-          match.Climb_State = "L1";
-        } else {
-          match.Climb_State = climbData.EndgameClimb;
-        }
-
-        if (climbData.AutoClimb.slice(-1) == "1") {
-          match.Auto_Climb = "Yes";
-        } else {
-          match.Auto_Climb = "No";
-        }
-
-        // Normalize climb time to 0 if climb state is "None"
-        normalizeClimbData(match);
-
-        return match;
+      let data = teamViewData.filter((el) => {
+        if (el.RecordType === "Match_Event") return false;
+        const raw = el.Team || el.team;
+        return (
+          raw &&
+          String(raw).replace(/\D/g, "") === String(teamNumber).replace(/\D/g, "")
+        );
       });
       
-      // Wait for all promises to resolve
-      data = await Promise.all(promises);
+      console.log(`loadTeamData: Found ${data.length} rows for team ${teamNumber}`);
+      
+      if (data.length > 0) {
+        data = aggregateMatches(data);
+        console.log(`loadTeamData: After aggregateMatches, ${data.length} matches`);
+        
+        // Fetch match alliances once for all matches
+        if (!matchAlliancesCache) {
+          try {
+            matchAlliancesCache = await fetchMatchAlliances(eventCode);
+          } catch (e) {
+            console.error("Failed to fetch match alliances:", e);
+            matchAlliancesCache = [];
+          }
+        }
+        
+        // Parallelize all API calls using Promise.all with error handling
+        const promises = data.map(async (match) => {
+          try {
+            const [estimatedPoints, climbData] = await Promise.all([
+              estimateTeamPoints(teamNumber, match.Match, matchAlliancesCache),
+              fetchRobotClimb(eventCode, teamNumber, match.Match).catch(() => ({ EndgameClimb: "", AutoClimb: "" })),
+            ]);
+            
+            match.EstimatedPoints = estimatedPoints;
+            
+            if (climbData && climbData.EndgameClimb) {
+              if (climbData.EndgameClimb.slice(-1) == "3") {
+                match.Climb_State = "L3";
+              } else if (climbData.EndgameClimb.slice(-1) == "2") {
+                match.Climb_State = "L2";
+              } else if (climbData.EndgameClimb.slice(-1) == "1") {
+                match.Climb_State = "L1";
+              } else {
+                match.Climb_State = climbData.EndgameClimb;
+              }
+
+              if (climbData.AutoClimb && climbData.AutoClimb.slice(-1) == "1") {
+                match.Auto_Climb = "Yes";
+              } else {
+                match.Auto_Climb = "No";
+              }
+            }
+
+            // Normalize climb time to 0 if climb state is "None"
+            normalizeClimbData(match);
+          } catch (e) {
+            console.error(`Error processing match ${match.Match}:`, e);
+            // Continue with match even if enrichment fails
+            normalizeClimbData(match);
+          }
+
+          return match;
+        });
+        
+        // Wait for all promises to resolve
+        data = await Promise.all(promises);
+        console.log(`loadTeamData: Loaded ${data.length} matches with enrichment`);
+      }
+      cache[teamNumber] = data;
+      matches = data; // ← drives TeamGrid reactively
+      console.log(`loadTeamData: Set matches to ${matches.length} rows`);
+    } catch (e) {
+      console.error(`loadTeamData: Unhandled error:`, e);
+      matches = [];
     }
-    cache[teamNumber] = data;
-    matches = data; // ← drives TeamGrid reactively
   }
 
   // ─── Local Data Helpers ───────────────────────────────────────────────────────
@@ -718,7 +750,8 @@
     isLoading = true;
     try {
       const stored = await getIndexedDBStore("scoutingData") || [];
-      const parsed = stored ? stored : [];
+      // Unwrap the value property if it exists (from compressed storage)
+      const parsed = (stored || []).map(item => item.value !== undefined ? item.value : item);
       teamViewData = extractValues(parsed, autoOnly);
       cache = {};
       allTeams = await loadTeamNumbers();
@@ -1325,8 +1358,23 @@
     isLoading = true;
     try {
       const stored = await getIndexedDBStore("scoutingData") || [];
-      const parsed = stored ? stored : [];
+      console.log(`onMount: Retrieved ${stored.length} items from IndexedDB`, stored.slice(0, 3));
+      
+      // Unwrap the value property if it exists (from compressed storage)
+      const parsed = (stored || []).map(item => item.value !== undefined ? item.value : item);
+      console.log(`onMount: After unwrapping, have ${parsed.length} items`, parsed.slice(0, 3));
+      
+      // Check the structure of first item
+      if (parsed.length > 0) {
+        console.log(`onMount: First item keys:`, Object.keys(parsed[0]));
+        console.log(`onMount: First item sample values:`, { Team: parsed[0].Team, team: parsed[0].team, Match: parsed[0].Match, RecordType: parsed[0].RecordType });
+      }
+      
       teamViewData = extractValues(parsed, autoOnly);
+      console.log(`onMount: After extractValues, teamViewData has ${teamViewData?.length || 0} rows`);
+      if (teamViewData?.length > 0) {
+        console.log(`onMount: First row after extraction:`, teamViewData[0]);
+      }
 
       if (eventCode) {
         fetchGracePage(eventCode)
@@ -1351,14 +1399,19 @@
             Object.entries(result._teams).map(([k, v]) => [Number(k), v]),
           );
           allTeams = result._teamNumbers;
+          console.log(`onMount: Fetched ${allTeams.length} teams from server`, allTeams);
         } catch (e) {
           console.error("Failed to fetch teams:", e);
         }
+      } else {
+        console.warn("onMount: No eventCode set");
       }
 
       if (allTeams.length > 0) {
         selectedTeam = getInitialTeam(allTeams);
         await loadTeamData(String(selectedTeam));
+      } else {
+        console.warn("onMount: No teams available to load");
       }
 
       teamQualData = await getQualDataForTeam(selectedTeam);
