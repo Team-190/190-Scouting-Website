@@ -101,7 +101,7 @@ const SERVER = VITE_TESTING === "0"
 const FRONTEND_DIST = process.env.FRONTEND_DIST || path.resolve(__dirname, "../frontend/dist");
 
 refreshTimer = setInterval(
-  () => {
+  async () => {
     if (eventCode && eventCode.trim()) {
       console.log(`[RefreshTimer] Refreshing data for event: ${eventCode}`);
       externalAPI.populateEventData(eventCode);
@@ -453,7 +453,6 @@ app.post("/api/postEventCode", async (req, res) => {
     res.sendStatus(400);
   } else {
     console.log(`Event code retrieved, ${eventCode}`);
-    externalAPI.populateEventData(eventCode);
     res.sendStatus(200);
   }
 });

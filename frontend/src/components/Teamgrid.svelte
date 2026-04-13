@@ -241,7 +241,8 @@
       "Match", "Team", "Id", "RecordType", "ScouterName", "ScouterError",
       "Time", "Mode", "DriveStation", "FarBlueZoneTime", "FarRedZoneTime",
       "NearBlueZoneTime", "NearRedZoneTime", "NearNeutralZoneTime",
-      "FarNeutralZoneTime", "NearFar", "MatchEvent", "MatchEventDetails", "EndState", "AutoClimb"
+      "FarNeutralZoneTime", "NearFar", "MatchEvent", "MatchEventDetails", "EndState", "AutoClimb",
+      "FuelShootingPhases"
     ]);
 
     const displayMetrics = Object.keys(matches[0]).filter((k) => !EXCLUDED_FIELDS.has(k));

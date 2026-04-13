@@ -101,6 +101,7 @@ async function getAvailableTeams(eventCode) {
 
 // Gets the data of all the teams in an event, summing up numeric fields
 // Returns each metric as [autoOnlyValue, fullMatchValue]
+// Also returns FuelShootingPhases: array of 7 numbers representing total fuel shooting time per phase
 async function getAllData(eventCode, lastId = 0) {
   try {
     await sql.connect(config);
@@ -140,6 +141,24 @@ async function getAllData(eventCode, lastId = 0) {
     ];
     const OVERRIDE_FIELDS = ["AutoClimb", "StartingLocation"];
 
+    // ── Phase boundaries (in seconds from match start) ──
+    // Phase 0: 0-20s (Auto)
+    // Phase 1: 20-30s (Transition)
+    // Phase 2: 30-55s (Phase 1)
+    // Phase 3: 55-80s (Phase 2)
+    // Phase 4: 80-105s (Phase 3)
+    // Phase 5: 105-130s (Phase 4)
+    // Phase 6: 130+s (Endgame)
+    function getPhaseIndex(elapsedSeconds) {
+      if (elapsedSeconds < 20) return 0;
+      if (elapsedSeconds < 30) return 1;
+      if (elapsedSeconds < 55) return 2;
+      if (elapsedSeconds < 80) return 3;
+      if (elapsedSeconds < 105) return 4;
+      if (elapsedSeconds < 130) return 5;
+      return 6;
+    }
+
     // ── Build EndAuto ID cutoffs for auto-only filtering ──
     const endAutoIds = {}; // uniqueKey -> { scouter -> EndAuto row ID }
     for (const row of rows) {
@@ -154,6 +173,10 @@ async function getAllData(eventCode, lastId = 0) {
         endAutoIds[uniqueKey][scouter] = rowId;
       }
     }
+
+    // ── Track match start times and fuel shooting by phase ──
+    const matchStartTimes = {}; // uniqueKey -> first Activities record time
+    const fuelShootingPhases = {}; // uniqueKey -> { scouter -> [phase0, phase1, ..., phase6] }
 
     // ── Accumulators for FULL match ──
     const fullGrouped = {};
@@ -181,6 +204,32 @@ async function getAllData(eventCode, lastId = 0) {
 
       const uniqueKey = `${team}_${match}`;
       const rowId = row.ID || row.Id || row.id || 0;
+
+      // ── Track first Activities record time for phase calculations ──
+      if (row.RecordType === "Activities" && !matchStartTimes[uniqueKey]) {
+        matchStartTimes[uniqueKey] = row.Time;
+      }
+
+      // ── Accumulate fuel shooting time by phase ──
+      if (
+        row.RecordType === "Activities" &&
+        row.FuelShootingTime != null &&
+        row.FuelShootingTime > -1 &&
+        matchStartTimes[uniqueKey]
+      ) {
+        if (!fuelShootingPhases[uniqueKey]) {
+          fuelShootingPhases[uniqueKey] = {};
+        }
+        if (!fuelShootingPhases[uniqueKey][scouter]) {
+          fuelShootingPhases[uniqueKey][scouter] = [0, 0, 0, 0, 0, 0, 0];
+        }
+
+        const elapsedSeconds =
+          (new Date(row.Time) - new Date(matchStartTimes[uniqueKey])) / 1000;
+        const phaseIndex = getPhaseIndex(elapsedSeconds);
+        fuelShootingPhases[uniqueKey][scouter][phaseIndex] +=
+          row.FuelShootingTime;
+      }
 
       // ────── FULL MATCH processing (all rows) ──────
 
@@ -338,6 +387,7 @@ async function getAllData(eventCode, lastId = 0) {
       matchEventCounts,
       matchEventDetails,
       endAutoTimes,
+      phases,
     ) {
       const baseObj = { ...grouped[key] };
       let keySums = {};
@@ -396,6 +446,26 @@ async function getAllData(eventCode, lastId = 0) {
         baseObj["MatchEventDetails"] = [];
       }
 
+      // ── Aggregate fuel shooting by phase across scouters ──
+      if (phases[key]) {
+        const phaseSums = [0, 0, 0, 0, 0, 0, 0];
+        let phaseScouterCount = 0;
+        for (const scouter of Object.keys(phases[key])) {
+          for (let i = 0; i < 7; i++) {
+            phaseSums[i] += phases[key][scouter][i];
+          }
+          phaseScouterCount++;
+        }
+        if (phaseScouterCount > 0) {
+          for (let i = 0; i < 7; i++) {
+            phaseSums[i] /= phaseScouterCount;
+          }
+        }
+        baseObj["FuelShootingPhases"] = phaseSums;
+      } else {
+        baseObj["FuelShootingPhases"] = [0, 0, 0, 0, 0, 0, 0];
+      }
+
       return baseObj;
     }
 
@@ -412,6 +482,7 @@ async function getAllData(eventCode, lastId = 0) {
         fullMatchEventCounts,
         fullMatchEventDetails,
         fullEndAutoTimes,
+        fuelShootingPhases,
       );
     }
 
@@ -428,6 +499,7 @@ async function getAllData(eventCode, lastId = 0) {
         autoMatchEventCounts,
         autoMatchEventDetails,
         autoEndAutoTimes,
+        fuelShootingPhases,
       );
     }
 
@@ -450,6 +522,10 @@ async function getAllData(eventCode, lastId = 0) {
         if (full[field] !== undefined) merged[field] = full[field];
       }
 
+      // FuelShootingPhases stays as [phase0, phase1, ..., phase6] from full match
+      if (full["FuelShootingPhases"] !== undefined)
+        merged["FuelShootingPhases"] = full["FuelShootingPhases"];
+
       // Merge all other fields as [autoValue, fullValue]
       const allMetricKeys = new Set([
         ...Object.keys(full),
@@ -458,7 +534,8 @@ async function getAllData(eventCode, lastId = 0) {
       for (const metric of allMetricKeys) {
         if (merged[metric] !== undefined) continue; // already set as metadata
         if (METADATA_FIELDS.includes(metric)) continue;
-        if (["MatchEvent", "NearFar"].includes(metric)) continue;
+        if (["MatchEvent", "NearFar", "FuelShootingPhases"].includes(metric))
+          continue;
 
         const fullVal = full[metric] !== undefined ? full[metric] : null;
         const autoVal = auto[metric] !== undefined ? auto[metric] : null;
