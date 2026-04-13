@@ -41,31 +41,54 @@ app.use((req, res, next) => {
     next();
 });
 
-let eventCode = "";
+// ─── KNOWN EVENT CODES ───────────────────────────────────────────────────────
+// All event codes seen since server start. Populated by POST /api/postEventCode
+// and kept in sync by externalAPI.populateEventData via registerEventCode.
+
+const eventCodes = new Set();
+
+function registerEventCode(code) {
+  if (code && !eventCodes.has(code)) {
+    eventCodes.add(code);
+    console.log(`[eventCodes] Registered new event code: ${code}`);
+  }
+}
+
 let bracket;
 let refreshTimer;
 
 // ─── HELPER FUNCTIONS ───────────────────────────────────────────────────────
 
+/**
+ * Reads the event code from the request (query or body) and attaches it to
+ * req.eventCode. Does NOT write to any shared global.
+ */
 const validateEventCode = (req, res, next) => {
-  eventCode = req.query.eventCode || req.body.event;
-  if (!eventCode) return res.sendStatus(403);
+  const code = req.query.eventCode || req.body?.event;
+  if (!code) return res.sendStatus(403);
+  req.eventCode = code;
   next();
 };
 
 async function getEventData(filename, eventCode) {
-  let data = await database.readJSONFile(filename);
-  return data[eventCode] || {};
+  const scopedFilename = `${filename}_${eventCode}`;
+  let data = await database.readJSONFile(scopedFilename);
+  // Scoped files store the payload directly (not nested under eventCode)
+  return data ?? {};
 }
 
 async function ensureEventCodeExists(filename, eventCode) {
-  let data = await database.readJSONFile(filename);
-  if (!data[eventCode]) {
-    data[eventCode] = {};
-    await database.writeJSONFile(filename, data);
-    console.log(`Initialized event code ${eventCode} in ${filename}`);
+  const scopedFilename = `${filename}_${eventCode}`;
+  let data;
+  try {
+    data = await database.readJSONFile(scopedFilename);
+  } catch (_) {
+    data = null;
   }
-  return data;
+  if (data === null || data === undefined) {
+    await database.writeJSONFile(scopedFilename, {});
+    console.log(`Initialized scoped file ${scopedFilename}`);
+  }
 }
 
 async function postRatingHelper(req, res, filename) {
@@ -77,17 +100,18 @@ async function postRatingHelper(req, res, filename) {
     return res.sendStatus(400);
   }
 
-  let fileData = await ensureEventCodeExists(filename, event);
-  fileData[event] ||= {};
+  await ensureEventCodeExists(filename, event);
+  const scopedFilename = `${filename}_${event}`;
+  let fileData = await database.readJSONFile(scopedFilename) ?? {};
 
-  if (fileData[event][team]) {
-    let nextRating = Object.keys(fileData[event][team]).length;
-    fileData[event][team][nextRating] = rating;
+  if (fileData[team]) {
+    let nextRating = Object.keys(fileData[team]).length;
+    fileData[team][nextRating] = rating;
   } else {
-    fileData[event][team] = { 0: rating };
+    fileData[team] = { 0: rating };
   }
 
-  database.writeJSONFile(filename, fileData);
+  database.writeJSONFile(scopedFilename, fileData);
   res.sendStatus(200);
 }
 
@@ -102,9 +126,10 @@ const FRONTEND_DIST = process.env.FRONTEND_DIST || path.resolve(__dirname, "../f
 
 refreshTimer = setInterval(
   () => {
-    if (eventCode && eventCode.trim()) {
-      console.log(`[RefreshTimer] Refreshing data for event: ${eventCode}`);
-      externalAPI.populateEventData(eventCode);
+    if (eventCodes.size === 0) return;
+    console.log(`[RefreshTimer] Refreshing data for ${eventCodes.size} event(s): ${[...eventCodes].join(", ")}`);
+    for (const code of eventCodes) {
+      externalAPI.populateEventData(code, registerEventCode);
     }
   },
   1000 * 60 * 1,
@@ -179,13 +204,12 @@ app.get("/api/getEvents", async (req, res) => {
 });
 
 app.get("/api/getAvailableTeams", validateEventCode, async (req, res) => {
-  eventCode = req.query.eventCode;
-  let result = await database.getAvailableTeams(eventCode);
+  let result = await database.getAvailableTeams(req.eventCode);
   res.send(result);
 });
 
 app.get("/api/getQualitativeScouting", validateEventCode, async (req, res) => {
-  eventCode = req.query.eventCode;
+  const eventCode = req.eventCode;
 
   let localCounts = {};
   try {
@@ -208,7 +232,7 @@ app.get("/api/getQualitativeScouting", validateEventCode, async (req, res) => {
 });
 
 app.get("/api/getPitScouting", validateEventCode, async (req, res) => {
-  eventCode = req.query.eventCode;
+  const eventCode = req.eventCode;
 
   let localTeams = [];
   try {
@@ -231,7 +255,8 @@ app.get("/api/getPitScouting", validateEventCode, async (req, res) => {
 });
 
 app.get("/api/getPitScoutingImage", validateEventCode, async (req, res) => {
-  const { eventCode, teamNumber } = req.query;
+  const { teamNumber } = req.query;
+  const eventCode = req.eventCode;
   if (!teamNumber) return res.sendStatus(403);
 
   try {
@@ -245,36 +270,26 @@ app.get("/api/getPitScoutingImage", validateEventCode, async (req, res) => {
 });
 
 app.get("/api/getAllData", validateEventCode, async (req, res) => {
-  eventCode = req.query.eventCode;
   const lastId = parseInt(req.query.lastId || "0");
-  let result = await database.getAllData(eventCode, lastId);
+  let result = await database.getAllData(req.eventCode, lastId);
   res.send(result);
 });
 
 app.get("/api/getTransactionTimers", validateEventCode, async (req, res) => {
-  eventCode = req.query.eventCode;
-  const matchNumber = req.query.matchNumber
-    ? parseInt(req.query.matchNumber)
-    : null;
+  const matchNumber = req.query.matchNumber ? parseInt(req.query.matchNumber) : null;
   const team = req.query.team || null;
   const scouter = req.query.scouter || null;
 
   if (!matchNumber) return res.sendStatus(400);
 
-  let result = await database.getTransactionTimers(
-    eventCode,
-    matchNumber,
-    team,
-    scouter,
-  );
+  let result = await database.getTransactionTimers(req.eventCode, matchNumber, team, scouter);
   res.send(result);
 });
 
 app.get("/api/getSingleMetric", validateEventCode, async (req, res) => {
-  eventCode = req.query.eventCode;
-  console.log("single metric data requested, eventCode: " + eventCode);
+  console.log("single metric data requested, eventCode: " + req.eventCode);
 
-  let result = await database.getAllData(eventCode);
+  let result = await database.getAllData(req.eventCode);
   result = result.data;
   let teams = {};
 
@@ -292,14 +307,14 @@ app.get("/api/getSingleMetric", validateEventCode, async (req, res) => {
 });
 
 app.get("/api/getRatings", validateEventCode, async (req, res) => {
-  eventCode = req.query.eventCode;
+  const eventCode = req.eventCode;
   await ensureEventCodeExists("driverRatings", eventCode);
   let fileData = await getEventData("driverRatings", eventCode);
   res.send(fileData);
 });
 
 app.get("/api/getHPRatings", validateEventCode, async (req, res) => {
-  eventCode = req.query.eventCode;
+  const eventCode = req.eventCode;
   await ensureEventCodeExists("HPRatings", eventCode);
   let fileData = await getEventData("HPRatings", eventCode);
   res.send(fileData);
@@ -308,7 +323,7 @@ app.get("/api/getHPRatings", validateEventCode, async (req, res) => {
 // ─── EXTERNAL API GET ROUTES ────────────────────────────────────────────────
 
 app.get("/api/getMatchAlliances", validateEventCode, async (req, res) => {
-  eventCode = req.query.eventCode;
+  const eventCode = req.eventCode;
   console.log("matches requested, eventCode: " + eventCode);
   await ensureEventCodeExists("matches", eventCode);
   const raw = await getEventData("matches", eventCode);
@@ -316,7 +331,7 @@ app.get("/api/getMatchAlliances", validateEventCode, async (req, res) => {
 });
 
 app.get("/api/getTeams", validateEventCode, async (req, res) => {
-  eventCode = req.query.eventCode;
+  const eventCode = req.eventCode;
   console.log("teams requested, eventCode: " + eventCode);
   await ensureEventCodeExists("teams", eventCode);
   const raw = await getEventData("teams", eventCode);
@@ -333,7 +348,7 @@ app.get("/api/getTeams", validateEventCode, async (req, res) => {
 });
 
 app.get("/api/getEventDetails", validateEventCode, async (req, res) => {
-  eventCode = req.query.eventCode;
+  const eventCode = req.eventCode;
   console.log("event details requested, eventCode: " + eventCode);
   await ensureEventCodeExists("eventDetails", eventCode);
   const raw = await getEventData("eventDetails", eventCode);
@@ -348,7 +363,7 @@ app.get("/api/getEventDetails", validateEventCode, async (req, res) => {
 });
 
 app.get("/api/getTeamStatuses", validateEventCode, async (req, res) => {
-  eventCode = req.query.eventCode;
+  const eventCode = req.eventCode;
   console.log("team statuses requested, eventCode: " + eventCode);
   await ensureEventCodeExists("teamStatuses", eventCode);
   const raw = await getEventData("teamStatuses", eventCode);
@@ -364,7 +379,7 @@ app.get("/api/getTeamStatuses", validateEventCode, async (req, res) => {
 });
 
 app.get("/api/getOPR", validateEventCode, async (req, res) => {
-  eventCode = req.query.eventCode;
+  const eventCode = req.eventCode;
   console.log("OPR requested, eventCode: " + eventCode);
   await ensureEventCodeExists("oprs", eventCode);
   const raw = await getEventData("oprs", eventCode);
@@ -379,7 +394,7 @@ app.get("/api/getOPR", validateEventCode, async (req, res) => {
 });
 
 app.get("/api/getCOPR", validateEventCode, async (req, res) => {
-  eventCode = req.query.eventCode;
+  const eventCode = req.eventCode;
   console.log("COPR requested, eventCode: " + eventCode);
   await ensureEventCodeExists("coprs", eventCode);
   const raw = await getEventData("coprs", eventCode);
@@ -387,7 +402,7 @@ app.get("/api/getCOPR", validateEventCode, async (req, res) => {
 });
 
 app.get("/api/getAlliances", validateEventCode, async (req, res) => {
-  eventCode = req.query.eventCode;
+  const eventCode = req.eventCode;
   console.log("alliances requested, eventCode: " + eventCode);
   await ensureEventCodeExists("alliances", eventCode);
   const raw = await getEventData("alliances", eventCode);
@@ -399,7 +414,7 @@ app.get("/api/getAlliances", validateEventCode, async (req, res) => {
 });
 
 app.get("/api/getEventEpas", validateEventCode, async (req, res) => {
-  eventCode = req.query.eventCode;
+  const eventCode = req.eventCode;
   console.log("EPAs requested, eventCode: " + eventCode);
   await ensureEventCodeExists("epas", eventCode);
   const raw = await getEventData("epas", eventCode);
@@ -407,7 +422,7 @@ app.get("/api/getEventEpas", validateEventCode, async (req, res) => {
 });
 
 app.get("/api/getElimsHaveStarted", validateEventCode, async (req, res) => {
-  eventCode = req.query.eventCode;
+  const eventCode = req.eventCode;
   console.log("elims check requested, eventCode: " + eventCode);
   await ensureEventCodeExists("matches", eventCode);
   const raw = await getEventData("matches", eventCode);
@@ -447,15 +462,15 @@ app.get("/api/getMatchScores", async (req, res) => {
 // ─── POST ROUTES ─────────────────────────────────────────────────────────────
 
 app.post("/api/postEventCode", async (req, res) => {
-  eventCode = req.body.eventCode;
-  if (!eventCode) {
+  const code = req.body.eventCode;
+  if (!code) {
     console.log("Event code could not be retrieved");
-    res.sendStatus(400);
-  } else {
-    console.log(`Event code retrieved, ${eventCode}`);
-    externalAPI.populateEventData(eventCode);
-    res.sendStatus(200);
+    return res.sendStatus(400);
   }
+  console.log(`Event code retrieved, ${code}`);
+  registerEventCode(code);
+  externalAPI.populateEventData(code, registerEventCode);
+  res.sendStatus(200);
 });
 
 app.post("/api/postRatings", (req, res) => {
@@ -467,9 +482,8 @@ app.post("/api/postHPRatings", (req, res) => {
 });
 
 app.post("/api/postPitScouting", validateEventCode, async (req, res) => {
-  let event = req.body.event;
-  let team = req.body.team;
-  let formData = req.body.formData;
+  const event = req.eventCode;
+  const { team, formData } = req.body;
 
   if (!formData || !team) {
     console.log("One or more fields could not be retrieved");
@@ -478,34 +492,34 @@ app.post("/api/postPitScouting", validateEventCode, async (req, res) => {
   }
 
   console.log(formData);
-  let fileData = await ensureEventCodeExists("pitScoutingData", event);
-  fileData[event] ||= {};
-  fileData[event][team] = formData;
+  await ensureEventCodeExists("pitScoutingData", event);
+  const scopedFilename = `pitScoutingData_${event}`;
+  let fileData = await database.readJSONFile(scopedFilename) ?? {};
+  fileData[team] = formData;
 
-  database.writeJSONFile("pitScoutingData", fileData);
+  database.writeJSONFile(scopedFilename, fileData);
   res.sendStatus(200);
 });
 
 app.post("/api/postQualitativeScouting", validateEventCode, async (req, res) => {
-    let event = req.body.event;
-    let match = req.body.match;
-    let team = req.body.team;
-    let formData = req.body.formData;
+  const event = req.eventCode;
+  const { match, team, formData } = req.body;
 
-    if (formData == null || team == null || match == null) {
-      console.log("One or more fields could not be retrieved");
-      console.log(`${formData} ${team} ${event} ${match}`);
-      return res.sendStatus(400);
-    }
+  if (formData == null || team == null || match == null) {
+    console.log("One or more fields could not be retrieved");
+    console.log(`${formData} ${team} ${event} ${match}`);
+    return res.sendStatus(400);
+  }
 
-    console.log(formData);
-    let fileData = await ensureEventCodeExists("qualitativeScoutingData", event);
-    fileData[event] ||= {};
-    fileData[event][team] ||= {};
-    fileData[event][team][match] = formData;
+  console.log(formData);
+  await ensureEventCodeExists("qualitativeScoutingData", event);
+  const scopedFilename = `qualitativeScoutingData_${event}`;
+  let fileData = await database.readJSONFile(scopedFilename) ?? {};
+  fileData[team] ||= {};
+  fileData[team][match] = formData;
 
-    database.writeJSONFile("qualitativeScoutingData", fileData);
-    res.sendStatus(200);
+  database.writeJSONFile(scopedFilename, fileData);
+  res.sendStatus(200);
 });
 
 app.post("/api/postGompeiMadnessBracket", async (req, res) => {

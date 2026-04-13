@@ -13,22 +13,40 @@ async function tbaFetch(url) {
   return fetch(url, { headers: { "X-TBA-Auth-Key": TBA_API_KEY } });
 }
 
+/**
+ * Returns the scoped filename for a given base name and event code.
+ * e.g. scopedName("matches", "2024casj") => "matches_2024casj"
+ * @param {string} filename
+ * @param {string} eventCode
+ * @returns {string}
+ */
+function scopedName(filename, eventCode) {
+  return `${filename}_${eventCode}`;
+}
+
 // ─── DATA POPULATION ────────────────────────────────────────────────────────
 
 /**
  * Fetches all data for a given event from TBA and Statbotics and writes it
- * to the appropriate JSON cache files. Called on startup and on a 5-minute
- * interval from index.js, as well as on-demand when a cache miss is detected.
+ * to per-event JSON cache files (e.g. "matches_2024casj"). Called on startup
+ * and on a 1-minute interval from index.js, as well as on-demand when a cache
+ * miss is detected.
  *
- * Files written (keyed by eventCode):
- *   matches, teams, eventDetails, teamStatuses, oprs, alliances, epas
+ * Files written (named as `${base}_${eventCode}`):
+ *   matches, teams, eventDetails, teamStatuses, oprs, alliances, epas, coprs
  *
  * @param {string} eventCode - TBA event code (e.g. "2024casj")
+ * @param {function(string): void} [registerEventCode] - Optional callback to
+ *   register the event code in the caller's tracking set.
  * @returns {Promise<void>}
  */
-async function populateEventData(eventCode) {
+async function populateEventData(eventCode, registerEventCode) {
   if (!eventCode) return;
   console.log(`[externalApi] Populating all data for eventCode: ${eventCode}`);
+
+  if (typeof registerEventCode === "function") {
+    registerEventCode(eventCode);
+  }
 
   const fetches = [
     {
@@ -78,29 +96,27 @@ async function populateEventData(eventCode) {
       url: `https://www.thebluealliance.com/api/v3/event/${eventCode}/coprs`,
       useTBA: true,
       fallback: {},
-    }
+    },
   ];
 
   await Promise.allSettled(
     fetches.map(async ({ filename, url, useTBA, fallback }) => {
+      const key = scopedName(filename, eventCode);
       try {
         const response = await (useTBA ? tbaFetch(url) : fetch(url));
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const raw = await response.json();
-
-        let fileData = {};
-        try { fileData = await database.readJSONFile(filename); } catch (_) {}
-        fileData[eventCode] = raw;
-        await database.writeJSONFile(filename, fileData);
-        console.log(`[externalApi] Cached ${filename} for ${eventCode}`);
+        await database.writeJSONFile(key, raw);
+        console.log(`[externalApi] Cached ${key}`);
       } catch (e) {
-        console.error(`[externalApi] Failed to populate ${filename} for ${eventCode}:`, e);
-        // Use fallback if fetch fails
-        let fileData = {};
-        try { fileData = await database.readJSONFile(filename); } catch (_) {}
-        fileData[eventCode] = fallback;
-        await database.writeJSONFile(filename, fileData);
-        console.log(`[externalApi] Cached ${filename} for ${eventCode} with fallback`);
+        console.error(`[externalApi] Failed to populate ${key}:`, e);
+        // Only write fallback if we don't already have something cached
+        let existing = null;
+        try { existing = await database.readJSONFile(key); } catch (_) {}
+        if (existing === null || existing === undefined) {
+          await database.writeJSONFile(key, fallback);
+          console.log(`[externalApi] Wrote fallback for ${key}`);
+        }
       }
     })
   );
@@ -118,27 +134,29 @@ function isCacheValid(value) {
 }
 
 /**
- * Reads the cached value for eventCode from a JSON file. If missing, empty,
- * or corrupt, triggers populateEventData() and reads again.
+ * Reads the cached value for a scoped file. If missing or corrupt, triggers
+ * populateEventData() and reads again.
  *
- * @param {string} filename
+ * @param {string} filename  - Base filename (without eventCode suffix)
  * @param {string} eventCode
- * @param {*} fallback - Returned if cache is still invalid after re-population
+ * @param {*} fallback       - Returned if cache is still invalid after re-population
  * @returns {Promise<*>}
  */
 async function readFromCache(filename, eventCode, fallback) {
-  let fileData = {};
-  try { fileData = await database.readJSONFile(filename); } catch (_) {}
+  const key = scopedName(filename, eventCode);
 
-  if (isCacheValid(fileData[eventCode])) {
-    return fileData[eventCode];
+  let cached = null;
+  try { cached = await database.readJSONFile(key); } catch (_) {}
+
+  if (isCacheValid(cached)) {
+    return cached;
   }
 
-  console.log(`[externalApi] Cache miss for ${filename}/${eventCode}, re-populating...`);
+  console.log(`[externalApi] Cache miss for ${key}, re-populating...`);
   await populateEventData(eventCode);
 
-  try { fileData = await database.readJSONFile(filename); } catch (_) {}
-  return isCacheValid(fileData[eventCode]) ? fileData[eventCode] : fallback;
+  try { cached = await database.readJSONFile(key); } catch (_) {}
+  return isCacheValid(cached) ? cached : fallback;
 }
 
 // ─── PUBLIC API ─────────────────────────────────────────────────────────────
