@@ -817,7 +817,7 @@
   }
 
   async function copySinglePicklist(list) {
-    const dataString = `${list.name}:${list.teams.map((t) => `${t.team_number}+${t.nickname || ""}`).join(",")}`;
+    const dataString = `${list.name}:\n${list.teams.map((t) => `${t.team_number}+${t.nickname || ""}`).join("\n")}`;
     try {
       await copyToClipboard(dataString);
       showNotification("✓ Picklist copied to clipboard!");
@@ -831,7 +831,7 @@
     const dataString = Object.values(picklists)
       .map(
         (list) =>
-          `${list.name}:${list.teams.map((t) => `${t.team_number}+${t.nickname || ""}`).join(",")}`,
+          `${list.name}:\n${list.teams.map((t) => `${t.team_number}+${t.nickname || ""}`).join("\n")}`,
       )
       .join(";");
     try {
@@ -864,7 +864,13 @@
           name = `${rawName} (${counter++})`;
         }
 
-        const teamEntries = teamNumbersStr ? teamNumbersStr.split(",") : [];
+        // Preferred format: one team per line. Backward compatible with comma-separated values.
+        const teamEntries = teamNumbersStr
+          ? teamNumbersStr
+              .split(/\r?\n|,/)
+              .map((entry) => entry.trim())
+              .filter(Boolean)
+          : [];
         const teams = teamEntries
           .map((entry) => {
             const trimmed = entry.trim();
