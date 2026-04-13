@@ -55,12 +55,28 @@
 <style>
   /* Adjust for sidebar navbar */
   .page-content {
-    margin-left: 0;
-    padding: 0px;
-    min-height: 0vh;
+    margin-left: 80px;
+    padding: 0;
+    min-height: 100vh;
+    width: calc(100% - 80px);
+    transition: margin-left 0.2s ease, width 0.2s ease;
   }
 
   main {
     max-width: 100%;
+  }
+
+  .page-content.sidebar-collapsed {
+    margin-left: 80px;
+    width: calc(100% - 80px);
+  }
+
+  @media (max-width: 768px) {
+    .page-content,
+    .page-content.sidebar-collapsed {
+      margin-left: 0;
+      width: 100%;
+      padding-top: 3.75rem;
+    }
   }
 </style>
