@@ -2,6 +2,29 @@ require('dotenv').config({ path: require('path').resolve(__dirname, '../.env'), 
 const TBA_API_KEY = process.env.VITE_AUTH_KEY;
 const database = require("./database.js");
 
+// ─── EVENT CODE REGISTRY ────────────────────────────────────────────────────
+
+const eventCodes = new Set();
+
+/**
+ * Adds an event code to the tracked set.
+ * @param {string} eventCode
+ */
+function addEventCode(eventCode) {
+  if (eventCode && !eventCodes.has(eventCode)) {
+    eventCodes.add(eventCode);
+    console.log(`[externalApi] Tracking new event code: ${eventCode}`);
+  }
+}
+
+/**
+ * Returns the set of all known event codes.
+ * @returns {Set<string>}
+ */
+function getEventCodes() {
+  return eventCodes;
+}
+
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 
 /**
@@ -13,40 +36,23 @@ async function tbaFetch(url) {
   return fetch(url, { headers: { "X-TBA-Auth-Key": TBA_API_KEY } });
 }
 
-/**
- * Returns the scoped filename for a given base name and event code.
- * e.g. scopedName("matches", "2024casj") => "matches_2024casj"
- * @param {string} filename
- * @param {string} eventCode
- * @returns {string}
- */
-function scopedName(filename, eventCode) {
-  return `${filename}_${eventCode}`;
-}
-
 // ─── DATA POPULATION ────────────────────────────────────────────────────────
 
 /**
  * Fetches all data for a given event from TBA and Statbotics and writes it
- * to per-event JSON cache files (e.g. "matches_2024casj"). Called on startup
- * and on a 1-minute interval from index.js, as well as on-demand when a cache
- * miss is detected.
+ * to the appropriate JSON cache files. Called on startup and on a 1-minute
+ * interval from index.js, as well as on-demand when a cache miss is detected.
  *
- * Files written (named as `${base}_${eventCode}`):
+ * Files written (keyed by eventCode):
  *   matches, teams, eventDetails, teamStatuses, oprs, alliances, epas, coprs
  *
  * @param {string} eventCode - TBA event code (e.g. "2024casj")
- * @param {function(string): void} [registerEventCode] - Optional callback to
- *   register the event code in the caller's tracking set.
  * @returns {Promise<void>}
  */
-async function populateEventData(eventCode, registerEventCode) {
+async function populateEventData(eventCode) {
   if (!eventCode) return;
+  addEventCode(eventCode);
   console.log(`[externalApi] Populating all data for eventCode: ${eventCode}`);
-
-  if (typeof registerEventCode === "function") {
-    registerEventCode(eventCode);
-  }
 
   const fetches = [
     {
@@ -96,26 +102,29 @@ async function populateEventData(eventCode, registerEventCode) {
       url: `https://www.thebluealliance.com/api/v3/event/${eventCode}/coprs`,
       useTBA: true,
       fallback: {},
-    },
+    }
   ];
 
   await Promise.allSettled(
     fetches.map(async ({ filename, url, useTBA, fallback }) => {
-      const key = scopedName(filename, eventCode);
       try {
         const response = await (useTBA ? tbaFetch(url) : fetch(url));
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const raw = await response.json();
-        await database.writeJSONFile(key, raw);
-        console.log(`[externalApi] Cached ${key}`);
+
+        let fileData = {};
+        try { fileData = await database.readJSONFile(filename); } catch (_) {}
+        fileData[eventCode] = raw;
+        await database.writeJSONFile(filename, fileData);
+        console.log(`[externalApi] Cached ${filename} for ${eventCode}`);
       } catch (e) {
-        console.error(`[externalApi] Failed to populate ${key}:`, e);
-        // Only write fallback if we don't already have something cached
-        let existing = null;
-        try { existing = await database.readJSONFile(key); } catch (_) {}
-        if (existing === null || existing === undefined) {
-          await database.writeJSONFile(key, fallback);
-          console.log(`[externalApi] Wrote fallback for ${key}`);
+        console.error(`[externalApi] Failed to populate ${filename} for ${eventCode}:`, e);
+        let fileData = {};
+        try { fileData = await database.readJSONFile(filename); } catch (_) {}
+        if (!fileData[eventCode]) {
+          fileData[eventCode] = fallback;
+          await database.writeJSONFile(filename, fileData);
+          console.log(`[externalApi] Initialized ${filename} for ${eventCode} with fallback`);
         }
       }
     })
@@ -134,97 +143,62 @@ function isCacheValid(value) {
 }
 
 /**
- * Reads the cached value for a scoped file. If missing or corrupt, triggers
- * populateEventData() and reads again.
+ * Reads the cached value for eventCode from a JSON file. If missing, empty,
+ * or corrupt, triggers populateEventData() and reads again.
  *
- * @param {string} filename  - Base filename (without eventCode suffix)
+ * @param {string} filename
  * @param {string} eventCode
- * @param {*} fallback       - Returned if cache is still invalid after re-population
+ * @param {*} fallback - Returned if cache is still invalid after re-population
  * @returns {Promise<*>}
  */
 async function readFromCache(filename, eventCode, fallback) {
-  const key = scopedName(filename, eventCode);
+  let fileData = {};
+  try { fileData = await database.readJSONFile(filename); } catch (_) {}
 
-  let cached = null;
-  try { cached = await database.readJSONFile(key); } catch (_) {}
-
-  if (isCacheValid(cached)) {
-    return cached;
+  if (isCacheValid(fileData[eventCode])) {
+    return fileData[eventCode];
   }
 
-  console.log(`[externalApi] Cache miss for ${key}, re-populating...`);
+  console.log(`[externalApi] Cache miss for ${filename}/${eventCode}, re-populating...`);
   await populateEventData(eventCode);
 
-  try { cached = await database.readJSONFile(key); } catch (_) {}
-  return isCacheValid(cached) ? cached : fallback;
+  try { fileData = await database.readJSONFile(filename); } catch (_) {}
+  return isCacheValid(fileData[eventCode]) ? fileData[eventCode] : fallback;
 }
 
 // ─── PUBLIC API ─────────────────────────────────────────────────────────────
 
-/**
- * Returns event details for the given event code.
- * @param {string} eventCode
- * @returns {Promise<object>}
- */
 async function fetchEventDetails(eventCode) {
   return readFromCache("eventDetails", eventCode, {});
 }
 
-/**
- * Returns the list of teams attending an event.
- * @param {string} eventCode
- * @returns {Promise<Array>}
- */
 async function fetchTeams(eventCode) {
   return readFromCache("teams", eventCode, []);
 }
 
-/**
- * Returns qualification ranking statuses for all teams at an event.
- * @param {string} eventCode
- * @returns {Promise<object>}
- */
 async function fetchTeamStatuses(eventCode) {
   return readFromCache("teamStatuses", eventCode, {});
 }
 
-/**
- * Returns raw match data for an event.
- * @param {string} eventCode
- * @returns {Promise<Array>}
- */
 async function fetchMatchAlliances(eventCode) {
   return readFromCache("matches", eventCode, []);
 }
 
-/**
- * Returns OPR data for an event.
- * @param {string} eventCode
- * @returns {Promise<object>}
- */
 async function fetchOPR(eventCode) {
   return readFromCache("oprs", eventCode, {});
 }
 
-/**
- * Returns alliance selection data for an event.
- * @param {string} eventCode
- * @returns {Promise<Array>}
- */
 async function fetchAlliances(eventCode) {
   return readFromCache("alliances", eventCode, []);
 }
 
-/**
- * Returns team EPA data from Statbotics for an event.
- * @param {string} eventCode
- * @returns {Promise<object>}
- */
 async function fetchEventEpas(eventCode) {
   return readFromCache("epas", eventCode, {});
 }
 
 module.exports = {
+  addEventCode,
+  getEventCodes,
   populateEventData,
   fetchEventDetails,
   fetchTeams,

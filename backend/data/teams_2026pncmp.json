@@ -1,0 +1,461 @@
+[
+    {
+        "city": "Bothell",
+        "country": "USA",
+        "key": "frc10079",
+        "name": "Northshore School District/SPEEA/Boeing/NASA/FIRST WA/Gene Haas Foundation/Bothell High School/Dunn Lumber/Northwest Folklife/Electroimpact/H10 Capital/Fluke/Northshore Rotary/Neal Brenner/Romac Industries/Fluke Metal Products/BC Craftsman/Woodinville Print/Online metals/Apple/Intuitive Foundation/Argosy Foundation/Bothell High School PTSA&Bothell High School",
+        "nickname": "Arrowdynamics",
+        "state_prov": "Washington",
+        "team_number": 10079
+    },
+    {
+        "city": "Spokane Valley",
+        "country": "USA",
+        "key": "frc10416",
+        "name": "Hagan Foundation&Spokane Valley Tech Skills Center",
+        "nickname": "Radical Raccoons",
+        "state_prov": "Washington",
+        "team_number": 10416
+    },
+    {
+        "city": "Sandy",
+        "country": "USA",
+        "key": "frc10991",
+        "name": "Argosy Foundation/ORTOP/NASA/Oregon Trail School District/Gene Haas Foundation/Robonauts Everybot&Sandy High School",
+        "nickname": "PioBytes",
+        "state_prov": "Oregon",
+        "team_number": 10991
+    },
+    {
+        "city": "Sammamish",
+        "country": "USA",
+        "key": "frc1294",
+        "name": "FIRST Washington/Eastlake Robotics Family Members/Argosy Foundation/Gene Haas Foundation/Eastlake HS PTSA/Happy Global/SPEEA/Grizzly Junk Removal/MASC/Pulse On/C2 Education&Eastlake High School",
+        "nickname": "Pack of Parts",
+        "state_prov": "Washington",
+        "team_number": 1294
+    },
+    {
+        "city": "Issaquah",
+        "country": "USA",
+        "key": "frc1318",
+        "name": "Boeing/Microsoft/Office of Superintendent of Public Instruction - OSPI/Issaquah Schools Foundation &Issaquah High School",
+        "nickname": "Issaquah Robotics Society",
+        "state_prov": "Washington",
+        "team_number": 1318
+    },
+    {
+        "city": "Wilsonville",
+        "country": "USA",
+        "key": "frc1425",
+        "name": "Lam Research/TE Connectivity/Lockheed Martin/Autodesk/Intuitive Foundation/Marie Lamfrom Charitable Foundation&Wilsonville High School",
+        "nickname": "Error Code Xero",
+        "state_prov": "Oregon",
+        "team_number": 1425
+    },
+    {
+        "city": "Portland",
+        "country": "USA",
+        "key": "frc1540",
+        "name": "Polymaker/TEL/FIRST Washington&Catlin Gabel School",
+        "nickname": "Flaming Chickens",
+        "state_prov": "Oregon",
+        "team_number": 1540
+    },
+    {
+        "city": "Spokane",
+        "country": "USA",
+        "key": "frc1595",
+        "name": "Pearson Packaging Systems/Apple/PMMI/Redwood Plastics and Rubber/Alcobra/Autodesk/FirstWashington&St George's School",
+        "nickname": "The Dragons",
+        "state_prov": "Washington",
+        "team_number": 1595
+    },
+    {
+        "city": "Mountlake Terrace",
+        "country": "USA",
+        "key": "frc1778",
+        "name": "Edmonds School District/Alderwood Terrace Rotary Club/BRPH/TAP Plastics/West Coast Products/Swerve Drive Specialties/Onshape/Gene Haas Foundation/Philips Ultrasound/Boeing/SPEEA/Puget Sound Plumbing & Heating/Lynnwood Rotary&Mountlake Terrace High School",
+        "nickname": "Chill Out",
+        "state_prov": "Washington",
+        "team_number": 1778
+    },
+    {
+        "city": "Seattle",
+        "country": "USA",
+        "key": "frc1983",
+        "name": "Lockheed Martin/The Boeing Company/Small Moon Development/Online Metals/Calsak Plastics&4H",
+        "nickname": "Skunk Works Robotics",
+        "state_prov": "Washington",
+        "team_number": 1983
+    },
+    {
+        "city": "Maple Valley",
+        "country": "USA",
+        "key": "frc2046",
+        "name": "The Truck Shop/1-800-Got-Junk/West Coast Products&Tahoma Senior High School",
+        "nickname": "Bear Metal",
+        "state_prov": "Washington",
+        "team_number": 2046
+    },
+    {
+        "city": "Portland",
+        "country": "USA",
+        "key": "frc2374",
+        "name": "Intuitive Foundation/Gene Haas Foundation/Daimler&Jesuit High School",
+        "nickname": "Jesuit Robotics",
+        "state_prov": "Oregon",
+        "team_number": 2374
+    },
+    {
+        "city": "Bellevue",
+        "country": "USA",
+        "key": "frc2412",
+        "name": "Sammamish Robotics Boosters/FIRST Washington/Boeing/Gene Haas Foundation/ElectroImpact/Bellevue Schools Foundation/Intellectual Ventures/TheNiftyBot.com&Sammamish High School",
+        "nickname": "Robototes",
+        "state_prov": "Washington",
+        "team_number": 2412
+    },
+    {
+        "city": "Camas",
+        "country": "USA",
+        "key": "frc2471",
+        "name": "US Digital/Fisher Investments/Analog Devices/Protech Composites/The Boeing Company/Hewlett Packard/WA OSPI/Camas Washougal Rotary/Wafertech/United Precision Corp&Camas High School&Hockinson High School&Washougal High School&Discovery High School",
+        "nickname": "Team Mean Machine",
+        "state_prov": "Washington",
+        "team_number": 2471
+    },
+    {
+        "city": "Eugene",
+        "country": "USA",
+        "key": "frc2521",
+        "name": "Central Lane Robotics/Google/Service Family Foundation/Oregon Department of Education /Springfield Utility Board/FIRSTWA/Autodesk /Boutique Academia /Friends and Family &Family/Community",
+        "nickname": "SERT",
+        "state_prov": "Oregon",
+        "team_number": 2521
+    },
+    {
+        "city": "Bothell",
+        "country": "USA",
+        "key": "frc2522",
+        "name": "Microsoft/OSPI/The Boeing Company/SPEEA/Honeycutt Manufacturing/Exotic Tool Welding Inc. & Lynnwood High School",
+        "nickname": "Royal Robotics",
+        "state_prov": "Washington",
+        "team_number": 2522
+    },
+    {
+        "city": "Lake Oswego",
+        "country": "USA",
+        "key": "frc2635",
+        "name": "LAM Research/Intel/Boeing/Mentor Graphics/DWFritz/WA FIRST Robotics/Really Big Video/Markforged&Lake Oswego High School&Lakeridge High School",
+        "nickname": "Lake Monsters",
+        "state_prov": "Oregon",
+        "team_number": 2635
+    },
+    {
+        "city": "Vancouver",
+        "country": "USA",
+        "key": "frc2811",
+        "name": "Boeing/Daimler Truck North America/Total Mechanical/R3 Retail Development/Goldfish Ventures/Vancouver Public Schools&Skyview High School",
+        "nickname": "StormBots",
+        "state_prov": "Washington",
+        "team_number": 2811
+    },
+    {
+        "city": "Mill Creek",
+        "country": "USA",
+        "key": "frc2910",
+        "name": "Boeing/Computer Concepts/Electroimpact/Gene Haas Foundation/Microsoft/Mill Creek Chamber of Commerce/Onshape/Reed Baldwin Redfellowship/SPEEA IFPTE Local 2001/Swerve Drive Specialties/Tacoma Screw/Washington Office of Superintendent of Public Instruction/BECU/Booked by Melissa Travel/EnerSys/Fabworks/T-Mobile Foundation/West Coast Products/Everett Public Schools/FIRST Washington/PLS/AmazingLife/Salon Ivory&Henry M. Jackson High School",
+        "nickname": "Jack in the Bot",
+        "state_prov": "Washington",
+        "team_number": 2910
+    },
+    {
+        "city": "Wapato",
+        "country": "USA",
+        "key": "frc2926",
+        "name": "Washington State Office of Superintendent of Public Instruction/Collins Aerospace/Matilda Moreno Montgomery (1966)/FIRST WA Board Grant/Wolf Den/Wapato School District (WSD)&Wapato Senior High School",
+        "nickname": "Robo Sparks",
+        "state_prov": "Washington",
+        "team_number": 2926
+    },
+    {
+        "city": "Sammamish",
+        "country": "USA",
+        "key": "frc2976",
+        "name": "Microsoft/The Boeing Company&Skyline High School",
+        "nickname": "The Spartabots",
+        "state_prov": "Washington",
+        "team_number": 2976
+    },
+    {
+        "city": "Bonney Lake",
+        "country": "USA",
+        "key": "frc3218",
+        "name": "Bennerstrom House/Schneider Electric /Muckleshoot Indian Tribe/Project Zephyr/Puyallup Tribe Of Indians/U.S. Army/Boeing/Closet Doctor/Gene Hass Foundation/Ponca Tribe Of Nebraska /ESM Consulting Engineers, LLC/SPEEA/ARCHER Construction, INC/Print NW /3G Cardio/Griot's Garage/Fastenal/Sumner-Bonney Lake School District&Bonney Lake high school",
+        "nickname": "Panther Robotics",
+        "state_prov": "Washington",
+        "team_number": 3218
+    },
+    {
+        "city": "Tacoma",
+        "country": "USA",
+        "key": "frc360",
+        "name": "The Boeing Company/Alaska Airlines/Surge Tacoma/FIRST WA Board of Directors/Hermanson Construction/Islam Family Foundation/DoD STEM/American Family Insurance/Microsoft/Gene Haas Foundation/Rev Robotics/Custom Fundraising Solutions/SPEEA Local 2001/Torr Technologies/Kettering GMI Alumni Association/Friends of Bellarmine Robotics/Weeks Waterjet & MFG LLC/Fabworks/Autodesk/Solidworks/Mastercam&Bellarmine Preparatory School",
+        "nickname": "The Revolution",
+        "state_prov": "Washington",
+        "team_number": 360
+    },
+    {
+        "city": "Bothell",
+        "country": "USA",
+        "key": "frc3663",
+        "name": "The Boeing Company/Inside & Out Renovation, Inc./EnerSys/Electroimpact/Christiansen Family/Team Nelson&Cedar Park Christian Schools",
+        "nickname": "CPR - Cedar Park Robotics",
+        "state_prov": "Washington",
+        "team_number": 3663
+    },
+    {
+        "city": "Battle Ground",
+        "country": "USA",
+        "key": "frc3674",
+        "name": "Boeing/US Digital/HP/OSPI / CAM Academy/NASA/WSU 4-H&Cam Academy&Family/Community",
+        "nickname": "CloverBots",
+        "state_prov": "Washington",
+        "team_number": 3674
+    },
+    {
+        "city": "Pullman",
+        "country": "USA",
+        "key": "frc4061",
+        "name": "Electrical Contractors NW/Schweitzer Engineering Laboratories, Inc./BAE Systems/Boeing/Real Digital/Colfax Thrifty Grandmother's&4-H",
+        "nickname": "SciBorgs",
+        "state_prov": "Washington",
+        "team_number": 4061
+    },
+    {
+        "city": "Duvall",
+        "country": "USA",
+        "key": "frc4089",
+        "name": "The Boeing Company / Microsoft / Washington State OSPI / SPEEA FPTE Local 2001 / FIRST Washington / Solidworks & Cedarcrest High School",
+        "nickname": "Stealth Robotics",
+        "state_prov": "Washington",
+        "team_number": 4089
+    },
+    {
+        "city": "Umatilla",
+        "country": "USA",
+        "key": "frc4125",
+        "name": "Umatilla School District/21st Century Community Learning Center/Amazon Web Services/Pierre Ford/HTP America/Form Labs/Uriel Aparicio&Umatilla High School",
+        "nickname": "Confidential",
+        "state_prov": "Oregon",
+        "team_number": 4125
+    },
+    {
+        "city": "Renton",
+        "country": "USA",
+        "key": "frc4131",
+        "name": "The Boeing Company/Issaquah Schools Foundation/OSPI&Liberty High School",
+        "nickname": "Iron Patriots",
+        "state_prov": "Washington",
+        "team_number": 4131
+    },
+    {
+        "city": "Olympia",
+        "country": "USA",
+        "key": "frc4450",
+        "name": "The Community Foundation of South Puget Sound/Washington State Office of Superintendent of Public Education/Olympia School District/Plastics Extrusion Machinery/Boeing/Diamond Technology Innovations/H2OJet, Inc./Obee Credit Union/FastSigns, Inc./Capital Industrial, Inc/Christopher Cook/Google/Kiwanis International/Zeiglers Welding/Solidworks&Capital High School&Olympia High School&Avanti High School",
+        "nickname": "Olympia Robotics Federation",
+        "state_prov": "Washington",
+        "team_number": 4450
+    },
+    {
+        "city": "Federal Way",
+        "country": "USA",
+        "key": "frc4469",
+        "name": "FIRST Washington/Boeing/Gene Haas Foundation/Byquist Design/SPEEA/TJ Raider Parent Movement/Federal Way Public Schools&Thomas Jefferson High School",
+        "nickname": "R.A.I.D. (Raider Artificial Intelligence Division)",
+        "state_prov": "Washington",
+        "team_number": 4469
+    },
+    {
+        "city": "Hillsboro",
+        "country": "USA",
+        "key": "frc4488",
+        "name": "Lockheed Martin/Intel/Davis Tool/Edwards Vacuum/Hillsboro Optimist Club&Glencoe High School",
+        "nickname": "Shockwave",
+        "state_prov": "Oregon",
+        "team_number": 4488
+    },
+    {
+        "city": "Everett",
+        "country": "USA",
+        "key": "frc4512",
+        "name": "Boeing/OSPI/Everett School District/Bruin Community Parents/SPEEA/Palachuk Family&Cascade High School",
+        "nickname": "Otter Chaos",
+        "state_prov": "Washington",
+        "team_number": 4512
+    },
+    {
+        "city": "Seattle",
+        "country": "USA",
+        "key": "frc488",
+        "name": "Microsoft Corporation/The Boeing Company/SPEEA&Cleveland High School STEM&Franklin High School",
+        "nickname": "Team XBOT",
+        "state_prov": "Washington",
+        "team_number": 488
+    },
+    {
+        "city": "Bainbridge Island",
+        "country": "USA",
+        "key": "frc4915",
+        "name": "Boeing/Bainbridge Schools Foundation/Office of Superintendent of Public Instruction/Microsoft/Bainbridge Island School District&Bainbridge High School",
+        "nickname": "Spartronics",
+        "state_prov": "Washington",
+        "team_number": 4915
+    },
+    {
+        "city": "Bellevue",
+        "country": "USA",
+        "key": "frc492",
+        "name": "Perpetual Technologies/Asha Madhavan DDS/FIRST Washington/The Boeing Company/Gene Haas Foundation/Microsoft/International School PTSA&International School",
+        "nickname": "Titan Robotics Club",
+        "state_prov": "Washington",
+        "team_number": 492
+    },
+    {
+        "city": "Bend",
+        "country": "USA",
+        "key": "frc5468",
+        "name": "PCC Schlosser/Trans Canada/LAM Research/Cerecoat/EA/Brooks Resources/Alpine Eye Care/AutoDesk/FIRST Washington/Miller Lumber/Willamette Valley Pies/Polymaker/Generac/Janette and Sam/Hayden Homes/Parr Lumber/The Blakely Family/Les Schwab/James and Jean Verheyden/Executive UpThink/Jan L Miller/Arrived/Novunex/Kraybill Family/KW/The Heller Family/Mountain Burger/River Bend Eye Care&Summit High School",
+        "nickname": "Chaos Theory",
+        "state_prov": "Oregon",
+        "team_number": 5468
+    },
+    {
+        "city": "Mercer Island",
+        "country": "USA",
+        "key": "frc5937",
+        "name": "Bottle Crusher US/NUCOR Steel/Kornblum Legal/Mercer Island ASB/Boeing/Sahara Pizza/FIRST WA&Mercer Island High School",
+        "nickname": "MI Robotics",
+        "state_prov": "Washington",
+        "team_number": 5937
+    },
+    {
+        "city": "Corbett",
+        "country": "USA",
+        "key": "frc6696",
+        "name": "Argosy Foundation/Autodesk/M & M Sourdough/Troutdale Bikes/Amy Detter Painting/Triple W Properties/LAM Research/OnPoint Community Credit Union/Reliance Connects/Microchip/CC Coatings/Corbett Education Foundation&Corbett High School",
+        "nickname": "Cardinal Dynamics",
+        "state_prov": "Oregon",
+        "team_number": 6696
+    },
+    {
+        "city": "West Linn",
+        "country": "USA",
+        "key": "frc7034",
+        "name": "Siemens/Erickson Forensics/Clackamas Steel & Manufacturing/Gene Haas/Teledyne Flir&West Linn High School",
+        "nickname": "2B Determined",
+        "state_prov": "Oregon",
+        "team_number": 7034
+    },
+    {
+        "city": "Bend",
+        "country": "USA",
+        "key": "frc753",
+        "name": "iFixit/Outback Manufacturing/FIA Custom CNC/Zamp Solar/McDonald's Corporation&Mountain View Sr High School",
+        "nickname": "High Desert Droids",
+        "state_prov": "Oregon",
+        "team_number": 753
+    },
+    {
+        "city": "Tukwila",
+        "country": "USA",
+        "key": "frc8051",
+        "name": "Foster High School",
+        "nickname": "TinkRex",
+        "state_prov": "Washington",
+        "team_number": 8051
+    },
+    {
+        "city": "Seattle",
+        "country": "USA",
+        "key": "frc8248",
+        "name": "SPS CTE/Boeing/SPEEA/Electroimpact/Intuitive Foundation/KeyBank&Lincoln High School",
+        "nickname": "ChainLynx",
+        "state_prov": "Washington",
+        "team_number": 8248
+    },
+    {
+        "city": "Puyallup",
+        "country": "USA",
+        "key": "frc8896",
+        "name": "Boeing/Gene Haas Foundation/SPEEA/First Washington&E B Walker High School",
+        "nickname": "Wolf Tech Robotics",
+        "state_prov": "Washington",
+        "team_number": 8896
+    },
+    {
+        "city": "Sammamish",
+        "country": "USA",
+        "key": "frc9023",
+        "name": "Boeing/Limited Productions/Metal Tech/MoviePosters.com/Numurus/EvolvedRobotics.ai/Microsoft/Intel/Google/Starbucks/T-Mobile/ByteDance/FIRST WA&Family/Community",
+        "nickname": "Future Martians",
+        "state_prov": "Washington",
+        "team_number": 9023
+    },
+    {
+        "city": "Salem",
+        "country": "USA",
+        "key": "frc9430",
+        "name": "The Biddix Foundation/RAM SteelCo/Salem Electric/Garmin&Career Technical Education Ctr",
+        "nickname": "CTEC Robotics",
+        "state_prov": "Oregon",
+        "team_number": 9430
+    },
+    {
+        "city": "Woodinville",
+        "country": "USA",
+        "key": "frc9450",
+        "name": "Northshore School District/OSPI/Dunn Lumber/Out of the Box Manufacturing /FIRST/Boeing/SPEEA /NASA/Gene Haas Foundation&Woodinville High School",
+        "nickname": "Velocity Raptors",
+        "state_prov": "Washington",
+        "team_number": 9450
+    },
+    {
+        "city": "Bellevue",
+        "country": "USA",
+        "key": "frc948",
+        "name": "XTool/Polymaker/Microsoft/Google/Bellevue Schools Foundation/Hatchx/Somerset PTSA/First Washington/Amazon&Newport High School",
+        "nickname": "NRG (Newport Robotics Group)",
+        "state_prov": "Washington",
+        "team_number": 948
+    },
+    {
+        "city": "Corvallis",
+        "country": "USA",
+        "key": "frc955",
+        "name": "Corvallis School District 509J/Friends of CV/Selma/Argosy Foundation/LAM Research/Stephen's Heating&Crescent Valley High School",
+        "nickname": "Ctrl C",
+        "state_prov": "Oregon",
+        "team_number": 955
+    },
+    {
+        "city": "Albany",
+        "country": "USA",
+        "key": "frc957",
+        "name": "Wheeler Family Foundation/Pyburn & Sons/Albany Public Schools Foundation/HP Inc./No Dinx/Argosy Foundation/LAM Research/Autodesk/Linn County Fair, Albany, OR/Benton County Fair Corvallis, OR/Albany Parks & Recreation/First Force/FIRST WA/Oregon Robotics Tournament & Outreach Program/Ram Steelco/Burcham's Metals/Albany American Legion Post 10/LBCC Mechatronics/Christmas Storybook Land/Albany Optimist Club/Takena and Central PTC/Viper Northwest&West Albany High School&South Albany High School",
+        "nickname": "SWARM - South and West Albany Robotics Maniacs",
+        "state_prov": "Oregon",
+        "team_number": 957
+    },
+    {
+        "city": "Corvallis",
+        "country": "USA",
+        "key": "frc997",
+        "name": "HAAS/HP, Inc/Argosy Foundation/LAM Research/Corvallis Public School Foundation/OptiTrack/Burgerville/Rice's Pharmacy/Oregon State University - College of Oceanography and Atmospheric Sciences/Grocery Outlet/Tom Laster Dentistry/Friends and Family/Block 15/McMenamins Restaurant Company&Corvallis High School",
+        "nickname": "Spartan Robotics",
+        "state_prov": "Oregon",
+        "team_number": 997
+    }
+]
