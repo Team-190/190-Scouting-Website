@@ -2,6 +2,29 @@ require('dotenv').config({ path: require('path').resolve(__dirname, '../.env'), 
 const TBA_API_KEY = process.env.VITE_AUTH_KEY;
 const database = require("./database.js");
 
+// ─── EVENT CODE REGISTRY ────────────────────────────────────────────────────
+
+const eventCodes = new Set();
+
+/**
+ * Adds an event code to the tracked set.
+ * @param {string} eventCode
+ */
+function addEventCode(eventCode) {
+  if (eventCode && !eventCodes.has(eventCode)) {
+    eventCodes.add(eventCode);
+    console.log(`[externalApi] Tracking new event code: ${eventCode}`);
+  }
+}
+
+/**
+ * Returns the set of all known event codes.
+ * @returns {Set<string>}
+ */
+function getEventCodes() {
+  return eventCodes;
+}
+
 // ─── HELPERS ────────────────────────────────────────────────────────────────
 
 /**
@@ -17,17 +40,18 @@ async function tbaFetch(url) {
 
 /**
  * Fetches all data for a given event from TBA and Statbotics and writes it
- * to the appropriate JSON cache files. Called on startup and on a 5-minute
+ * to the appropriate JSON cache files. Called on startup and on a 1-minute
  * interval from index.js, as well as on-demand when a cache miss is detected.
  *
  * Files written (keyed by eventCode):
- *   matches, teams, eventDetails, teamStatuses, oprs, alliances, epas
+ *   matches, teams, eventDetails, teamStatuses, oprs, alliances, epas, coprs
  *
  * @param {string} eventCode - TBA event code (e.g. "2024casj")
  * @returns {Promise<void>}
  */
 async function populateEventData(eventCode) {
   if (!eventCode) return;
+  addEventCode(eventCode);
   console.log(`[externalApi] Populating all data for eventCode: ${eventCode}`);
 
   const fetches = [
@@ -95,12 +119,13 @@ async function populateEventData(eventCode) {
         console.log(`[externalApi] Cached ${filename} for ${eventCode}`);
       } catch (e) {
         console.error(`[externalApi] Failed to populate ${filename} for ${eventCode}:`, e);
-        // Use fallback if fetch fails
         let fileData = {};
         try { fileData = await database.readJSONFile(filename); } catch (_) {}
-        fileData[eventCode] = fallback;
-        await database.writeJSONFile(filename, fileData);
-        console.log(`[externalApi] Cached ${filename} for ${eventCode} with fallback`);
+        if (!fileData[eventCode]) {
+          fileData[eventCode] = fallback;
+          await database.writeJSONFile(filename, fileData);
+          console.log(`[externalApi] Initialized ${filename} for ${eventCode} with fallback`);
+        }
       }
     })
   );
@@ -143,70 +168,37 @@ async function readFromCache(filename, eventCode, fallback) {
 
 // ─── PUBLIC API ─────────────────────────────────────────────────────────────
 
-/**
- * Returns event details for the given event code.
- * @param {string} eventCode
- * @returns {Promise<object>}
- */
 async function fetchEventDetails(eventCode) {
   return readFromCache("eventDetails", eventCode, {});
 }
 
-/**
- * Returns the list of teams attending an event.
- * @param {string} eventCode
- * @returns {Promise<Array>}
- */
 async function fetchTeams(eventCode) {
   return readFromCache("teams", eventCode, []);
 }
 
-/**
- * Returns qualification ranking statuses for all teams at an event.
- * @param {string} eventCode
- * @returns {Promise<object>}
- */
 async function fetchTeamStatuses(eventCode) {
   return readFromCache("teamStatuses", eventCode, {});
 }
 
-/**
- * Returns raw match data for an event.
- * @param {string} eventCode
- * @returns {Promise<Array>}
- */
 async function fetchMatchAlliances(eventCode) {
   return readFromCache("matches", eventCode, []);
 }
 
-/**
- * Returns OPR data for an event.
- * @param {string} eventCode
- * @returns {Promise<object>}
- */
 async function fetchOPR(eventCode) {
   return readFromCache("oprs", eventCode, {});
 }
 
-/**
- * Returns alliance selection data for an event.
- * @param {string} eventCode
- * @returns {Promise<Array>}
- */
 async function fetchAlliances(eventCode) {
   return readFromCache("alliances", eventCode, []);
 }
 
-/**
- * Returns team EPA data from Statbotics for an event.
- * @param {string} eventCode
- * @returns {Promise<object>}
- */
 async function fetchEventEpas(eventCode) {
   return readFromCache("epas", eventCode, {});
 }
 
 module.exports = {
+  addEventCode,
+  getEventCodes,
   populateEventData,
   fetchEventDetails,
   fetchTeams,
