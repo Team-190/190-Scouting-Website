@@ -471,6 +471,7 @@ export function estimateTeamPoints2(teamStr, matchNumber, coprs, autoRows, teleo
 
   // Get FuelShootingPhases for a specific team in this match
   function getPhaseShootingTimes(teamNum) {
+    const allRows = [...autoRows, ...teleopRows];
     const row = allRows.find(
       (row) =>
         String(row.Team || row.team || "").replace(/\D/g, "") === teamNum &&
