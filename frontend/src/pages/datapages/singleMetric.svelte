@@ -44,7 +44,7 @@
   const SELECTED_METRIC_KEY = "singleMetric_selectedMetric";
   const OPR_DISPLAY = "OPR (Offensive Power Rating)";
   const EFS_DISPLAY = "EFS (Estimated Fuel Score)";
-  const EFS2_DISPLAY = "EFS2 (EFS but better)";
+  const EFS2_DISPLAY = "EFS2 (More Accurate EFS)";
   const BOOLEAN_METRICS = new Set(["AutoClimb", "AttemptClimb", "Auto_Climb"]);
   const CLIMBSTATE_METRIC = "Climb_State";
 
