@@ -4,10 +4,38 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link id="favicon-link" rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+    <link
+      id="apple-touch-icon-link"
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="/apple-touch-icon.png"
+    />
     <title>data-viz</title>
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const faviconLink = document.getElementById("favicon-link");
+        const appleTouchIconLink = document.getElementById("apple-touch-icon-link");
+        let usePrimaryIcons = true;
+
+        const swapIcons = () => {
+          usePrimaryIcons = !usePrimaryIcons;
+          const cacheBuster = `?t=${Date.now()}`;
+
+          if (faviconLink) {
+            faviconLink.href = `${usePrimaryIcons ? "/favicon.png" : "/favicon1.png"}${cacheBuster}`;
+          }
+
+          if (appleTouchIconLink) {
+            appleTouchIconLink.href = `${
+              usePrimaryIcons ? "/apple-touch-icon.png" : "/apple-touch-icon1.png"
+            }${cacheBuster}`;
+          }
+        };
+
+        setInterval(swapIcons, 5000);
+      });
+    </script>
   </head>
   <body>
     <div id="app"></div>

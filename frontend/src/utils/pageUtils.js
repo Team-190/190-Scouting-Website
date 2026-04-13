@@ -447,14 +447,8 @@ const EFS2_PHASES = [
  * @param {any[]} alliances - Preloaded alliance data from fetchMatchAlliances
  * @returns {number|null} Estimated points for this team in this match, or null
  */
-export function estimateTeamPoints2(
-  teamStr,
-  matchNumber,
-  coprs,
-  allRows,
-  alliances,
-) {
-  if (!coprs || !allRows || !alliances) return null;
+export function estimateTeamPoints2(teamStr, matchNumber, coprs, autoRows, teleopRows, alliances) {
+  if (!coprs || !autoRows || !teleopRows || !alliances) return null;
 
   const teamStrClean = String(teamStr).replace(/\D/g, "");
 
@@ -463,12 +457,8 @@ export function estimateTeamPoints2(
   );
   if (!tbaMatch) return null;
 
-  const redKeys = tbaMatch.alliances.red.team_keys.map((k) =>
-    k.replace("frc", ""),
-  );
-  const blueKeys = tbaMatch.alliances.blue.team_keys.map((k) =>
-    k.replace("frc", ""),
-  );
+  const redKeys = tbaMatch.alliances.red.team_keys.map((k) => k.replace("frc", ""));
+  const blueKeys = tbaMatch.alliances.blue.team_keys.map((k) => k.replace("frc", ""));
   const onRed = redKeys.includes(teamStrClean);
   const onBlue = blueKeys.includes(teamStrClean);
   if (!onRed && !onBlue) return null;
@@ -584,8 +574,7 @@ export function estimateTeamPoints2(
     );
 
     const allianceTotalRate = allianceKeys.reduce(
-      (sum, allyNum) => sum + rates[allyNum],
-      0,
+      (sum, allyNum) => sum + rates[allyNum], 0,
     );
     if (allianceTotalRate === 0) continue;
 

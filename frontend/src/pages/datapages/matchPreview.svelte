@@ -843,7 +843,8 @@
 
       // Load fresh data if cache is invalid
       const stored = await getIndexedDBStore("scoutingData") || [];
-      const parsed = stored ? stored : [];
+      // Unwrap the value property if it exists (from compressed storage)
+      const parsed = (stored || []).map(item => item.value !== undefined ? item.value : item);
       teamViewData = extractValues(parsed, autoOnly);
 
       if (eventCode) {

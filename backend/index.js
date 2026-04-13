@@ -1,12 +1,10 @@
 // REQUIRED .env PARAMETERS:
-// VITE_BACKEND_PORT - Port on which the backend runs
-// VITE_FRONTEND_PORT - Port on which the frontend runs
 // SESSION_SECRET - Random string to sign off session cookies
 // VITE_AUTH_KEY - TBA API key
 // DB_USER - Database user to access data
 // DB_PASSWORD - Database password to access data
 // VITE_SERVER_IP - IP of where the backend/frontend are running
-// VITE_TESTING - Binary value to indicate whether the code is in testing or production
+// VITE_TESTING - Binary value to indicate whether runtime is local (1) or server (0)
 
 const express = require("express");
 const path = require("path");
@@ -17,12 +15,31 @@ const database = require("./database.js");
 const externalAPI = require("./externalApi.js");
 const session = require("express-session");
 const cors = require("cors");
-require("dotenv").config({
-  path: path.resolve(__dirname, "../.env"),
-  override: true,
-});
+const runtimeConstants = require("../runtime/constants");
+require('dotenv').config({ path: path.resolve(__dirname, '../.env'), override: true });
 
 const app = express();
+
+const logFilePath = "./logs/testing.csv";
+
+app.use((req, res, next) => {
+    let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+    if (ip === "::1") {
+        ip = "127.0.0.1";
+    } else if (ip.includes("::ffff:")) {
+        ip = ip.split("::ffff:")[1];
+    }
+
+    const timestamp = new Date().toISOString();
+    const logEntry = `"${ip}","${timestamp}","${req.method}","${req.url}"\n`;
+
+    fs.appendFile(logFilePath, logEntry, (err) => {
+        if (err) console.error("Log write failed", err);
+    });
+
+    next();
+});
 
 let eventCode = "";
 let bracket;
@@ -30,26 +47,17 @@ let refreshTimer;
 
 // ─── HELPER FUNCTIONS ───────────────────────────────────────────────────────
 
-/**
- * Middleware to validate eventCode parameter
- */
 const validateEventCode = (req, res, next) => {
   eventCode = req.query.eventCode || req.body.event;
   if (!eventCode) return res.sendStatus(403);
   next();
 };
 
-/**
- * Helper to read JSON file and get event-scoped data
- */
 async function getEventData(filename, eventCode) {
   let data = await database.readJSONFile(filename);
   return data[eventCode] || {};
 }
 
-/**
- * Helper to ensure event code exists in a JSON file
- */
 async function ensureEventCodeExists(filename, eventCode) {
   let data = await database.readJSONFile(filename);
   if (!data[eventCode]) {
@@ -60,9 +68,6 @@ async function ensureEventCodeExists(filename, eventCode) {
   return data;
 }
 
-/**
- * Helper to post rating data (generic for driver/HP ratings)
- */
 async function postRatingHelper(req, res, filename) {
   const { event, rating, team } = req.body;
 
@@ -86,12 +91,14 @@ async function postRatingHelper(req, res, filename) {
   res.sendStatus(200);
 }
 
-const VITE_BACKEND_PORT = process.env.VITE_BACKEND_PORT || 8000;
-const VITE_FRONTEND_PORT = process.env.VITE_FRONTEND_PORT || 5173;
-const VITE_TESTING = process.env.VITE_TESTING || 1;
-const SERVER = !parseInt(VITE_TESTING)
-  ? process.env.VITE_SERVER_IP
-  : "localhost";
+const VITE_BACKEND_PORT = Number(runtimeConstants.ports.backend);
+const VITE_FRONTEND_PORT = Number(runtimeConstants.ports.frontend);
+const VITE_TESTING = String(process.env.VITE_TESTING ?? "1");
+const SHOULD_SERVE_FRONTEND = VITE_TESTING === "0";
+const SERVER = VITE_TESTING === "0"
+    ? (process.env.VITE_SERVER_IP || runtimeConstants.server.host)
+    : "localhost";
+const FRONTEND_DIST = process.env.FRONTEND_DIST || path.resolve(__dirname, "../frontend/dist");
 
 refreshTimer = setInterval(
   async () => {
@@ -111,8 +118,8 @@ app.use(express.json());
 
 app.use(
   compression({
-    level: 9, // Balance between compression ratio and speed
-    threshold: 500, // Compresses files above this size
+    level: 9,
+    threshold: 500,
   }),
 );
 
@@ -130,32 +137,34 @@ app.use(
 app.use(
   cors({
     origin: [
-      `http://${SERVER}:${VITE_FRONTEND_PORT}`,
-      `http://localhost:${VITE_FRONTEND_PORT}`,
-      `http://127.0.0.1:${VITE_FRONTEND_PORT}`,
-      `https://${SERVER}:${VITE_FRONTEND_PORT}`,
-      `https://localhost:${VITE_FRONTEND_PORT}`,
-      `https://127.0.0.1:${VITE_FRONTEND_PORT}`,
-      VITE_FRONTEND_PORT === "80" ? `http://${SERVER}` : null,
-      VITE_FRONTEND_PORT === "80" ? `http://localhost` : null,
-      VITE_FRONTEND_PORT === "80" ? `http://127.0.0.1` : null,
-      VITE_FRONTEND_PORT === "443" ? `https://${SERVER}` : null,
-      VITE_FRONTEND_PORT === "443" ? `https://localhost` : null,
-      VITE_FRONTEND_PORT === "443" ? `https://127.0.0.1` : null,
-      "http://190scouting.com",
-      "https://190scouting.com",
-    ],
+        `http://${SERVER}:${VITE_FRONTEND_PORT}`,
+        `http://localhost:${VITE_FRONTEND_PORT}`,
+        `http://127.0.0.1:${VITE_FRONTEND_PORT}`,
+        `https://${SERVER}:${VITE_FRONTEND_PORT}`,
+        `https://localhost:${VITE_FRONTEND_PORT}`,
+        `https://127.0.0.1:${VITE_FRONTEND_PORT}`,
+        VITE_FRONTEND_PORT === 80 ? `http://${SERVER}` : null,
+        VITE_FRONTEND_PORT === 80 ? `http://localhost` : null,
+        VITE_FRONTEND_PORT === 80 ? `http://127.0.0.1` : null,
+        VITE_FRONTEND_PORT === 443 ? `https://${SERVER}` : null,
+        VITE_FRONTEND_PORT === 443 ? `https://localhost` : null,
+        VITE_FRONTEND_PORT === 443 ? `https://127.0.0.1` : null,
+        "http://190scouting.com",
+        "https://190scouting.com",
+    ].filter(Boolean),
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type"],
-  }),
-);
+}));
 
-app.get("/", async (req, res) => {
-  res.renderHtml("file.html");
-});
+// Serve static frontend files in production (catch-all is at the bottom)
+if (SHOULD_SERVE_FRONTEND) {
+    app.use(express.static(FRONTEND_DIST));
+}
 
-app.get("/login", (req, res) => {
-  res.renderHtml("login.html");
+// ─── INTERNAL API ROUTES ────────────────────────────────────────────────────
+
+app.get("/api/health", (req, res) => {
+  res.json({ ok: true, timestamp: Date.now() });
 });
 
 app.get("/api/getEvents", async (req, res) => {
@@ -167,10 +176,6 @@ app.get("/api/getEvents", async (req, res) => {
     console.error(error);
     res.status(500).json({ error: "Failed to fetch events" });
   }
-});
-
-app.get("/api/health", (req, res) => {
-  res.json({ ok: true, timestamp: Date.now() });
 });
 
 app.get("/api/getAvailableTeams", validateEventCode, async (req, res) => {
@@ -300,9 +305,7 @@ app.get("/api/getHPRatings", validateEventCode, async (req, res) => {
   res.send(fileData);
 });
 
-////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
-////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
-////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
+// ─── EXTERNAL API GET ROUTES ────────────────────────────────────────────────
 
 app.get("/api/getMatchAlliances", validateEventCode, async (req, res) => {
   eventCode = req.query.eventCode;
@@ -409,7 +412,6 @@ app.get("/api/getElimsHaveStarted", validateEventCode, async (req, res) => {
   await ensureEventCodeExists("matches", eventCode);
   const raw = await getEventData("matches", eventCode);
 
-  // raw might be an empty object {} if data hasn't been loaded yet
   const matchesArray = Array.isArray(raw) ? raw : [];
   const result = matchesArray.some(
     (m) =>
@@ -429,7 +431,6 @@ app.get("/api/getMatchScores", async (req, res) => {
   await ensureEventCodeExists("matches", eventCode);
   const raw = await getEventData("matches", eventCode);
 
-  // raw might be an empty object {} if data hasn't been loaded yet
   const matchesArray = Array.isArray(raw) ? raw : [];
   const matchKey = `${eventCode}_qm${matchNumber}`;
   const alliance = driveStation.startsWith("red") ? "red" : "blue";
@@ -443,9 +444,7 @@ app.get("/api/getMatchScores", async (req, res) => {
   res.send({ score: tbaMatch.alliances[alliance].score });
 });
 
-////////////// POST Methods \\\\\\\\\\\\\\
-////////////// POST Methods \\\\\\\\\\\\\\
-////////////// POST Methods \\\\\\\\\\\\\\
+// ─── POST ROUTES ─────────────────────────────────────────────────────────────
 
 app.post("/api/postEventCode", async (req, res) => {
   eventCode = req.body.eventCode;
@@ -486,10 +485,7 @@ app.post("/api/postPitScouting", validateEventCode, async (req, res) => {
   res.sendStatus(200);
 });
 
-app.post(
-  "/api/postQualitativeScouting",
-  validateEventCode,
-  async (req, res) => {
+app.post("/api/postQualitativeScouting", validateEventCode, async (req, res) => {
     let event = req.body.event;
     let match = req.body.match;
     let team = req.body.team;
@@ -502,18 +498,14 @@ app.post(
     }
 
     console.log(formData);
-    let fileData = await ensureEventCodeExists(
-      "qualitativeScoutingData",
-      event,
-    );
+    let fileData = await ensureEventCodeExists("qualitativeScoutingData", event);
     fileData[event] ||= {};
     fileData[event][team] ||= {};
     fileData[event][team][match] = formData;
 
     database.writeJSONFile("qualitativeScoutingData", fileData);
     res.sendStatus(200);
-  },
-);
+});
 
 app.post("/api/postGompeiMadnessBracket", async (req, res) => {
   bracket = req.body.bracket;
@@ -524,10 +516,23 @@ app.post("/api/postGompeiMadnessBracket", async (req, res) => {
   }
 });
 
-// Check if SSL certificates exist for HTTPS
+// ─── SPA CATCH-ALL (must be last) ────────────────────────────────────────────
+
+if (SHOULD_SERVE_FRONTEND) {
+    app.get("/{*path}", (req, res) => {
+        const indexPath = path.join(FRONTEND_DIST, "index.html");
+        if (!fs.existsSync(indexPath)) {
+            return res.status(500).send(`Missing frontend build at ${indexPath}`);
+        }
+        return res.sendFile(indexPath);
+    });
+}
+
+// ─── SERVER LISTEN ────────────────────────────────────────────────────────────
+
 const certPath = path.join(__dirname, "../certificate.crt");
 const keyPath = path.join(__dirname, "../certificate.key");
-const useHttps = false; // Nginx handles HTTPS - backend runs on HTTP only
+const useHttps = false;
 
 if (useHttps) {
   const httpsOptions = {

@@ -120,9 +120,11 @@
         teamViewData = [];
         return;
       }
+      // Unwrap the value property if it exists (from compressed storage)
+      const unwrapped = (raw || []).map(item => item.value !== undefined ? item.value : item);
       // IDB rows have [auto, full] tuple format — same as localStorage
       // extractValues unwraps tuples to take the full (index 1) value
-      teamViewData = extractValues(raw);
+      teamViewData = extractValues(unwrapped);
       console.log("[hovercard debug] sample extracted row:", teamViewData[0]);
     } catch (e) {
       console.error("Failed to load scouting data from IndexedDB:", e);
