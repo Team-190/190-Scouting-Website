@@ -226,6 +226,7 @@ export const EXCLUDED_FIELDS = new Set([
   "scouter_error",
   "EndState",
   "AutoClimb",
+  "FuelShootingPhases",
 ]);
 
 /**
@@ -426,23 +427,23 @@ export function isNumeric(n) {
 }
 
 const EFS2_PHASES = [
-  { coprKey: "Hub Auto Fuel Count", shootingField: "FuelShootingTime" },
-  { coprKey: "Hub Transition Fuel Count", shootingField: "FuelShootingTime" },
-  { coprKey: "Hub Shift 1 Fuel Count", shootingField: "FuelShootingTime" },
-  { coprKey: "Hub Shift 2 Fuel Count", shootingField: "FuelShootingTime" },
-  { coprKey: "Hub Shift 3 Fuel Count", shootingField: "FuelShootingTime" },
-  { coprKey: "Hub Shift 4 Fuel Count", shootingField: "FuelShootingTime" },
-  { coprKey: "Hub Endgame Fuel Count", shootingField: "FuelShootingTime" },
+  { index: 0, label: "Auto", coprKey: "Hub Auto Fuel Count" },
+  { index: 1, label: "Transition", coprKey: "Hub Transition Fuel Count" },
+  { index: 2, label: "Shift 1", coprKey: "Hub Shift 1 Fuel Count" },
+  { index: 3, label: "Shift 2", coprKey: "Hub Shift 2 Fuel Count" },
+  { index: 4, label: "Shift 3", coprKey: "Hub Shift 3 Fuel Count" },
+  { index: 5, label: "Shift 4", coprKey: "Hub Shift 4 Fuel Count" },
+  { index: 6, label: "Endgame", coprKey: "Hub Endgame Fuel Count" },
 ];
 
 /**
  * Estimates a team's fuel-scoring contribution using COPR data scaled by
- * per-match shooting time share.
+ * per-phase shooting time share from FuelShootingPhases.
  *
  * @param {string} teamStr - Team number (e.g. "190")
  * @param {number} matchNumber - Match number
  * @param {Object} coprs - COPR data from fetchCOPRs (keyed by phase name → { frcXXX: value })
- * @param {any[]} allRows - All scouting rows for the event
+ * @param {any[]} allRows - All scouting rows for the event (rows should have FuelShootingPhases)
  * @param {any[]} alliances - Preloaded alliance data from fetchMatchAlliances
  * @returns {number|null} Estimated points for this team in this match, or null
  */
@@ -478,61 +479,69 @@ export function estimateTeamPoints2(
     : tbaMatch.score_breakdown?.blue;
   if (!scoreBreakdown) return null;
 
-  // Get shooting time for a specific team in this specific match only
-  function getMatchShootingTime(teamNum) {
-    const rows = allRows.filter(
+  // Get FuelShootingPhases for a specific team in this match
+  function getPhaseShootingTimes(teamNum) {
+    const row = allRows.find(
       (row) =>
-        row.RecordType !== "Match_Event" &&
         String(row.Team || row.team || "").replace(/\D/g, "") === teamNum &&
         Number(row.Match) === matchNumber,
     );
-    return rows.reduce(
-      (sum, row) =>
-        sum +
-        (isNumeric(row.FuelShootingTime) ? Number(row.FuelShootingTime) : 0),
-      0,
-    );
+    return row?.FuelShootingPhases ?? [0, 0, 0, 0, 0, 0, 0];
   }
 
-  // Precompute this match's shooting time for all 3 alliance robots
-  const matchShootingTimes = {};
+  // Precompute phase shooting times for all 3 alliance robots
+  // phases: [0=auto, 1=transition, 2=shift1, 3=shift2, 4=shift3, 5=shift4, 6=endgame]
+  const matchPhaseShootingTimes = {};
   for (const allyNum of allianceKeys) {
-    matchShootingTimes[allyNum] = getMatchShootingTime(allyNum);
+    matchPhaseShootingTimes[allyNum] = getPhaseShootingTimes(allyNum);
   }
 
   const phases = [
     {
       label: "Auto",
+      phaseIndices: [0],
       getCoprs: (allyNum) =>
         Math.max(0, coprs["Hub Auto Fuel Count"]?.[`frc${allyNum}`] ?? 0),
       getScore: () => scoreBreakdown.hubScore?.autoPoints ?? 0,
     },
     {
       label: "Transition",
+      phaseIndices: [1],
       getCoprs: (allyNum) =>
         Math.max(0, coprs["Hub Transition Fuel Count"]?.[`frc${allyNum}`] ?? 0),
       getScore: () => scoreBreakdown.hubScore?.transitionPoints ?? 0,
     },
     {
-      label: "Shift1+2",
+      label: "Shift1",
+      phaseIndices: [2],
       getCoprs: (allyNum) =>
-        Math.max(0, coprs["Hub Shift 1 Fuel Count"]?.[`frc${allyNum}`] ?? 0) +
-        Math.max(0, coprs["Hub Shift 2 Fuel Count"]?.[`frc${allyNum}`] ?? 0),
-      getScore: () =>
-        (scoreBreakdown.hubScore?.shift1Points ?? 0) +
-        (scoreBreakdown.hubScore?.shift2Points ?? 0),
+        Math.max(0, coprs["Hub Shift 1 Fuel Count"]?.[`frc${allyNum}`] ?? 0),
+      getScore: () => scoreBreakdown.hubScore?.shift1Points ?? 0,
     },
     {
-      label: "Shift3+4",
+      label: "Shift2",
+      phaseIndices: [3],
       getCoprs: (allyNum) =>
-        Math.max(0, coprs["Hub Shift 3 Fuel Count"]?.[`frc${allyNum}`] ?? 0) +
+        Math.max(0, coprs["Hub Shift 2 Fuel Count"]?.[`frc${allyNum}`] ?? 0),
+      getScore: () => scoreBreakdown.hubScore?.shift2Points ?? 0,
+    },
+    {
+      label: "Shift3",
+      phaseIndices: [4],
+      getCoprs: (allyNum) =>
+        Math.max(0, coprs["Hub Shift 3 Fuel Count"]?.[`frc${allyNum}`] ?? 0),
+      getScore: () => scoreBreakdown.hubScore?.shift3Points ?? 0,
+    },
+    {
+      label: "Shift4",
+      phaseIndices: [5],
+      getCoprs: (allyNum) =>
         Math.max(0, coprs["Hub Shift 4 Fuel Count"]?.[`frc${allyNum}`] ?? 0),
-      getScore: () =>
-        (scoreBreakdown.hubScore?.shift3Points ?? 0) +
-        (scoreBreakdown.hubScore?.shift4Points ?? 0),
+      getScore: () => scoreBreakdown.hubScore?.shift4Points ?? 0,
     },
     {
       label: "Endgame",
+      phaseIndices: [6],
       getCoprs: (allyNum) =>
         Math.max(0, coprs["Hub Endgame Fuel Count"]?.[`frc${allyNum}`] ?? 0),
       getScore: () => scoreBreakdown.hubScore?.endgamePoints ?? 0,
@@ -545,9 +554,20 @@ export function estimateTeamPoints2(
     const actualPhaseScore = phase.getScore();
     if (actualPhaseScore <= 0) continue;
 
+    // Sum shooting time for this phase across its indices
+    const phaseShootingTimes = {};
+    for (const allyNum of allianceKeys) {
+      phaseShootingTimes[allyNum] = phase.phaseIndices.reduce(
+        (sum, idx) =>
+          sum +
+          (matchPhaseShootingTimes[allyNum][idx] ?? 0),
+        0,
+      );
+    }
+
     const rates = {};
     for (const allyNum of allianceKeys) {
-      const shootingTime = matchShootingTimes[allyNum];
+      const shootingTime = phaseShootingTimes[allyNum];
       const totalCopr = phase.getCoprs(allyNum);
       rates[allyNum] = shootingTime > 0 ? totalCopr / shootingTime : 0;
     }
@@ -557,7 +577,7 @@ export function estimateTeamPoints2(
         allianceKeys
           .map(
             (k) =>
-              `  frc${k}: shootingTime=${matchShootingTimes[k].toFixed(2)}  COPR=${phase.getCoprs(k).toFixed(2)}  rate=${rates[k].toFixed(4)}`,
+              `  frc${k}: phaseShootingTime=${phaseShootingTimes[k].toFixed(2)}  COPR=${phase.getCoprs(k).toFixed(2)}  rate=${rates[k].toFixed(4)}`,
           )
           .join("\n") +
         `\n  actualPhaseScore=${actualPhaseScore}`,
