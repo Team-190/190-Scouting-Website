@@ -817,7 +817,7 @@
   }
 
   async function copySinglePicklist(list) {
-    const dataString = `${list.name}:${list.teams.map((t) => t.team_number).join(",")}`;
+    const dataString = `${list.name}:\n${list.teams.map((t) => `${t.team_number}+${t.nickname || ""}`).join("\n")}`;
     try {
       await copyToClipboard(dataString);
       showNotification("✓ Picklist copied to clipboard!");
@@ -831,7 +831,7 @@
     const dataString = Object.values(picklists)
       .map(
         (list) =>
-          `${list.name}:${list.teams.map((t) => t.team_number).join(",")}`,
+          `${list.name}:\n${list.teams.map((t) => `${t.team_number}+${t.nickname || ""}`).join("\n")}`,
       )
       .join(";");
     try {
@@ -864,12 +864,32 @@
           name = `${rawName} (${counter++})`;
         }
 
-        const teamNumbers = teamNumbersStr ? teamNumbersStr.split(",") : [];
-        const teams = teamNumbers
-          .map((numStr) => {
-            const num = parseInt(numStr.trim());
+        // Preferred format: one team per line. Backward compatible with comma-separated values.
+        const teamEntries = teamNumbersStr
+          ? teamNumbersStr
+              .split(/\r?\n|,/)
+              .map((entry) => entry.trim())
+              .filter(Boolean)
+          : [];
+        const teams = teamEntries
+          .map((entry) => {
+            const trimmed = entry.trim();
+            if (!trimmed) return null;
+
+            const plusIdx = trimmed.indexOf("+");
+            const numberPart = plusIdx === -1 ? trimmed : trimmed.slice(0, plusIdx);
+            const namePart = plusIdx === -1 ? "" : trimmed.slice(plusIdx + 1);
+
+            const num = parseInt(numberPart.trim());
+            if (!Number.isFinite(num)) return null;
+
+            // Prefer imported name when present, otherwise fall back to event team store.
+            if (namePart) {
+              return { team_number: num, nickname: namePart };
+            }
+
             const team = teamFromStore(num);
-            return team.nickname ? team : null;
+            return team.nickname ? team : { team_number: num, nickname: String(num) };
           })
           .filter(Boolean);
 
