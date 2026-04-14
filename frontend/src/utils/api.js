@@ -22,7 +22,7 @@ const getAPILink = () => {
 
 const defaultAPILink = getAPILink();
 
-import { setIndexedDBStore, getIndexedDBStore } from "./indexedDB";
+import { getIndexedDBStore, setIndexedDBStore } from "./indexedDB";
 
 function fetchApi(path, query = {}) {
   const params = new URLSearchParams();
