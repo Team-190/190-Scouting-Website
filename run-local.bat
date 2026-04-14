@@ -6,16 +6,7 @@ set "ROOT_DIR=%CD%"
 
 if /i "%~1"=="--help" goto :usage
 if /i "%~1"=="-h" goto :usage
-if "%~1"=="" goto :usage_error
-if not "%~2"=="" goto :usage_error
-
-set "MODE=%~1"
-if /i "%MODE%"=="prod" set "MODE=production"
-
-if /i not "%MODE%"=="production" if /i not "%MODE%"=="dev" (
-    echo Invalid mode "%~1". Use production or dev.
-    goto :usage_error
-)
+if not "%~1"=="" goto :usage_error
 
 where npm >nul 2>nul
 if errorlevel 1 (
@@ -50,28 +41,13 @@ if errorlevel 1 exit /b 1
 call :ensure_dependencies "frontend" "frontend"
 if errorlevel 1 exit /b 1
 
-if /i "%MODE%"=="production" (
-    echo Building frontend for production...
-    pushd "%ROOT_DIR%\frontend"
-    call npm run build
-    set "BUILD_EXIT=!ERRORLEVEL!"
-    popd
-    if not "!BUILD_EXIT!"=="0" exit /b !BUILD_EXIT!
-)
+call :stop_runtime
 
-echo Starting local runtime: branch=%CURRENT_BRANCH% mode=%MODE% backend_port=%BACKEND_PORT% frontend_port=%FRONTEND_PORT%
-if /i "%MODE%"=="dev" (
-    call :launch_runtime "Local Backend Runtime" "%ROOT_DIR%\backend" "npm run dev"
-) else (
-    call :launch_runtime "Local Backend Runtime" "%ROOT_DIR%\backend" "npm run start"
-)
+echo Starting local runtime: branch=%CURRENT_BRANCH% mode=dev backend_port=%BACKEND_PORT% frontend_port=%FRONTEND_PORT%
+call :launch_runtime "Local Backend Runtime" "%ROOT_DIR%\backend" "npm run dev"
 if errorlevel 1 exit /b 1
 
-if /i "%MODE%"=="production" (
-    call :launch_runtime "Local Frontend Runtime" "%ROOT_DIR%\frontend" "npm run preview"
-) else (
-    call :launch_runtime "Local Frontend Runtime" "%ROOT_DIR%\frontend" "npm run dev"
-)
+call :launch_runtime "Local Frontend Runtime" "%ROOT_DIR%\frontend" "npm run dev"
 if errorlevel 1 exit /b 1
 
 start "" "http://localhost:%FRONTEND_PORT%"
@@ -91,6 +67,20 @@ if not "!LAUNCH_EXIT!"=="0" (
 )
 exit /b 0
 
+:stop_runtime
+taskkill /FI "WINDOWTITLE eq Local Backend Runtime*" /F /T >nul 2>nul
+taskkill /FI "WINDOWTITLE eq Local Frontend Runtime*" /F /T >nul 2>nul
+call :kill_runtime_by_cmdline "Local Backend Runtime"
+call :kill_runtime_by_cmdline "Local Frontend Runtime"
+exit /b 0
+
+:kill_runtime_by_cmdline
+set "RUNTIME_MATCH=%~1"
+for /f %%P in ('powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='SilentlyContinue'; Get-CimInstance Win32_Process -Filter \"Name='cmd.exe'\" ^| Where-Object { $_.CommandLine -like '*%RUNTIME_MATCH%*' } ^| ForEach-Object { $_.ProcessId }"') do (
+    taskkill /PID %%P /T /F >nul 2>nul
+)
+exit /b 0
+
 :ensure_dependencies
 set "DEP_PATH=%~1"
 set "DEP_LABEL=%~2"
@@ -105,11 +95,11 @@ if not exist "%ROOT_DIR%\%DEP_PATH%\node_modules" (
 exit /b 0
 
 :usage
-echo Usage: .\run-local.bat [production^|dev]
+echo Usage: .\run-local.bat
 echo.
-echo Examples:
-echo   .\run-local.bat production
-echo   .\run-local.bat dev
+echo Runs the current branch in local development mode.
+echo - Backend: npm run dev
+echo - Frontend: npm run dev
 exit /b 0
 
 :usage_error
