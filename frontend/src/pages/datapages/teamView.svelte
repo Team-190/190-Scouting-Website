@@ -1,8 +1,7 @@
 <script lang="ts">
   import {
-    AllCommunityModule,
-    createGrid,
-    ModuleRegistry,
+      AllCommunityModule,
+      ModuleRegistry
   } from "ag-grid-community";
   import { onMount, tick } from "svelte";
   import { v4 as uuidv4 } from "uuid";
@@ -13,43 +12,35 @@
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
   import {
-    fetchAnanthPage,
-    fetchGracePage,
-    fetchPitScoutingImage,
-    fetchMatchAlliances,
-    fetchOPR,
-    fetchCOPRs,
-    fetchTeams,
-    fetchRobotClimb,
-    readPitScoutingFromIDB,
-    readQualScoutingFromIDB,
+      fetchAnanthPage,
+      fetchCOPRs,
+      fetchGracePage,
+      fetchMatchAlliances,
+      fetchOPR,
+      fetchPitScoutingImage,
+      fetchRobotClimb,
+      fetchTeams,
+      readPitScoutingFromIDB,
+      readQualScoutingFromIDB,
   } from "../../utils/api.js";
   import {
-    BOOLEAN_METRICS,
-    CLIMBSTATE_METRIC,
-    COLOR_MODES,
-    EXCLUDED_FIELDS,
-    getAnanthRatings,
-    getColorblindMode,
-    getEventCode,
-    getGraceRatings,
-    HEADER_HEIGHT,
-    INVERTED_METRICS,
-    lerpColor,
-    mean,
-    median,
-    METADATA_KEYS,
-    METRIC_DISPLAY_NAMES,
-    normalizeClimbData,
-    percentile,
-    ROW_HEIGHT,
-    sd,
-    estimateTeamPoints2,
-    ZONE_TIME_FIELDS,
+      COLOR_MODES,
+      estimateTeamPoints2,
+      EXCLUDED_FIELDS,
+      getAnanthRatings,
+      getColorblindMode,
+      getEventCode,
+      getGraceRatings,
+      lerpColor,
+      mean,
+      METADATA_KEYS,
+      METRIC_DISPLAY_NAMES,
+      normalizeClimbData,
+      ZONE_TIME_FIELDS
   } from "../../utils/pageUtils.js";
 
-  import { getIndexedDBStore } from '../../utils/indexedDB';
   import TeamGrid from "../../components/Teamgrid.svelte";
+  import { getIndexedDBStore } from '../../utils/indexedDB';
   ModuleRegistry.registerModules([AllCommunityModule]);
 
   // ─── Constants ────────────────────────────────────────────────────────────────
