@@ -563,16 +563,16 @@ export function estimateTeamPoints2(teamStr, matchNumber, coprs, autoRows, teleo
       rates[allyNum] = shootingTime > 0 ? totalCopr / shootingTime : 0;
     }
 
-    console.log(
-      `Match ${matchNumber} | Team ${teamStrClean} | Phase: ${phase.label}\n` +
-        allianceKeys
-          .map(
-            (k) =>
-              `  frc${k}: phaseShootingTime=${phaseShootingTimes[k].toFixed(2)}  COPR=${phase.getCoprs(k).toFixed(2)}  rate=${rates[k].toFixed(4)}`,
-          )
-          .join("\n") +
-        `\n  actualPhaseScore=${actualPhaseScore}`,
-    );
+    // console.log(
+    //   `Match ${matchNumber} | Team ${teamStrClean} | Phase: ${phase.label}\n` +
+    //     allianceKeys
+    //       .map(
+    //         (k) =>
+    //           `  frc${k}: phaseShootingTime=${phaseShootingTimes[k].toFixed(2)}  COPR=${phase.getCoprs(k).toFixed(2)}  rate=${rates[k].toFixed(4)}`,
+    //       )
+    //       .join("\n") +
+    //     `\n  actualPhaseScore=${actualPhaseScore}`,
+    // );
 
     const allianceTotalRate = allianceKeys.reduce(
       (sum, allyNum) => sum + rates[allyNum], 0,
