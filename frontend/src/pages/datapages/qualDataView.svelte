@@ -25,6 +25,7 @@
   let showDataDropdown = false;
   let showPit = true;
   let showQual = true;
+  let qualMatchIndexByTeam: Record<number, number> = {};
 
   function toggleTeamVisibility(team: number) {
     const next = new Set(hiddenTeams);
@@ -394,6 +395,38 @@
   return result;
 })();
 
+  $: {
+    // Keep per-team pagination index valid as filters/data change.
+    const next: Record<number, number> = {};
+    for (const team of visibleCards) {
+      const rows = filteredQualByTeam[team] ?? [];
+      const maxIdx = Math.max(0, rows.length - 1);
+      const current = qualMatchIndexByTeam[team] ?? 0;
+      next[team] = Math.min(Math.max(0, current), maxIdx);
+    }
+    qualMatchIndexByTeam = next;
+  }
+
+  function previousQualMatch(team: number) {
+    const rows = filteredQualByTeam[team] ?? [];
+    if (!rows.length) return;
+    const current = qualMatchIndexByTeam[team] ?? 0;
+    qualMatchIndexByTeam = {
+      ...qualMatchIndexByTeam,
+      [team]: Math.max(0, current - 1),
+    };
+  }
+
+  function nextQualMatch(team: number) {
+    const rows = filteredQualByTeam[team] ?? [];
+    if (!rows.length) return;
+    const current = qualMatchIndexByTeam[team] ?? 0;
+    qualMatchIndexByTeam = {
+      ...qualMatchIndexByTeam,
+      [team]: Math.min(rows.length - 1, current + 1),
+    };
+  }
+
   $: if (colorblindMode) {
     // Redraw all canvases when colorblind mode changes
     for (const canvas of canvasesByTeamMatch.values()) {
@@ -680,16 +713,39 @@
             <!-- Qualitative Notes + Auto Paths -->
             {#if filteredQualByTeam[team]?.length > 0 && showQual}
               <div class="card-section">
-                <div class="section-label">
-                  <span class="section-icon">📝</span> Qualitative Notes
+                <div class="section-label qual-section-header">
+                  <div class="section-label-main">
+                    <span class="section-icon">📝</span> Qualitative Notes
+                  </div>
+                  <div class="qual-pagination-controls">
+                    <button
+                      class="qual-page-btn"
+                      on:click={() => previousQualMatch(team)}
+                      disabled={(qualMatchIndexByTeam[team] ?? 0) <= 0}
+                      aria-label="Previous match"
+                    >
+                      ◀
+                    </button>
+                    <span class="qual-page-indicator">
+                      {(qualMatchIndexByTeam[team] ?? 0) + 1}/{(filteredQualByTeam[team] ?? []).length}
+                    </span>
+                    <button
+                      class="qual-page-btn"
+                      on:click={() => nextQualMatch(team)}
+                      disabled={(qualMatchIndexByTeam[team] ?? 0) >= ((filteredQualByTeam[team] ?? []).length - 1)}
+                      aria-label="Next match"
+                    >
+                      ▶
+                    </button>
+                  </div>
                 </div>
                 <div class="qual-matches">
-                  {#each (filteredQualByTeam[team] ?? []) as matchRow}
+                  {#each (filteredQualByTeam[team] ?? []).slice(qualMatchIndexByTeam[team] ?? 0, (qualMatchIndexByTeam[team] ?? 0) + 1) as matchRow (matchRow.Match ?? matchRow.match)}
                     <div class="qual-match-block">
                       <div class="qual-match-header">Match {matchRow.Match ?? matchRow.match}</div>
 
                       {#if matchRow?.AutoPath && Array.isArray(matchRow.AutoPath) && matchRow.AutoPath.length > 0}
-                        <div class="auto-path-wrapper" key={matchRow.Match}>
+                        <div class="auto-path-wrapper">
                           <div class="progress-bar-container" style="--progress: {progressByCanvasId[`canvas-${team}-${matchRow.Match}`] ?? 0}">
                             <div class="progress-bar-fill"></div>
                           </div>
@@ -1039,6 +1095,59 @@
     display: flex; align-items: center; gap: 6px;
     font-size: 0.72rem; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
     color: var(--red); margin-bottom: 10px;
+  }
+
+  .qual-section-header {
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .section-label-main {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .qual-pagination-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .qual-page-btn {
+    border: 1px solid rgba(200,27,0,0.45);
+    background: rgba(255,255,255,0.06);
+    color: #ddd;
+    border-radius: 6px;
+    width: 24px;
+    height: 24px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    font-size: 0.7rem;
+  }
+
+  .qual-page-btn:hover:not(:disabled) {
+    background: rgba(200,27,0,0.22);
+    color: #fff;
+  }
+
+  .qual-page-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  .qual-page-indicator {
+    min-width: 46px;
+    text-align: center;
+    font-size: 0.66rem;
+    color: #bbb;
+    font-weight: 700;
+    letter-spacing: 0.4px;
   }
 
   .info-group { margin-bottom: 10px; }
