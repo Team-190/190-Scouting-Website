@@ -49,6 +49,7 @@
     // Always hide navbar when clicking a link
     expandedMenu = null;
     isPinnedOpen = false;
+    isHovering = false;
     isSidebarOpen.set(false);
     goto(path);
   }
