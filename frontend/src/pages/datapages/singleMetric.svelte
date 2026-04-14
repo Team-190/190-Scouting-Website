@@ -572,6 +572,7 @@
   function resolveDataKey(displayMetric: string): string {
     if (displayMetric === OPR_DISPLAY) return "OPR";
     if (displayMetric === EFS_DISPLAY) return "EFS";
+    if (displayMetric === EFS2_DISPLAY) return "EFS2";
     for (const [key, val] of METRIC_DISPLAY_NAMES) {
       if (val === displayMetric) return key;
     }
@@ -581,6 +582,7 @@
   function checkIsNumericMetric(metric: string): boolean {
     const key = resolveDataKey(metric);
     if (key === "OPR") return Object.keys(teamOPRs).length > 0;
+    if (key === "EFS" || key === "EFS2") return true;
     let hasData = false;
     for (const team of availableTeams) {
       for (const row of teamData[team] ?? []) {
@@ -1490,7 +1492,11 @@
     chart.yAxisMetric = dataMetric;
     chart.selectedTeams ??= new Set(availableTeams);
     const isNumericData =
-      selectedMetric === OPR_DISPLAY ? true : checkIsNumericMetric(dataMetric);
+      selectedMetric === OPR_DISPLAY ||
+      selectedMetric === EFS_DISPLAY ||
+      selectedMetric === EFS2_DISPLAY
+        ? true
+        : checkIsNumericMetric(dataMetric);
     let option;
     if (!isNumericData && chart.type !== "pie" && chart.type !== "radar") {
       option = {
