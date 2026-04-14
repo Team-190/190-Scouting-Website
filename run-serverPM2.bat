@@ -3,6 +3,7 @@ setlocal EnableExtensions EnableDelayedExpansion
 
 cd /d "%~dp0"
 set "ROOT_DIR=%CD%"
+set "NGINX_DIR=C:\nginx"
 
 if /i "%~1"=="--help" goto :usage
 if /i "%~1"=="-h" goto :usage
@@ -17,6 +18,18 @@ if errorlevel 1 (
 where node >nul 2>nul
 if errorlevel 1 (
     echo node is required but not found in PATH.
+    exit /b 1
+)
+
+where pm2 >nul 2>nul
+if errorlevel 1 (
+    echo pm2 is required but not found in PATH.
+    exit /b 1
+)
+
+set "NGINX_EXE=%NGINX_DIR%\nginx.exe"
+if not exist "!NGINX_EXE!" (
+    echo nginx executable not found at !NGINX_EXE!
     exit /b 1
 )
 
@@ -55,40 +68,40 @@ popd
 if not "!BUILD_EXIT!"=="0" exit /b !BUILD_EXIT!
 
 echo Starting server runtime: branch=%CURRENT_BRANCH% mode=production backend_port=%BACKEND_PORT% frontend_port=%FRONTEND_PORT%
-call :stop_runtime
 
-call :launch_runtime "Server Backend Runtime" "%ROOT_DIR%\backend" "npm run start"
-if errorlevel 1 exit /b 1
-call :launch_runtime "Server Frontend Runtime" "%ROOT_DIR%\frontend" "npm run preview"
-if errorlevel 1 exit /b 1
-
-exit /b 0
-
-:launch_runtime
-set "RUNTIME_TITLE=%~1"
-set "RUNTIME_DIR=%~2"
-set "RUNTIME_CMD=%~3"
-
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath 'cmd.exe' -WorkingDirectory '%RUNTIME_DIR%' -ArgumentList '/k','title %RUNTIME_TITLE% && %RUNTIME_CMD%' -WindowStyle Normal | Out-Null"
-set "LAUNCH_EXIT=!ERRORLEVEL!"
-if not "!LAUNCH_EXIT!"=="0" (
-    echo Failed to launch %RUNTIME_TITLE%.
-    exit /b !LAUNCH_EXIT!
+REM Stop any existing pm2 backend process
+echo Checking for existing pm2 backend process...
+pm2 list | find /I "backend" >nul 2>nul
+if errorlevel 0 (
+    echo Stopping existing pm2 backend process...
+    pm2 stop backend >nul 2>nul
+    pm2 delete backend >nul 2>nul
 )
-exit /b 0
 
-:stop_runtime
-taskkill /FI "WINDOWTITLE eq Server Backend Runtime*" /F /T >nul 2>nul
-taskkill /FI "WINDOWTITLE eq Server Frontend Runtime*" /F /T >nul 2>nul
-call :kill_runtime_by_cmdline "Server Backend Runtime"
-call :kill_runtime_by_cmdline "Server Frontend Runtime"
-exit /b 0
-
-:kill_runtime_by_cmdline
-set "RUNTIME_MATCH=%~1"
-for /f %%P in ('powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='SilentlyContinue'; Get-CimInstance Win32_Process -Filter \"Name='cmd.exe'\" ^| Where-Object { $_.CommandLine -like '*%RUNTIME_MATCH%*' } ^| ForEach-Object { $_.ProcessId }"') do (
-    taskkill /PID %%P /T /F >nul 2>nul
+REM Check if nginx is running and reload, otherwise start it
+echo Checking nginx status...
+tasklist /FI "IMAGENAME eq nginx.exe" 2>nul | find /I "nginx.exe" >nul 2>nul
+if errorlevel 0 (
+    echo Reloading nginx...
+    "!NGINX_EXE!" -s reload
+) else (
+    echo Starting nginx...
+    start "Nginx Server" "!NGINX_EXE!"
+    timeout /t 2 /nobreak
 )
+
+REM Start backend with pm2
+echo Starting backend with pm2...
+pushd "%ROOT_DIR%\backend"
+pm2 start "index.js" --name "backend" --cwd "%ROOT_DIR%\backend"
+set "PM2_EXIT=!ERRORLEVEL!"
+popd
+if not "!PM2_EXIT!"=="0" (
+    echo Failed to start backend with pm2.
+    exit /b !PM2_EXIT!
+)
+
+echo Server runtime started successfully.
 exit /b 0
 
 :ensure_dependencies
