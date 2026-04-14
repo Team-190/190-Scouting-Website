@@ -2,25 +2,19 @@
 
 ## Runtime
 
-Server commands:
+Commands:
 
-- `.\run-server.bat main production`
-- `.\run-server.bat dev production`
-- `.\run-server.bat main dev`
-- `.\run-server.bat dev dev`
+- `./run-local.bat`
+- `./run-server.bat`
 
-Local commands (current branch):
+Behavior:
 
-- `.\run-local.bat production`
-- `.\run-local.bat dev`
+- `run-local.bat` runs the current branch in local development mode.
+- `run-server.bat` runs the current branch in server production mode.
+- Neither script performs git polling or automatic pulls.
+- Both scripts auto-install missing backend/frontend dependencies.
+- Frontend port is fixed at `5173` and backend port is fixed at `8000`.
 
 Notes:
 
-- `run-server.bat` includes git polling and auto-restart after pulls.
-- Server polling defaults: every `30s` in `dev` mode and every `60s` in `production` mode.
-- Auto-pull/restart occurs only when the remote branch is actually ahead (not when local is ahead/diverged).
-- In server production mode, frontend build is skipped on restart when pulled changes do not touch `frontend/` or `runtime/`.
-- `run-local.bat` does not poll git.
-- Both scripts auto-install missing backend/frontend dependencies.
-- Frontend port is fixed at `5173` and backend port is fixed at `8000` for local and server modes.
 - Port values are centralized in `runtime/constants.js` (not `.env`).
