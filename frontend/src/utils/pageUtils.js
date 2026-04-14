@@ -188,6 +188,7 @@ export const METRIC_DISPLAY_NAMES = new Map([
   ["LadderLocation", "Ladder Location"],
   ["Strategy", "Strategy"],
   ["EstimatedPoints", "EFS (Estimated Fuel Scored)"],
+  ["EstimatedPoints2", "EFS2 (Phase-based)"],
   ["NearFar", "Near/Far"],
   ["MatchEventCount", "Match Events"],
   ["RecordType", "Record Type"],
