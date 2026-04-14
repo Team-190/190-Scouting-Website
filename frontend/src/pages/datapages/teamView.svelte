@@ -18,6 +18,7 @@
     fetchPitScoutingImage,
     fetchMatchAlliances,
     fetchOPR,
+    fetchCOPRs,
     fetchTeams,
     fetchRobotClimb,
     readPitScoutingFromIDB,
@@ -43,6 +44,7 @@
     percentile,
     ROW_HEIGHT,
     sd,
+    estimateTeamPoints2,
     ZONE_TIME_FIELDS,
   } from "../../utils/pageUtils.js";
 
@@ -63,6 +65,8 @@
   let allTeams: number[] = [];
   let selectedTeam: number | null = null;
   let teamOPR: number | null = null;
+  let teamEFS2: number | null = null;
+  let teamCOPRs: Record<string, any> = {};
   let graceData: any = null;
   let ananthData: any = null;
   let cache: Record<string, any[]> = {};
@@ -79,6 +83,8 @@
   let isLoading = false;
   let autoOnly = false;
   let matchAlliancesCache: any = null;
+  let autoRowsAll: any[] = [];
+  let teleopRowsAll: any[] = [];
 
   // TeamGrid prop
   let matches: any[] = [];
@@ -543,6 +549,7 @@
       if (!teamViewData) {
         console.warn("loadTeamData: teamViewData is null/empty");
         matches = [];
+        teamEFS2 = null;
         return;
       }
       
@@ -570,16 +577,38 @@
             matchAlliancesCache = [];
           }
         }
+
+        if (!Object.keys(teamCOPRs).length && eventCode) {
+          try {
+            teamCOPRs = await fetchCOPRs(eventCode);
+          } catch (e) {
+            console.error("Failed to fetch COPRs:", e);
+            teamCOPRs = {};
+          }
+        }
         
         // Parallelize all API calls using Promise.all with error handling
         const promises = data.map(async (match) => {
           try {
-            const [estimatedPoints, climbData] = await Promise.all([
+            const [estimatedPoints, estimatedPoints2, climbData] = await Promise.all([
               estimateTeamPoints(teamNumber, match.Match, matchAlliancesCache),
+              Promise.resolve(
+                Object.keys(teamCOPRs).length
+                  ? estimateTeamPoints2(
+                      teamNumber,
+                      Number(match.Match),
+                      teamCOPRs,
+                      autoRowsAll,
+                      teleopRowsAll,
+                      matchAlliancesCache,
+                    )
+                  : null,
+              ),
               fetchRobotClimb(eventCode, teamNumber, match.Match).catch(() => ({ EndgameClimb: "", AutoClimb: "" })),
             ]);
             
             match.EstimatedPoints = estimatedPoints;
+            match.EstimatedPoints2 = estimatedPoints2;
             
             if (climbData && climbData.EndgameClimb) {
               if (climbData.EndgameClimb.slice(-1) == "3") {
@@ -612,7 +641,15 @@
         
         // Wait for all promises to resolve
         data = await Promise.all(promises);
+        const efs2Values = data
+          .map((m) => Number(m.EstimatedPoints2))
+          .filter((v) => Number.isFinite(v) && v > 0);
+        teamEFS2 = efs2Values.length
+          ? Number(mean(efs2Values).toFixed(2))
+          : null;
         console.log(`loadTeamData: Loaded ${data.length} matches with enrichment`);
+      } else {
+        teamEFS2 = null;
       }
       cache[teamNumber] = data;
       matches = data; // ← drives TeamGrid reactively
@@ -752,6 +789,8 @@
       const stored = await getIndexedDBStore("scoutingData") || [];
       // Unwrap the value property if it exists (from compressed storage)
       const parsed = (stored || []).map(item => item.value !== undefined ? item.value : item);
+      autoRowsAll = extractValues(parsed, true);
+      teleopRowsAll = extractValues(parsed, false);
       teamViewData = extractValues(parsed, autoOnly);
       cache = {};
       allTeams = await loadTeamNumbers();
@@ -1363,6 +1402,9 @@
       // Unwrap the value property if it exists (from compressed storage)
       const parsed = (stored || []).map(item => item.value !== undefined ? item.value : item);
       console.log(`onMount: After unwrapping, have ${parsed.length} items`, parsed.slice(0, 3));
+
+      autoRowsAll = extractValues(parsed, true);
+      teleopRowsAll = extractValues(parsed, false);
       
       // Check the structure of first item
       if (parsed.length > 0) {
