@@ -70,11 +70,6 @@
 
   function toggleMenu(menuName) {
     expandedMenu = expandedMenu === menuName ? null : menuName;
-    // On mobile, close navbar after clicking any button
-    if (typeof window !== 'undefined' && window.innerWidth < 768) {
-      isSidebarOpen.set(false);
-      isPinnedOpen = false;
-    }
   }
 
   async function checkAlliances() {
