@@ -1886,8 +1886,8 @@
     <h1>Event View</h1>
     <p class="subtitle">FRC Team 190 - Scouting Data Analysis</p>
   </div>
-
-  <div class="controls">
+  
+  <div class="top-controls">
     {#if loading}
       <span style="color: transparent;">Loading team data...</span>
     {:else if error}
@@ -2269,18 +2269,24 @@
     margin: 0;
   }
 
-  .controls {
+  .top-controls {
+    padding: 1rem 1.5rem;
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+    color: white;
+    font-size: 1.1rem;
     display: flex;
     flex-wrap: wrap;
     gap: 1.875rem;
     align-items: center;
     justify-content: center;
     width: 100%;
-    padding: 1rem 1.5rem;
-    color: white;
-    font-size: 1.1rem;
+    max-width: 75rem;
+    border-radius: 0.625rem;
+    margin-bottom: 1.25rem;
+    border: 2px solid var(--frc-190-red);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
   }
-  .controls label {
+  .top-controls label {
     font-weight: 600;
     color: #fff;
     font-size: 0.9rem;
@@ -2507,12 +2513,12 @@
     .header-section h1 {
       font-size: 1.5rem;
     }
-    .controls {
+    .top-controls {
       font-size: 1rem;
       gap: 1.25rem;
       padding: 0.8rem 1.25rem;
     }
-    .controls label {
+    .top-controls label {
       font-size: 0.85rem;
     }
     select {
@@ -2541,13 +2547,13 @@
     .header-section .subtitle {
       font-size: 0.8rem;
     }
-    .controls {
+    .top-controls {
       gap: 0.75rem;
       padding: 0.6rem 1rem;
       font-size: 0.9rem;
       flex-direction: column;
     }
-    .controls label {
+    .top-controls label {
       font-size: 0.8rem;
     }
     .auto-only-toggle label {
@@ -2635,7 +2641,7 @@
     .header-section .subtitle {
       font-size: 0.7rem;
     }
-    .controls {
+    .top-controls {
       gap: 0.5rem;
       padding: 0.4rem 0.75rem;
       font-size: 0.85rem;
