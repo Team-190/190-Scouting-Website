@@ -380,8 +380,11 @@
   }
 
   .logo {
+    width: 80px;
     height: 40px;
-    width: auto;
+    max-width: none;
+    object-fit: contain;
+    flex-shrink: 0;
     display: block;
   }
 
@@ -976,6 +979,11 @@
     .sidebar-content {
       margin-top: 2.9rem;
       overflow-y: auto;
+    }
+
+    .logo {
+      width: 64px;
+      height: 32px;
     }
 
     .nav-links button,
