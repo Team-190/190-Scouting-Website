@@ -267,6 +267,116 @@
     return "cap-neutral";
   }
 
+  const QUAL_METADATA_KEYS = new Set([
+    "RecordType",
+    "recordType",
+    "Match",
+    "match",
+    "Team",
+    "team",
+    "ScouterName",
+    "scouterName",
+    "ScoutStation",
+    "scoutStation",
+    "Alliance",
+    "alliance",
+    "AutoPath",
+    "autoPath",
+    "_id",
+    "id",
+  ]);
+
+  const QUAL_LABEL_OVERRIDES: Record<string, string> = {
+    autoActions: "Autonomous Actions",
+    travelMethod: "Travel Method",
+    travelTroubles: "Travel Troubles",
+    fuelScored: "Fuel Scored",
+    fuelCollectionPosition: "Fuel Collection Position",
+    shooterEfficiency: "Shooter Efficiency",
+    inactivePeriod: "Inactive Period",
+    trenchFeedVolume: "Trench Feed Volume",
+    bumpFeedVolume: "Bump Feed Volume",
+    defenseEffectiveness: "Defense Effectiveness",
+    defenseAvoidance: "Defense Avoidance",
+    intakeEfficiency: "Intake Efficiency",
+    penalties: "Penalties",
+    drivingQuality: "Driving Quality",
+    matchEvents: "Match Events",
+    otherNotes: "Notes",
+    climbQuality: "Climb Quality",
+  };
+
+  const QUAL_FIELD_ORDER = [
+    "autoActions",
+    "travelMethod",
+    "travelTroubles",
+    "fuelScored",
+    "fuelCollectionPosition",
+    "shooterEfficiency",
+    "inactivePeriod",
+    "trenchFeedVolume",
+    "bumpFeedVolume",
+    "defenseEffectiveness",
+    "defenseAvoidance",
+    "intakeEfficiency",
+    "penalties",
+    "drivingQuality",
+    "matchEvents",
+    "otherNotes",
+    "climbQuality",
+  ];
+
+  const QUAL_FIELD_ORDER_INDEX = new Map(
+    QUAL_FIELD_ORDER.map((field, index) => [field, index]),
+  );
+
+  function humanizeQualKey(key: string): string {
+    if (QUAL_LABEL_OVERRIDES[key]) return QUAL_LABEL_OVERRIDES[key];
+    return key
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      .replace(/[_-]+/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+      .trim();
+  }
+
+  function hasRenderableQualValue(value: any): boolean {
+    if (value === null || value === undefined) return false;
+    if (typeof value === "string") return value.trim() !== "";
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === "object") return Object.keys(value).length > 0;
+    return true;
+  }
+
+  function formatSliderValue(value: any): string {
+    const num = Number(value);
+    if (!isFinite(num) || num <= 0) return "None (0)";
+    if (num <= 2) return `A little (${num})`;
+    if (num <= 5) return `Moderate (${num})`;
+    if (num <= 8) return `A lot (${num})`;
+    return `Tons (${num})`;
+  }
+
+  function formatQualValue(key: string, value: any): string {
+    if (key === "fuelScored") return formatSliderValue(value);
+    if (typeof value === "boolean") return value ? "Yes" : "No";
+    if (Array.isArray(value) || typeof value === "object") {
+      return JSON.stringify(value);
+    }
+    return String(value);
+  }
+
+  function getQualMetricEntries(row: Record<string, any>): Array<[string, string]> {
+    return Object.entries(row)
+      .filter(([key, value]) => !QUAL_METADATA_KEYS.has(key) && hasRenderableQualValue(value))
+      .sort(([aKey], [bKey]) => {
+        const aOrder = QUAL_FIELD_ORDER_INDEX.get(aKey) ?? Number.MAX_SAFE_INTEGER;
+        const bOrder = QUAL_FIELD_ORDER_INDEX.get(bKey) ?? Number.MAX_SAFE_INTEGER;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return humanizeQualKey(aKey).localeCompare(humanizeQualKey(bKey));
+      })
+      .map(([key, value]) => [humanizeQualKey(key), formatQualValue(key, value)]);
+  }
+
   // ─── Mount ────────────────────────────────────────────────────────────────────
   onMount(async () => {
     isLoading = true;
@@ -765,21 +875,19 @@
                       {/if}
 
                       <div class="qual-rows">
-                        {#each [
-                          ["Trench Feed Vol.", matchRow.trenchFeedVolume],
-                          ["Defense Effect.", matchRow.defenseEffectiveness],
-                          ["Defense Avoid.", matchRow.defenseAvoidance],
-                          ["Intake Efficiency", matchRow.intakeEfficiency],
-                          ["Match Events", matchRow.matchEvents],
-                          ["Notes", matchRow.otherNotes],
-                        ] as [label, value]}
-                          {#if value !== undefined && value !== null && value !== ""}
+                        {#if getQualMetricEntries(matchRow).length === 0}
+                          <div class="qual-row-item">
+                            <span class="qual-row-lbl">Notes</span>
+                            <span class="qual-row-val">No qualitative responses recorded.</span>
+                          </div>
+                        {:else}
+                          {#each getQualMetricEntries(matchRow) as [label, value]}
                             <div class="qual-row-item">
                               <span class="qual-row-lbl">{label}</span>
                               <span class="qual-row-val">{value}</span>
                             </div>
-                          {/if}
-                        {/each}
+                          {/each}
+                        {/if}
                       </div>
                     </div>
                   {/each}
