@@ -17,10 +17,11 @@
   },
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon server.js",
+    "dev": "nodemon index.js",
     "test": "jest --coverage --testPathIgnorePatterns=legacy"
   },
   "dependencies": {
+    "compression": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",

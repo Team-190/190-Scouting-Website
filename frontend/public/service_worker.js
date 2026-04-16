@@ -1,4 +1,4 @@
-const CACHE_NAME = 'app-shell-v1';
+const CACHE_NAME = 'app-shell-v2';
 const IS_DEV = self.location.hostname === 'localhost';
 const APP_SHELL = ['/', '/index.html'];
 
@@ -35,9 +35,19 @@ self.addEventListener('fetch', event => {
 
       // Always try to fetch a fresh version in the background
       const fetchPromise = fetch(event.request).then(response => {
-        cache.put(event.request, response.clone());
+        // Only cache GET requests (Cache API limitation)
+        if (event.request.method === 'GET' && response.status === 200) {
+          try {
+            cache.put(event.request, response.clone());
+          } catch (err) {
+            console.error('Failed to cache:', err);
+          }
+        }
         return response;
-      }).catch(() => null); // if network fails, silently fall back
+      }).catch(err => {
+        console.error('Fetch failed:', err);
+        return null;
+      });
 
       // Return cached immediately if available, otherwise wait for network
       return cached ?? await fetchPromise;

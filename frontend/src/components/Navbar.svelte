@@ -13,8 +13,27 @@
   let expandedMenu = null;
   let isHovering = false;
   let isPinnedOpen = false;
+  let isMobile = false;
+
+  function syncViewportMode() {
+    if (typeof window === "undefined") return;
+    isMobile = window.innerWidth <= 768;
+    if (isMobile) {
+      isHovering = false;
+      isPinnedOpen = false;
+      isSidebarOpen.set(false);
+    }
+  }
 
   function toggleSidebar() {
+    if (isMobile) {
+      const nextOpen = !$isSidebarOpen;
+      isPinnedOpen = false;
+      isHovering = false;
+      isSidebarOpen.set(nextOpen);
+      return;
+    }
+
     if (isPinnedOpen) {
       // Currently pinned open, close it
       isPinnedOpen = false;
@@ -30,16 +49,27 @@
     // Always hide navbar when clicking a link
     expandedMenu = null;
     isPinnedOpen = false;
+    isHovering = false;
     isSidebarOpen.set(false);
     goto(path);
   }
 
-  function toggleMenu(menuName) {
-    expandedMenu = expandedMenu === menuName ? null : menuName;
-    // On mobile, close navbar after toggling menu if not pinned
-    if (!isPinnedOpen && typeof window !== 'undefined' && window.innerWidth < 768) {
+  function handleMouseEnter() {
+    if (isMobile) return;
+    isHovering = true;
+    isSidebarOpen.set(true);
+  }
+
+  function handleMouseLeave() {
+    if (isMobile) return;
+    isHovering = false;
+    if (!isPinnedOpen) {
       isSidebarOpen.set(false);
     }
+  }
+
+  function toggleMenu(menuName) {
+    expandedMenu = expandedMenu === menuName ? null : menuName;
   }
 
   async function checkAlliances() {
@@ -70,17 +100,20 @@
   }
 
   onMount(() => {
+    syncViewportMode();
     checkAlliances();
     window.addEventListener("storage", onStorageChange);
+    window.addEventListener("resize", syncViewportMode);
     const interval = setInterval(checkAlliances, 30000);
     return () => {
       window.removeEventListener("storage", onStorageChange);
+      window.removeEventListener("resize", syncViewportMode);
       clearInterval(interval);
     };
   });
 </script>
 
-<nav class="navbar" class:collapsed={!$isSidebarOpen && !isHovering} on:mouseenter={() => { isHovering = true; isSidebarOpen.set(true); }} on:mouseleave={() => { isHovering = false; if (!isPinnedOpen) isSidebarOpen.set(false); }}>
+<nav class="navbar" class:collapsed={!$isSidebarOpen && !isHovering} class:mobile={isMobile} on:mouseenter={handleMouseEnter} on:mouseleave={handleMouseLeave}>
   <button class="toggle-btn" on:click={toggleSidebar} aria-label="Toggle sidebar">
     <span class="toggle-icon" class:rotated={$isSidebarOpen}></span>
   </button>
@@ -279,12 +312,15 @@
     background: white;
     position: relative;
     transition: transform 0.3s ease;
+    left: 0;
+    margin: 0 auto;
   }
 
   .toggle-icon::before,
   .toggle-icon::after {
     content: "";
     position: absolute;
+    left: 0;
     width: 20px;
     height: 2px;
     background: white;
@@ -328,6 +364,7 @@
     margin-bottom: 1rem;
     cursor: pointer;
     transition: background-color 0.2s;
+    width: 100%;
   }
 
   .logo-section:hover {
@@ -338,9 +375,17 @@
     background-color: #666;
   }
 
+  .navbar.collapsed .logo-section {
+    padding: 1rem 0;
+  }
+
   .logo {
+    width: 80px;
     height: 40px;
-    width: auto;
+    max-width: none;
+    object-fit: contain;
+    flex-shrink: 0;
+    display: block;
   }
 
   .logo-text {
@@ -903,5 +948,52 @@
     0%   { left: -75%;  }
     55%  { left: 125%;  }
     100% { left: 125%;  }
+  }
+
+  @media (max-width: 768px) {
+    .navbar {
+      width: min(82vw, 320px);
+      transform: translateX(calc(-100% + 56px));
+      transition: transform 0.3s ease;
+      box-shadow: 2px 0 10px rgba(0, 0, 0, 0.35);
+    }
+
+    .navbar.collapsed {
+      width: min(82vw, 320px);
+      transform: translateX(calc(-100% + 56px));
+    }
+
+    .navbar.mobile:not(.collapsed) {
+      transform: translateX(0);
+    }
+
+    .toggle-btn {
+      top: 0.6rem;
+      left: auto;
+      right: 0.5rem;
+      background: rgba(0, 0, 0, 0.25);
+      border-radius: 8px;
+      padding: 0.55rem;
+    }
+
+    .sidebar-content {
+      margin-top: 2.9rem;
+      overflow-y: auto;
+    }
+
+    .logo {
+      width: 64px;
+      height: 32px;
+    }
+
+    .nav-links button,
+    .dropdown-toggle {
+      padding: 0.85rem 0.9rem;
+      font-size: 0.95rem;
+    }
+
+    .dropdown-item {
+      padding: 0.65rem 0.9rem 0.65rem 1.4rem;
+    }
   }
 </style>

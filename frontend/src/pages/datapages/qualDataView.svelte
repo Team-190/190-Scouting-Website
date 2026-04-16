@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { fetchTeams, fetchQualitativeScouting, fetchPitScouting } from "../../utils/api.js";
-  import { getEventCode } from "../../utils/pageUtils.js";
+  import { COLOR_MODES, getColorblindMode, getEventCode } from "../../utils/pageUtils.js";
+  import { fetchTeams, fetchQualitativeScouting, fetchPitScouting, readPitScoutingFromIDB, readQualScoutingFromIDB } from "../../utils/api.js";
   import fieldImageSrc from "../../images/FieldImage.png";
 
   let eventCode = getEventCode();
@@ -13,10 +13,19 @@
   let qualDataByTeam: Record<string, any[]> = {};
   let pitDataByTeam: Record<string, any> = {};
   let fieldImg: HTMLImageElement | null = null;
+  let colorblindMode = getColorblindMode();
+  let canvasesByTeamMatch: Map<string, HTMLCanvasElement> = new Map();
 
-  // ─── Filter dropdown ──────────────────────────────────────────────────────────
+  // ─── Filter dropdowns ─────────────────────────────────────────────────────────
   let showFilterDropdown = false;
+  let showMatchDropdown = false;
   let hiddenTeams: Set<number> = new Set();
+  let selectedMatches: Set<string> = new Set();
+
+  let showDataDropdown = false;
+  let showPit = true;
+  let showQual = true;
+  let qualMatchIndexByTeam: Record<number, number> = {};
 
   function toggleTeamVisibility(team: number) {
     const next = new Set(hiddenTeams);
@@ -25,14 +34,23 @@
     hiddenTeams = next;
   }
 
+  function toggleMatchVisibility(m: string) {
+    const next = new Set(selectedMatches);
+    if (next.has(m)) next.delete(m);
+    else next.add(m);
+    selectedMatches = next;
+  }
+
   function showAll() { hiddenTeams = new Set(); }
   function hideAll() { hiddenTeams = new Set(teamsWithData); }
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   function handleOutsideClick(e: MouseEvent) {
     const target = e.target as HTMLElement;
     if (!target.closest(".filter-dropdown-wrapper")) {
       showFilterDropdown = false;
+      showMatchDropdown = false;
+      showDataDropdown = false;
     }
   }
 
@@ -74,14 +92,20 @@
     dragOverTeam = null;
   }
 
+  // ─── Auto Path Animation ──────────────────────────────────────────────────────
+  let animationState: Map<HTMLCanvasElement, { isAnimating: boolean; progress: number; frameId: number | null; lastTime: number }> = new Map();
+  let animationDuration = 5000; // 5 seconds for full path
+  let progressByCanvasId: Record<string, number> = {};
+
   // ─── Auto Path Canvas ─────────────────────────────────────────────────────────
 
-  function drawAutoPath(canvas: HTMLCanvasElement, matchRow: any) {
+  function drawAutoPath(canvas: HTMLCanvasElement, matchRow: any, progress: number = 1) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const W = canvas.width;
     const H = canvas.height;
     ctx.clearRect(0, 0, W, H);
+
 
     if (fieldImg && fieldImg.complete && fieldImg.naturalWidth > 0) {
       const imgW = fieldImg.naturalWidth;
@@ -109,51 +133,123 @@
     }
 
     const RECORDED_W = 1200;
-    const RECORDED_H = 600;
-    const scaleX = W / RECORDED_W;
-    const scaleY = H / RECORDED_H;
+  const RECORDED_H = 600;
+  const scaleX = W / RECORDED_W;
+  const scaleY = H / RECORDED_H;
 
-    if (matchRow?.AutoPath && Array.isArray(matchRow.AutoPath)) {
-      matchRow.AutoPath.forEach((path: any[]) => {
-        if (!Array.isArray(path) || path.length < 2) return;
-        const px = (p: any) => p.x * scaleX;
-        const py = (p: any) => p.y * scaleY;
-        ctx.beginPath();
-        ctx.moveTo(px(path[0]), py(path[0]));
-        for (let i = 1; i < path.length; i++) ctx.lineTo(px(path[i]), py(path[i]));
-        ctx.strokeStyle = "#FFFFFF";
-        ctx.lineWidth = 2;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        ctx.stroke();
-        if (path.length >= 2) {
-          const last = path[path.length - 1];
-          const prev = path[path.length - 2];
-          const angle = Math.atan2(py(last) - py(prev), px(last) - px(prev));
-          const sz = 7;
-          ctx.beginPath();
-          ctx.moveTo(px(last), py(last));
-          ctx.lineTo(px(last) - sz * Math.cos(angle - Math.PI / 6), py(last) - sz * Math.sin(angle - Math.PI / 6));
-          ctx.moveTo(px(last), py(last));
-          ctx.lineTo(px(last) - sz * Math.cos(angle + Math.PI / 6), py(last) - sz * Math.sin(angle + Math.PI / 6));
-          ctx.strokeStyle = "#FFFFFF";
-          ctx.lineWidth = 2;
-          ctx.stroke();
-        }
-      });
+  if (matchRow?.AutoPath && Array.isArray(matchRow.AutoPath)) {
+    const allPaths = matchRow.AutoPath.filter((path: any[]) => Array.isArray(path) && path.length >= 2);
+    if (allPaths.length === 0) return;
+
+    const px = (p: any) => p.x * scaleX;
+    const py = (p: any) => p.y * scaleY;
+
+    // Flatten all points into single array
+    const allPoints: any[] = [];
+    allPaths.forEach((path: any[]) => allPoints.push(...path));
+
+    const totalPoints = allPoints.length;
+    // progress (0–1) now maps to point INDEX, not distance
+    const targetIndex = Math.floor(progress * (totalPoints - 1));
+
+    const modeColors = COLOR_MODES[colorblindMode] || COLOR_MODES.normal;
+    const [r1, g1, b1] = modeColors.below;
+    const [r2, g2, b2] = modeColors.above;
+    const lerpColor = (t: number) => {
+      const r = Math.round(r1 + (r2 - r1) * t);
+      const g = Math.round(g1 + (g2 - g1) * t);
+      const b = Math.round(b1 + (b2 - b1) * t);
+      return `rgb(${r},${g},${b})`;
+    };
+
+    // Draw segments up to targetIndex — each segment advances by 1 point = 1 time unit
+    for (let i = 1; i <= targetIndex && i < totalPoints; i++) {
+      const t = (i - 1) / (totalPoints - 1);
+      ctx.beginPath();
+      ctx.moveTo(px(allPoints[i - 1]), py(allPoints[i - 1]));
+      ctx.lineTo(px(allPoints[i]), py(allPoints[i]));
+      ctx.strokeStyle = lerpColor(t);
+      ctx.lineWidth = 2;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.stroke();
+    }
+
+    // Draw current position dot
+    if (targetIndex < totalPoints) {
+      const cur = allPoints[targetIndex];
+      const t = targetIndex / (totalPoints - 1);
+      ctx.beginPath();
+      ctx.arc(px(cur), py(cur), 4, 0, Math.PI * 2);
+      ctx.fillStyle = lerpColor(t);
+      ctx.fill();
     }
   }
+}
 
   function initMatchCanvas(canvas: HTMLCanvasElement, matchRow: any) {
-    const tryDraw = () => drawAutoPath(canvas, matchRow);
+    const canvasId = `canvas-${matchRow.Team}-${matchRow.Match}`;
+    animationState.set(canvas, { isAnimating: false, progress: 1, frameId: null, lastTime: Date.now() });
+    progressByCanvasId[canvasId] = 1;
+    (canvas as any).animationCanvasId = canvasId;
+    (canvas as any).matchRowData = matchRow;
+    canvasesByTeamMatch.set(`${matchRow.Team}-${matchRow.Match}`, canvas);
+    
+    const tryDraw = () => drawAutoPath(canvas, matchRow, animationState.get(canvas)?.progress ?? 0);
     if (fieldImg && fieldImg.complete && fieldImg.naturalWidth > 0) {
       tryDraw();
     } else if (fieldImg) {
       fieldImg.addEventListener("load", tryDraw, { once: true });
     }
+    
+    // Start animation loop
+    const animate = () => {
+      const state = animationState.get(canvas);
+      if (!state) return;
+      
+      const now = Date.now();
+      const elapsed = now - state.lastTime;
+      state.lastTime = now;
+      
+      if (state.isAnimating) {
+        state.progress += elapsed / animationDuration;
+        if (state.progress >= 1) {
+          state.progress = 0; // Loop back to start
+        }
+        progressByCanvasId[canvasId] = state.progress;
+      }
+      
+      drawAutoPath(canvas, matchRow, state.progress);
+      state.frameId = requestAnimationFrame(animate);
+    };
+    
+    // Toggle play/pause on click
+    const handleClick = () => {
+      const animState = animationState.get(canvas);
+      if (animState) {
+        animState.isAnimating = !animState.isAnimating;
+        animState.lastTime = Date.now();
+        
+        // Start animation loop if not already running
+        if (animState.isAnimating && !animState.frameId) {
+          animState.frameId = requestAnimationFrame(animate);
+        }
+      }
+    };
+    
+    canvas.addEventListener("click", handleClick);
+    
     return {
-      update(newRow: any) { drawAutoPath(canvas, newRow); },
-      destroy() {}
+      update(newRow: any) { matchRow = newRow; },
+      destroy() {
+        const animState = animationState.get(canvas);
+        if (animState && animState.frameId !== null) {
+          cancelAnimationFrame(animState.frameId);
+        }
+        canvas.removeEventListener("click", handleClick);
+        animationState.delete(canvas);
+        delete progressByCanvasId[canvasId];
+      }
     };
   }
 
@@ -184,18 +280,13 @@
       );
       teamNumbers = teamsResult._teamNumbers as number[];
 
-      const localPitStr = localStorage.getItem("retrievePit");
-      const localPit = localPitStr ? JSON.parse(localPitStr) : {};
+      const localPit = await readPitScoutingFromIDB({});
       const pitTeams = Object.keys(localPit);
 
-      const localQualStr = localStorage.getItem("retrieveQual");
-      const localQual = localQualStr ? JSON.parse(localQualStr) : {};
-      const localCounts: Record<string, Record<string, number>> = {};
+      const localQual = await readQualScoutingFromIDB({});
+      const localCounts: Record<string, number> = {};
       for (const [team, matches] of Object.entries(localQual)) {
-        localCounts[team] = {};
-        for (const matchKey of Object.keys(matches as object)) {
-          localCounts[team][matchKey] = 1;
-        }
+        localCounts[team] = Object.keys(matches as object).length;
       }
 
       const qualResponse = await fetchQualitativeScouting(eventCode, localCounts);
@@ -220,13 +311,17 @@
       } else if (qualRaw && typeof qualRaw === "object") {
         for (const [teamKey, val] of Object.entries(qualRaw)) {
           if (Array.isArray(val)) {
-            qualDataByTeam[teamKey] = (val as any[]).sort(
+            qualDataByTeam[teamKey] = val.sort(
               (a, b) => Number(a.Match ?? a.match ?? 0) - Number(b.Match ?? b.match ?? 0)
             );
           } else if (val && typeof val === "object") {
-            qualDataByTeam[teamKey] = Object.entries(val as Record<string, any>)
-              .map(([matchNum, matchData]) => ({ Match: matchNum, ...(matchData as object) }))
-              .sort((a, b) => Number(a.Match) - Number(b.Match));
+            if ((val as any).Match !== undefined || (val as any).match !== undefined) {
+              qualDataByTeam[teamKey] = [val];
+            } else {
+              qualDataByTeam[teamKey] = Object.entries(val as Record<string, any>)
+                .map(([matchNum, matchData]) => ({ Match: matchNum, ...(matchData as object) }))
+                .sort((a, b) => Number(a.Match) - Number(b.Match));
+            }
           }
         }
       }
@@ -245,7 +340,14 @@
         }
       }
 
+      for (const team of Object.keys(qualDataByTeam)) {
+        if (!Array.isArray(qualDataByTeam[team])) {
+          qualDataByTeam[team] = Object.values(qualDataByTeam[team]);
+        }
+      }
+
       qualDataByTeam = { ...qualDataByTeam };
+      (window as any).__qualData = qualDataByTeam;
       pitDataByTeam = { ...pitDataByTeam };
     } catch (error) {
       console.error("Error fetching scouting data:", error);
@@ -258,11 +360,9 @@
     (t) => qualDataByTeam[t]?.length > 0 || !!pitDataByTeam[t]
   );
 
-  // Initialise / sync card order when teamsWithData changes
   $: {
     const existing = new Set(cardOrder);
     const incoming = teamsWithData;
-    // Add new teams at the end, preserve existing order, remove teams no longer present
     const updated = [
       ...cardOrder.filter(t => incoming.includes(t)),
       ...incoming.filter(t => !existing.has(t)),
@@ -272,6 +372,71 @@
 
   $: visibleCards = cardOrder.filter(t => !hiddenTeams.has(t));
   $: hiddenCount = hiddenTeams.size;
+
+  $: availableMatches = (() => {
+    const nums = new Set<number>();
+    for (const rows of Object.values(qualDataByTeam)) {
+      for (const row of rows) {
+        const m = Number(row.Match ?? row.match ?? 0);
+        if (m) nums.add(m);
+      }
+    }
+    return [...nums].sort((a, b) => a - b);
+  })();
+
+  $: filteredQualByTeam = (() => {
+  const result: Record<number, any[]> = {};
+  for (const team of visibleCards) {
+    const rows = qualDataByTeam[team] ?? [];
+    result[team] = selectedMatches.size === 0
+      ? rows
+      : rows.filter(r => !selectedMatches.has(String(r.Match ?? r.match)));
+  }
+  return result;
+})();
+
+  $: {
+    // Keep per-team pagination index valid as filters/data change.
+    const next: Record<number, number> = {};
+    for (const team of visibleCards) {
+      const rows = filteredQualByTeam[team] ?? [];
+      const maxIdx = Math.max(0, rows.length - 1);
+      const current = qualMatchIndexByTeam[team] ?? 0;
+      next[team] = Math.min(Math.max(0, current), maxIdx);
+    }
+    qualMatchIndexByTeam = next;
+  }
+
+  function previousQualMatch(team: number) {
+    const rows = filteredQualByTeam[team] ?? [];
+    if (!rows.length) return;
+    const current = qualMatchIndexByTeam[team] ?? 0;
+    qualMatchIndexByTeam = {
+      ...qualMatchIndexByTeam,
+      [team]: Math.max(0, current - 1),
+    };
+  }
+
+  function nextQualMatch(team: number) {
+    const rows = filteredQualByTeam[team] ?? [];
+    if (!rows.length) return;
+    const current = qualMatchIndexByTeam[team] ?? 0;
+    qualMatchIndexByTeam = {
+      ...qualMatchIndexByTeam,
+      [team]: Math.min(rows.length - 1, current + 1),
+    };
+  }
+
+  $: if (colorblindMode) {
+    // Redraw all canvases when colorblind mode changes
+    for (const canvas of canvasesByTeamMatch.values()) {
+      const state = animationState.get(canvas);
+      if (state) {
+        drawAutoPath(canvas, (canvas as any).matchRowData, state.progress);
+      }
+    }
+  }
+
 </script>
 
 <svelte:window on:click={handleOutsideClick} />
@@ -294,6 +459,7 @@
   {#if !isLoading}
     <!-- Controls bar -->
     <div class="controls-bar">
+
       <!-- Team filter dropdown -->
       <div class="filter-dropdown-wrapper">
         <button
@@ -335,6 +501,92 @@
           </div>
         {/if}
       </div>
+
+      <!-- Match filter dropdown -->
+      <div class="filter-dropdown-wrapper">
+        <button
+          class="filter-btn"
+          on:click|stopPropagation={() => (showMatchDropdown = !showMatchDropdown)}
+        >
+          <span class="filter-icon">▼</span>
+          {selectedMatches.size === 0 ? "All Matches" : `${availableMatches.length - selectedMatches.size} match${availableMatches.length - selectedMatches.size !== 1 ? "es" : ""}`}
+        </button>
+
+        {#if showMatchDropdown}
+          <div class="filter-dropdown">
+            <div class="filter-dropdown-header">
+              <span class="filter-dropdown-title">Filter Matches</span>
+              <div class="filter-actions">
+                <button class="action-link" on:click={() => selectedMatches = new Set()}>All</button>
+                <span class="action-divider">·</span>
+                <button class="action-link" on:click={() => selectedMatches = new Set(availableMatches.map(String))}>None</button>
+              </div>
+            </div>
+            <div class="filter-list">
+              {#each availableMatches as m}
+                <label class="filter-item">
+                  <input
+                    type="checkbox"
+                    checked={!selectedMatches.has(String(m))}
+                    on:change={() => toggleMatchVisibility(String(m))}
+                  />
+                  <span class="filter-team-num">Match {m}</span>
+                </label>
+              {/each}
+            </div>
+          </div>
+        {/if}
+      </div>
+
+      <!-- Data type filter dropdown -->
+      <div class="filter-dropdown-wrapper">
+        <button
+          class="filter-btn"
+          on:click|stopPropagation={() => (showDataDropdown = !showDataDropdown)}
+        >
+          <span class="filter-icon">▼</span>
+          {showPit && showQual ? "Pit & Qual" : showPit ? "Pit Only" : showQual ? "Qual Only" : "No Data"}
+        </button>
+
+        {#if showDataDropdown}
+          <div class="filter-dropdown">
+            <div class="filter-dropdown-header">
+              <span class="filter-dropdown-title">Data to Show</span>
+              <div class="filter-actions">
+                <button class="action-link" on:click={() => { showPit = true; showQual = true; }}>All</button>
+                <span class="action-divider">·</span>
+                <button class="action-link" on:click={() => { showPit = false; showQual = false; }}>None</button>
+              </div>
+            </div>
+            <div class="filter-list">
+              <label class="filter-item">
+                <input type="checkbox" bind:checked={showPit} />
+                <span class="filter-team-num">Pit Scouting</span>
+              </label>
+              <label class="filter-item">
+                <input type="checkbox" bind:checked={showQual} />
+                <span class="filter-team-num">Qual Notes</span>
+              </label>
+            </div>
+          </div>
+        {/if}
+      </div>
+
+      <!-- Colorblind mode dropdown -->
+      <select
+        bind:value={colorblindMode}
+        on:change={(e) => {
+          colorblindMode = (e.target as HTMLSelectElement).value;
+          localStorage.setItem("colorblindMode", colorblindMode);
+        }}
+        class="colorblind-select"
+      >
+        <option value="normal">Gradient</option>
+        <option value="protanopia">Protanopia (Red Blind)</option>
+        <option value="deuteranopia">Deuteranopia (Green Blind)</option>
+        <option value="tritanopia">Tritanopia (Blue-Yellow Blind)</option>
+        <option value="alex">Alex Coloring</option>
+      </select>
 
       <span class="count-label">
         {visibleCards.length} of {teamsWithData.length} teams · drag cards to reorder
@@ -385,7 +637,7 @@
             </div>
 
             <!-- Pit Scouting -->
-            {#if pit}
+            {#if pit && showPit}
               <div class="card-section">
                 <div class="section-label">
                   <span class="section-icon">🔧</span> Pit Scouting
@@ -459,18 +711,44 @@
             {/if}
 
             <!-- Qualitative Notes + Auto Paths -->
-            {#if qual.length > 0}
+            {#if filteredQualByTeam[team]?.length > 0 && showQual}
               <div class="card-section">
-                <div class="section-label">
-                  <span class="section-icon">📝</span> Qualitative Notes
+                <div class="section-label qual-section-header">
+                  <div class="section-label-main">
+                    <span class="section-icon">📝</span> Qualitative Notes
+                  </div>
+                  <div class="qual-pagination-controls">
+                    <button
+                      class="qual-page-btn"
+                      on:click={() => previousQualMatch(team)}
+                      disabled={(qualMatchIndexByTeam[team] ?? 0) <= 0}
+                      aria-label="Previous match"
+                    >
+                      ◀
+                    </button>
+                    <span class="qual-page-indicator">
+                      {(qualMatchIndexByTeam[team] ?? 0) + 1}/{(filteredQualByTeam[team] ?? []).length}
+                    </span>
+                    <button
+                      class="qual-page-btn"
+                      on:click={() => nextQualMatch(team)}
+                      disabled={(qualMatchIndexByTeam[team] ?? 0) >= ((filteredQualByTeam[team] ?? []).length - 1)}
+                      aria-label="Next match"
+                    >
+                      ▶
+                    </button>
+                  </div>
                 </div>
                 <div class="qual-matches">
-                  {#each qual as matchRow}
+                  {#each (filteredQualByTeam[team] ?? []).slice(qualMatchIndexByTeam[team] ?? 0, (qualMatchIndexByTeam[team] ?? 0) + 1) as matchRow (matchRow.Match ?? matchRow.match)}
                     <div class="qual-match-block">
                       <div class="qual-match-header">Match {matchRow.Match ?? matchRow.match}</div>
 
                       {#if matchRow?.AutoPath && Array.isArray(matchRow.AutoPath) && matchRow.AutoPath.length > 0}
                         <div class="auto-path-wrapper">
+                          <div class="progress-bar-container" style="--progress: {progressByCanvasId[`canvas-${team}-${matchRow.Match}`] ?? 0}">
+                            <div class="progress-bar-fill"></div>
+                          </div>
                           <canvas
                             use:initMatchCanvas={matchRow}
                             width={300}
@@ -478,8 +756,10 @@
                             class="auto-path-canvas"
                           ></canvas>
                           <div class="path-legend-inline">
-                            <div class="legend-dot"></div>
-                            <span>Auto Path</span>
+                            <span class="legend-label">Start</span>
+                            <div class="legend-gradient" style="--start-color: rgb({COLOR_MODES[colorblindMode].below.join(',')}); --end-color: rgb({COLOR_MODES[colorblindMode].above.join(',')});"></div>
+                            <span class="legend-label">End</span>
+                            <span class="legend-mode-name">{COLOR_MODES[colorblindMode].name}</span>
                           </div>
                         </div>
                       {/if}
@@ -507,7 +787,7 @@
               </div>
             {/if}
 
-            {#if !pit && qual.length === 0}
+            {#if (!pit || !showPit) && (!filteredQualByTeam[team]?.length || !showQual)}
               <div class="card-empty">No data collected yet.</div>
             {/if}
           </div>
@@ -581,6 +861,28 @@
     color: #666;
     font-size: 0.8rem;
     font-weight: 600;
+  }
+
+  .colorblind-select {
+    padding: 8px 12px;
+    background: linear-gradient(135deg, var(--dark) 0%, var(--dark2) 100%);
+    border: 2px solid var(--red);
+    border-radius: 8px;
+    color: white;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s, box-shadow 0.2s;
+  }
+
+  .colorblind-select:hover {
+    background: linear-gradient(135deg, var(--dark2) 0%, var(--dark3) 100%);
+    box-shadow: 0 0 0 3px rgba(200,27,0,0.25);
+  }
+
+  .colorblind-select option {
+    background: #1a1a1a;
+    color: white;
   }
 
   /* ── Filter Dropdown ── */
@@ -747,7 +1049,6 @@
     transform: scale(1.01);
   }
 
-  /* Drag handle — top-right braille dots */
   .drag-handle {
     position: absolute;
     top: 10px;
@@ -764,7 +1065,7 @@
 
   .card-header {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 14px 36px 12px 16px; /* right padding leaves room for drag handle */
+    padding: 14px 36px 12px 16px;
     background: linear-gradient(90deg, rgba(200,27,0,0.18) 0%, transparent 100%);
     border-bottom: 1px solid rgba(200,27,0,0.25);
   }
@@ -794,6 +1095,59 @@
     display: flex; align-items: center; gap: 6px;
     font-size: 0.72rem; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
     color: var(--red); margin-bottom: 10px;
+  }
+
+  .qual-section-header {
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .section-label-main {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .qual-pagination-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .qual-page-btn {
+    border: 1px solid rgba(200,27,0,0.45);
+    background: rgba(255,255,255,0.06);
+    color: #ddd;
+    border-radius: 6px;
+    width: 24px;
+    height: 24px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    font-size: 0.7rem;
+  }
+
+  .qual-page-btn:hover:not(:disabled) {
+    background: rgba(200,27,0,0.22);
+    color: #fff;
+  }
+
+  .qual-page-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  .qual-page-indicator {
+    min-width: 46px;
+    text-align: center;
+    font-size: 0.66rem;
+    color: #bbb;
+    font-weight: 700;
+    letter-spacing: 0.4px;
   }
 
   .info-group { margin-bottom: 10px; }
@@ -838,6 +1192,20 @@
     border-bottom: 1px solid rgba(255,255,255,0.06);
     user-select: none;
   }
+  .progress-bar-container {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: rgba(255,255,255,0.1);
+    z-index: 10;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: #ffffff;
+    width: calc(var(--progress, 0) * 100%);
+    transition: width 0.05s linear;
+  }
   .auto-path-canvas {
     display: block;
     width: 100%;
@@ -846,13 +1214,29 @@
   .path-legend-inline {
     position: absolute;
     bottom: 6px; right: 8px;
-    display: flex; align-items: center; gap: 5px;
+    display: flex; align-items: center; gap: 8px;
     font-size: 0.65rem; font-weight: 700;
     color: rgba(255,255,255,0.7);
     letter-spacing: 0.5px; text-transform: uppercase;
     pointer-events: none;
   }
-  .legend-dot { width: 12px; height: 3px; background: #fff; border-radius: 2px; }
+  .legend-label {
+    font-size: 0.65rem;
+    opacity: 0.8;
+    min-width: 28px;
+    text-align: center;
+  }
+  .legend-gradient { 
+    width: 60px; height: 6px; 
+    background: linear-gradient(to right, var(--start-color, #0077BE), var(--end-color, #FFD60A));
+    border-radius: 3px;
+  }
+  .legend-mode-name {
+    color: rgba(255,255,255,0.7);
+    font-size: 0.65rem;
+    font-weight: 700;
+    margin-left: 4px;
+  }
 
   .qual-rows { padding: 6px 8px; display: flex; flex-direction: column; gap: 3px; }
   .qual-row-item {

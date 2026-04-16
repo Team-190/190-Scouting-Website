@@ -1,8 +1,7 @@
 <script lang="ts">
   import {
-    AllCommunityModule,
-    createGrid,
-    ModuleRegistry,
+      AllCommunityModule,
+      ModuleRegistry
   } from "ag-grid-community";
   import { onMount, tick } from "svelte";
   import { v4 as uuidv4 } from "uuid";
@@ -13,42 +12,40 @@
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
   import {
-    fetchAnanthPage,
-    fetchGracePage,
-    fetchPitScoutingImage,
-    fetchMatchAlliances,
-    fetchOPR,
-    fetchTeams,
-    fetchRobotClimb,
+      fetchAnanthPage,
+      fetchCOPRs,
+      fetchGracePage,
+      fetchMatchAlliances,
+      fetchOPR,
+      fetchPitScoutingImage,
+      fetchRobotClimb,
+      fetchTeams,
+      readPitScoutingFromIDB,
+      readQualScoutingFromIDB,
   } from "../../utils/api.js";
   import {
-    BOOLEAN_METRICS,
-    CLIMBSTATE_METRIC,
-    COLOR_MODES,
-    EXCLUDED_FIELDS,
-    getAnanthRatings,
-    getColorblindMode,
-    getEventCode,
-    getGraceRatings,
-    HEADER_HEIGHT,
-    INVERTED_METRICS,
-    lerpColor,
-    mean,
-    median,
-    METADATA_KEYS,
-    METRIC_DISPLAY_NAMES,
-    percentile,
-    ROW_HEIGHT,
-    sd,
-    ZONE_TIME_FIELDS,
+      COLOR_MODES,
+      estimateTeamPoints2,
+      EXCLUDED_FIELDS,
+      getAnanthRatings,
+      getColorblindMode,
+      getEventCode,
+      getGraceRatings,
+      lerpColor,
+      mean,
+      METADATA_KEYS,
+      METRIC_DISPLAY_NAMES,
+      normalizeClimbData,
+      ZONE_TIME_FIELDS
   } from "../../utils/pageUtils.js";
 
-  import { getIndexedDBStore } from '../../utils/indexedDB';
   import TeamGrid from "../../components/Teamgrid.svelte";
+  import { getIndexedDBStore } from '../../utils/indexedDB';
   ModuleRegistry.registerModules([AllCommunityModule]);
 
   // ─── Constants ────────────────────────────────────────────────────────────────
 
+  const SELECTED_TEAM_KEY = "teamView_selectedTeam";
   const AnanthRating = getAnanthRatings();
   const GraceRating = getGraceRatings();
 
@@ -59,6 +56,8 @@
   let allTeams: number[] = [];
   let selectedTeam: number | null = null;
   let teamOPR: number | null = null;
+  let teamEFS2: number | null = null;
+  let teamCOPRs: Record<string, any> = {};
   let graceData: any = null;
   let ananthData: any = null;
   let cache: Record<string, any[]> = {};
@@ -75,6 +74,8 @@
   let isLoading = false;
   let autoOnly = false;
   let matchAlliancesCache: any = null;
+  let autoRowsAll: any[] = [];
+  let teleopRowsAll: any[] = [];
 
   // TeamGrid prop
   let matches: any[] = [];
@@ -85,6 +86,11 @@
   let fieldImg: any = null;
   let selectedAutoPathMatch: number | null = null;
   let teamsMap: Map<number, string> = new Map();
+
+  // Auto path animation
+  let autoPathAnimationState: { isAnimating: boolean; progress: number; frameId: number | null; lastTime: number } = { isAnimating: true, progress: 0, frameId: null, lastTime: Date.now() };
+  let autoPathAnimationDuration = 5000;
+  let autoPathProgress = 0;
 
   // ─── Value Helpers ────────────────────────────────────────────────────────────
 
@@ -247,7 +253,8 @@
     const storedData = await getIndexedDBStore("scoutingData") || [];
     if (!storedData) return [];
     try {
-      const parsed = storedData;
+      // Unwrap the value property if it exists (from compressed storage)
+      const parsed = (storedData || []).map(item => item.value !== undefined ? item.value : item);
       if (!Array.isArray(parsed)) return [];
       const teams: number[] = [];
       for (const el of parsed) {
@@ -257,7 +264,9 @@
         const num = parseInt(String(raw).replace(/\D/g, ""));
         if (!isNaN(num) && !teams.includes(num)) teams.push(num);
       }
-      return teams.sort((a, b) => a - b);
+      const sorted = teams.sort((a, b) => a - b);
+      console.log(`loadTeamNumbers: Found teams:`, sorted);
+      return sorted;
     } catch (e) {
       console.error("Error parsing localStorage data:", e);
       return [];
@@ -527,62 +536,125 @@
   }
 
   async function loadTeamData(teamNumber: string) {
-    if (!teamViewData) return;
-    let data = teamViewData.filter((el) => {
-      if (el.RecordType === "Match_Event") return false;
-      const raw = el.Team || el.team;
-      return (
-        raw &&
-        String(raw).replace(/\D/g, "") === String(teamNumber).replace(/\D/g, "")
-      );
-    });
-    if (data.length > 0) {
-      data = aggregateMatches(data);
-      
-      // Fetch match alliances once for all matches
-      if (!matchAlliancesCache) {
-        matchAlliancesCache = await fetchMatchAlliances(eventCode);
+    try {
+      if (!teamViewData) {
+        console.warn("loadTeamData: teamViewData is null/empty");
+        matches = [];
+        teamEFS2 = null;
+        return;
       }
       
-      // Parallelize all API calls using Promise.all
-      const promises = data.map(async (match) => {
-        const [estimatedPoints, climbData] = await Promise.all([
-          estimateTeamPoints(teamNumber, match.Match, matchAlliancesCache),
-          fetchRobotClimb(eventCode, teamNumber, match.Match),
-        ]);
-        
-        match.EstimatedPoints = estimatedPoints;
-        
-        if (climbData.EndgameClimb.slice(-1) == "3") {
-          match.Climb_State = "L3";
-        } else if (climbData.EndgameClimb.slice(-1) == "2") {
-          match.Climb_State = "L2";
-        } else if (climbData.EndgameClimb.slice(-1) == "1") {
-          match.Climb_State = "L1";
-        } else {
-          match.Climb_State = climbData.EndgameClimb;
-        }
-
-        if (climbData.AutoClimb.slice(-1) == "1") {
-          match.Auto_Climb = "Yes";
-        } else {
-          match.Auto_Climb = "No";
-        }
-        return match;
+      let data = teamViewData.filter((el) => {
+        if (el.RecordType === "Match_Event") return false;
+        const raw = el.Team || el.team;
+        return (
+          raw &&
+          String(raw).replace(/\D/g, "") === String(teamNumber).replace(/\D/g, "")
+        );
       });
       
-      // Wait for all promises to resolve
-      data = await Promise.all(promises);
+      console.log(`loadTeamData: Found ${data.length} rows for team ${teamNumber}`);
+      
+      if (data.length > 0) {
+        data = aggregateMatches(data);
+        console.log(`loadTeamData: After aggregateMatches, ${data.length} matches`);
+        
+        // Fetch match alliances once for all matches
+        if (!matchAlliancesCache) {
+          try {
+            matchAlliancesCache = await fetchMatchAlliances(eventCode);
+          } catch (e) {
+            console.error("Failed to fetch match alliances:", e);
+            matchAlliancesCache = [];
+          }
+        }
+
+        if (!Object.keys(teamCOPRs).length && eventCode) {
+          try {
+            teamCOPRs = await fetchCOPRs(eventCode);
+          } catch (e) {
+            console.error("Failed to fetch COPRs:", e);
+            teamCOPRs = {};
+          }
+        }
+        
+        // Parallelize all API calls using Promise.all with error handling
+        const promises = data.map(async (match) => {
+          try {
+            const [estimatedPoints, estimatedPoints2, climbData] = await Promise.all([
+              estimateTeamPoints(teamNumber, match.Match, matchAlliancesCache),
+              Promise.resolve(
+                Object.keys(teamCOPRs).length
+                  ? estimateTeamPoints2(
+                      teamNumber,
+                      Number(match.Match),
+                      teamCOPRs,
+                      autoRowsAll,
+                      teleopRowsAll,
+                      matchAlliancesCache,
+                    )
+                  : null,
+              ),
+              fetchRobotClimb(eventCode, teamNumber, match.Match).catch(() => ({ EndgameClimb: "", AutoClimb: "" })),
+            ]);
+            
+            match.EstimatedPoints = estimatedPoints;
+            match.EstimatedPoints2 = estimatedPoints2;
+            
+            if (climbData && climbData.EndgameClimb) {
+              if (climbData.EndgameClimb.slice(-1) == "3") {
+                match.Climb_State = "L3";
+              } else if (climbData.EndgameClimb.slice(-1) == "2") {
+                match.Climb_State = "L2";
+              } else if (climbData.EndgameClimb.slice(-1) == "1") {
+                match.Climb_State = "L1";
+              } else {
+                match.Climb_State = climbData.EndgameClimb;
+              }
+
+              if (climbData.AutoClimb && climbData.AutoClimb.slice(-1) == "1") {
+                match.Auto_Climb = "Yes";
+              } else {
+                match.Auto_Climb = "No";
+              }
+            }
+
+            // Normalize climb time to 0 if climb state is "None"
+            normalizeClimbData(match);
+          } catch (e) {
+            console.error(`Error processing match ${match.Match}:`, e);
+            // Continue with match even if enrichment fails
+            normalizeClimbData(match);
+          }
+
+          return match;
+        });
+        
+        // Wait for all promises to resolve
+        data = await Promise.all(promises);
+        const efs2Values = data
+          .map((m) => Number(m.EstimatedPoints2))
+          .filter((v) => Number.isFinite(v) && v > 0);
+        teamEFS2 = efs2Values.length
+          ? Number(mean(efs2Values).toFixed(2))
+          : null;
+        console.log(`loadTeamData: Loaded ${data.length} matches with enrichment`);
+      } else {
+        teamEFS2 = null;
+      }
+      cache[teamNumber] = data;
+      matches = data; // ← drives TeamGrid reactively
+      console.log(`loadTeamData: Set matches to ${matches.length} rows`);
+    } catch (e) {
+      console.error(`loadTeamData: Unhandled error:`, e);
+      matches = [];
     }
-    cache[teamNumber] = data;
-    matches = data; // ← drives TeamGrid reactively
   }
 
   // ─── Local Data Helpers ───────────────────────────────────────────────────────
 
-  function getQualDataForTeam(teamNumber: number): any[] {
-    const stored = localStorage.getItem("retrieveQual");
-    const qualData = stored ? JSON.parse(stored) : {};
+  async function getQualDataForTeam(teamNumber: number): Promise<any[]> {
+    const qualData = await readQualScoutingFromIDB({});
     const teamKey = String(teamNumber).replace(/\D/g, "");
     const teamMatches = qualData[teamKey];
     if (!teamMatches) return [];
@@ -591,9 +663,8 @@
     );
   }
 
-  function getPitDataForTeam(teamNumber: number): any {
-    const stored = localStorage.getItem("retrievePit");
-    const pitScouting = stored ? JSON.parse(stored) : {};
+  async function getPitDataForTeam(teamNumber: number): Promise<any> {
+    const pitScouting = await readPitScoutingFromIDB({});
     return pitScouting[String(teamNumber)] ?? null;
   }
 
@@ -664,11 +735,13 @@
     isLoading = true;
     try {
       const teamStr = String(selectedTeam);
+      // Save selected team to localStorage
+      localStorage.setItem(SELECTED_TEAM_KEY, teamStr);
       await loadTeamData(teamStr);
       fetchTeamOPR(teamStr);
       populateMatchDropdown(selectedTeam);
-      teamQualData = getQualDataForTeam(selectedTeam);
-      teamPitData = getPitDataForTeam(selectedTeam);
+      teamQualData = await getQualDataForTeam(selectedTeam);
+      teamPitData = await getPitDataForTeam(selectedTeam);
 
       const graceEl = document.getElementById(
         "grace-rating",
@@ -685,11 +758,30 @@
     }
   }
 
+  /**
+   * Load the selected team from localStorage, or use first available team
+   */
+  function getInitialTeam(teams: number[]): number | null {
+    if (!teams.length) return null;
+    const saved = localStorage.getItem(SELECTED_TEAM_KEY);
+    // Only use saved team if it's still available
+    if (saved) {
+      const savedTeam = Number(saved);
+      if (teams.includes(savedTeam)) {
+        return savedTeam;
+      }
+    }
+    return teams[0];
+  }
+
   async function onAutoOnlyChange() {
     isLoading = true;
     try {
       const stored = await getIndexedDBStore("scoutingData") || [];
-      const parsed = stored ? stored : [];
+      // Unwrap the value property if it exists (from compressed storage)
+      const parsed = (stored || []).map(item => item.value !== undefined ? item.value : item);
+      autoRowsAll = extractValues(parsed, true);
+      teleopRowsAll = extractValues(parsed, false);
       teamViewData = extractValues(parsed, autoOnly);
       cache = {};
       allTeams = await loadTeamNumbers();
@@ -785,6 +877,10 @@
     colorblindMode = (e.target as HTMLSelectElement).value;
     localStorage.setItem("colorblindMode", colorblindMode);
     if (selectedTeam) loadTeamData(String(selectedTeam));
+    // Redraw auto path with new colors
+    if (selectedAutoPathMatch !== null) {
+      redrawAutoPathCanvas(autoPathAnimationState.progress);
+    }
   }
 
   // ─── Reactive ─────────────────────────────────────────────────────────────────
@@ -850,7 +946,14 @@
   }
 
   $: if (selectedAutoPathMatch !== null) {
-    redrawAutoPathCanvas();
+    redrawAutoPathCanvas(autoPathAnimationState.progress);
+    
+    // Initialize animation state if not already done
+    if (!autoPathAnimationState.frameId) {
+      autoPathAnimationState.isAnimating = false;
+      autoPathAnimationState.progress = 1;
+      autoPathAnimationState.lastTime = Date.now();
+    }
   }
 
   // ─── Charts ───────────────────────────────────────────────────────────────────
@@ -1150,7 +1253,7 @@
     };
   }
 
-  function redrawAutoPathCanvas() {
+  function redrawAutoPathCanvas(progress: number = 1) {
     if (!autoPathCtx || !autoPathCanvasEl) return;
     const W = autoPathCanvasEl.width;
     const H = autoPathCanvasEl.height;
@@ -1194,38 +1297,87 @@
     if (teamQualData && selectedAutoPathMatch !== null) {
       const match = teamQualData.find((m) => m.Match === selectedAutoPathMatch);
       if (match?.AutoPath && Array.isArray(match.AutoPath)) {
-        match.AutoPath.forEach((path: any[]) => {
-          if (!Array.isArray(path) || path.length < 2) return;
-          autoPathCtx.beginPath();
-          autoPathCtx.moveTo(path[0].x, path[0].y);
-          for (let i = 1; i < path.length; i++)
-            autoPathCtx.lineTo(path[i].x, path[i].y);
-          autoPathCtx.strokeStyle = "#FFFFFF";
-          autoPathCtx.lineWidth = 3;
-          autoPathCtx.lineCap = "round";
-          autoPathCtx.lineJoin = "round";
-          autoPathCtx.stroke();
-          if (path.length >= 2) {
-            const last = path[path.length - 1];
-            const prev = path[path.length - 2];
-            const angle = Math.atan2(last.y - prev.y, last.x - prev.x);
-            const sz = 12;
-            autoPathCtx.beginPath();
-            autoPathCtx.moveTo(last.x, last.y);
-            autoPathCtx.lineTo(
-              last.x - sz * Math.cos(angle - Math.PI / 6),
-              last.y - sz * Math.sin(angle - Math.PI / 6),
-            );
-            autoPathCtx.moveTo(last.x, last.y);
-            autoPathCtx.lineTo(
-              last.x - sz * Math.cos(angle + Math.PI / 6),
-              last.y - sz * Math.sin(angle + Math.PI / 6),
-            );
-            autoPathCtx.strokeStyle = "#FFFFFF";
-            autoPathCtx.lineWidth = 3;
-            autoPathCtx.stroke();
+        const allPaths = match.AutoPath.filter((path: any[]) => Array.isArray(path) && path.length >= 2);
+        if (allPaths.length > 0) {
+          // Flatten all points into single array
+          const allPoints: any[] = [];
+          allPaths.forEach((path: any[]) => {
+            allPoints.push(...path);
+          });
+          
+          // Calculate cumulative distances
+          const distances = [0];
+          for (let i = 1; i < allPoints.length; i++) {
+            const p1 = allPoints[i - 1];
+            const p2 = allPoints[i];
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            distances.push(distances[distances.length - 1] + Math.sqrt(dx * dx + dy * dy));
           }
-        });
+          const totalDist = distances[distances.length - 1];
+          const targetDist = totalDist * Math.max(0, Math.min(1, progress));
+          
+          // Get colors based on colorblind mode
+          const modeColors = COLOR_MODES[colorblindMode] || COLOR_MODES.normal;
+          const [r1, g1, b1] = modeColors.below; // Start color
+          const [r2, g2, b2] = modeColors.above; // End color
+          
+          // Function to interpolate color
+          const lerpColor = (t: number) => {
+            const r = Math.round(r1 + (r2 - r1) * t);
+            const g = Math.round(g1 + (g2 - g1) * t);
+            const b = Math.round(b1 + (b2 - b1) * t);
+            return `rgb(${r},${g},${b})`;
+          };
+          
+          // Draw path segments up to current progress with interpolated colors
+          let currentPathIndex = -1;
+          for (let i = 1; i < allPoints.length; i++) {
+            if (distances[i] <= targetDist) {
+              const t = totalDist > 0 ? distances[i] / totalDist : 0;
+              autoPathCtx.beginPath();
+              autoPathCtx.moveTo(allPoints[i - 1].x, allPoints[i - 1].y);
+              autoPathCtx.lineTo(allPoints[i].x, allPoints[i].y);
+              autoPathCtx.strokeStyle = lerpColor(t);
+              autoPathCtx.lineWidth = 3;
+              autoPathCtx.lineCap = "round";
+              autoPathCtx.lineJoin = "round";
+              autoPathCtx.stroke();
+              currentPathIndex = i;
+            } else if (distances[i - 1] < targetDist && distances[i] > targetDist) {
+              // Partial segment to current progress point
+              const segmentProgress = (targetDist - distances[i - 1]) / (distances[i] - distances[i - 1]);
+              const partialX = allPoints[i - 1].x + (allPoints[i].x - allPoints[i - 1].x) * segmentProgress;
+              const partialY = allPoints[i - 1].y + (allPoints[i].y - allPoints[i - 1].y) * segmentProgress;
+              const t = totalDist > 0 ? targetDist / totalDist : 0;
+              autoPathCtx.beginPath();
+              autoPathCtx.moveTo(allPoints[i - 1].x, allPoints[i - 1].y);
+              autoPathCtx.lineTo(partialX, partialY);
+              autoPathCtx.strokeStyle = lerpColor(t);
+              autoPathCtx.lineWidth = 3;
+              autoPathCtx.lineCap = "round";
+              autoPathCtx.lineJoin = "round";
+              autoPathCtx.stroke();
+              currentPathIndex = i;
+              
+              // Draw current point as small circle
+              autoPathCtx.beginPath();
+              autoPathCtx.arc(partialX, partialY, 6, 0, Math.PI * 2);
+              autoPathCtx.fillStyle = lerpColor(t);
+              autoPathCtx.fill();
+              break;
+            }
+          }
+          
+          // Draw final point if at end
+          if (currentPathIndex >= allPoints.length - 1) {
+            const lastPoint = allPoints[allPoints.length - 1];
+            autoPathCtx.beginPath();
+            autoPathCtx.arc(lastPoint.x, lastPoint.y, 6, 0, Math.PI * 2);
+            autoPathCtx.fillStyle = lerpColor(1);
+            autoPathCtx.fill();
+          }
+        }
       }
     }
   }
@@ -1236,8 +1388,26 @@
     isLoading = true;
     try {
       const stored = await getIndexedDBStore("scoutingData") || [];
-      const parsed = stored ? stored : [];
+      console.log(`onMount: Retrieved ${stored.length} items from IndexedDB`, stored.slice(0, 3));
+      
+      // Unwrap the value property if it exists (from compressed storage)
+      const parsed = (stored || []).map(item => item.value !== undefined ? item.value : item);
+      console.log(`onMount: After unwrapping, have ${parsed.length} items`, parsed.slice(0, 3));
+
+      autoRowsAll = extractValues(parsed, true);
+      teleopRowsAll = extractValues(parsed, false);
+      
+      // Check the structure of first item
+      if (parsed.length > 0) {
+        console.log(`onMount: First item keys:`, Object.keys(parsed[0]));
+        console.log(`onMount: First item sample values:`, { Team: parsed[0].Team, team: parsed[0].team, Match: parsed[0].Match, RecordType: parsed[0].RecordType });
+      }
+      
       teamViewData = extractValues(parsed, autoOnly);
+      console.log(`onMount: After extractValues, teamViewData has ${teamViewData?.length || 0} rows`);
+      if (teamViewData?.length > 0) {
+        console.log(`onMount: First row after extraction:`, teamViewData[0]);
+      }
 
       if (eventCode) {
         fetchGracePage(eventCode)
@@ -1262,18 +1432,23 @@
             Object.entries(result._teams).map(([k, v]) => [Number(k), v]),
           );
           allTeams = result._teamNumbers;
+          console.log(`onMount: Fetched ${allTeams.length} teams from server`, allTeams);
         } catch (e) {
           console.error("Failed to fetch teams:", e);
         }
+      } else {
+        console.warn("onMount: No eventCode set");
       }
 
       if (allTeams.length > 0) {
-        selectedTeam = allTeams[0];
+        selectedTeam = getInitialTeam(allTeams);
         await loadTeamData(String(selectedTeam));
+      } else {
+        console.warn("onMount: No teams available to load");
       }
 
-      teamQualData = getQualDataForTeam(selectedTeam);
-      teamPitData = getPitDataForTeam(selectedTeam);
+      teamQualData = await getQualDataForTeam(selectedTeam);
+      teamPitData = await getPitDataForTeam(selectedTeam);
 
       await fetchTeamOPR(String(selectedTeam));
       await fetchRobotPicture(selectedTeam);
@@ -1434,19 +1609,48 @@
           {/each}
         </select>
       </div>
-      <div class="auto-path-wrapper">
+      <div class="auto-path-wrapper" style="--auto-progress: {autoPathProgress}">
+        <div class="progress-bar-container">
+          <div class="progress-bar-fill"></div>
+        </div>
         <canvas
           use:initAutoPathCanvas
           width={1200}
           height={600}
           class="auto-path-canvas"
+          on:click={() => {
+            if (!autoPathAnimationState.frameId) {
+              // Start animation loop on first click
+              const animate = () => {
+                const now = Date.now();
+                const elapsed = now - autoPathAnimationState.lastTime;
+                autoPathAnimationState.lastTime = now;
+                
+                if (autoPathAnimationState.isAnimating) {
+                  autoPathAnimationState.progress += elapsed / autoPathAnimationDuration;
+                  if (autoPathAnimationState.progress >= 1) {
+                    autoPathAnimationState.progress = 0; // Loop back to start
+                  }
+                  autoPathProgress = autoPathAnimationState.progress;
+                }
+                
+                redrawAutoPathCanvas(autoPathAnimationState.progress);
+                autoPathAnimationState.frameId = requestAnimationFrame(animate);
+              };
+              autoPathAnimationState.frameId = requestAnimationFrame(animate);
+            }
+            autoPathAnimationState.isAnimating = !autoPathAnimationState.isAnimating;
+            autoPathAnimationState.lastTime = Date.now();
+          }}
         ></canvas>
       </div>
       <div class="path-legend">
         <div class="legend-item">
-          <div class="legend-color" style="background: #FFFFFF;"></div>
-          <span>Autonomous Path</span>
+          <span class="legend-label">Start</span>
+          <div class="legend-gradient" style="--start-color: rgb({COLOR_MODES[colorblindMode].below.join(',')}); --end-color: rgb({COLOR_MODES[colorblindMode].above.join(',')})"></div>
+          <span class="legend-label">End</span>
         </div>
+        <span class="legend-mode-name">{COLOR_MODES[colorblindMode].name}</span>
       </div>
     </div>
 
@@ -2341,6 +2545,20 @@
     max-width: 100%;
     width: 100%;
   }
+  .progress-bar-container {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: rgba(255,255,255,0.1);
+    z-index: 10;
+    overflow: hidden;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: #ffffff;
+    width: calc(var(--auto-progress, 0) * 100%);
+    transition: width 0.05s linear;
+  }
   .auto-path-canvas {
     display: block;
     width: 100%;
@@ -2356,15 +2574,27 @@
   .legend-item {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.75rem;
     color: rgba(255, 255, 255, 0.85);
     font-size: 0.8rem;
     font-weight: 600;
   }
-  .legend-color {
-    width: 1.1rem;
-    height: 1.1rem;
-    border-radius: 0.25rem;
+  .legend-label {
+    font-size: 0.75rem;
+    opacity: 0.8;
+    min-width: 35px;
+    text-align: center;
+  }
+  .legend-gradient {
+    width: 80px;
+    height: 8px;
+    background: linear-gradient(to right, var(--start-color, #0077BE), var(--end-color, #FFD60A));
+    border-radius: 4px;
+  }
+  .legend-mode-name {
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.8rem;
+    font-weight: 600;
   }
 
   .qual-grid {

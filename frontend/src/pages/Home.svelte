@@ -4,10 +4,15 @@
         fetchAllData,
         fetchEventDetails,
         fetchEvents,
+        fetchMatchAlliances,
         fetchPitScouting,
         fetchQualitativeScouting,
         postEventCode,
         refreshEventCaches,
+        readPitScoutingFromIDB,
+        writePitScoutingToIDB,
+        readQualScoutingFromIDB,
+        writeQualScoutingToIDB,
     } from "../utils/api";
     import { clearAllStores, getIndexedDBStore, getLastId, setIndexedDBStore } from '../utils/indexedDB';
 
@@ -15,6 +20,18 @@
     let isLoading = false;
     let notification = null;
     let isAutoSyncing = false;
+    let scheduleLoading = false;
+    let autoDataRefreshEnabled = Boolean(parseStoredJson("homeAutoDataRefreshEnabled", false));
+    let autoDataRefreshTimer = null;
+
+    const OUR_TEAM_KEY = "frc190";
+    let matchSchedule = {
+        currentMatch: "—",
+        ourMatch: "—",
+        matchesUntilOurs: "—",
+        minutesUntilOurMatch: "—",
+        status: "Select an event and load data to view match timing.",
+    };
 
     function parseStoredJson(key, fallback) {
         const raw = localStorage.getItem(key);
@@ -44,6 +61,102 @@
         }, duration);
     }
 
+    function getScheduledTimestamp(match) {
+        return Number(
+            match?.predicted_time || match?.time || match?.actual_time || match?.post_result_time || 0,
+        );
+    }
+
+    function isMatchComplete(match) {
+        const redScore = Number(match?.alliances?.red?.score);
+        const blueScore = Number(match?.alliances?.blue?.score);
+        const hasFinalScore = Number.isFinite(redScore)
+            && Number.isFinite(blueScore)
+            && redScore >= 0
+            && blueScore >= 0;
+
+        return Boolean(match?.actual_time || match?.post_result_time || hasFinalScore);
+    }
+
+    function isOurMatch(match) {
+        const redTeams = match?.alliances?.red?.team_keys || [];
+        const blueTeams = match?.alliances?.blue?.team_keys || [];
+        return [...redTeams, ...blueTeams].includes(OUR_TEAM_KEY);
+    }
+
+    function minutesUntil(timestampSec) {
+        if (!timestampSec) return "TBD";
+        const diff = Math.ceil((timestampSec * 1000 - Date.now()) / 60000);
+        return diff <= 0 ? "0" : String(diff);
+    }
+
+    async function refreshMatchSchedule() {
+        if (!eventCode) {
+            matchSchedule = {
+                currentMatch: "—",
+                ourMatch: "—",
+                matchesUntilOurs: "—",
+                minutesUntilOurMatch: "—",
+                status: "No event selected.",
+            };
+            return;
+        }
+
+        scheduleLoading = true;
+        try {
+            const [allMatches, details] = await Promise.all([
+                fetchMatchAlliances(eventCode),
+                fetchEventDetails(eventCode),
+            ]);
+
+            const qualMatches = (Array.isArray(allMatches) ? allMatches : [])
+                .filter((match) => match?.comp_level === "qm")
+                .sort((a, b) => Number(a?.match_number) - Number(b?.match_number));
+
+            if (qualMatches.length === 0) {
+                matchSchedule = {
+                    currentMatch: "—",
+                    ourMatch: "—",
+                    matchesUntilOurs: "—",
+                    minutesUntilOurMatch: "—",
+                    status: `No qualification matches cached for ${details?.name || eventCode}.`,
+                };
+                return;
+            }
+
+            const currentMatch = qualMatches.find((m) => !isMatchComplete(m)) || qualMatches[qualMatches.length - 1];
+            const ourNextMatch = qualMatches.find((m) => !isMatchComplete(m) && isOurMatch(m))
+                || qualMatches.find((m) => isOurMatch(m));
+
+            const currentNumber = Number(currentMatch?.match_number);
+            const ourNumber = Number(ourNextMatch?.match_number);
+            const matchesUntil = Number.isFinite(currentNumber) && Number.isFinite(ourNumber)
+                ? String(Math.max(0, ourNumber - currentNumber))
+                : "—";
+
+            matchSchedule = {
+                currentMatch: Number.isFinite(currentNumber) ? String(currentNumber) : "—",
+                ourMatch: Number.isFinite(ourNumber) ? String(ourNumber) : "—",
+                matchesUntilOurs: matchesUntil,
+                minutesUntilOurMatch: ourNextMatch ? minutesUntil(getScheduledTimestamp(ourNextMatch)) : "—",
+                status: ourNextMatch
+                    ? `Using ${details?.name || eventCode} schedule from TBA cache. (Made by Atharv)`
+                    : "Team 190 is not in this event schedule.",
+            };
+        } catch (error) {
+            console.error("Failed to refresh match schedule:", error);
+            matchSchedule = {
+                currentMatch: "—",
+                ourMatch: "—",
+                matchesUntilOurs: "—",
+                minutesUntilOurMatch: "—",
+                status: "Unable to read schedule cache. Click Get Data to refresh from TBA.",
+            };
+        } finally {
+            scheduleLoading = false;
+        }
+    }
+
     async function withLoading(task, successMessage, errorMessage) {
         isLoading = true;
         await tick();
@@ -58,13 +171,36 @@
         }
     }
 
+    function configureAutoDataRefresh() {
+        if (autoDataRefreshTimer) {
+            clearInterval(autoDataRefreshTimer);
+            autoDataRefreshTimer = null;
+        }
+
+        localStorage.setItem("homeAutoDataRefreshEnabled", JSON.stringify(autoDataRefreshEnabled));
+
+        if (!autoDataRefreshEnabled) return;
+
+        syncEventData();
+        autoDataRefreshTimer = setInterval(() => {
+            syncEventData();
+        }, 1000 * 60);
+    }
+
+    function handleAutoRefreshToggle(event) {
+        autoDataRefreshEnabled = Boolean(event?.target?.checked);
+        configureAutoDataRefresh();
+    }
+
     async function cacheAllData({ forceFullRefresh = false } = {}) {
         await withLoading(async () => {
             if (!eventCode) {
                 throw new Error("No event selected");
             }
 
-            const existingData = forceFullRefresh ? [] : await getIndexedDBStore("scoutingData");
+            const existingDataRaw = forceFullRefresh ? [] : await getIndexedDBStore("scoutingData");
+            // Unwrap the value property if it exists (from compressed storage)
+            const existingData = (existingDataRaw || []).map(item => item.value !== undefined ? item.value : item);
             const lastId = await getLastId(existingData);
 
             const dataRes = await fetchAllData(eventCode, lastId);
@@ -77,7 +213,7 @@
                 await setIndexedDBStore("scoutingData", { rows: newData });
             }
 
-            const localPit = forceFullRefresh ? {} : parseStoredJson("retrievePit", {});
+            const localPit = forceFullRefresh ? {} : await readPitScoutingFromIDB({});
             const pitTeams = Object.keys(localPit);
 
             const pitRes = await fetchPitScouting(eventCode, pitTeams);
@@ -87,9 +223,9 @@
             const newPitData = await parseResponseJson(pitRes, {});
             
             const combinedPit = { ...localPit, ...newPitData };
-            localStorage.setItem("retrievePit", JSON.stringify(combinedPit));
+            await writePitScoutingToIDB(combinedPit);
 
-            const localQual = forceFullRefresh ? {} : parseStoredJson("retrieveQual", {});
+            const localQual = forceFullRefresh ? {} : await readQualScoutingFromIDB({});
             const qualCounts = {};
             for (const team in localQual) {
                 qualCounts[team] = Object.keys(localQual[team] || {}).length;
@@ -105,9 +241,11 @@
             for (const team in newQualData) {
                 combinedQual[team] = { ...(combinedQual[team] || {}), ...newQualData[team] };
             }
-            localStorage.setItem("retrieveQual", JSON.stringify(combinedQual));
+            await writeQualScoutingToIDB(combinedQual);
 
             await refreshEventCaches(eventCode);
+
+            await refreshMatchSchedule();
 
             localStorage.setItem("timestamp", new Date(Date.now()).toLocaleString());
             localStorage.setItem("eventCode", eventCode);
@@ -124,8 +262,6 @@
 
             if (isNewEvent) {
                 await clearAllStores();
-                localStorage.removeItem("retrievePit");
-                localStorage.removeItem("retrieveQual");
             }
 
             localStorage.setItem("eventCode", eventCode);
@@ -158,8 +294,25 @@
         }, "Events loaded successfully!", "Failed to load events from backend.");
     }
 
-    onMount(async () => {
-        await loadDbEvents();
+    onMount(() => {
+        (async () => {
+            await loadDbEvents();
+            await refreshMatchSchedule();
+        })();
+
+        configureAutoDataRefresh();
+
+        const scheduleTimer = setInterval(() => {
+            refreshMatchSchedule();
+        }, 1000 * 60);
+
+        return () => {
+            clearInterval(scheduleTimer);
+            if (autoDataRefreshTimer) {
+                clearInterval(autoDataRefreshTimer);
+                autoDataRefreshTimer = null;
+            }
+        };
     });
 </script>
 
@@ -195,7 +348,7 @@
     <div class="event-selector-panel">
         <h2>Event Selector</h2>
 
-        <select class="select" bind:value={eventCode}>
+        <select class="select" bind:value={eventCode} onchange={refreshMatchSchedule}>
             {#each dbEvents as event}
                 <option value={event.eventCode}>{event.name}</option>
             {/each}
@@ -205,6 +358,28 @@
             You selected: {dbEvents.find((e) => e.eventCode === eventCode)
                 ?.name || eventCode}
         </p>
+
+        <label class="auto-refresh-toggle">
+            <input
+                type="checkbox"
+                checked={autoDataRefreshEnabled}
+                onchange={handleAutoRefreshToggle}
+            />
+            <span>Auto Get Data every minute</span>
+        </label>
+
+        <div class="match-schedule-panel">
+            <h3>Match Schedule</h3>
+            {#if scheduleLoading}
+                <p class="schedule-status">Loading match timing…</p>
+            {:else}
+                <p><strong>Current match:</strong> Q{matchSchedule.currentMatch}</p>
+                <p><strong>Team 190 next match:</strong> Q{matchSchedule.ourMatch}</p>
+                <p><strong>Matches until ours:</strong> {matchSchedule.matchesUntilOurs}</p>
+                <p><strong>Minutes until ours:</strong> {matchSchedule.minutesUntilOurMatch}</p>
+                <p class="schedule-status">{matchSchedule.status}</p>
+            {/if}
+        </div>
     </div>
 </div>
 
@@ -308,6 +483,49 @@
         font-size: 0.9rem;
         color: #000000;
         font-weight: 500;
+    }
+
+    .auto-refresh-toggle {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 0.35rem;
+        font-size: 0.9rem;
+        color: #111;
+        font-weight: 600;
+        user-select: none;
+    }
+
+    .auto-refresh-toggle input {
+        width: 1rem;
+        height: 1rem;
+        accent-color: var(--frc-190-red);
+    }
+
+    .match-schedule-panel {
+        margin-top: 0.5rem;
+        background: rgba(0, 0, 0, 0.08);
+        border-radius: 0.5rem;
+        padding: 0.9rem 1rem;
+        border-left: 0.25rem solid var(--frc-190-red);
+    }
+
+    .match-schedule-panel h3 {
+        margin: 0 0 0.5rem 0;
+        color: var(--frc-190-black);
+        font-size: 1.05rem;
+    }
+
+    .match-schedule-panel p {
+        margin: 0.2rem 0;
+        color: #101010;
+        font-size: 0.92rem;
+    }
+
+    .schedule-status {
+        margin-top: 0.5rem !important;
+        font-size: 0.82rem !important;
+        color: #333 !important;
     }
 
     .loading-spinner-overlay {

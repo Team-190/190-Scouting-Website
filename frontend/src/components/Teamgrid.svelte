@@ -241,7 +241,8 @@
       "Match", "Team", "Id", "RecordType", "ScouterName", "ScouterError",
       "Time", "Mode", "DriveStation", "FarBlueZoneTime", "FarRedZoneTime",
       "NearBlueZoneTime", "NearRedZoneTime", "NearNeutralZoneTime",
-      "FarNeutralZoneTime", "NearFar", "MatchEvent", "MatchEventDetails", "EndState", "AutoClimb"
+      "FarNeutralZoneTime", "NearFar", "MatchEvent", "MatchEventDetails", "EndState", "AutoClimb",
+      "FuelShootingPhases"
     ]);
 
     const displayMetrics = Object.keys(matches[0]).filter((k) => !EXCLUDED_FIELDS.has(k));
@@ -317,25 +318,25 @@
       if (isClimb) {
         const attemptRow = rowData.find((r) => r.metric === "AttemptClimb");
         const bg = getClimbStateColor(val, attemptRow?.[params.colDef.field]);
-        return { background: bg, color: textColorForBg(bg), fontSize: "18px", fontWeight: 600, textAlign: "center" };
+        return { background: bg, color: textColorForBg(bg), fontSize: "14px", fontWeight: 600, textAlign: "center" };
       }
       if (isBool) {
         const bg = getBooleanColor(val);
-        return { background: bg, color: textColorForBg(bg), fontSize: "18px", fontWeight: 600, textAlign: "center" };
+        return { background: bg, color: textColorForBg(bg), fontSize: "14px", fontWeight: 600, textAlign: "center" };
       }
 
       const num = isNumeric(val) ? Number(val) : 0;
       const inv = INVERTED_METRICS.includes(metric);
-      if (num === -1) return { background: "#4D4D4D", color: "white", fontSize: "18px", fontWeight: 600, textAlign: "center" };
-      if (num === 0)  return { background: "black",   color: "white", fontSize: "18px", fontWeight: 600, textAlign: "center" };
+      if (num === -1) return { background: "#4D4D4D", color: "white", fontSize: "14px", fontWeight: 600, textAlign: "center" };
+      if (num === 0)  return { background: "black",   color: "white", fontSize: "14px", fontWeight: 600, textAlign: "center" };
 
       if (colorblindMode === "alex") {
         const vp = getAlexValuePercentile(num, stats, inv);
         const bg = getAlexBgColor(vp, true);
-        return { background: bg, color: textColorForBg(bg), fontSize: "18px", fontWeight: 600, textAlign: "center" };
+        return { background: bg, color: textColorForBg(bg), fontSize: "14px", fontWeight: 600, textAlign: "center" };
       }
       const bg = colorFromStats(num, stats, inv, isBool, isClimb);
-      return { background: bg, color: textColorForBg(bg), fontSize: "18px", fontWeight: 600, textAlign: "center" };
+      return { background: bg, color: textColorForBg(bg), fontSize: "14px", fontWeight: 600, textAlign: "center" };
     };
 
     const qValueFormatter = (params: any) => {
@@ -353,7 +354,7 @@
       const isBool  = BOOLEAN_METRICS.includes(metric);
       const isClimb = metric === CLIMBSTATE_METRIC;
       const v       = params.value;
-      const base    = { fontSize: "18px", fontWeight: "bold", textAlign: "center", borderLeft: border };
+      const base    = { fontSize: "14px", fontWeight: "bold", textAlign: "center", borderLeft: border };
 
       if (v === undefined || v === null || v === "" || isBool || isClimb)
         return { background: "#4D4D4D", color: "white", ...base };
@@ -384,21 +385,21 @@
         headerName: "MatchNum",
         field: "metric",
         pinned: "left",
-        flex: 1,
-        minWidth: 120,
+        minWidth: 160,
+        width: 180,
         headerClass: "header-center",
         cellClass: "cell-center",
         cellStyle: {
           background: "#C81B00", color: "white",
-          fontSize: "18px", fontWeight: "bold", textAlign: "center",
+          fontSize: "14px", fontWeight: "bold", textAlign: "center",
         },
         valueFormatter: (params: any) => METRIC_DISPLAY_NAMES.get(params.value) || params.value,
       },
       ...qLabels.map((q, i) => ({
         headerName: matchNums[i],
         field: q,
-        flex: 1,
         minWidth: 80,
+        flex: 1,
         headerClass: "header-center",
         cellClass: "cell-center",
         cellStyle: qCellStyle,
@@ -449,7 +450,7 @@
           const bg = getAlexBgColor(params.value, false);
           return {
             background: bg, color: textColorForBg(bg),
-            fontSize: "18px", fontWeight: "bold",
+            fontSize: "14px", fontWeight: "bold",
             textAlign: "center", borderLeft: "2px solid #555",
           };
         },
@@ -462,22 +463,28 @@
 
     if (gridInstance) gridInstance.destroy();
     gridInstance = createGrid(domNode, {
-      rowData,
-      columnDefs,
-      rowHeight: ROW_HEIGHT,
-      headerHeight: HEADER_HEIGHT,
-      domLayout: "autoHeight",
-      tooltipShowDelay: 200,
-      popupParent: document.body,
-      defaultColDef: {
-        resizable: false,
-        sortable: false,
-        suppressMovable: true,
-        cellStyle: { fontSize: "18px" },
-      },
-      suppressColumnVirtualisation: true,
-      suppressHorizontalScroll: true,
-    });
+  rowData,
+  columnDefs,
+  rowHeight: ROW_HEIGHT,
+  headerHeight: HEADER_HEIGHT,
+  domLayout: "autoHeight",
+  tooltipShowDelay: 200,
+  popupParent: document.body,
+  defaultColDef: {
+    resizable: false,
+    sortable: false,
+    suppressMovable: true,
+    wrapText: true,
+    cellStyle: { 
+      fontSize: "12px",
+      whiteSpace: "normal",
+      wordWrap: "break-word",
+      overflow: "visible",
+    },
+  },
+  suppressColumnVirtualisation: true,
+  suppressHorizontalScroll: false,
+});
 
     dispatch("gridReady", { api: gridInstance });
 
@@ -541,7 +548,7 @@
   :global(.ag-header-cell) {
     background: var(--frc-190-red, #c81b00) !important;
     color: white !important;
-    font-size: 18px;
+    font-size: 14px;
     font-weight: bold;
   }
   :global(.ag-header-cell.header-center .ag-header-cell-label) {
@@ -549,7 +556,7 @@
     text-align: center;
     width: 100%;
     color: white !important;
-    font-size: 18px;
+    font-size: 14px;
   }
   :global(.cell-center) {
     text-align: center !important;
@@ -587,4 +594,30 @@
     border: 2px solid var(--frc-190-black, #4d4d4d);
   }
   :global(.ag-body-viewport::-webkit-scrollbar-thumb:hover) { background: #e02200; }
+
+  @media (max-width: 768px) {
+    .team-grid-container {
+      margin-top: 12px;
+      border-radius: 6px;
+    }
+
+    :global(.ag-header-cell) {
+      font-size: 14px;
+    }
+
+    :global(.ag-header-cell.header-center .ag-header-cell-label) {
+      font-size: 14px;
+    }
+
+    :global(.ag-theme-quartz .ag-root-wrapper) {
+      --ag-font-size: 14px;
+      border-width: 2px;
+      border-radius: 6px;
+    }
+
+    :global(.ag-body-viewport::-webkit-scrollbar) {
+      width: 8px;
+      height: 8px;
+    }
+  }
 </style>

@@ -1,12 +1,17 @@
 <script lang="ts">
-  import { onDestroy, onMount } from "svelte";
+  import { onDestroy, onMount, tick } from "svelte";
   import { v4 as uuidv4 } from "uuid";
   import * as barGraph from "../../pages/graphcode/bar.js";
   import * as lineGraph from "../../pages/graphcode/line.js";
   import * as pieGraph from "../../pages/graphcode/pie.js";
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
-  import { fetchMatchAlliances, fetchOPR, fetchRobotClimb } from "../../utils/api.js";
+  import {
+    fetchMatchAlliances,
+    fetchOPR,
+    fetchCOPRs,
+    fetchRobotClimb,
+  } from "../../utils/api.js";
   import EventGrid from "../../components/Eventgrid.svelte";
   import {
     COLOR_MODES,
@@ -18,20 +23,28 @@
     median,
     METADATA_KEYS,
     METRIC_DISPLAY_NAMES,
+    normalizeClimbData,
     percentile,
     ROW_HEIGHT,
     sd,
+    estimateTeamPoints,
+    isNumeric,
+    estimateTeamPoints2,
   } from "../../utils/pageUtils.js";
 
   import { getIndexedDBStore } from "../../utils/indexedDB";
+  import { cacheMetrics, getCachedMetrics } from "../../utils/indexedDB";
+  import { singleMetricCache } from "../../stores/singleMetricCache.js";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
   // ─── Constants ────────────────────────────────────────────────────────────────
 
   const HIGHLIGHTED_TEAM_KEY = "singleMetric_highlightedTeam";
+  const SELECTED_METRIC_KEY = "singleMetric_selectedMetric";
   const OPR_DISPLAY = "OPR (Offensive Power Rating)";
   const EFS_DISPLAY = "EFS (Estimated Fuel Score)";
+  const EFS2_DISPLAY = "EFS2 (More Accurate EFS)";
   const BOOLEAN_METRICS = new Set(["AutoClimb", "AttemptClimb", "Auto_Climb"]);
   const CLIMBSTATE_METRIC = "Climb_State";
 
@@ -55,7 +68,7 @@
     "MatchEvent",
     "MatchEventDetails",
     "AutoClimb",
-    "EndState"
+    "EndState",
   ]);
 
   const INVERTED_METRICS = new Set([
@@ -103,6 +116,7 @@
   let eventCode = getEventCode();
 
   let teamOPRs: Record<string, number> = {};
+  let teamCOPRs: Record<string, any> = {};
 
   // ── EventGrid props ──
   let rowData: any[] = [];
@@ -120,18 +134,34 @@
   let isClimbStateMetric = false;
   let isNumericMetric = false;
 
+  let allMetricsList: string[] = [];
+
+  $: {
+    allMetricsList = getAllMetrics();
+  }
+
   let charts: any[] = [];
   let chartTypes = ["bar", "line", "pie", "scatter", "radar"];
   let showDropdown = false;
   let autoOnly = false;
+  let metricChangeTimer: any = null;
+  let pendingMetricChange: any = null;
+  let efsWorker: Worker | null = null;
+
+  // Initialize EFS Web Worker if available (for better performance on slow devices)
+  function initEFSWorker() {
+    if (typeof Worker !== "undefined") {
+      try {
+        efsWorker = new Worker("/src/workers/efsWorker.js", { type: "module" });
+        console.log("[EFS Worker] Web Worker initialized");
+      } catch (e) {
+        console.warn("[EFS Worker] Failed to initialize Web Worker:", e);
+        efsWorker = null;
+      }
+    }
+  }
 
   // ─── Value Helpers ────────────────────────────────────────────────────────────
-
-  function isNumeric(n: any): boolean {
-    if (n === null || n === undefined || n === "" || typeof n === "boolean")
-      return false;
-    return !isNaN(parseFloat(n)) && isFinite(n);
-  }
 
   function normalizeValue(value: any): string {
     if (value === null || value === undefined) return "";
@@ -163,7 +193,32 @@
   }
 
   // ─── Color Helpers (kept for chart builders) ──────────────────────────────────
-
+  function makeTeamColumnDef() {
+    return {
+      headerName: "Team",
+      field: "team",
+      pinned: "left",
+      width: 100,
+      minWidth: 100,
+      headerClass: "header-center",
+      cellClass: "cell-center",
+      cellStyle: (params) => ({
+        background: params.value === highlightedTeam ? "#FFD700" : "#C81B00",
+        color: params.value === highlightedTeam ? "black" : "white",
+        fontWeight: "bold",
+        fontSize: "18px",
+        textAlign: "center",
+        cursor: "pointer",
+      }),
+      onCellClicked: (params) => {
+        if (!params.value) return;
+        highlightedTeam =
+          highlightedTeam === params.value ? null : params.value;
+        broadcastHighlightedTeam(highlightedTeam);
+        efsGridApi?.redrawRows();
+      },
+    };
+  }
   function textColorForBg(bg: string): string {
     if (!bg) return "black";
     const darkColors = [
@@ -367,7 +422,9 @@
   async function fetchAllMetricData(): Promise<string | null> {
     const stored = (await getIndexedDBStore("scoutingData")) || [];
     if (!stored) return null;
-    return JSON.stringify(extractValues(stored, autoOnly));
+    // Unwrap the value property if it exists (from compressed storage)
+    const unwrapped = (stored || []).map(item => item.value !== undefined ? item.value : item);
+    return JSON.stringify(extractValues(unwrapped, autoOnly));
   }
 
   async function loadOPRFromCache(): Promise<Record<string, number>> {
@@ -388,146 +445,100 @@
     }
   }
 
-  async function estimateTeamPoints(
-    teamStr: string,
-    matchNumber: number,
-    preloadedAlliances?: any[],
-    preloadedData?: any[],
-  ): Promise<number | null> {
-    const allMatches =
-      preloadedAlliances ?? (await fetchMatchAlliances(eventCode));
-    const tbaMatch = allMatches.find(
-      (m) => m.comp_level === "qm" && m.match_number === matchNumber,
-    );
-    const data = preloadedData ?? JSON.parse(await fetchAllMetricData());
-    if (!data || !tbaMatch) return null;
-
-    const teamStrClean = String(teamStr).replace(/\D/g, "");
-    const teamRows = data.filter((row) => {
-      if (row.RecordType === "Match_Event") return false;
-      return (
-        String(row.Team || row.team || "").replace(/\D/g, "") ===
-          teamStrClean && Number(row.Match) === matchNumber
-      );
-    });
-    if (!teamRows.length) return null;
-
-    const redKeys = tbaMatch.alliances.red.team_keys.map((k) =>
-      k.replace("frc", ""),
-    );
-    const onRed = redKeys.includes(teamStrClean);
-    const allianceScoreBreakdown = onRed
-      ? tbaMatch.score_breakdown?.red
-      : tbaMatch.score_breakdown?.blue;
-    if (!allianceScoreBreakdown) return null;
-
-    const phases = [
-      { name: "Auto", start: 0, end: 20, scoreKey: "autoPoints" },
-      { name: "Transition", start: 20, end: 30, scoreKey: "transitionPoints" },
-      { name: "Phase1", start: 30, end: 55, scoreKey: "shift1Points" },
-      { name: "Phase2", start: 55, end: 80, scoreKey: "shift2Points" },
-      { name: "Phase3", start: 80, end: 105, scoreKey: "shift3Points" },
-      { name: "Phase4", start: 105, end: 130, scoreKey: "shift4Points" },
-      { name: "Endgame", start: 130, end: 160, scoreKey: "endgamePoints" },
-    ];
-
-    let teamFuelShootingTime = 0;
-    teamRows.forEach((row) => {
-      if (isNumeric(row.FuelShootingTime))
-        teamFuelShootingTime += Number(row.FuelShootingTime);
-    });
-
-    const allianceTeams = onRed
-      ? tbaMatch.alliances.red.team_keys
-      : tbaMatch.alliances.blue.team_keys;
-    const allianceTeamNumbers = allianceTeams.map((k) =>
-      String(k).replace("frc", ""),
-    );
-    let totalAllianceShootingTime = 0;
-    for (const allyTeamNum of allianceTeamNumbers) {
-      const allyRows = data.filter((row) => {
-        if (row.RecordType === "Match_Event") return false;
-        return (
-          String(row.Team || row.team || "").replace(/\D/g, "") ===
-            allyTeamNum && Number(row.Match) === matchNumber
-        );
-      });
-      allyRows.forEach((row) => {
-        if (isNumeric(row.FuelShootingTime))
-          totalAllianceShootingTime += Number(row.FuelShootingTime);
-      });
+  async function processTeamData(allRows: any[]) {
+    availableTeams = [];
+    teamData = {};
+    for (const row of allRows) {
+      if (row.RecordType === "Match_Event") continue;
+      const team = String(row.Team || row.team || "").replace(/^frc/, "");
+      if (!team) continue;
+      if (!availableTeams.includes(team))
+        availableTeams = [...availableTeams, team];
+      if (!teamData[team]) teamData[team] = [];
+      teamData[team] = [...teamData[team], row];
     }
+    availableTeams = availableTeams.sort();
 
-    const teamShootingPercentage =
-      totalAllianceShootingTime > 0
-        ? teamFuelShootingTime / totalAllianceShootingTime
-        : 0;
+    // Load climb data in background (non-blocking) to keep initial page load fast
+    // Fetch match alliances once and process all climb data in batch
+    if (eventCode) {
+      try {
+        const allMatches = await fetchMatchAlliances(eventCode);
+        // Process all team/match combinations in parallel without repeated API calls
+        const batchUpdates: Promise<void>[] = [];
+        for (const team of availableTeams) {
+          const rows = teamData[team] ?? [];
+          for (const row of rows) {
+            batchUpdates.push(
+              (async () => {
+                try {
+                  const match = allMatches.find(
+                    (m) => m.match_number === parseInt(row.Match) && m.comp_level === "qm",
+                  );
+                  if (!match) {
+                    row.Climb_State = null;
+                    row.Auto_Climb = null;
+                    return;
+                  }
 
-    let estimatedPoints = 0;
-    const hubScore = allianceScoreBreakdown.hubScore;
-    if (hubScore) {
-      phases.forEach((phase) => {
-        const phaseScore = hubScore[phase.scoreKey] || 0;
-        if (phaseScore > 0 && teamShootingPercentage > 0) {
-          estimatedPoints += phaseScore * teamShootingPercentage;
+                  let allianceColor = null;
+                  let robotIndex = null;
+                  ["red", "blue"].forEach((color) => {
+                    const teamKeys = match.alliances[color].team_keys;
+                    const index = teamKeys.indexOf(`frc${team}`);
+                    if (index !== -1) {
+                      allianceColor = color;
+                      robotIndex = index + 1;
+                    }
+                  });
+
+                  if (!allianceColor) {
+                    row.Climb_State = null;
+                    row.Auto_Climb = null;
+                    return;
+                  }
+
+                  const scoreBreakdown = match.score_breakdown[allianceColor];
+                  const endgameClimb = scoreBreakdown[`endGameTowerRobot${robotIndex}`] || "None";
+                  const autoClimb = scoreBreakdown[`autoChargeStationRobot${robotIndex}`] || "None";
+
+                  const end = endgameClimb ?? "";
+                  const lastChar = String(end).slice(-1);
+                  row.Climb_State =
+                    lastChar === "3"
+                      ? "L3"
+                      : lastChar === "2"
+                        ? "L2"
+                        : lastChar === "1"
+                          ? "L1"
+                          : "No";
+                  const auto = autoClimb ?? "";
+                  row.Auto_Climb = String(auto).slice(-1) === "1" ? "Yes" : "No";
+
+                  // Normalize climb time to 0 if climb state is "None"
+                  normalizeClimbData(row);
+                } catch (e) {
+                  row.Climb_State = null;
+                  row.Auto_Climb = null;
+                }
+              })()
+            );
+          }
         }
-      });
+        await Promise.all(batchUpdates);
+        console.log("[Climb] Batch fetched climb data for all teams");
+      } catch (e) {
+        console.warn("Background batch climb data fetch failed:", e);
+      }
     }
-
-    return estimatedPoints > 0 ? Math.round(estimatedPoints * 10) / 10 : null;
   }
-
- async function processTeamData(allRows: any[]) {
-  availableTeams = [];
-  teamData = {};
-  for (const row of allRows) {
-    if (row.RecordType === "Match_Event") continue;
-    const team = String(row.Team || row.team || "").replace(/^frc/, "");
-    if (!team) continue;
-    if (!availableTeams.includes(team)) availableTeams = [...availableTeams, team];
-    if (!teamData[team]) teamData[team] = [];
-    teamData[team] = [...teamData[team], row];
-  }
-  availableTeams = availableTeams.sort();
-
-  // Load climb data in background (non-blocking) to keep initial page load fast
-  if (eventCode) {
-    Promise.all(
-      availableTeams.map(async (team) => {
-        const rows = teamData[team] ?? [];
-        await Promise.all(
-          rows.map(async (row) => {
-            try {
-              const climbData = await fetchRobotClimb(eventCode, team, row.Match);
-              const end = climbData.EndgameClimb ?? "";
-              const lastChar = String(end).slice(-1);
-              row.Climb_State =
-                lastChar === "3" ? "L3" :
-                lastChar === "2" ? "L2" :
-                lastChar === "1" ? "L1" :
-                "No"
-              const auto = climbData.AutoClimb ?? "";
-              row.Auto_Climb = String(auto).slice(-1) === "1" ? "Yes" : "No";
-            } catch {
-              row.Climb_State = null;
-              row.Auto_Climb = null;
-            }
-          })
-        );
-      })
-    ).catch((e) => console.warn("Background climb data fetch failed:", e));
-  }
-}
 
   function computeMetrics(): string[] {
     if (!availableTeams.length) return [];
     const set = new Set<string>();
-    if (eventCode || Object.keys(teamOPRs).length) set.add(OPR_DISPLAY);
-    if (eventCode) {
-      set.add(EFS_DISPLAY);
-      set.add("Climb State");
-      set.add("Auto Climb");
-    }
+    // Note: OPR, EFS, EFS2 are computed metrics and will be added on-demand
+    // This speeds up initial metrics computation significantly
+    
     for (const team of availableTeams) {
       for (const row of teamData[team] ?? []) {
         Object.keys(row).forEach((k) => {
@@ -536,12 +547,32 @@
         });
       }
     }
+    if (eventCode) {
+      set.add("Climb State");
+      set.add("Auto Climb");
+    }
     return Array.from(set).sort();
+  }
+
+  /**
+   * Get all available metrics including computed ones
+   * Computes OPR/EFS/EFS2 on-demand
+   */
+  function getAllMetrics(): string[] {
+    let allMetrics = computeMetrics();
+    if (Object.keys(teamOPRs).length || eventCode) {
+      allMetrics = [OPR_DISPLAY, ...allMetrics];
+    }
+    if (eventCode) {
+      allMetrics = [...allMetrics, EFS_DISPLAY, EFS2_DISPLAY];
+    }
+    return allMetrics;
   }
 
   function resolveDataKey(displayMetric: string): string {
     if (displayMetric === OPR_DISPLAY) return "OPR";
     if (displayMetric === EFS_DISPLAY) return "EFS";
+    if (displayMetric === EFS2_DISPLAY) return "EFS2";
     for (const [key, val] of METRIC_DISPLAY_NAMES) {
       if (val === displayMetric) return key;
     }
@@ -551,6 +582,7 @@
   function checkIsNumericMetric(metric: string): boolean {
     const key = resolveDataKey(metric);
     if (key === "OPR") return Object.keys(teamOPRs).length > 0;
+    if (key === "EFS" || key === "EFS2") return true;
     let hasData = false;
     for (const team of availableTeams) {
       for (const row of teamData[team] ?? []) {
@@ -586,6 +618,16 @@
       buildOPRGrid();
       return;
     }
+    if (selectedMetric === EFS2_DISPLAY) {
+      buildEFS2Grid();
+      return;
+    }
+
+    // Destroy the custom grid when switching to a regular metric
+    if (efsGridApi) {
+      efsGridApi.destroy?.();
+      efsGridApi = null;
+    }
 
     isBooleanMetric = BOOLEAN_METRICS.has(dataMetric);
     isClimbStateMetric = dataMetric === CLIMBSTATE_METRIC;
@@ -620,6 +662,7 @@
     qLabels = Array.from({ length: maxMatchCount }, (_, i) => `Q${i + 1}`);
 
     rowData = availableTeams
+    
       .map((team) => {
         const rows = teamData[team] ?? [];
         const row: any = {
@@ -735,32 +778,6 @@
     };
   }
 
-  function makeTeamColumnDef() {
-    return {
-      headerName: "Team",
-      field: "team",
-      pinned: "left",
-      width: 150,
-      headerClass: "header-center",
-      cellClass: "cell-center",
-      cellStyle: (params) => ({
-        background: params.value === highlightedTeam ? "#FFD700" : "#C81B00",
-        color: params.value === highlightedTeam ? "black" : "white",
-        fontWeight: "bold",
-        fontSize: "18px",
-        textAlign: "center",
-        cursor: "pointer",
-      }),
-      onCellClicked: (params) => {
-        if (!params.value) return;
-        highlightedTeam =
-          highlightedTeam === params.value ? null : params.value;
-        broadcastHighlightedTeam(highlightedTeam);
-        efsGridApi?.redrawRows();
-      },
-    };
-  }
-
   // EFS/OPR grids manage their own ag-grid instance since they have fully custom columns
   let efsGridApi: any = null;
   let efsGridNode: HTMLElement;
@@ -792,7 +809,13 @@
           resizable: false,
           sortable: false,
           suppressMovable: true,
-          cellStyle: { fontSize: "18px" },
+          cellStyle: { 
+            fontSize: "18px",
+            whiteSpace: "normal",
+            wordWrap: "break-word",
+            overflow: "visible",
+          },
+          wrapText: true,
         },
         suppressColumnVirtualisation: true,
         suppressHorizontalScroll: true,
@@ -814,7 +837,10 @@
 
   function applyEFSOPRGrid(columnDefs: any[], data = rowData) {
     if (!efsGridNode) return;
+    // Calculate height to show all rows while maintaining scroll performance
+    // ag-Grid's row virtualization will handle rendering efficiency internally
     efsGridHeight = data.length * ROW_HEIGHT + HEADER_HEIGHT + 6;
+    
     if (efsGridApi) {
       efsGridApi.setGridOption("columnDefs", columnDefs);
       efsGridApi.setGridOption("rowData", data);
@@ -830,16 +856,26 @@
           resizable: false,
           sortable: false,
           suppressMovable: true,
-          cellStyle: { fontSize: "18px" },
+          cellStyle: { 
+            fontSize: "18px",
+            whiteSpace: "normal",
+            wordWrap: "break-word",
+            overflow: "visible",
+          },
+          wrapText: true,
         },
         suppressColumnVirtualisation: true,
         suppressHorizontalScroll: true,
+        suppressRowVirtualisation: false, // Enable row virtualization
+        domLayout: "normal", // Allow scrolling within container
         theme: "legacy",
       });
     }
   }
 
   async function buildEFSGrid() {
+    if (efsGridApi) { efsGridApi.destroy?.(); efsGridApi = null; }
+  await tick();
     if (!availableTeams.length) return;
     efsLoading = true;
 
@@ -868,9 +904,12 @@
         const matches = teamData[team] ?? [];
         const row: any = { team, hasData: false };
         const efsValues: number[] = [];
+        
+        // Note: EFS computation could be offloaded to efsWorker for better UI responsiveness
+        // Currently running on main thread. Consider using worker for large datasets.
         await Promise.all(
           matches.map(async (matchRow, i) => {
-            const efs = await estimateTeamPoints(
+            const efs = estimateTeamPoints(
               String(team),
               Number(matchRow.Match),
               alliances,
@@ -929,56 +968,59 @@
       }),
     );
 
-    const efsCellStyle = (v: any) => {
-      if (v === null || v === undefined)
-        return {
-          background: "#333",
-          color: "white",
-          fontWeight: 600,
-          fontSize: "16px",
-          textAlign: "center",
-          border: "1px solid #555",
-        };
-      if (v === 0)
-        return {
-          background: "black",
-          color: "white",
-          fontWeight: 600,
-          fontSize: "18px",
-          textAlign: "center",
-        };
-      const bg = colorFromStats(v, efsGlobalStats, false, "EFS");
-      return {
-        background: bg,
-        color: textColorForBg(bg),
-        fontWeight: 600,
-        fontSize: "18px",
-        textAlign: "center",
-      };
-    };
-
-    const efsStatStyle = (v: any, border?: string) => {
-      if (v === null || v === undefined)
-        return statCellStyle("#4D4D4D", "white", border);
-      if (v === 0) return statCellStyle("black", "white", border);
-      const bg = colorFromStats(v, efsGlobalStats, false, "EFS");
-      return statCellStyle(bg, textColorForBg(bg), border);
-    };
-
     const columnDefs = [
       makeTeamColumnDef(),
       ...efsQLabels.map((q) => ({
         headerName: q,
         field: q,
         flex: 1,
-        minWidth: 70,
+        minWidth: 60,
         headerClass: "header-center",
         cellClass: "cell-center",
-        cellStyle: (params) => efsCellStyle(params.value),
-        valueFormatter: (params) =>
-          params.value !== null && params.value !== undefined
-            ? Number(params.value).toFixed(1)
-            : "",
+        cellStyle: (params: any) => {
+          const v = params.value;
+          if (v === undefined || v === null || v === "") {
+            return {
+              background: "#333",
+              color: "white",
+              fontWeight: 600,
+              fontSize: "14px",
+              textAlign: "center",
+              border: "1px solid #555",
+            };
+          }
+          const val = Number(v ?? 0);
+          if (val === -1)
+            return {
+              background: "#4D4D4D",
+              color: "white",
+              fontWeight: 600,
+              fontSize: "14px",
+              textAlign: "center",
+            };
+          if (val === 0)
+            return {
+              background: "black",
+              color: "white",
+              fontWeight: 600,
+              fontSize: "14px",
+              textAlign: "center",
+            };
+          const bg = colorFromStats(val, efsGlobalStats, false, "EFS");
+          return {
+            background: bg,
+            color: textColorForBg(bg),
+            fontWeight: 600,
+            fontSize: "14px",
+            textAlign: "center",
+          };
+        },
+        valueFormatter: (params: any) => {
+          if (!params.data?.hasData) return "";
+          if (params.value === undefined || params.value === null) return "";
+          const num = Number(params.value ?? 0);
+          return num === -1 ? "False" : num.toFixed(2);
+        },
       })),
       {
         headerName: "Mean",
@@ -987,11 +1029,24 @@
         minWidth: 80,
         headerClass: "header-center",
         cellClass: "cell-center",
-        cellStyle: (params) => efsStatStyle(params.value, "3px solid #C81B00"),
-        valueFormatter: (params) =>
-          params.value != null && params.data?.hasData
-            ? Number(params.value).toFixed(2)
-            : "",
+        cellStyle: (params: any) => {
+          const bg =
+            params.value == null
+              ? "#4D4D4D"
+              : colorFromStats(params.value, efsGlobalStats, false, "EFS");
+          return {
+            background: bg,
+            color: textColorForBg(bg),
+            fontWeight: "bold",
+            fontSize: "14px",
+            textAlign: "center",
+            borderLeft: "3px solid #C81B00",
+          };
+        },
+        valueFormatter: (params: any) =>
+          !params.data?.hasData || params.value == null
+            ? ""
+            : Number(params.value).toFixed(2),
       },
       {
         headerName: "Med.",
@@ -1000,11 +1055,24 @@
         minWidth: 80,
         headerClass: "header-center",
         cellClass: "cell-center",
-        cellStyle: (params) => efsStatStyle(params.value, "2px solid #555"),
-        valueFormatter: (params) =>
-          params.value != null && params.data?.hasData
-            ? Number(params.value).toFixed(2)
-            : "",
+        cellStyle: (params: any) => {
+          const bg =
+            params.value == null
+              ? "#4D4D4D"
+              : colorFromStats(params.value, efsGlobalStats, false, "EFS");
+          return {
+            background: bg,
+            color: textColorForBg(bg),
+            fontWeight: "bold",
+            fontSize: "14px",
+            textAlign: "center",
+            borderLeft: "2px solid #555",
+          };
+        },
+        valueFormatter: (params: any) =>
+          !params.data?.hasData || params.value == null
+            ? ""
+            : Number(params.value).toFixed(2),
       },
       makePercentileColumnDef(false),
     ];
@@ -1014,8 +1082,67 @@
     efsLoading = false;
   }
 
-  function buildOPRGrid() {
-    if (!Object.keys(teamOPRs).length) {
+  async function buildEFS2Grid() {
+    if (efsGridApi) { efsGridApi.destroy?.(); efsGridApi = null; }
+  await tick();
+    if (!availableTeams.length) return;
+    efsLoading = true;
+
+    applyEFSOPRGrid(
+      [
+        {
+          headerName: "Loading EFS data…",
+          field: "msg",
+          flex: 1,
+          cellStyle: { textAlign: "center", color: "white", padding: "20px" },
+        },
+      ],
+      [{ msg: "Fetching match alliances from TBA…" }],
+    );
+
+    const alliances = await fetchMatchAlliances(eventCode);
+    const rawStored = (await getIndexedDBStore("scoutingData")) || [];
+    // Unwrap the value property if it exists (from compressed storage)
+    const unwrapped = (rawStored || []).map(item => item.value !== undefined ? item.value : item);
+    const dataAuto = extractValues(unwrapped, true);  
+    const dataTeleop = extractValues(unwrapped, false);
+    const maxMatchCount = getMaxMatchCount();
+    const efsQLabels = Array.from(
+      { length: maxMatchCount },
+      (_, i) => `Q${i + 1}`,
+    );
+
+    rowData = await Promise.all(
+      availableTeams.map(async (team) => {
+        const matches = teamData[team] ?? [];
+        const row: any = { team, hasData: false };
+        const efsValues: number[] = [];
+        await Promise.all(
+          matches.map(async (matchRow, i) => {
+            const efs = estimateTeamPoints2(
+              String(team),
+              Number(matchRow.Match),
+              teamCOPRs,
+              dataAuto,
+              dataTeleop,
+              alliances
+            );
+            row[efsQLabels[i]] = efs;
+            if (efs !== null) {
+              efsValues.push(efs);
+              row.hasData = true;
+            }
+          }),
+        );
+        row.mean = efsValues.length ? Number(mean(efsValues).toFixed(2)) : null;
+        row.median = efsValues.length
+          ? Number(median(efsValues).toFixed(2))
+          : null;
+        return row;
+      }),
+    );
+
+    if (!rowData.some((r) => r.hasData)) {
       applyEFSOPRGrid(
         [
           {
@@ -1025,10 +1152,161 @@
             cellStyle: { textAlign: "center", padding: "20px", color: "white" },
           },
         ],
-        [{ message: "No OPR data available for this event" }],
+        [
+          {
+            message:
+              "No EFS data could be computed — check that FuelShootingTime is scouted and TBA alliance data is available.",
+          },
+        ],
       );
+      efsLoading = false;
       return;
     }
+
+    const allEfsValues: number[] = [];
+    rowData.forEach((r) =>
+      efsQLabels.forEach((q) => {
+        if (r[q] !== null && r[q] > 0) allEfsValues.push(r[q]);
+      }),
+    );
+    const efsGlobalStats = computeGlobalStats(allEfsValues);
+
+    rowData = assignAlexPercentiles(
+      rowData.sort((a, b) => {
+        if (a.mean === null && b.mean !== null) return 1;
+        if (b.mean === null && a.mean !== null) return -1;
+        if (a.mean === null) return 0;
+        return b.mean - a.mean;
+      }),
+    );
+
+    const columnDefs = [
+      makeTeamColumnDef(),
+      ...efsQLabels.map((q) => ({
+        headerName: q,
+        field: q,
+        flex: 1,
+        minWidth: 60,
+        headerClass: "header-center",
+        cellClass: "cell-center",
+        cellStyle: (params: any) => {
+          const v = params.value;
+          if (v === undefined || v === null || v === "") {
+            return {
+              background: "#333",
+              color: "white",
+              fontWeight: 600,
+              fontSize: "14px",
+              textAlign: "center",
+              border: "1px solid #555",
+            };
+          }
+          const val = Number(v ?? 0);
+          if (val === -1)
+            return {
+              background: "#4D4D4D",
+              color: "white",
+              fontWeight: 600,
+              fontSize: "14px",
+              textAlign: "center",
+            };
+          if (val === 0)
+            return {
+              background: "black",
+              color: "white",
+              fontWeight: 600,
+              fontSize: "14px",
+              textAlign: "center",
+            };
+          const bg = colorFromStats(val, efsGlobalStats, false, "EFS");
+          return {
+            background: bg,
+            color: textColorForBg(bg),
+            fontWeight: 600,
+            fontSize: "14px",
+            textAlign: "center",
+          };
+        },
+        valueFormatter: (params: any) => {
+          if (!params.data?.hasData) return "";
+          if (params.value === undefined || params.value === null) return "";
+          const num = Number(params.value ?? 0);
+          return num === -1 ? "False" : num.toFixed(2);
+        },
+      })),
+      {
+        headerName: "Mean",
+        field: "mean",
+        flex: 1,
+        minWidth: 80,
+        headerClass: "header-center",
+        cellClass: "cell-center",
+        cellStyle: (params: any) => {
+          const bg =
+            params.value == null
+              ? "#4D4D4D"
+              : colorFromStats(params.value, efsGlobalStats, false, "EFS");
+          return {
+            background: bg,
+            color: textColorForBg(bg),
+            fontWeight: "bold",
+            fontSize: "14px",
+            textAlign: "center",
+            borderLeft: "3px solid #C81B00",
+          };
+        },
+        valueFormatter: (params: any) =>
+          !params.data?.hasData || params.value == null
+            ? ""
+            : Number(params.value).toFixed(2),
+      },
+      {
+        headerName: "Med.",
+        field: "median",
+        flex: 1,
+        minWidth: 80,
+        headerClass: "header-center",
+        cellClass: "cell-center",
+        cellStyle: (params: any) => {
+          const bg =
+            params.value == null
+              ? "#4D4D4D"
+              : colorFromStats(params.value, efsGlobalStats, false, "EFS");
+          return {
+            background: bg,
+            color: textColorForBg(bg),
+            fontWeight: "bold",
+            fontSize: "14px",
+            textAlign: "center",
+            borderLeft: "2px solid #555",
+          };
+        },
+        valueFormatter: (params: any) =>
+          !params.data?.hasData || params.value == null
+            ? ""
+            : Number(params.value).toFixed(2),
+      },
+      makePercentileColumnDef(false),
+    ];
+
+    applyEFSOPRGrid(columnDefs);
+    updateAllCharts();
+    efsLoading = false;
+  }
+
+  async function buildOPRGrid() {
+      if (efsGridApi) { efsGridApi.destroy?.(); efsGridApi = null; }
+
+  await tick();
+
+  if (!Object.keys(teamOPRs).length) {
+    applyEFSOPRGrid(
+      [{ headerName: "Message", field: "message", flex: 1,
+         cellStyle: { textAlign: "center", padding: "20px", color: "white" } }],
+      [{ message: "No OPR data available for this event" }],
+    );
+    return;
+  }
 
     rowData = assignAlexPercentiles(
       Object.entries(teamOPRs)
@@ -1050,7 +1328,7 @@
         headerName: "OPR",
         field: "mean",
         flex: 1,
-        minWidth: 150,
+        minWidth: 90,
         headerClass: "header-center",
         cellClass: "cell-center",
         cellStyle: (params) => {
@@ -1072,9 +1350,33 @@
   // ─── Event Handlers ───────────────────────────────────────────────────────────
 
   function onMetricChange(e: Event) {
-    selectedMetric = (e.target as HTMLSelectElement).value;
-    dataMetric = resolveDataKey(selectedMetric);
-    buildGrid();
+    // Debounce metric changes to batch updates (100ms delay)
+    const newMetric = (e.target as HTMLSelectElement).value;
+    
+    clearTimeout(metricChangeTimer);
+    pendingMetricChange = newMetric;
+    
+    metricChangeTimer = setTimeout(() => {
+      selectedMetric = pendingMetricChange;
+      dataMetric = resolveDataKey(selectedMetric);
+      // Save selected metric to localStorage
+      localStorage.setItem(SELECTED_METRIC_KEY, selectedMetric);
+      buildGrid();
+      metricChangeTimer = null;
+    }, 100);
+  }
+
+  /**
+   * Load the selected metric from localStorage, or use default
+   */
+  function getInitialMetric(metrics: string[]): string {
+    if (!metrics.length) return "";
+    const saved = localStorage.getItem(SELECTED_METRIC_KEY);
+    // Only use saved metric if it's still available in current metrics list
+    if (saved && metrics.includes(saved)) {
+      return saved;
+    }
+    return metrics[0];
   }
 
   function onColorblindChange(e: Event) {
@@ -1095,12 +1397,13 @@
         return;
       }
       metrics = computeMetrics();
-      if (!metrics.length) {
+      allMetricsList = getAllMetrics();
+      if (!allMetricsList.length) {
         error = "No metrics found.";
         loading = false;
         return;
       }
-      if (!metrics.includes(selectedMetric)) selectedMetric = metrics[0];
+      if (!allMetricsList.includes(selectedMetric)) selectedMetric = allMetricsList[0];
       dataMetric = resolveDataKey(selectedMetric);
       loading = false;
       buildGrid();
@@ -1189,7 +1492,11 @@
     chart.yAxisMetric = dataMetric;
     chart.selectedTeams ??= new Set(availableTeams);
     const isNumericData =
-      selectedMetric === OPR_DISPLAY ? true : checkIsNumericMetric(dataMetric);
+      selectedMetric === OPR_DISPLAY ||
+      selectedMetric === EFS_DISPLAY ||
+      selectedMetric === EFS2_DISPLAY
+        ? true
+        : checkIsNumericMetric(dataMetric);
     let option;
     if (!isNumericData && chart.type !== "pie" && chart.type !== "radar") {
       option = {
@@ -1470,21 +1777,82 @@
 
   onMount(async () => {
     window.addEventListener("storage", handleStorageEvent);
+    // Initialize Web Worker for EFS computation (optimization for slow devices)
+    initEFSWorker();
+    
     try {
+      // ─── Check cache first ─────────────────────────────────────────────────
+      const cacheData = singleMetricCache.get(eventCode);
+      if (cacheData && singleMetricCache.isValid(eventCode)) {
+        availableTeams = [...cacheData.teamData.availableTeams];
+        teamData = cacheData.teamData.teamData;
+        teamOPRs = { ...cacheData.teamOPRs };
+        teamCOPRs = { ...cacheData.teamCOPRs };
+        metrics = [...cacheData.metrics];
+        allMetricsList = getAllMetrics();
+        
+        if (!allMetricsList.length) {
+          error = "Team data loaded, but no metrics were found.";
+          loading = false;
+          return;
+        }
+        selectedMetric = getInitialMetric(allMetricsList);
+        dataMetric = resolveDataKey(selectedMetric);
+        loading = false;
+        buildGrid();
+        console.log("[Cache] Loaded singleMetric data from cache");
+        return;
+      }
+
+      // ─── Fetch fresh data ──────────────────────────────────────────────────
       const raw = await fetchAllMetricData();
-      if (!raw) { error = "No scouting data found."; loading = false; return; }
+      if (!raw) {
+        error = "No scouting data found.";
+        loading = false;
+        return;
+      }
       processTeamData(JSON.parse(raw));
-      if (!availableTeams.length) { error = "No team data found from backend."; loading = false; return; }
+      if (!availableTeams.length) {
+        error = "No team data found from backend.";
+        loading = false;
+        return;
+      }
 
       teamOPRs = await loadOPRFromCache();
+      teamCOPRs = await fetchCOPRs(eventCode);
 
-      metrics = computeMetrics();
-      if (!metrics.length) {
+      // Try to load metrics from IndexedDB cache first (24-hour TTL)
+      const cachedMetrics = await getCachedMetrics(eventCode);
+      if (cachedMetrics && cachedMetrics.length > 0) {
+        metrics = cachedMetrics;
+        console.log("[MetricsCache] Using cached metrics from IndexedDB");
+      } else {
+        // Compute metrics if not cached
+        metrics = computeMetrics();
+        if (metrics.length > 0) {
+          // Cache the newly computed metrics
+          await cacheMetrics(eventCode, metrics);
+        }
+      }
+
+      allMetricsList = getAllMetrics();
+      if (!allMetricsList.length) {
         error = "Team data loaded, but no metrics were found.";
         loading = false;
         return;
       }
-      selectedMetric = metrics[0];
+      
+      // ─── Cache the data ────────────────────────────────────────────────────
+      singleMetricCache.setData(
+        eventCode,
+        { availableTeams, teamData },
+        metrics,
+        teamOPRs,
+        teamCOPRs
+      );
+      console.log("[Cache] Saved singleMetric data to cache");
+      
+      selectedMetric = getInitialMetric(allMetricsList);
       dataMetric = resolveDataKey(selectedMetric);
       loading = false;
       buildGrid();
@@ -1498,6 +1866,10 @@
   onDestroy(() => {
     window.removeEventListener("storage", handleStorageEvent);
     efsGridApi?.destroy?.();
+    if (efsWorker) {
+      efsWorker.terminate();
+      console.log("[EFS Worker] Web Worker terminated");
+    }
   });
 </script>
 
@@ -1514,8 +1886,8 @@
     <h1>Event View</h1>
     <p class="subtitle">FRC Team 190 - Scouting Data Analysis</p>
   </div>
-
-  <div class="controls">
+  
+  <div class="top-controls">
     {#if loading}
       <span style="color: transparent;">Loading team data...</span>
     {:else if error}
@@ -1528,7 +1900,7 @@
           bind:value={selectedMetric}
           on:change={onMetricChange}
         >
-          {#each metrics as m}
+          {#each allMetricsList as m}
             <option value={m}>{m}</option>
           {/each}
         </select>
@@ -1560,7 +1932,7 @@
   </div>
 
   <!-- Normal metric grid via EventGrid component -->
-  {#if !loading && !error && selectedMetric !== EFS_DISPLAY && selectedMetric !== OPR_DISPLAY}
+  {#if !loading && !error && selectedMetric !== EFS_DISPLAY && selectedMetric !== OPR_DISPLAY && selectedMetric !== EFS2_DISPLAY}
     <EventGrid
       {rowData}
       {globalStats}
@@ -1577,7 +1949,7 @@
   {/if}
 
   <!-- EFS / OPR use their own ag-grid instance with custom columns -->
-  {#if !loading && !error && (selectedMetric === EFS_DISPLAY || selectedMetric === OPR_DISPLAY)}
+  {#if !loading && !error && (selectedMetric === EFS_DISPLAY || selectedMetric === OPR_DISPLAY || selectedMetric === EFS2_DISPLAY)}
     <div
       class="grid-container ag-theme-quartz"
       bind:this={efsGridNode}
@@ -1809,6 +2181,7 @@
     padding: 1.25rem;
     background: var(--wpi-gray);
     width: 100%;
+    overflow-x: hidden;
   }
 
   :global(select option:checked) {
@@ -1843,6 +2216,7 @@
     border: 3px solid var(--frc-190-red);
     border-radius: 8px;
     overflow: hidden;
+    width: 100%;
   }
   :global(.ag-tooltip) {
     white-space: pre-line;
@@ -1858,7 +2232,7 @@
   }
   :global(.ag-body-viewport) {
     overflow-y: scroll !important;
-    overflow-x: auto !important;
+    overflow-x: hidden !important;
   }
   :global(.ag-body-viewport::-webkit-scrollbar) {
     width: 12px;
@@ -1895,7 +2269,7 @@
     margin: 0;
   }
 
-  .controls {
+  .top-controls {
     padding: 1rem 1.5rem;
     background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
     color: white;
@@ -1912,7 +2286,7 @@
     border: 2px solid var(--frc-190-red);
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
   }
-  .controls label {
+  .top-controls label {
     font-weight: 600;
     color: #fff;
     font-size: 0.9rem;
@@ -1958,20 +2332,21 @@
 
   .grid-container {
     width: 100%;
-    max-width: 75rem;
     background: var(--frc-190-black);
     border-radius: 0.5rem;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    overflow: hidden;
   }
 
   .graph-section {
     width: 100%;
-    max-width: 75rem;
     margin-top: 1.9rem;
     display: flex;
     flex-direction: column;
     align-items: center;
     padding-bottom: 3.125rem;
+    padding-left: 0;
+    padding-right: 0;
   }
   .section-title {
     color: var(--frc-190-red);
@@ -2041,14 +2416,15 @@
     justify-content: center;
     flex-wrap: wrap;
     width: 100%;
-    max-width: 75rem;
+    gap: 1rem;
   }
   .chart-wrapper {
     position: relative;
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    width: 100%;
+    flex: 1 1 calc(50% - 0.5rem);
+    min-width: 350px;
     background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
     border: 2px solid var(--frc-190-red);
     border-radius: 0.5rem;
@@ -2134,60 +2510,196 @@
 
   /* Responsive Design */
   @media (max-width: 1024px) {
-    .header-section h1 { font-size: 1.5rem; }
-    .controls { font-size: 1rem; gap: 1.25rem; padding: 0.8rem 1.25rem; }
-    .controls label { font-size: 0.85rem; }
-    select { font-size: 0.9rem; padding: 0.4rem 0.8rem; }
-    .section-title { font-size: 1.1rem; margin-bottom: 1rem; }
-    .chart-wrapper { padding: 0.75rem; }
+    .header-section h1 {
+      font-size: 1.5rem;
+    }
+    .top-controls {
+      font-size: 1rem;
+      gap: 1.25rem;
+      padding: 0.8rem 1.25rem;
+    }
+    .top-controls label {
+      font-size: 0.85rem;
+    }
+    select {
+      font-size: 0.9rem;
+      padding: 0.4rem 0.8rem;
+    }
+    .section-title {
+      font-size: 1.1rem;
+      margin-bottom: 1rem;
+    }
+    .chart-wrapper {
+      padding: 0.75rem;
+    }
   }
 
   @media (max-width: 768px) {
-    .page-wrapper { padding: 0.75rem; }
-    .header-section { margin-bottom: 1rem; }
-    .header-section h1 { font-size: 1.2rem; }
-    .header-section .subtitle { font-size: 0.8rem; }
-    .controls { gap: 0.75rem; padding: 0.6rem 1rem; font-size: 0.9rem; flex-direction: column; }
-    .controls label { font-size: 0.8rem; }
-    .auto-only-toggle label { gap: 0.4rem; }
-    .auto-only-toggle input { width: 1rem; height: 1rem; }
-    select { margin-left: 0.4rem; font-size: 0.8rem; padding: 0.4rem 0.7rem; }
-    .grid-container { border-radius: 0.4rem; }
-    .graph-section { margin-top: 1.5rem; padding-bottom: 2rem; }
-    .section-title { font-size: 1rem; margin-bottom: 0.8rem; }
-    .dropdown-container { margin-bottom: 1rem; }
-    .plus-btn { width: 2.75rem; height: 2.75rem; font-size: 1.1rem; }
-    .dropdown { top: 3.25rem; width: 8rem; }
-    .dropdown li { padding: 0.6rem 0.8rem; font-size: 0.8rem; }
-    .chart-wrapper { padding: 0.6rem; margin-bottom: 1rem; }
-    .chart-container { height: 18rem; }
-    .chart-label { font-size: 0.8rem; margin-top: 0.5rem; }
-    .chart-controls { gap: 0.4rem; }
-    .mini-btn { padding: 0.2rem 0.5rem; font-size: 0.75rem; }
-    .local-filter-panel { padding: 0.5rem; margin-bottom: 0.75rem; max-height: 11rem; }
-    .local-filter-actions { gap: 0.4rem; margin-bottom: 0.4rem; }
-    .local-grid { gap: 0.4rem; }
-    .mini-checkbox { font-size: 0.75rem; gap: 0.2rem; }
+    .page-wrapper {
+      padding: 0.75rem;
+    }
+    .header-section {
+      margin-bottom: 1rem;
+    }
+    .header-section h1 {
+      font-size: 1.2rem;
+    }
+    .header-section .subtitle {
+      font-size: 0.8rem;
+    }
+    .top-controls {
+      gap: 0.75rem;
+      padding: 0.6rem 1rem;
+      font-size: 0.9rem;
+      flex-direction: column;
+    }
+    .top-controls label {
+      font-size: 0.8rem;
+    }
+    .auto-only-toggle label {
+      gap: 0.4rem;
+    }
+    .auto-only-toggle input {
+      width: 1rem;
+      height: 1rem;
+    }
+    select {
+      margin-left: 0.4rem;
+      font-size: 0.8rem;
+      padding: 0.4rem 0.7rem;
+    }
+    .grid-container {
+      border-radius: 0.4rem;
+    }
+    .graph-section {
+      margin-top: 1.5rem;
+      padding-bottom: 2rem;
+    }
+    .section-title {
+      font-size: 1rem;
+      margin-bottom: 0.8rem;
+    }
+    .dropdown-container {
+      margin-bottom: 1rem;
+    }
+    .plus-btn {
+      width: 2.75rem;
+      height: 2.75rem;
+      font-size: 1.1rem;
+    }
+    .dropdown {
+      top: 3.25rem;
+      width: 8rem;
+    }
+    .dropdown li {
+      padding: 0.6rem 0.8rem;
+      font-size: 0.8rem;
+    }
+    .chart-wrapper {
+      padding: 0.6rem;
+      margin-bottom: 1rem;
+    }
+    .chart-container {
+      height: 18rem;
+    }
+    .chart-label {
+      font-size: 0.8rem;
+      margin-top: 0.5rem;
+    }
+    .chart-controls {
+      gap: 0.4rem;
+    }
+    .mini-btn {
+      padding: 0.2rem 0.5rem;
+      font-size: 0.75rem;
+    }
+    .local-filter-panel {
+      padding: 0.5rem;
+      margin-bottom: 0.75rem;
+      max-height: 11rem;
+    }
+    .local-filter-actions {
+      gap: 0.4rem;
+      margin-bottom: 0.4rem;
+    }
+    .local-grid {
+      gap: 0.4rem;
+    }
+    .mini-checkbox {
+      font-size: 0.75rem;
+      gap: 0.2rem;
+    }
   }
 
   @media (max-width: 480px) {
-    .page-wrapper { padding: 0.5rem; }
-    .header-section h1 { font-size: 1rem; }
-    .header-section .subtitle { font-size: 0.7rem; }
-    .controls { gap: 0.5rem; padding: 0.4rem 0.75rem; font-size: 0.85rem; }
-    select { margin-left: 0.25rem; font-size: 0.75rem; padding: 0.3rem 0.6rem; }
-    .grid-container { border-radius: 0.3rem; }
-    .graph-section { margin-top: 1.25rem; padding-bottom: 1.5rem; max-width: 100%; }
-    .section-title { font-size: 0.95rem; margin-bottom: 0.75rem; }
-    .plus-btn { width: 2.5rem; height: 2.5rem; font-size: 1rem; }
-    .dropdown { width: 7.5rem; top: 3rem; }
-    .dropdown li { padding: 0.5rem; font-size: 0.75rem; }
-    .chart-wrapper { padding: 0.5rem; margin-bottom: 0.8rem; }
-    .chart-container { height: 15rem; }
-    .chart-label { font-size: 0.75rem; }
-    .mini-btn { padding: 0.15rem 0.4rem; font-size: 0.7rem; }
-    .local-filter-panel { padding: 0.4rem; margin-bottom: 0.6rem; max-height: 10rem; }
-    .local-grid { gap: 0.3rem; }
-    .mini-checkbox { font-size: 0.7rem; }
+    .page-wrapper {
+      padding: 0.5rem;
+    }
+    .header-section h1 {
+      font-size: 1rem;
+    }
+    .header-section .subtitle {
+      font-size: 0.7rem;
+    }
+    .top-controls {
+      gap: 0.5rem;
+      padding: 0.4rem 0.75rem;
+      font-size: 0.85rem;
+    }
+    select {
+      margin-left: 0.25rem;
+      font-size: 0.75rem;
+      padding: 0.3rem 0.6rem;
+    }
+    .grid-container {
+      border-radius: 0.3rem;
+    }
+    .graph-section {
+      margin-top: 1.25rem;
+      padding-bottom: 1.5rem;
+      max-width: 100%;
+    }
+    .section-title {
+      font-size: 0.95rem;
+      margin-bottom: 0.75rem;
+    }
+    .plus-btn {
+      width: 2.5rem;
+      height: 2.5rem;
+      font-size: 1rem;
+    }
+    .dropdown {
+      width: 7.5rem;
+      top: 3rem;
+    }
+    .dropdown li {
+      padding: 0.5rem;
+      font-size: 0.75rem;
+    }
+    .chart-wrapper {
+      padding: 0.5rem;
+      margin-bottom: 0.8rem;
+    }
+    .chart-container {
+      height: 15rem;
+    }
+    .chart-label {
+      font-size: 0.75rem;
+    }
+    .mini-btn {
+      padding: 0.15rem 0.4rem;
+      font-size: 0.7rem;
+    }
+    .local-filter-panel {
+      padding: 0.4rem;
+      margin-bottom: 0.6rem;
+      max-height: 10rem;
+    }
+    .local-grid {
+      gap: 0.3rem;
+    }
+    .mini-checkbox {
+      font-size: 0.7rem;
+    }
   }
 </style>

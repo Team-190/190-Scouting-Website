@@ -12,7 +12,14 @@
   import * as pieGraph from "../../pages/graphcode/pie.js";
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
-  import { fetchAnanthPage, fetchGracePage, fetchMatchAlliances, fetchOPR } from "../../utils/api.js";
+  import {
+      fetchAnanthPage,
+      fetchGracePage,
+      fetchMatchAlliances,
+      fetchOPR,
+      fetchCOPRs,
+      fetchStatboticsMatchPrediction,
+  } from "../../utils/api.js";
   import {
       BOOLEAN_METRICS,
       CLIMBSTATE_METRIC,
@@ -31,13 +38,17 @@
       percentile,
       ROW_HEIGHT,
       sd,
+      estimateTeamPoints,
+      estimateTeamPoints2,
   } from "../../utils/pageUtils.js";
   import { getIndexedDBStore } from '../../utils/indexedDB';
+  import { matchPreviewCache } from '../../stores/matchPreviewCache.js';
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
   // ─── Constants ────────────────────────────────────────────────────────────────
 
+  const SELECTED_MATCH_KEY = "matchPreview_selectedMatch";
   const AnanthRating = getAnanthRatings();
   const GraceRating = getGraceRatings();
 
@@ -52,8 +63,10 @@
   let cache: Record<string, any[]> = {};
   let allMatches: any[] = [];
   let selectedMatch = "";
+  let statboticsRedWinProb: number | null = null;
   let redAlliance: string[] = ["", "", ""];
   let blueAlliance: string[] = ["", "", ""];
+  let coprs: Record<string, any> = {};
 
   /**
    * OPR values keyed by bare team number string (no "frc" prefix).
@@ -67,6 +80,7 @@
   let showDropdown = false;
   let isLoading = false;
   let autoOnly = false;
+  let globalStatsCache: Record<string, any> = {};
 
   // Six grid DOM nodes / instances (3 red, 3 blue)
   let domNode, domNode2, domNode3;
@@ -256,16 +270,18 @@
   // ─── Rating Helpers ───────────────────────────────────────────────────────────
 
   /** Returns the src URL for the most recent grace rating image, defaulting to horse. */
-  function fetchGraceRating(team: number): string {
-    if (!graceData || graceData[team] === undefined) return GraceRating[GraceRating.length - 1];
-    const entry = graceData[team];
+  function fetchGraceRating(team: number | string): string {
+    const teamKey = String(team);
+    if (!graceData || graceData[teamKey] === undefined) return GraceRating[GraceRating.length - 1];
+    const entry = graceData[teamKey];
     return GraceRating[entry[Object.keys(entry)[Object.keys(entry).length - 1]]];
   }
 
   /** Returns the src URL for the most recent ananth rating image, defaulting to horse. */
-  function fetchAnanthRating(team: number): string {
-    if (!ananthData || ananthData[team] === undefined) return AnanthRating[AnanthRating.length - 1];
-    const entry = ananthData[team];
+  function fetchAnanthRating(team: number | string): string {
+    const teamKey = String(team);
+    if (!ananthData || ananthData[teamKey] === undefined) return AnanthRating[AnanthRating.length - 1];
+    const entry = ananthData[teamKey];
     return AnanthRating[entry[Object.keys(entry)[Object.keys(entry).length - 1]]];
   }
 
@@ -362,6 +378,29 @@
     loadAllAllianceTeams();
   }
 
+  /**
+   * Fetches Statbotics prediction for the currently selected match.
+   * Stores the red alliance win probability as a [0,1] fraction.
+   */
+  async function loadStatboticsWinProb(matchKey: string) {
+    if (!matchKey) {
+      statboticsRedWinProb = null;
+      return;
+    }
+
+    try {
+      const data = await fetchStatboticsMatchPrediction(matchKey);
+      const redProb = Number(data?.pred?.red_win_prob);
+
+      statboticsRedWinProb = Number.isFinite(redProb)
+        ? Math.max(0, Math.min(1, redProb))
+        : null;
+    } catch (e) {
+      console.error("Failed to fetch Statbotics win probability:", e);
+      statboticsRedWinProb = null;
+    }
+  }
+
   // ─── Match Aggregation ────────────────────────────────────────────────────────
 
   /**
@@ -448,7 +487,7 @@
 
   // ─── Grid Building ────────────────────────────────────────────────────────────
 
-  function buildGridForTeam(teamNumber: string, domElement: HTMLElement): any {
+  function buildGridForTeam(teamNumber: string, domElement: HTMLElement, cachedGlobalStats: Record<string, any>, allMatchesData: any[], coprsData: Record<string, any>): any {
     if (!teamViewData || !domElement) return null;
 
     let data = teamViewData.filter((el) => {
@@ -458,14 +497,57 @@
     if (!data.length) return null;
 
     data = aggregateMatches(data);
+    
+    // Calculate EFS and EFS2 for each match
+    data = data.map((matchRow) => {
+      const matchNum = matchRow.Match || matchRow.match;
+      const efs = estimateTeamPoints(teamNumber, matchNum, allMatchesData, teamViewData);
+      
+      // Get raw rows for this team/match for EFS2 calculation
+      const teamClean = String(teamNumber).replace(/\D/g, "");
+      const teamRows = teamViewData.filter(
+        (r) => String(r.Team || r.team || "").replace(/\D/g, "") === teamClean &&
+               Number(r.Match || r.match) === matchNum &&
+               r.RecordType !== "Match_Event"
+      );
+      
+      // Pass same rows for both - the data already has FuelShootingPhases split by phase
+      const efs2 = teamRows.length > 0 ? estimateTeamPoints2(teamNumber, matchNum, coprsData, teamRows, teamRows, allMatchesData) : 0;
+      
+      return {
+        ...matchRow,
+        EstimatedPoints: efs ?? 0,
+        EstimatedPoints2: efs2 ?? 0,
+      };
+    });
+    
     const matchNums = data.map((m) => m.Match || m.match);
     const qLabels   = matchNums.map((_, i) => `Q${i + 1}`);
     const displayMetrics = Object.keys(data[0]).filter((k) => !EXCLUDED_FIELDS.has(k));
 
-    const globalStats: Record<string, any> = {};
-    displayMetrics.forEach((metric) => {
-      globalStats[metric] = computeGlobalStats(metric, teamViewData);
-    });
+    // Compute stats for EFS and EFS2 locally
+    const efsValues = data.map((d) => d.EstimatedPoints).filter((v) => isNumeric(v) && Number(v) !== 0).map(Number);
+    const efs2Values = data.map((d) => d.EstimatedPoints2).filter((v) => isNumeric(v) && Number(v) !== 0).map(Number);
+    
+    const globalStats = {
+      ...cachedGlobalStats,
+      EstimatedPoints: {
+        mean: efsValues.length ? mean(efsValues) : 0,
+        sd: efsValues.length ? sd(efsValues, mean(efsValues)) : 0,
+        isNumeric: true,
+        p25: percentile(efsValues, 25),
+        p50: percentile(efsValues, 50),
+        p75: percentile(efsValues, 75),
+      },
+      EstimatedPoints2: {
+        mean: efs2Values.length ? mean(efs2Values) : 0,
+        sd: efs2Values.length ? sd(efs2Values, mean(efs2Values)) : 0,
+        isNumeric: true,
+        p25: percentile(efs2Values, 25),
+        p50: percentile(efs2Values, 50),
+        p75: percentile(efs2Values, 75),
+      },
+    };
 
     const rowData = displayMetrics.map((metric) => {
       const row: any = { metric };
@@ -485,6 +567,20 @@
 
       row.mean   = isNumericMetric && values.length ? Number(mean(values).toFixed(2))   : null;
       row.median = isNumericMetric && values.length ? Number(median(values).toFixed(2)) : null;
+      row.alexPercentile = null;
+      
+      // Calculate percentile only for numeric metrics
+      if (isNumericMetric && row.mean !== null) {
+        const stats = globalStats[metric];
+        if (stats?.isNumeric && stats?.p25 != null && stats?.p50 != null && stats?.p75 != null) {
+          const inverted = INVERTED_METRICS.includes(metric);
+          if (inverted) {
+            row.alexPercentile = row.mean <= stats.p25 ? 75 : row.mean <= stats.p50 ? 50 : row.mean <= stats.p75 ? 25 : 0;
+          } else {
+            row.alexPercentile = row.mean >= stats.p75 ? 75 : row.mean >= stats.p50 ? 50 : row.mean >= stats.p25 ? 25 : 0;
+          }
+        }
+      }
       return row;
     });
 
@@ -497,23 +593,23 @@
       if (!stats.isNumeric) {
         if (metric === CLIMBSTATE_METRIC) {
           const bg = getClimbStateColor(val, null);
-          return { background: bg, color: textColorForBg(bg), fontSize: "12px", fontWeight: 600, textAlign: "center" };
+          return { background: bg, color: textColorForBg(bg), fontSize: "11px", fontWeight: 600, textAlign: "center" };
         }
         if (BOOLEAN_METRICS.includes(metric)) {
           const bg = getBooleanColor(val);
-          return { background: bg, color: textColorForBg(bg), fontSize: "12px", fontWeight: 600, textAlign: "center" };
+          return { background: bg, color: textColorForBg(bg), fontSize: "11px", fontWeight: 600, textAlign: "center" };
         }
-        return { background: "#333", color: "white", fontSize: "12px", fontWeight: 600, textAlign: "center", border: "1px solid #555" };
+        return { background: "#333", color: "white", fontSize: "11px", fontWeight: 600, textAlign: "center", border: "1px solid #555" };
       }
 
       const bg = colorFromStats(isNumeric(val) ? Number(val) : 0, stats, inverted, metric);
-      return { background: bg, color: textColorForBg(bg), fontSize: "14px", fontWeight: 600, textAlign: "center" };
+      return { background: bg, color: textColorForBg(bg), fontSize: "12px", fontWeight: 600, textAlign: "center" };
     };
 
     const statCellStyle = (params) => {
       const stats    = globalStats[params.data.metric] ?? {};
       const inverted = INVERTED_METRICS.includes(params.data.metric);
-      const base     = { fontSize: "14px", fontWeight: "bold", textAlign: "center" };
+      const base     = { fontSize: "12px", fontWeight: "bold", textAlign: "center" };
       if (params.value === 0 || params.value === null)
         return { background: "#4D4D4D", color: "white", ...base };
       const bg = colorFromStats(params.value, stats, inverted, params.data.metric);
@@ -528,13 +624,13 @@
 
     const columnDefs = [
       {
-        headerName: "Metric", field: "metric", pinned: "left" as "left", flex: 1, minWidth: 100,
+        headerName: "Metric", field: "metric", pinned: "left" as "left", width: 100,
         headerClass: "header-center", cellClass: "cell-center",
-        cellStyle: { background: "#C81B00", color: "white", fontSize: "14px", fontWeight: "bold", textAlign: "center" },
+        cellStyle: { background: "#C81B00", color: "white", fontSize: "12px", fontWeight: "bold", textAlign: "center" },
         valueFormatter: (params) => METRIC_DISPLAY_NAMES.get(params.value) || params.value,
       },
       ...qLabels.map((q, i) => ({
-        headerName: String(matchNums[i]), field: q, flex: 1, minWidth: 60,
+        headerName: String(matchNums[i]), field: q, flex: 1, minWidth: 40,
         headerClass: "header-center", cellClass: "cell-center",
         cellStyle: qCellStyle,
         valueFormatter: (params) => {
@@ -545,30 +641,43 @@
         },
       })),
       {
-        headerName: "Mean", field: "mean", flex: 1, minWidth: 60,
+        headerName: "Mean", field: "mean", flex: 1, minWidth: 45,
         headerClass: "header-center", cellClass: "cell-center",
         cellStyle: statCellStyle, valueFormatter: statValueFormatter,
       },
       {
-        headerName: "Median", field: "median", flex: 1, minWidth: 60,
+        headerName: "Med.", field: "median", flex: 1, minWidth: 45,
         headerClass: "header-center", cellClass: "cell-center",
         cellStyle: statCellStyle, valueFormatter: statValueFormatter,
       },
+      {
+        headerName: "Per.", field: "alexPercentile", flex: 1, minWidth: 45,
+        headerClass: "header-center", cellClass: "cell-center",
+        cellStyle: (params) => {
+          if (params.value === null || params.value === undefined) return { background: "#4D4D4D", color: "white", fontSize: "12px", fontWeight: "bold", textAlign: "center" };
+          const colors: Record<number, string> = { 75: "#0000FF", 50: "#00FF00", 25: "#FFFF00", 0: "#FF0000" };
+          const bg = colors[params.value] || "#4D4D4D";
+          return { background: bg, color: textColorForBg(bg), fontSize: "12px", fontWeight: "bold", textAlign: "center" };
+        },
+        valueFormatter: (params) => params.value !== null && params.value !== undefined ? String(params.value) : "",
+      },
     ];
 
-    gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT;
+    gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT + 6;
 
     return createGrid(domElement, {
       rowData,
       columnDefs,
       rowHeight: ROW_HEIGHT,
       headerHeight: HEADER_HEIGHT,
+      domLayout: "normal",
       defaultColDef: {
         resizable: false, sortable: false, suppressMovable: true,
         cellStyle: { fontSize: "14px" },
       },
-      suppressColumnVirtualisation: true,
-      suppressHorizontalScroll: true,
+      suppressColumnVirtualisation: false,
+      suppressHorizontalScroll: false,
+      suppressVerticalScroll: false,
     });
   }
 
@@ -582,10 +691,10 @@
     destroyAllGrids();
 
     [gridInstance, gridInstance2, gridInstance3] = [domNode, domNode2, domNode3]
-      .map((node, i) => node && redAlliance[i] ? buildGridForTeam(redAlliance[i], node) : null);
+      .map((node, i) => node && redAlliance[i] ? buildGridForTeam(redAlliance[i], node, globalStatsCache, allMatches, coprs) : null);
 
     [gridInstanceRight, gridInstance4, gridInstance5] = [domNodeRight, domNode4, domNode5]
-      .map((node, i) => node && blueAlliance[i] ? buildGridForTeam(blueAlliance[i], node) : null);
+      .map((node, i) => node && blueAlliance[i] ? buildGridForTeam(blueAlliance[i], node, globalStatsCache, allMatches, coprs) : null);
   }
 
   // ─── Event Handlers ───────────────────────────────────────────────────────────
@@ -594,10 +703,45 @@
     isLoading = true;
     try {
       selectedMatch = (e.target as HTMLSelectElement).value;
-      await loadMatchData(selectedMatch);
+      localStorage.setItem(SELECTED_MATCH_KEY, selectedMatch);
+      
+      // Ensure eventCode is set before fetching COPRs
+      if (!eventCode) {
+        const stored = localStorage.getItem("eventCode");
+        if (stored) eventCode = stored;
+      }
+      
+      // Fetch COPRs for EFS2 calculations
+      if (eventCode) {
+        try {
+          const coprData = await fetchCOPRs(eventCode);
+          coprs = coprData || {};
+        } catch (err) {
+          console.warn("Failed to fetch COPRs:", err);
+          coprs = {};
+        }
+      }
+      
+      await Promise.all([
+        loadMatchData(selectedMatch),
+        loadStatboticsWinProb(selectedMatch),
+      ]);
     } finally {
       isLoading = false;
     }
+  }
+
+  /**
+   * Load the selected match from localStorage, or use first available match
+   */
+  function getInitialMatch(matches: any[]): string {
+    if (!matches.length) return "";
+    const saved = localStorage.getItem(SELECTED_MATCH_KEY);
+    // Only use saved match if it's still available
+    if (saved && matches.some((m) => m.key === saved)) {
+      return saved;
+    }
+    return matches[0].key;
   }
 
   function onColorblindChange(e: Event) {
@@ -616,6 +760,21 @@
             checkIsNumericMetric(k, teamViewData),
         )
       : [];
+
+  // Compute global stats cache when teamViewData changes (not on every match selection)
+  $: if (teamViewData?.length > 0) {
+    const displayMetrics = Object.keys(teamViewData[0]).filter((k) => !EXCLUDED_FIELDS.has(k));
+    const newCache: Record<string, any> = {};
+    displayMetrics.forEach((metric) => {
+      newCache[metric] = computeGlobalStats(metric, teamViewData);
+    });
+    globalStatsCache = newCache;
+    
+    // Update cache store with new stats
+    if (eventCode && allMatches?.length) {
+      matchPreviewCache.setData(eventCode, teamViewData, allMatches, teamOPRs, graceData, ananthData, globalStatsCache);
+    }
+  }
 
   function addChart(type: string) {
     charts = [
@@ -751,10 +910,45 @@
   onMount(async () => {
     isLoading = true;
     try {
+      eventCode = localStorage.getItem("eventCode") || "";
+
+      // Check if cache is valid for this event
+      if (eventCode && matchPreviewCache.isValid(eventCode)) {
+        const cached = matchPreviewCache.get(eventCode);
+        if (cached) {
+          teamViewData = cached.teamViewData;
+          allMatches = cached.allMatches;
+          teamOPRs = cached.teamOPRs;
+          graceData = cached.graceData;
+          ananthData = cached.ananthData;
+          globalStatsCache = cached.globalStatsCache;
+
+          // Fetch COPRs even from cache before loading match data
+          try {
+            const coprData = await fetchCOPRs(eventCode);
+            coprs = coprData || {};
+          } catch (err) {
+            console.warn("Failed to fetch COPRs:", err);
+            coprs = {};
+          }
+
+          if (allMatches?.length) {
+            selectedMatch = getInitialMatch(allMatches);
+            await tick();
+            await Promise.all([
+              loadMatchData(selectedMatch),
+              loadStatboticsWinProb(selectedMatch),
+            ]);
+          }
+          return;
+        }
+      }
+
+      // Load fresh data if cache is invalid
       const stored = await getIndexedDBStore("scoutingData") || [];
-      const parsed = stored ? stored : [];
+      // Unwrap the value property if it exists (from compressed storage)
+      const parsed = (stored || []).map(item => item.value !== undefined ? item.value : item);
       teamViewData = extractValues(parsed, autoOnly);
-      eventCode    = localStorage.getItem("eventCode") || "";
 
       if (eventCode) {
         // Grace / ananth ratings are non-critical — fetch in background
@@ -775,12 +969,29 @@
         );
 
         allMatches = await fetchEventMatches(eventCode);
+
+        // Fetch COPRs for EFS2 calculations
+        try {
+          const coprData = await fetchCOPRs(eventCode);
+          coprs = coprData || {};
+        } catch (err) {
+          console.warn("Failed to fetch COPRs:", err);
+          coprs = {};
+        }
       }
 
       if (allMatches?.length) {
-        selectedMatch = allMatches[0].key;
+        selectedMatch = getInitialMatch(allMatches);
         await tick();
-        await loadMatchData(selectedMatch);
+        await Promise.all([
+          loadMatchData(selectedMatch),
+          loadStatboticsWinProb(selectedMatch),
+        ]);
+      }
+
+      // Save to cache after loading
+      if (eventCode && teamViewData && allMatches) {
+        matchPreviewCache.setData(eventCode, teamViewData, allMatches, teamOPRs, graceData, ananthData, globalStatsCache);
       }
     } finally {
       isLoading = false;
@@ -831,6 +1042,20 @@
     </div>
   </div>
 
+  <div class="statbotics-banner">
+    <span class="statbotics-label">Statbotics Win%</span>
+    {#if statboticsRedWinProb !== null}
+      <span class:favorite={statboticsRedWinProb >= 0.5} class="statbotics-red">
+        Red: {(statboticsRedWinProb * 100).toFixed(1)}%
+      </span>
+      <span class:favorite={statboticsRedWinProb < 0.5} class="statbotics-blue">
+        Blue: {((1 - statboticsRedWinProb) * 100).toFixed(1)}%
+      </span>
+    {:else}
+      <span class="statbotics-na">Unavailable</span>
+    {/if}
+  </div>
+
   <div class="grid-wrapper">
     <!-- Red Alliance -->
     <div class="grid-column">
@@ -850,11 +1075,11 @@
             <img src={fetchAnanthRating(team)} alt="Ananth Rating" style="width: 60px;" />
           </h3>
           {#if i === 0}
-            <div class="grid-container ag-theme-quartz" bind:this={domNode}      style="height: {gridHeight}px;"></div>
+            <div class="grid-container ag-theme-quartz" bind:this={domNode} style="height: {gridHeight}px;"></div>
           {:else if i === 1}
-            <div class="grid-container ag-theme-quartz" bind:this={domNode2}     style="height: {gridHeight}px;"></div>
+            <div class="grid-container ag-theme-quartz" bind:this={domNode2} style="height: {gridHeight}px;"></div>
           {:else}
-            <div class="grid-container ag-theme-quartz" bind:this={domNode3}     style="height: {gridHeight}px;"></div>
+            <div class="grid-container ag-theme-quartz" bind:this={domNode3} style="height: {gridHeight}px;"></div>
           {/if}
         </div>
       {/each}
@@ -880,9 +1105,9 @@
           {#if i === 0}
             <div class="grid-container ag-theme-quartz" bind:this={domNodeRight} style="height: {gridHeight}px;"></div>
           {:else if i === 1}
-            <div class="grid-container ag-theme-quartz" bind:this={domNode4}     style="height: {gridHeight}px;"></div>
+            <div class="grid-container ag-theme-quartz" bind:this={domNode4} style="height: {gridHeight}px;"></div>
           {:else}
-            <div class="grid-container ag-theme-quartz" bind:this={domNode5}     style="height: {gridHeight}px;"></div>
+            <div class="grid-container ag-theme-quartz" bind:this={domNode5} style="height: {gridHeight}px;"></div>
           {/if}
         </div>
       {/each}
@@ -911,23 +1136,22 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  :global(html), :global(body) { margin: 0; padding: 0; background: var(--wpi-gray); height: 100vh; width: 100vw; overflow-x: hidden; }
+  :global(html), :global(body) { margin: 0; padding: 0; background: var(--wpi-gray); height: auto; width: 100vw; overflow-x: hidden; }
   :global(*) { box-sizing: border-box; }
-  .page-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: 100vh; padding: 20px; background: var(--wpi-gray); }
+  .page-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: auto; padding: 1rem; background: var(--wpi-gray); }
 
   :global(select option:checked) { background: var(--frc-190-red); color: white; font-size: 18px; }
   :global(select option) { background: #333; color: white; padding: 8px; }
-  :global(.ag-header-cell) { background: var(--frc-190-red) !important; color: white !important; font-size: 18px; font-weight: bold; }
-  :global(.ag-header-cell.header-center .ag-header-cell-label) { justify-content: center; text-align: center; width: 100%; color: white !important; font-size: 18px; }
+  :global(.ag-header-cell) { background: var(--frc-190-red) !important; color: white !important; font-size: 14px; font-weight: bold; }
+  :global(.ag-header-cell.header-center .ag-header-cell-label) { justify-content: center; text-align: center; width: 100%; color: white !important; font-size: 14px; }
   :global(.cell-center) { text-align: center !important; }
-  :global(.ag-theme-quartz .ag-root-wrapper) { --ag-font-size: 20px; border: 3px solid var(--frc-190-red); border-radius: 8px; overflow: hidden; }
-  :global(.ag-body-viewport) { overflow-y: scroll !important; overflow-x: auto !important; }
-  :global(.ag-body-viewport::-webkit-scrollbar) { width: 12px; height: 12px; }
-  :global(.ag-body-viewport::-webkit-scrollbar-track) { background: var(--frc-190-black); border-radius: 6px; }
-  :global(.ag-body-viewport::-webkit-scrollbar-thumb) { background: var(--frc-190-red); border-radius: 6px; border: 2px solid var(--frc-190-black); }
-  :global(.ag-body-viewport::-webkit-scrollbar-thumb:hover) { background: #e02200; }
+  :global(.ag-theme-quartz .ag-root-wrapper) { --ag-font-size: 14px; border: 3px solid var(--frc-190-red); border-radius: 8px; overflow: hidden; }
+  :global(.ag-body-viewport) { overflow-y: hidden !important; overflow-x: hidden !important; }
+  :global(.ag-center-cols-viewport) { overflow-y: hidden !important; overflow-x: hidden !important; }
+  :global(.ag-body-vertical-scroll) { display: none !important; }
+  :global(.ag-body-horizontal-scroll) { display: none !important; }
 
-  .page-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: 100vh; padding: 1rem; background: var(--wpi-gray); }
+  .page-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: auto; padding: 1rem; background: var(--wpi-gray); }
   .header-section { text-align: center; margin-bottom: 1rem; }
   .header-section h1 { color: var(--frc-190-red); font-size: 1.8rem; font-weight: 800; margin: 0 0 0.3rem; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); letter-spacing: 1px; }
   .header-section .subtitle { color: var(--frc-190-black); font-size: 0.9rem; margin: 0; }
@@ -935,12 +1159,20 @@
   .controls { padding: 1rem; background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); color: white; font-size: 1rem; display: flex; gap: 1.5rem; align-items: center; justify-content: center; width: 100%; max-width: 1200px; border-radius: 10px; margin-bottom: 1rem; border: 2px solid var(--frc-190-red); box-shadow: 0 4px 15px rgba(0,0,0,0.3); flex-wrap: wrap; }
   .controls label { font-weight: 600; color: #fff; font-size: 0.95rem; }
 
+  .statbotics-banner { width: 100%; max-width: 1200px; display: flex; gap: 0.75rem; align-items: center; justify-content: center; flex-wrap: wrap; margin-bottom: 1rem; padding: 0.65rem 0.9rem; border-radius: 10px; border: 2px solid #1f4a6a; background: linear-gradient(135deg, #0f2435 0%, #18374f 100%); color: #fff; font-weight: 700; }
+  .statbotics-label { text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.8rem; color: #b9d9ef; }
+  .statbotics-red, .statbotics-blue, .statbotics-na { padding: 0.2rem 0.7rem; border-radius: 999px; font-size: 0.85rem; }
+  .statbotics-red { background: rgba(200, 27, 0, 0.35); border: 1px solid rgba(200, 27, 0, 0.65); }
+  .statbotics-blue { background: rgba(0, 102, 204, 0.35); border: 1px solid rgba(0, 102, 204, 0.7); }
+  .statbotics-na { background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); }
+  .favorite { box-shadow: 0 0 0 2px rgba(255,255,255,0.28) inset; }
+
   select { margin-left: 0.5rem; padding: 0.5rem 1rem; background: linear-gradient(135deg, #333 0%, #444 100%); color: white; font-size: 0.9rem; border: 2px solid var(--frc-190-red); border-radius: 6px; cursor: pointer; transition: all 0.3s ease; }
   select:hover { background: linear-gradient(135deg, #444 0%, #555 100%); border-color: #e02200; }
   select:focus { outline: none; box-shadow: 0 0 0 3px rgba(200, 27, 0, 0.4); }
 
-  .grid-wrapper { width: 100%; max-width: 1400px; display: flex; align-items: flex-start; justify-content: center; gap: 1rem; flex-wrap: wrap; }
-  .grid-column { flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 1rem; }
+  .grid-wrapper { width: 100%; max-width: none; display: flex; align-items: flex-start; justify-content: center; gap: 1rem; flex-wrap: wrap; padding: 0 1rem 1rem 1rem; }
+  .grid-column { flex: 1; min-width: 350px; display: flex; flex-direction: column; gap: 1rem; }
   .team-box { display: flex; flex-direction: column; }
 
   .team-label { margin: 0 0 0.5rem; padding: 0.5rem 1rem; font-size: 1rem; font-weight: 700; text-align: center; border-radius: 6px 6px 0 0; text-shadow: 1px 1px 2px rgba(0,0,0,0.3); position: relative; height: auto; min-height: 50px; width: 100%; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; }
@@ -948,7 +1180,7 @@
   .red-label  { background: var(--frc-190-red); color: white; }
   .blue-label { background: linear-gradient(135deg, #003d7a 0%, #0066cc 100%); color: white; }
 
-  .grid-container { width: 100%; background: var(--frc-190-black); border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.4); overflow-x: auto; }
+  .grid-container { width: 100%; background: var(--frc-190-black); border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.4); overflow: hidden; }
   .opr-badge { margin-left: 0.5rem; padding: 0.2rem 0.75rem; background: rgba(0,0,0,0.3); border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
 
   /* Tablet */
@@ -957,6 +1189,7 @@
     .header-section h1 { font-size: 1.5rem; }
     .header-section .subtitle { font-size: 0.8rem; }
     .controls { gap: 1rem; padding: 0.75rem; }
+    .statbotics-banner { padding: 0.55rem 0.75rem; }
     .grid-wrapper { gap: 0.75rem; }
     .grid-column { min-width: 280px; }
     .team-label { font-size: 0.9rem; min-height: 45px; padding: 0.4rem 0.8rem; }
@@ -964,16 +1197,36 @@
   }
 
   /* Mobile */
-  @media (max-width: 768px) {
+  @media (max-width: 900px), (hover: none) and (pointer: coarse) {
     .page-wrapper { padding: 0.5rem; }
     .header-section { margin-bottom: 0.75rem; }
     .header-section h1 { font-size: 1.2rem; margin-bottom: 0.2rem; }
     .header-section .subtitle { font-size: 0.75rem; }
     .controls { gap: 0.75rem; padding: 0.6rem; font-size: 0.85rem; flex-direction: column; }
     .controls label { font-size: 0.8rem; }
+    .statbotics-banner { padding: 0.5rem 0.6rem; gap: 0.45rem; }
+    .statbotics-label { font-size: 0.72rem; }
+    .statbotics-red, .statbotics-blue, .statbotics-na { font-size: 0.75rem; }
     select { margin-left: 0; margin-top: 0.3rem; padding: 0.4rem 0.8rem; font-size: 0.8rem; width: 100%; }
-    .grid-wrapper { flex-direction: column; gap: 0.5rem; }
-    .grid-column { min-width: auto; width: 100%; }
+    .grid-wrapper {
+      display: block !important;
+      width: 100%;
+    }
+    .grid-column {
+      display: block !important;
+      min-width: 0 !important;
+      width: 100% !important;
+    }
+    .grid-column + .grid-column {
+      margin-top: 0.6rem;
+    }
+    .team-box {
+      width: 100%;
+      margin-bottom: 0.6rem;
+    }
+    .team-box:last-child {
+      margin-bottom: 0;
+    }
     .team-label { font-size: 0.8rem; min-height: 40px; padding: 0.3rem 0.6rem; }
     .last-match-badge { font-size: 0.6rem; padding: 0.15rem 0.4rem; }
     .opr-badge { font-size: 0.7rem; margin-left: 0.25rem; padding: 0.15rem 0.5rem; }
@@ -987,6 +1240,9 @@
     .header-section .subtitle { font-size: 0.7rem; }
     .controls { gap: 0.5rem; padding: 0.5rem; font-size: 0.75rem; }
     .controls label { font-size: 0.7rem; }
+    .statbotics-banner { padding: 0.45rem 0.5rem; }
+    .statbotics-label { font-size: 0.66rem; }
+    .statbotics-red, .statbotics-blue, .statbotics-na { font-size: 0.68rem; padding: 0.15rem 0.5rem; }
     select { margin-left: 0; padding: 0.3rem 0.6rem; font-size: 0.7rem; }
     .grid-wrapper { gap: 0.4rem; }
     .team-label { font-size: 0.7rem; min-height: 35px; padding: 0.25rem 0.5rem; }
