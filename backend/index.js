@@ -5,14 +5,20 @@
 // DB_PASSWORD - Database password to access data
 // VITE_SERVER_IP - IP of where the backend/frontend are running
 // VITE_TESTING - Binary value to indicate whether runtime is local (1) or server (0)
+// VITE_PAYLOAD_ENCRYPTION_KEY - Shared secret for encrypted/compressed client payloads
 
 const express = require("express");
 const path = require("path");
 const compression = require("compression");
 const fs = require("fs");
 const https = require("https");
+const util = require("util");
 const database = require("./database.js");
 const externalAPI = require("./externalApi.js");
+const {
+  decodeSecurePayload,
+  isSecurePayloadEnvelope,
+} = require("./securePayload.js");
 const session = require("express-session");
 const cors = require("cors");
 const runtimeConstants = require("../runtime/constants");
@@ -20,25 +26,88 @@ require('dotenv').config({ path: path.resolve(__dirname, '../.env'), override: t
 
 const app = express();
 
-const logFilePath = "./logs/testing.csv";
+const logsDir = path.resolve(__dirname, "../logs");
+if (!fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir, { recursive: true });
+}
 
-app.use((req, res, next) => {
-    let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+const runLogFile = path.join(
+  logsDir,
+  `server-${new Date().toISOString().replace(/[:.]/g, "-")}.log`,
+);
 
-    if (ip === "::1") {
-        ip = "127.0.0.1";
-    } else if (ip.includes("::ffff:")) {
-        ip = ip.split("::ffff:")[1];
-    }
+function serializeLogValue(value) {
+  if (value instanceof Error) {
+    return value.stack || value.message || String(value);
+  }
 
-    const timestamp = new Date().toISOString();
-    const logEntry = `"${ip}","${timestamp}","${req.method}","${req.url}"\n`;
+  if (typeof value === "string") {
+    return value;
+  }
 
-    fs.appendFile(logFilePath, logEntry, (err) => {
-        if (err) console.error("Log write failed", err);
+  try {
+    return JSON.stringify(value);
+  } catch (_) {
+    return util.inspect(value, {
+      depth: null,
+      maxArrayLength: null,
+      breakLength: Infinity,
     });
+  }
+}
 
-    next();
+function appendRunLog(level, message, details = null) {
+  const timestamp = new Date().toISOString();
+  const formattedDetails = details == null ? "" : ` ${serializeLogValue(details)}`;
+  const line = `[${timestamp}] [${String(level).toUpperCase()}] ${message}${formattedDetails}\n`;
+
+  try {
+    fs.appendFileSync(runLogFile, line, "utf8");
+  } catch (error) {
+    process.stderr.write(`Failed to append server log: ${error.message}\n`);
+  }
+}
+
+const originalConsole = {
+  log: console.log.bind(console),
+  info: console.info.bind(console),
+  warn: console.warn.bind(console),
+  error: console.error.bind(console),
+  debug: console.debug ? console.debug.bind(console) : console.log.bind(console),
+};
+
+function wrapConsoleMethod(method) {
+  return (...args) => {
+    appendRunLog(method, args.map((arg) => serializeLogValue(arg)).join(" "));
+    originalConsole[method](...args);
+  };
+}
+
+console.log = wrapConsoleMethod("log");
+console.info = wrapConsoleMethod("info");
+console.warn = wrapConsoleMethod("warn");
+console.error = wrapConsoleMethod("error");
+console.debug = wrapConsoleMethod("debug");
+
+function getClientIp(req) {
+  let ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown";
+
+  if (ip === "::1") {
+    ip = "127.0.0.1";
+  } else if (typeof ip === "string" && ip.includes("::ffff:")) {
+    ip = ip.split("::ffff:")[1];
+  }
+
+  if (typeof ip === "string" && ip.includes(",")) {
+    ip = ip.split(",")[0].trim();
+  }
+
+  return ip;
+}
+
+appendRunLog("info", "Server logging initialized", {
+  pid: process.pid,
+  logFile: runLogFile,
 });
 
 const eventCodes = new Set();
@@ -48,7 +117,7 @@ let refreshTimer;
 // ─── HELPER FUNCTIONS ───────────────────────────────────────────────────────
 
 const validateEventCode = (req, res, next) => {
-  const code = req.query.eventCode || req.body.event;
+  const code = req.query.eventCode || req.body?.event;
   if (!code) return res.sendStatus(403);
   req.eventCode = code;
   next();
@@ -115,7 +184,82 @@ if (typeof refreshTimer.unref === "function") {
   refreshTimer.unref();
 }
 
-app.use(express.json());
+app.use(express.json({ limit: "15mb" }));
+
+app.use((error, req, res, next) => {
+  if (!error) {
+    return next();
+  }
+
+  if (error.type === "entity.too.large") {
+    console.error("Payload too large", {
+      ip: getClientIp(req),
+      method: req.method,
+      url: req.originalUrl || req.url,
+      limit: "15mb",
+    });
+    return res.status(413).json({ error: "Payload too large" });
+  }
+
+  if (error instanceof SyntaxError && error.status === 400 && "body" in error) {
+    console.error("Invalid JSON payload", {
+      ip: getClientIp(req),
+      method: req.method,
+      url: req.originalUrl || req.url,
+      message: error.message,
+    });
+    return res.status(400).json({ error: "Invalid JSON payload" });
+  }
+
+  return next(error);
+});
+
+app.use((req, res, next) => {
+  if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
+    return next();
+  }
+
+  if (!isSecurePayloadEnvelope(req.body)) {
+    return next();
+  }
+
+  try {
+    req.body = decodeSecurePayload(req.body);
+    return next();
+  } catch (error) {
+    console.error("Failed to decode secure payload", {
+      path: req.url,
+      ip: getClientIp(req),
+      error: error.message,
+    });
+    return res.status(400).json({ error: "Invalid secure payload" });
+  }
+});
+
+app.use((req, res, next) => {
+  const ip = getClientIp(req);
+
+  appendRunLog("request", "Incoming request", {
+    ip,
+    method: req.method,
+    url: req.originalUrl || req.url,
+    query: req.query,
+    body: ["POST", "PUT", "PATCH", "DELETE"].includes(req.method)
+      ? req.body
+      : undefined,
+  });
+
+  res.on("finish", () => {
+    appendRunLog("response", "Completed request", {
+      ip,
+      method: req.method,
+      url: req.originalUrl || req.url,
+      statusCode: res.statusCode,
+    });
+  });
+
+  next();
+});
 
 app.use(
   compression({

@@ -23,6 +23,7 @@ const getAPILink = () => {
 const defaultAPILink = getAPILink();
 
 import { getIndexedDBStore, setIndexedDBStore } from "./indexedDB";
+import { secureEncodePayload } from "./securePayload";
 
 function fetchApi(path, query = {}) {
   const params = new URLSearchParams();
@@ -35,6 +36,15 @@ function fetchApi(path, query = {}) {
   const queryString = params.toString();
   const route = `${defaultAPILink}${path}${queryString ? `?${queryString}` : ""}`;
   return fetch(route);
+}
+
+async function postApi(path, payload = {}) {
+  const securePayload = await secureEncodePayload(payload);
+  return fetch(`${defaultAPILink}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(securePayload),
+  });
 }
 
 export function fetchEvents() {
@@ -166,11 +176,7 @@ export async function fetchElimsHaveStarted(eventCode) {
 export async function refreshEventCaches(eventCode) {
   try {
     // First, trigger the backend to populate its JSON caches
-    await fetch(`${defaultAPILink}/api/postEventCode`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ eventCode }),
-    });
+    await postApi("/api/postEventCode", { eventCode });
 
     // Now fetch all the cached data from the backend and store in IndexedDB
     const results = await Promise.allSettled([
@@ -567,11 +573,7 @@ export async function fetchStatboticsMatchPrediction(matchKey) {
 ////////////// POST Methods \\\\\\\\\\\\\\
 
 export async function postEventCode(eventCode) {
-  const response = await fetch(`${defaultAPILink}/api/postEventCode`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ eventCode }),
-  });
+  const response = await postApi("/api/postEventCode", { eventCode });
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(
@@ -584,11 +586,7 @@ export async function postEventCode(eventCode) {
 }
 
 export async function postGracePage(event, team, rating) {
-  const response = await fetch(`${defaultAPILink}/api/postRatings`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ event, team, rating }),
-  });
+  const response = await postApi("/api/postRatings", { event, team, rating });
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(
@@ -601,11 +599,7 @@ export async function postGracePage(event, team, rating) {
 }
 
 export async function postAnanthPage(event, team, rating) {
-  const response = await fetch(`${defaultAPILink}/api/postHPRatings`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ event, team, rating }),
-  });
+  const response = await postApi("/api/postHPRatings", { event, team, rating });
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(
@@ -618,35 +612,26 @@ export async function postAnanthPage(event, team, rating) {
 }
 
 export async function postPitScouting(event, team, formData) {
-  const response = await fetch(`${defaultAPILink}/api/postPitScouting`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ event, team, formData }),
+  const response = await postApi("/api/postPitScouting", {
+    event,
+    team,
+    formData,
   });
   return response;
 }
 
 export async function postQualitativeScouting(event, team, match, formData) {
-  const response = await fetch(
-    `${defaultAPILink}/api/postQualitativeScouting`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ event, team, match, formData }),
-    },
-  );
+  const response = await postApi("/api/postQualitativeScouting", {
+    event,
+    team,
+    match,
+    formData,
+  });
   return response;
 }
 
 export async function postGompeiMadnessBracket(bracket) {
-  const response = await fetch(
-    `${defaultAPILink}/api/postGompeiMadnessBracket`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ bracket }),
-    },
-  );
+  const response = await postApi("/api/postGompeiMadnessBracket", { bracket });
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(
