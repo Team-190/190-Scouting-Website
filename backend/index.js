@@ -706,11 +706,21 @@ app.get("/api/getMatchScores", async (req, res) => {
 // ─── POST ROUTES ─────────────────────────────────────────────────────────────
 
 app.post("/api/postEventCode", async (req, res) => {
-  const code = req.body.eventCode;
+  const rawCode =
+    req.body?.eventCode
+    || req.body?.event
+    || req.query?.eventCode
+    || req.query?.event;
+  const code = String(rawCode || "").trim();
+
   if (!code) {
     console.log("Event code could not be retrieved");
-    return res.sendStatus(400);
+    return res.status(400).json({
+      error: "Event code is required",
+      expected: ["body.eventCode", "body.event", "query.eventCode", "query.event"],
+    });
   }
+
   console.log(`Event code received: ${code}`);
   eventCodes.add(code);
   externalAPI.populateEventData(code);

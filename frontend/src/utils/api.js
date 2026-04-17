@@ -39,12 +39,34 @@ function fetchApi(path, query = {}) {
 }
 
 async function postApi(path, payload = {}) {
-  const securePayload = await secureEncodePayload(payload);
-  return fetch(`${defaultAPILink}${path}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(securePayload),
-  });
+  const route = `${defaultAPILink}${path}`;
+
+  const sendPayload = (body) =>
+    fetch(route, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+  let encodedPayload = null;
+  try {
+    encodedPayload = await secureEncodePayload(payload);
+  } catch (error) {
+    console.warn("Secure payload encoding failed, sending plain JSON", error);
+    return sendPayload(payload);
+  }
+
+  const secureResponse = await sendPayload(encodedPayload);
+  if (secureResponse.status !== 400 && secureResponse.status !== 415) {
+    return secureResponse;
+  }
+
+  console.warn(
+    `Secure payload POST failed with status ${secureResponse.status}; retrying plain JSON`,
+    { path },
+  );
+
+  return sendPayload(payload);
 }
 
 export function fetchEvents() {
