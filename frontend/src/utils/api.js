@@ -70,10 +70,18 @@ export function fetchQualitativeScouting(eventCode, localCounts = {}) {
   });
 }
 
-export function fetchPitScouting(eventCode, localTeams = []) {
+export function fetchPitScouting(eventCode, localState = {}) {
+  if (Array.isArray(localState)) {
+    // Backward compatibility for older call sites still passing team arrays.
+    return fetchApi("/api/getPitScouting", {
+      eventCode,
+      localTeams: JSON.stringify(localState),
+    });
+  }
+
   return fetchApi("/api/getPitScouting", {
     eventCode,
-    localTeams: JSON.stringify(localTeams),
+    localCounts: JSON.stringify(localState || {}),
   });
 }
 
@@ -265,6 +273,61 @@ export async function refreshEventCaches(eventCode) {
 const PIT_QUEUE_KEY = "pitScouting";
 const QUAL_QUEUE_KEY = "scoutingData";
 
+function createClientEntryId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function normalizeTeamKey(team) {
+  const stripped = String(team ?? "").replace(/\D/g, "");
+  return stripped || String(team ?? "");
+}
+
+function ensureEntryPayload(formData, providedEntryId = null) {
+  const entryId = String(
+    providedEntryId
+      || (formData && typeof formData === "object" ? formData._entryId : "")
+      || createClientEntryId(),
+  );
+
+  if (formData && typeof formData === "object" && !Array.isArray(formData)) {
+    return {
+      entryId,
+      payload: {
+        ...formData,
+        _entryId: entryId,
+      },
+    };
+  }
+
+  return {
+    entryId,
+    payload: {
+      value: formData,
+      _entryId: entryId,
+    },
+  };
+}
+
+function appendUniqueEntry(existingValue, nextEntry) {
+  const normalizedExisting = Array.isArray(existingValue)
+    ? existingValue
+    : existingValue && typeof existingValue === "object"
+      ? [existingValue]
+      : [];
+
+  const nextEntryId = String(nextEntry?._entryId || "");
+  if (
+    nextEntryId
+    && normalizedExisting.some(
+      (entry) => String(entry?._entryId || "") === nextEntryId,
+    )
+  ) {
+    return normalizedExisting;
+  }
+
+  return [...normalizedExisting, nextEntry];
+}
+
 function canUseLocalStorage() {
   return typeof window !== "undefined" && typeof localStorage !== "undefined";
 }
@@ -340,15 +403,26 @@ function readQueue(key) {
 
 async function updatePitMirror(team, formData) {
   const pitData = await readPitScoutingFromIDB({});
-  pitData[String(team)] = formData;
+  const teamKey = normalizeTeamKey(team);
+  const { payload } = ensureEntryPayload(formData);
+  pitData[teamKey] = appendUniqueEntry(pitData[teamKey], payload);
   await writePitScoutingToIDB(pitData);
 }
 
 async function updateQualMirror(team, match, formData) {
   const qualData = await readQualScoutingFromIDB({});
-  const teamKey = String(team).replace(/\D/g, "");
-  qualData[teamKey] ||= {};
-  qualData[teamKey][String(match)] = formData;
+  const teamKey = normalizeTeamKey(team);
+  const matchKey = String(match);
+  const { payload } = ensureEntryPayload(formData);
+
+  if (!qualData[teamKey] || typeof qualData[teamKey] !== "object" || Array.isArray(qualData[teamKey])) {
+    qualData[teamKey] = {};
+  }
+
+  qualData[teamKey][matchKey] = appendUniqueEntry(
+    qualData[teamKey][matchKey],
+    payload,
+  );
   await writeQualScoutingToIDB(qualData);
 }
 
@@ -372,10 +446,11 @@ export async function hasServerConnection(timeoutMs = 2500) {
 }
 
 export async function queuePitScoutingForSync(event, team, formData) {
+  const { entryId, payload } = ensureEntryPayload(formData);
   const queue = readQueue(PIT_QUEUE_KEY);
-  queue.push({ event, team: String(team), formData });
+  queue.push({ event, team: String(team), formData: payload, entryId });
   writeLocalJson(PIT_QUEUE_KEY, queue);
-  await updatePitMirror(team, formData);
+  await updatePitMirror(team, payload);
   return queue.length;
 }
 
@@ -385,10 +460,17 @@ export async function queueQualitativeScoutingForSync(
   match,
   formData,
 ) {
+  const { entryId, payload } = ensureEntryPayload(formData);
   const queue = readQueue(QUAL_QUEUE_KEY);
-  queue.push({ event, team: String(team), match: String(match), formData });
+  queue.push({
+    event,
+    team: String(team),
+    match: String(match),
+    formData: payload,
+    entryId,
+  });
   writeLocalJson(QUAL_QUEUE_KEY, queue);
-  await updateQualMirror(team, match, formData);
+  await updateQualMirror(team, match, payload);
   return queue.length;
 }
 
@@ -409,23 +491,30 @@ export async function flushPitScoutingQueue() {
     const item = queue[i];
     const event = item.event || localStorage.getItem("eventCode");
     const team = item.team || item.teamNumber;
-    const formData = item.formData || item;
+    const { entryId, payload } = ensureEntryPayload(item.formData || item, item.entryId);
+    const normalizedItem = {
+      ...item,
+      event,
+      team: String(team || ""),
+      formData: payload,
+      entryId,
+    };
 
-    if (!event || !team || !formData) {
-      remaining.push(item);
+    if (!event || !team || !payload) {
+      remaining.push(normalizedItem);
       continue;
     }
 
     try {
-      const response = await postPitScouting(event, team, formData);
+      const response = await postPitScouting(event, team, payload);
       if (response.ok) {
         uploaded += 1;
-        await updatePitMirror(team, formData);
+        await updatePitMirror(team, payload);
       } else {
-        remaining.push(item);
+        remaining.push(normalizedItem);
       }
     } catch {
-      remaining.push(item, ...queue.slice(i + 1));
+      remaining.push(normalizedItem, ...queue.slice(i + 1));
       break;
     }
   }
@@ -452,10 +541,18 @@ export async function flushQualitativeScoutingQueue() {
     const event = item.event || localStorage.getItem("eventCode");
     const team = item.team || item.Team;
     const match = item.match || item.Match;
-    const formData = item.formData || item;
+    const { entryId, payload } = ensureEntryPayload(item.formData || item, item.entryId);
+    const normalizedItem = {
+      ...item,
+      event,
+      team: String(team || ""),
+      match: String(match || ""),
+      formData: payload,
+      entryId,
+    };
 
-    if (!event || !team || !match || !formData) {
-      remaining.push(item);
+    if (!event || !team || !match || !payload) {
+      remaining.push(normalizedItem);
       continue;
     }
 
@@ -464,16 +561,16 @@ export async function flushQualitativeScoutingQueue() {
         event,
         team,
         match,
-        formData,
+        payload,
       );
       if (response.ok) {
         uploaded += 1;
-        await updateQualMirror(team, match, formData);
+        await updateQualMirror(team, match, payload);
       } else {
-        remaining.push(item);
+        remaining.push(normalizedItem);
       }
     } catch {
-      remaining.push(item, ...queue.slice(i + 1));
+      remaining.push(normalizedItem, ...queue.slice(i + 1));
       break;
     }
   }

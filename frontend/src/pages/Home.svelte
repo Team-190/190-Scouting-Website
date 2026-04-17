@@ -54,6 +54,56 @@
         }
     }
 
+    function normalizeEntries(value) {
+        if (Array.isArray(value)) {
+            return value.filter((entry) => entry && typeof entry === "object");
+        }
+        if (value && typeof value === "object") {
+            return [value];
+        }
+        return [];
+    }
+
+    function mergeEntries(localValue, incomingValue) {
+        const merged = [...normalizeEntries(localValue)];
+        const seenIds = new Set(
+            merged
+                .map((entry) => String(entry?._entryId || ""))
+                .filter(Boolean),
+        );
+
+        for (const entry of normalizeEntries(incomingValue)) {
+            const entryId = String(entry?._entryId || "");
+            if (entryId && seenIds.has(entryId)) continue;
+            if (entryId) seenIds.add(entryId);
+            merged.push(entry);
+        }
+
+        return merged;
+    }
+
+    function countPitEntries(teamData) {
+        return normalizeEntries(teamData).length;
+    }
+
+    function countQualEntries(teamData) {
+        if (!teamData || typeof teamData !== "object") return 0;
+
+        if (Array.isArray(teamData)) {
+            return teamData.length;
+        }
+
+        if (teamData.Match != null || teamData.match != null) {
+            return 1;
+        }
+
+        let total = 0;
+        for (const matchData of Object.values(teamData)) {
+            total += normalizeEntries(matchData).length;
+        }
+        return total;
+    }
+
     function showNotification(message, type = "success", duration = 3000) {
         notification = { message, type };
         setTimeout(() => {
@@ -214,21 +264,27 @@
             }
 
             const localPit = forceFullRefresh ? {} : await readPitScoutingFromIDB({});
-            const pitTeams = Object.keys(localPit);
+            const pitCounts = {};
+            for (const [team, entries] of Object.entries(localPit)) {
+                pitCounts[team] = countPitEntries(entries);
+            }
 
-            const pitRes = await fetchPitScouting(eventCode, pitTeams);
+            const pitRes = await fetchPitScouting(eventCode, pitCounts);
             if (!pitRes.ok) {
                 throw new Error(`Failed to fetch pit scouting: HTTP ${pitRes.status}`);
             }
             const newPitData = await parseResponseJson(pitRes, {});
             
-            const combinedPit = { ...localPit, ...newPitData };
+            const combinedPit = { ...localPit };
+            for (const [team, incomingEntries] of Object.entries(newPitData || {})) {
+                combinedPit[team] = mergeEntries(combinedPit[team], incomingEntries);
+            }
             await writePitScoutingToIDB(combinedPit);
 
             const localQual = forceFullRefresh ? {} : await readQualScoutingFromIDB({});
             const qualCounts = {};
             for (const team in localQual) {
-                qualCounts[team] = Object.keys(localQual[team] || {}).length;
+                qualCounts[team] = countQualEntries(localQual[team]);
             }
 
             const qualRes = await fetchQualitativeScouting(eventCode, qualCounts);
@@ -239,7 +295,20 @@
             
             const combinedQual = { ...localQual };
             for (const team in newQualData) {
-                combinedQual[team] = { ...(combinedQual[team] || {}), ...newQualData[team] };
+                const localTeamData =
+                    combinedQual[team] && typeof combinedQual[team] === "object" && !Array.isArray(combinedQual[team])
+                        ? { ...combinedQual[team] }
+                        : {};
+                const incomingTeamData =
+                    newQualData[team] && typeof newQualData[team] === "object" && !Array.isArray(newQualData[team])
+                        ? newQualData[team]
+                        : {};
+
+                for (const [matchKey, incomingMatchData] of Object.entries(incomingTeamData)) {
+                    localTeamData[matchKey] = mergeEntries(localTeamData[matchKey], incomingMatchData);
+                }
+
+                combinedQual[team] = localTeamData;
             }
             await writeQualScoutingToIDB(combinedQual);
 

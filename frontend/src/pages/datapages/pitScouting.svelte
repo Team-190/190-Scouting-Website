@@ -46,7 +46,7 @@
         
         const scoutedTeams = new Set([
             ...Object.keys(retrievePit),
-            ...pitScouting.map(entry => String(entry.teamNumber))
+            ...pitScouting.map(entry => String(entry.team ?? entry.teamNumber ?? ""))
         ]);
         
         allTeams = _teamNumbers.map(team => ({

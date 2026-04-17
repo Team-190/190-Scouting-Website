@@ -113,6 +113,7 @@ appendRunLog("info", "Server logging initialized", {
 const eventCodes = new Set();
 let bracket;
 let refreshTimer;
+const scoutingWriteQueues = new Map();
 
 // ─── HELPER FUNCTIONS ───────────────────────────────────────────────────────
 
@@ -159,6 +160,89 @@ async function postRatingHelper(req, res, filename) {
 
   database.writeJSONFile(filename, fileData);
   res.sendStatus(200);
+}
+
+function appendScoutingEntry(existingValue, nextEntry) {
+  if (Array.isArray(existingValue)) {
+    return [...existingValue, nextEntry];
+  }
+
+  if (existingValue && typeof existingValue === "object") {
+    return [existingValue, nextEntry];
+  }
+
+  return [nextEntry];
+}
+
+function countQualEntries(teamData) {
+  if (!teamData) return 0;
+
+  if (Array.isArray(teamData)) {
+    return teamData.length;
+  }
+
+  if (typeof teamData !== "object") {
+    return 0;
+  }
+
+  if (teamData.Match != null || teamData.match != null) {
+    return 1;
+  }
+
+  let total = 0;
+  for (const matchEntries of Object.values(teamData)) {
+    if (Array.isArray(matchEntries)) {
+      total += matchEntries.length;
+    } else if (matchEntries && typeof matchEntries === "object") {
+      total += 1;
+    }
+  }
+
+  return total;
+}
+
+function countPitEntries(teamData) {
+  if (!teamData) return 0;
+  if (Array.isArray(teamData)) return teamData.length;
+  if (typeof teamData === "object") return 1;
+  return 0;
+}
+
+function stripPitImage(entry) {
+  if (!entry || typeof entry !== "object") {
+    return entry;
+  }
+
+  const { robotPicturePreview, ...rest } = entry;
+  return rest;
+}
+
+async function withScoutingFileWriteLock(filename, updater) {
+  const previous = scoutingWriteQueues.get(filename) || Promise.resolve();
+
+  const next = previous
+    .catch(() => {})
+    .then(async () => {
+      const fileData = await database.readJSONFile(filename);
+      const safeData =
+        fileData && typeof fileData === "object" && !Array.isArray(fileData)
+          ? fileData
+          : {};
+
+      const updatedData = await updater(safeData);
+      await database.writeJSONFile(filename, updatedData);
+      return updatedData;
+    });
+
+  scoutingWriteQueues.set(filename, next);
+
+  try {
+    return await next;
+  } finally {
+    if (scoutingWriteQueues.get(filename) === next) {
+      scoutingWriteQueues.delete(filename);
+    }
+  }
 }
 
 const VITE_BACKEND_PORT = Number(runtimeConstants.ports.backend);
@@ -343,8 +427,9 @@ app.get("/api/getQualitativeScouting", validateEventCode, async (req, res) => {
 
   let filtered = {};
   for (let team in result) {
-    let backendCount = Object.keys(result[team]).length;
-    if (!localCounts[team] || localCounts[team] < backendCount) {
+    const backendCount = countQualEntries(result[team]);
+    const localCount = Number(localCounts[team] ?? 0);
+    if (!Number.isFinite(localCount) || localCount < backendCount) {
       filtered[team] = result[team];
     }
   }
@@ -354,6 +439,12 @@ app.get("/api/getQualitativeScouting", validateEventCode, async (req, res) => {
 
 app.get("/api/getPitScouting", validateEventCode, async (req, res) => {
   const { eventCode } = req;
+
+  let localCounts = {};
+  try {
+    if (req.query.localCounts)
+      localCounts = JSON.parse(decodeURIComponent(req.query.localCounts));
+  } catch (e) {}
 
   let localTeams = [];
   try {
@@ -366,9 +457,19 @@ app.get("/api/getPitScouting", validateEventCode, async (req, res) => {
 
   let filtered = {};
   for (const [team, data] of Object.entries(result)) {
-    if (!localTeams.includes(team)) {
-      const { robotPicturePreview, ...rest } = data;
-      filtered[team] = rest;
+    const hasLocalCount = Object.prototype.hasOwnProperty.call(localCounts, team);
+    const backendCount = countPitEntries(data);
+    const localCount = Number(localCounts[team] ?? 0);
+    const needsUpdate = hasLocalCount
+      ? !Number.isFinite(localCount) || localCount < backendCount
+      : !localTeams.includes(team);
+
+    if (needsUpdate) {
+      if (Array.isArray(data)) {
+        filtered[team] = data.map((entry) => stripPitImage(entry));
+      } else {
+        filtered[team] = stripPitImage(data);
+      }
     }
   }
 
@@ -382,9 +483,21 @@ app.get("/api/getPitScoutingImage", validateEventCode, async (req, res) => {
 
   try {
     let data = await getEventData("pitScoutingData", eventCode);
-    const result = data[teamNumber]?.["robotPicturePreview"];
+    const teamEntries = data[teamNumber];
+
+    if (Array.isArray(teamEntries)) {
+      for (let i = teamEntries.length - 1; i >= 0; i--) {
+        const result = teamEntries[i]?.robotPicturePreview;
+        if (result) {
+          return res.send(result);
+        }
+      }
+      return res.sendStatus(404);
+    }
+
+    const result = teamEntries?.robotPicturePreview;
     if (!result) return res.sendStatus(404);
-    res.send(result);
+    return res.send(result);
   } catch (e) {
     return res.sendStatus(404);
   }
@@ -613,7 +726,8 @@ app.post("/api/postHPRatings", (req, res) => {
 });
 
 app.post("/api/postPitScouting", validateEventCode, async (req, res) => {
-  const { event, team, formData } = req.body;
+  const event = req.eventCode;
+  const { team, formData } = req.body;
 
   if (!formData || !team) {
     console.log("One or more fields could not be retrieved");
@@ -622,16 +736,19 @@ app.post("/api/postPitScouting", validateEventCode, async (req, res) => {
   }
 
   console.log(formData);
-  let fileData = await ensureEventCodeExists("pitScoutingData", event);
-  fileData[event] ||= {};
-  fileData[event][team] = formData;
+  const teamKey = String(team).replace(/\D/g, "") || String(team);
+  await withScoutingFileWriteLock("pitScoutingData", async (fileData) => {
+    fileData[event] ||= {};
+    fileData[event][teamKey] = appendScoutingEntry(fileData[event][teamKey], formData);
+    return fileData;
+  });
 
-  database.writeJSONFile("pitScoutingData", fileData);
   res.sendStatus(200);
 });
 
 app.post("/api/postQualitativeScouting", validateEventCode, async (req, res) => {
-  const { event, match, team, formData } = req.body;
+  const event = req.eventCode;
+  const { match, team, formData } = req.body;
 
   if (formData == null || team == null || match == null) {
     console.log("One or more fields could not be retrieved");
@@ -640,12 +757,18 @@ app.post("/api/postQualitativeScouting", validateEventCode, async (req, res) => 
   }
 
   console.log(formData);
-  let fileData = await ensureEventCodeExists("qualitativeScoutingData", event);
-  fileData[event] ||= {};
-  fileData[event][team] ||= {};
-  fileData[event][team][match] = formData;
+  const teamKey = String(team).replace(/\D/g, "") || String(team);
+  const matchKey = String(match);
+  await withScoutingFileWriteLock("qualitativeScoutingData", async (fileData) => {
+    fileData[event] ||= {};
+    fileData[event][teamKey] ||= {};
+    fileData[event][teamKey][matchKey] = appendScoutingEntry(
+      fileData[event][teamKey][matchKey],
+      formData,
+    );
+    return fileData;
+  });
 
-  database.writeJSONFile("qualitativeScoutingData", fileData);
   res.sendStatus(200);
 });
 

@@ -11,7 +11,7 @@
   let teamsMap: Map<number, string> = new Map();
   let teamNumbers: number[] = [];
   let qualDataByTeam: Record<string, any[]> = {};
-  let pitDataByTeam: Record<string, any> = {};
+  let pitDataByTeam: Record<string, any[]> = {};
   let fieldImg: HTMLImageElement | null = null;
   let colorblindMode = getColorblindMode();
   let canvasesByTeamMatch: Map<string, HTMLCanvasElement> = new Map();
@@ -43,6 +43,107 @@
 
   function showAll() { hiddenTeams = new Set(); }
   function hideAll() { hiddenTeams = new Set(teamsWithData); }
+
+  function normalizeTeamKey(team: any): string {
+    const stripped = String(team ?? "").replace(/\D/g, "");
+    return stripped || String(team ?? "");
+  }
+
+  function normalizeEntries(value: any): any[] {
+    if (Array.isArray(value)) {
+      return value.filter((entry) => entry && typeof entry === "object");
+    }
+    if (value && typeof value === "object") {
+      return [value];
+    }
+    return [];
+  }
+
+  function mergeEntries(localValue: any, incomingValue: any): any[] {
+    const merged = [...normalizeEntries(localValue)];
+    const seenIds = new Set(
+      merged
+        .map((entry) => String(entry?._entryId || ""))
+        .filter(Boolean),
+    );
+
+    for (const entry of normalizeEntries(incomingValue)) {
+      const entryId = String(entry?._entryId || "");
+      if (entryId && seenIds.has(entryId)) continue;
+      if (entryId) seenIds.add(entryId);
+      merged.push(entry);
+    }
+
+    return merged;
+  }
+
+  function countQualEntries(teamData: any): number {
+    if (!teamData || typeof teamData !== "object") return 0;
+    if (Array.isArray(teamData)) return teamData.length;
+    if (teamData.Match != null || teamData.match != null) return 1;
+
+    let total = 0;
+    for (const matchData of Object.values(teamData)) {
+      total += normalizeEntries(matchData).length;
+    }
+    return total;
+  }
+
+  function countPitEntries(teamData: any): number {
+    return normalizeEntries(teamData).length;
+  }
+
+  function normalizeQualRows(teamKey: string, teamData: any): any[] {
+    const normalizedTeamKey = normalizeTeamKey(teamKey);
+    const rows: any[] = [];
+
+    if (!teamData || typeof teamData !== "object") {
+      return rows;
+    }
+
+    if (Array.isArray(teamData)) {
+      for (const row of teamData) {
+        if (!row || typeof row !== "object") continue;
+        rows.push({
+          Team: row.Team ?? row.team ?? normalizedTeamKey,
+          ...row,
+        });
+      }
+      return rows.sort((a, b) => Number(a.Match ?? a.match ?? 0) - Number(b.Match ?? b.match ?? 0));
+    }
+
+    if (teamData.Match != null || teamData.match != null) {
+      rows.push({
+        Team: teamData.Team ?? teamData.team ?? normalizedTeamKey,
+        ...teamData,
+      });
+      return rows;
+    }
+
+    for (const [matchKey, matchValue] of Object.entries(teamData)) {
+      for (const entry of normalizeEntries(matchValue)) {
+        rows.push({
+          Team: entry.Team ?? entry.team ?? normalizedTeamKey,
+          Match: entry.Match ?? entry.match ?? matchKey,
+          ...entry,
+        });
+      }
+    }
+
+    return rows.sort((a, b) => Number(a.Match ?? a.match ?? 0) - Number(b.Match ?? b.match ?? 0));
+  }
+
+  function normalizePitEntries(teamData: any): any[] {
+    return normalizeEntries(teamData);
+  }
+
+  function getQualRowKey(team: number, row: any, index: number): string {
+    const explicitId = String(row?._entryId || "").trim();
+    if (explicitId) return explicitId;
+    const matchNum = String(row?.Match ?? row?.match ?? "unknown");
+    const scouter = String(row?.ScouterName ?? row?.scouterName ?? "").trim();
+    return `${team}-${matchNum}-${scouter || "entry"}-${index}`;
+  }
 
   // Close dropdowns when clicking outside
   function handleOutsideClick(e: MouseEvent) {
@@ -187,13 +288,19 @@
   }
 }
 
-  function initMatchCanvas(canvas: HTMLCanvasElement, matchRow: any) {
-    const canvasId = `canvas-${matchRow.Team}-${matchRow.Match}`;
+  function initMatchCanvas(
+    canvas: HTMLCanvasElement,
+    payload: { matchRow: any; rowKey: string },
+  ) {
+    let matchRow = payload?.matchRow;
+    let rowKey = payload?.rowKey || String(Date.now());
+    let canvasId = `canvas-${rowKey}`;
+
     animationState.set(canvas, { isAnimating: false, progress: 1, frameId: null, lastTime: Date.now() });
     progressByCanvasId[canvasId] = 1;
     (canvas as any).animationCanvasId = canvasId;
     (canvas as any).matchRowData = matchRow;
-    canvasesByTeamMatch.set(`${matchRow.Team}-${matchRow.Match}`, canvas);
+    canvasesByTeamMatch.set(canvasId, canvas);
     
     const tryDraw = () => drawAutoPath(canvas, matchRow, animationState.get(canvas)?.progress ?? 0);
     if (fieldImg && fieldImg.complete && fieldImg.naturalWidth > 0) {
@@ -240,7 +347,24 @@
     canvas.addEventListener("click", handleClick);
     
     return {
-      update(newRow: any) { matchRow = newRow; },
+      update(newPayload: { matchRow: any; rowKey: string }) {
+        matchRow = newPayload?.matchRow;
+        const nextRowKey = newPayload?.rowKey || rowKey;
+        const nextCanvasId = `canvas-${nextRowKey}`;
+
+        if (nextCanvasId !== canvasId) {
+          canvasesByTeamMatch.delete(canvasId);
+          delete progressByCanvasId[canvasId];
+
+          canvasId = nextCanvasId;
+          rowKey = nextRowKey;
+          (canvas as any).animationCanvasId = canvasId;
+          progressByCanvasId[canvasId] = animationState.get(canvas)?.progress ?? 1;
+          canvasesByTeamMatch.set(canvasId, canvas);
+        }
+
+        (canvas as any).matchRowData = matchRow;
+      },
       destroy() {
         const animState = animationState.get(canvas);
         if (animState && animState.frameId !== null) {
@@ -248,6 +372,7 @@
         }
         canvas.removeEventListener("click", handleClick);
         animationState.delete(canvas);
+        canvasesByTeamMatch.delete(canvasId);
         delete progressByCanvasId[canvasId];
       }
     };
@@ -367,7 +492,7 @@
 
   function getQualMetricEntries(row: Record<string, any>): Array<[string, string]> {
     return Object.entries(row)
-      .filter(([key, value]) => !QUAL_METADATA_KEYS.has(key) && hasRenderableQualValue(value))
+      .filter(([key, value]) => !QUAL_METADATA_KEYS.has(key) && !key.startsWith("_") && hasRenderableQualValue(value))
       .sort(([aKey], [bKey]) => {
         const aOrder = QUAL_FIELD_ORDER_INDEX.get(aKey) ?? Number.MAX_SAFE_INTEGER;
         const bOrder = QUAL_FIELD_ORDER_INDEX.get(bKey) ?? Number.MAX_SAFE_INTEGER;
@@ -391,70 +516,112 @@
       teamNumbers = teamsResult._teamNumbers as number[];
 
       const localPit = await readPitScoutingFromIDB({});
-      const pitTeams = Object.keys(localPit);
+      const localPitCounts: Record<string, number> = {};
+      for (const [team, entries] of Object.entries(localPit)) {
+        localPitCounts[team] = countPitEntries(entries);
+      }
 
       const localQual = await readQualScoutingFromIDB({});
       const localCounts: Record<string, number> = {};
       for (const [team, matches] of Object.entries(localQual)) {
-        localCounts[team] = Object.keys(matches as object).length;
+        localCounts[team] = countQualEntries(matches);
       }
 
       const qualResponse = await fetchQualitativeScouting(eventCode, localCounts);
       const qualRaw = await qualResponse.json();
-      const pitResponse = await fetchPitScouting(eventCode, pitTeams);
+      const pitResponse = await fetchPitScouting(eventCode, localPitCounts);
       const pitRaw = await pitResponse.json();
 
-      for (const [team, matches] of Object.entries(localQual)) {
-        for (const [matchKey, matchData] of Object.entries(matches as Record<string, any>)) {
-          if (!qualRaw[team]) qualRaw[team] = {};
-          if (!qualRaw[team][matchKey]) qualRaw[team][matchKey] = matchData;
-        }
-      }
+      const mergedQualRaw: Record<string, any> = {};
+      const qualSources = [qualRaw, localQual];
+      for (const source of qualSources) {
+        if (!source || typeof source !== "object") continue;
 
-      if (Array.isArray(qualRaw)) {
-        for (const row of qualRaw) {
-          const key = String(row.Team ?? row.team ?? "");
-          if (!key) continue;
-          if (!qualDataByTeam[key]) qualDataByTeam[key] = [];
-          qualDataByTeam[key].push(row);
-        }
-      } else if (qualRaw && typeof qualRaw === "object") {
-        for (const [teamKey, val] of Object.entries(qualRaw)) {
-          if (Array.isArray(val)) {
-            qualDataByTeam[teamKey] = val.sort(
-              (a, b) => Number(a.Match ?? a.match ?? 0) - Number(b.Match ?? b.match ?? 0)
+        if (Array.isArray(source)) {
+          for (const row of source) {
+            const teamKey = normalizeTeamKey(row?.Team ?? row?.team ?? "");
+            const matchKey = String(row?.Match ?? row?.match ?? "");
+            if (!teamKey || !matchKey) continue;
+            if (!mergedQualRaw[teamKey]) mergedQualRaw[teamKey] = {};
+            mergedQualRaw[teamKey][matchKey] = mergeEntries(
+              mergedQualRaw[teamKey][matchKey],
+              row,
             );
-          } else if (val && typeof val === "object") {
-            if ((val as any).Match !== undefined || (val as any).match !== undefined) {
-              qualDataByTeam[teamKey] = [val];
-            } else {
-              qualDataByTeam[teamKey] = Object.entries(val as Record<string, any>)
-                .map(([matchNum, matchData]) => ({ Match: matchNum, ...(matchData as object) }))
-                .sort((a, b) => Number(a.Match) - Number(b.Match));
+          }
+          continue;
+        }
+
+        for (const [teamKey, teamData] of Object.entries(source)) {
+          const normalizedTeamKey = normalizeTeamKey(teamKey);
+          if (!mergedQualRaw[normalizedTeamKey]) mergedQualRaw[normalizedTeamKey] = {};
+
+          if (!teamData || typeof teamData !== "object") continue;
+
+          if (Array.isArray(teamData)) {
+            for (const row of teamData) {
+              const matchKey = String(row?.Match ?? row?.match ?? "");
+              if (!matchKey) continue;
+              mergedQualRaw[normalizedTeamKey][matchKey] = mergeEntries(
+                mergedQualRaw[normalizedTeamKey][matchKey],
+                row,
+              );
             }
+            continue;
+          }
+
+          if ((teamData as any).Match != null || (teamData as any).match != null) {
+            const matchKey = String((teamData as any).Match ?? (teamData as any).match ?? "");
+            if (matchKey) {
+              mergedQualRaw[normalizedTeamKey][matchKey] = mergeEntries(
+                mergedQualRaw[normalizedTeamKey][matchKey],
+                teamData,
+              );
+            }
+            continue;
+          }
+
+          for (const [matchKey, matchData] of Object.entries(teamData as Record<string, any>)) {
+            mergedQualRaw[normalizedTeamKey][matchKey] = mergeEntries(
+              mergedQualRaw[normalizedTeamKey][matchKey],
+              matchData,
+            );
           }
         }
       }
 
-      for (const [teamKey, pitInfo] of Object.entries(localPit)) {
-        if (!pitRaw[teamKey]) pitRaw[teamKey] = pitInfo;
-      }
-      if (Array.isArray(pitRaw)) {
-        for (const row of pitRaw) {
-          const key = String(row.Team ?? row.team ?? "");
-          if (key) pitDataByTeam[key] = row;
+      qualDataByTeam = Object.fromEntries(
+        Object.entries(mergedQualRaw).map(([teamKey, teamData]) => [
+          teamKey,
+          normalizeQualRows(teamKey, teamData),
+        ]),
+      );
+
+      const mergedPitRaw: Record<string, any[]> = {};
+      for (const source of [pitRaw, localPit]) {
+        if (!source || typeof source !== "object") continue;
+
+        if (Array.isArray(source)) {
+          for (const row of source) {
+            const teamKey = normalizeTeamKey(row?.Team ?? row?.team ?? row?.teamNumber ?? "");
+            if (!teamKey) continue;
+            mergedPitRaw[teamKey] = mergeEntries(
+              mergedPitRaw[teamKey],
+              row,
+            );
+          }
+          continue;
         }
-      } else if (pitRaw && typeof pitRaw === "object") {
-        for (const [teamKey, val] of Object.entries(pitRaw)) {
-          pitDataByTeam[teamKey] = val;
+
+        for (const [teamKey, teamData] of Object.entries(source)) {
+          const normalizedTeamKey = normalizeTeamKey(teamKey);
+          mergedPitRaw[normalizedTeamKey] = mergeEntries(
+            mergedPitRaw[normalizedTeamKey],
+            normalizePitEntries(teamData),
+          );
         }
       }
 
-      for (const team of Object.keys(qualDataByTeam)) {
-        if (!Array.isArray(qualDataByTeam[team])) {
-          qualDataByTeam[team] = Object.values(qualDataByTeam[team]);
-        }
-      }
+      pitDataByTeam = mergedPitRaw;
 
       qualDataByTeam = { ...qualDataByTeam };
       (window as any).__qualData = qualDataByTeam;
@@ -467,7 +634,7 @@
   });
 
   $: teamsWithData = teamNumbers.filter(
-    (t) => qualDataByTeam[t]?.length > 0 || !!pitDataByTeam[t]
+    (t) => qualDataByTeam[t]?.length > 0 || (pitDataByTeam[t]?.length ?? 0) > 0
   );
 
   $: {
@@ -713,7 +880,7 @@
         {#each visibleCards as team (team)}
           {@const teamName = teamsMap.get(team)}
           {@const qual = qualDataByTeam[team] ?? []}
-          {@const pit = pitDataByTeam[team]}
+          {@const pitEntries = pitDataByTeam[team] ?? []}
           <!-- svelte-ignore a11y-no-static-element-interactions -->
           <div
             class="team-card"
@@ -737,8 +904,8 @@
                 {/if}
               </div>
               <div class="card-badges">
-                {#if pit}
-                  <span class="badge badge-pit">PIT</span>
+                {#if pitEntries.length > 0}
+                  <span class="badge badge-pit">PIT {pitEntries.length}</span>
                 {/if}
                 {#if qual.length > 0}
                   <span class="badge badge-qual">{qual.length} match{qual.length !== 1 ? "es" : ""}</span>
@@ -747,76 +914,82 @@
             </div>
 
             <!-- Pit Scouting -->
-            {#if pit && showPit}
+            {#if pitEntries.length > 0 && showPit}
               <div class="card-section">
                 <div class="section-label">
                   <span class="section-icon">🔧</span> Pit Scouting
                 </div>
 
-                {#if pit.framesize || pit.startingHeight || pit.fullExtensionHeight || pit.quantityBallsHopper}
+                {#each pitEntries as pit, pitIndex (pit._entryId ?? `${team}-pit-${pitIndex}`)}
                   <div class="info-group">
-                    <div class="info-group-title">Robot Info</div>
-                    <div class="info-rows">
-                      {#each [
-                        ["Frame Size", pit.framesize],
-                        ["Start Height", pit.startingHeight],
-                        ["Full Extension", pit.fullExtensionHeight],
-                        ["Hopper Capacity", pit.quantityBallsHopper],
-                      ] as [label, value]}
-                        {#if value !== undefined && value !== null && value !== ""}
-                          <div class="info-row">
-                            <span class="info-lbl">{label}</span>
-                            <span class="info-val">{value}</span>
-                          </div>
-                        {/if}
-                      {/each}
-                    </div>
+                    <div class="info-group-title">Entry {pitIndex + 1}</div>
                   </div>
-                {/if}
 
-                {#if pit.avgIntakeSpeed || pit.avgShootSpeed || pit.accuracy || pit.climbLevels}
-                  <div class="info-group">
-                    <div class="info-group-title">Performance</div>
-                    <div class="info-rows">
-                      {#each [
-                        ["Intake Speed", pit.avgIntakeSpeed],
-                        ["Shoot Speed", pit.avgShootSpeed],
-                        ["Accuracy", pit.accuracy],
-                        ["Climb Levels", pit.climbLevels],
-                      ] as [label, value]}
-                        {#if value !== undefined && value !== null && value !== ""}
-                          <div class="info-row">
-                            <span class="info-lbl">{label}</span>
-                            <span class="info-val">{value}</span>
-                          </div>
-                        {/if}
-                      {/each}
+                  {#if pit.framesize || pit.startingHeight || pit.fullExtensionHeight || pit.quantityBallsHopper}
+                    <div class="info-group">
+                      <div class="info-group-title">Robot Info</div>
+                      <div class="info-rows">
+                        {#each [
+                          ["Frame Size", pit.framesize],
+                          ["Start Height", pit.startingHeight],
+                          ["Full Extension", pit.fullExtensionHeight],
+                          ["Hopper Capacity", pit.quantityBallsHopper],
+                        ] as [label, value]}
+                          {#if value !== undefined && value !== null && value !== ""}
+                            <div class="info-row">
+                              <span class="info-lbl">{label}</span>
+                              <span class="info-val">{value}</span>
+                            </div>
+                          {/if}
+                        {/each}
+                      </div>
                     </div>
-                  </div>
-                {/if}
+                  {/if}
 
-                {#if [pit.overBump, pit.throughTrench, pit.climbDuringAuto, pit.canUseHP, pit.canUseDepot, pit.canFeed].some(v => v !== undefined && v !== null && v !== "")}
-                  <div class="info-group">
-                    <div class="info-group-title">Capabilities</div>
-                    <div class="capabilities-grid">
-                      {#each [
-                        ["Over Bump", pit.overBump],
-                        ["Trench", pit.throughTrench],
-                        ["Auto Climb", pit.climbDuringAuto],
-                        ["Use HP", pit.canUseHP],
-                        ["Use Depot", pit.canUseDepot],
-                        ["Can Feed", pit.canFeed],
-                      ] as [label, val]}
-                        {#if val !== undefined && val !== null && val !== ""}
-                          <div class="cap-chip {capabilityClass(val)}">
-                            <span class="cap-icon">{capabilityIcon(val)}</span>
-                            <span class="cap-label">{label}</span>
-                          </div>
-                        {/if}
-                      {/each}
+                  {#if pit.avgIntakeSpeed || pit.avgShootSpeed || pit.accuracy || pit.climbLevels}
+                    <div class="info-group">
+                      <div class="info-group-title">Performance</div>
+                      <div class="info-rows">
+                        {#each [
+                          ["Intake Speed", pit.avgIntakeSpeed],
+                          ["Shoot Speed", pit.avgShootSpeed],
+                          ["Accuracy", pit.accuracy],
+                          ["Climb Levels", pit.climbLevels],
+                        ] as [label, value]}
+                          {#if value !== undefined && value !== null && value !== ""}
+                            <div class="info-row">
+                              <span class="info-lbl">{label}</span>
+                              <span class="info-val">{value}</span>
+                            </div>
+                          {/if}
+                        {/each}
+                      </div>
                     </div>
-                  </div>
-                {/if}
+                  {/if}
+
+                  {#if [pit.overBump, pit.throughTrench, pit.climbDuringAuto, pit.canUseHP, pit.canUseDepot, pit.canFeed].some(v => v !== undefined && v !== null && v !== "")}
+                    <div class="info-group">
+                      <div class="info-group-title">Capabilities</div>
+                      <div class="capabilities-grid">
+                        {#each [
+                          ["Over Bump", pit.overBump],
+                          ["Trench", pit.throughTrench],
+                          ["Auto Climb", pit.climbDuringAuto],
+                          ["Use HP", pit.canUseHP],
+                          ["Use Depot", pit.canUseDepot],
+                          ["Can Feed", pit.canFeed],
+                        ] as [label, val]}
+                          {#if val !== undefined && val !== null && val !== ""}
+                            <div class="cap-chip {capabilityClass(val)}">
+                              <span class="cap-icon">{capabilityIcon(val)}</span>
+                              <span class="cap-label">{label}</span>
+                            </div>
+                          {/if}
+                        {/each}
+                      </div>
+                    </div>
+                  {/if}
+                {/each}
               </div>
             {/if}
 
@@ -850,17 +1023,18 @@
                   </div>
                 </div>
                 <div class="qual-matches">
-                  {#each (filteredQualByTeam[team] ?? []).slice(qualMatchIndexByTeam[team] ?? 0, (qualMatchIndexByTeam[team] ?? 0) + 1) as matchRow (matchRow.Match ?? matchRow.match)}
+                  {#each (filteredQualByTeam[team] ?? []).slice(qualMatchIndexByTeam[team] ?? 0, (qualMatchIndexByTeam[team] ?? 0) + 1) as matchRow, matchIndex (getQualRowKey(team, matchRow, matchIndex))}
+                    {@const rowKey = getQualRowKey(team, matchRow, matchIndex)}
                     <div class="qual-match-block">
                       <div class="qual-match-header">Match {matchRow.Match ?? matchRow.match}</div>
 
                       {#if matchRow?.AutoPath && Array.isArray(matchRow.AutoPath) && matchRow.AutoPath.length > 0}
                         <div class="auto-path-wrapper">
-                          <div class="progress-bar-container" style="--progress: {progressByCanvasId[`canvas-${team}-${matchRow.Match}`] ?? 0}">
+                          <div class="progress-bar-container" style="--progress: {progressByCanvasId[`canvas-${rowKey}`] ?? 0}">
                             <div class="progress-bar-fill"></div>
                           </div>
                           <canvas
-                            use:initMatchCanvas={matchRow}
+                            use:initMatchCanvas={{ matchRow, rowKey }}
                             width={300}
                             height={150}
                             class="auto-path-canvas"
@@ -895,7 +1069,7 @@
               </div>
             {/if}
 
-            {#if (!pit || !showPit) && (!filteredQualByTeam[team]?.length || !showQual)}
+            {#if (pitEntries.length === 0 || !showPit) && (!filteredQualByTeam[team]?.length || !showQual)}
               <div class="card-empty">No data collected yet.</div>
             {/if}
           </div>
