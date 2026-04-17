@@ -10,15 +10,28 @@ function isSecurePayloadEnvelope(body) {
   return Boolean(body && typeof body === "object" && body.__securePayload === true);
 }
 
-function getPayloadSecret() {
-  return String(
-    process.env.VITE_PAYLOAD_ENCRYPTION_KEY
-      || process.env.VITE_AUTH_KEY
-      || process.env.PAYLOAD_ENCRYPTION_KEY
-      || process.env.SESSION_SECRET
-      || "scouting-payload-default-key"
-      || "",
-  ).trim();
+function getPayloadSecretCandidates() {
+  const configured = [
+    process.env.VITE_PAYLOAD_ENCRYPTION_KEY,
+    process.env.VITE_AUTH_KEY,
+    process.env.PAYLOAD_ENCRYPTION_KEY,
+    process.env.SESSION_SECRET,
+    "scouting-payload-default-key",
+  ];
+
+  const uniqueSecrets = [];
+  for (const candidate of configured) {
+    const normalized = String(candidate || "").trim();
+    if (!normalized) {
+      continue;
+    }
+
+    if (!uniqueSecrets.includes(normalized)) {
+      uniqueSecrets.push(normalized);
+    }
+  }
+
+  return uniqueSecrets;
 }
 
 function decodeBase64(value) {
@@ -30,7 +43,10 @@ function decodeBase64(value) {
 }
 
 function decodeSecurePayload(envelope) {
-  const secret = getPayloadSecret();
+  const secrets = getPayloadSecretCandidates();
+  if (secrets.length === 0) {
+    throw new Error("No secure payload secret configured");
+  }
 
   const iterations = Number(envelope.iterations || DEFAULT_ITERATIONS);
   if (!Number.isInteger(iterations) || iterations < 1000) {
@@ -49,31 +65,41 @@ function decodeSecurePayload(envelope) {
     throw new Error("Secure payload is too short to decrypt");
   }
 
-  const key = crypto.pbkdf2Sync(
-    secret,
-    salt,
-    iterations,
-    EXPECTED_KEY_LENGTH_BYTES,
-    "sha256",
-  );
-
   const authTag = encrypted.subarray(encrypted.length - TAG_LENGTH_BYTES);
   const cipherText = encrypted.subarray(0, encrypted.length - TAG_LENGTH_BYTES);
 
-  const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
-  decipher.setAuthTag(authTag);
+  let lastError;
 
-  const compressed = Buffer.concat([
-    decipher.update(cipherText),
-    decipher.final(),
-  ]);
+  for (const secret of secrets) {
+    try {
+      const key = crypto.pbkdf2Sync(
+        secret,
+        salt,
+        iterations,
+        EXPECTED_KEY_LENGTH_BYTES,
+        "sha256",
+      );
 
-  let payloadBuffer = compressed;
-  if ((envelope.compression || "").toLowerCase() === "gzip") {
-    payloadBuffer = zlib.gunzipSync(compressed);
+      const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+      decipher.setAuthTag(authTag);
+
+      const compressed = Buffer.concat([
+        decipher.update(cipherText),
+        decipher.final(),
+      ]);
+
+      let payloadBuffer = compressed;
+      if ((envelope.compression || "").toLowerCase() === "gzip") {
+        payloadBuffer = zlib.gunzipSync(compressed);
+      }
+
+      return JSON.parse(payloadBuffer.toString("utf8"));
+    } catch (error) {
+      lastError = error;
+    }
   }
 
-  return JSON.parse(payloadBuffer.toString("utf8"));
+  throw lastError || new Error("Unable to decode secure payload");
 }
 
 module.exports = {
