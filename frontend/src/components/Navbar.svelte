@@ -590,10 +590,7 @@
   }
 
   .dropdown-menu {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
+    position: static;
     background-color: #222;
     border-left: 3px solid #c81b00;
     padding: 0;
@@ -1135,25 +1132,33 @@
     }
   }
 
- @media (max-width: 768px) {
-  .navbar {
-    position: relative;
-    width: 56px;
-    height: 56px; /* collapsed: only take up a strip, not full viewport height */
-    transition: none;
-    box-shadow: none;
-    z-index: 1000;
-  }
+  @media (max-width: 768px) {
+    .navbar {
+      position: fixed;
+      width: 56px;
+      height: 56px;
+      transition: none;
+      box-shadow: none;
+      z-index: 1000;
+      overflow: visible;
+    }
 
-  .navbar.mobile:not(.collapsed) {
-    position: absolute;
-    width: min(82vw, 320px);
-    height: 100vh;
-    top: 0;
-    left: 0;
-    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.35);
-    transition: width 1s, height 1s;
-  }
+    .navbar.mobile:not(.collapsed) {
+      width: min(82vw, 320px);
+      height: 100dvh;
+      top: 0;
+      left: 0;
+      box-shadow: 2px 0 10px rgba(0, 0, 0, 0.35);
+      overflow: hidden;
+      transition: width 1s, height 1s;
+    }
+
+    .navbar.mobile:not(.collapsed) .sidebar-content {
+      overflow-y: auto;
+      overflow-x: hidden;
+      /* Allow the content to scroll within the fixed-height navbar */
+      max-height: calc(100dvh - 2.9rem);
+    }
 
     .toggle-btn {
       background: rgba(0, 0, 0, 0.25);
@@ -1163,7 +1168,6 @@
 
     .sidebar-content {
       margin-top: 2.9rem;
-      overflow-y: auto;
     }
 
     .logo {
