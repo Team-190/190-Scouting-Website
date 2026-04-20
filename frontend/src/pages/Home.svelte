@@ -117,6 +117,37 @@
         );
     }
 
+    function compareQualificationOrder(a, b) {
+        const aTimestamp = getScheduledTimestamp(a);
+        const bTimestamp = getScheduledTimestamp(b);
+        const aHasTimestamp = aTimestamp > 0;
+        const bHasTimestamp = bTimestamp > 0;
+
+        if (aHasTimestamp && bHasTimestamp && aTimestamp !== bTimestamp) {
+            return aTimestamp - bTimestamp;
+        }
+
+        // Prefer entries with known schedule timestamps; replayed matches can share
+        // match numbers and should be ordered by schedule when available.
+        if (aHasTimestamp !== bHasTimestamp) {
+            return aHasTimestamp ? -1 : 1;
+        }
+
+        const aMatchNumber = Number(a?.match_number);
+        const bMatchNumber = Number(b?.match_number);
+        if (Number.isFinite(aMatchNumber) && Number.isFinite(bMatchNumber) && aMatchNumber !== bMatchNumber) {
+            return aMatchNumber - bMatchNumber;
+        }
+
+        const aSetNumber = Number(a?.set_number);
+        const bSetNumber = Number(b?.set_number);
+        if (Number.isFinite(aSetNumber) && Number.isFinite(bSetNumber) && aSetNumber !== bSetNumber) {
+            return aSetNumber - bSetNumber;
+        }
+
+        return String(a?.key || "").localeCompare(String(b?.key || ""));
+    }
+
     function isMatchComplete(match) {
         const redScore = Number(match?.alliances?.red?.score);
         const blueScore = Number(match?.alliances?.blue?.score);
@@ -132,6 +163,27 @@
         const redTeams = match?.alliances?.red?.team_keys || [];
         const blueTeams = match?.alliances?.blue?.team_keys || [];
         return [...redTeams, ...blueTeams].includes(OUR_TEAM_KEY);
+    }
+
+    function getCurrentMatchIndex(qualMatches) {
+        if (!Array.isArray(qualMatches) || qualMatches.length === 0) return -1;
+
+        // Prefer moving forward from the latest completed match so stale replay
+        // placeholders do not pin the UI on an old qualification number.
+        let latestCompletedIndex = -1;
+        for (let i = 0; i < qualMatches.length; i += 1) {
+            if (isMatchComplete(qualMatches[i])) {
+                latestCompletedIndex = i;
+            }
+        }
+
+        if (latestCompletedIndex >= 0 && latestCompletedIndex < qualMatches.length - 1) {
+            return latestCompletedIndex + 1;
+        }
+
+        const firstIncomplete = qualMatches.findIndex((m) => !isMatchComplete(m));
+        if (firstIncomplete >= 0) return firstIncomplete;
+        return qualMatches.length - 1;
     }
 
     function minutesUntil(timestampSec) {
@@ -161,7 +213,7 @@
 
             const qualMatches = (Array.isArray(allMatches) ? allMatches : [])
                 .filter((match) => match?.comp_level === "qm")
-                .sort((a, b) => Number(a?.match_number) - Number(b?.match_number));
+                .sort(compareQualificationOrder);
 
             if (qualMatches.length === 0) {
                 matchSchedule = {
@@ -174,14 +226,25 @@
                 return;
             }
 
-            const currentMatch = qualMatches.find((m) => !isMatchComplete(m)) || qualMatches[qualMatches.length - 1];
-            const ourNextMatch = qualMatches.find((m) => !isMatchComplete(m) && isOurMatch(m))
-                || qualMatches.find((m) => isOurMatch(m));
+            const normalizedCurrentIndex = getCurrentMatchIndex(qualMatches);
+            const currentMatch = qualMatches[normalizedCurrentIndex];
+
+            const ourNextIndex = qualMatches.findIndex(
+                (m, index) => index >= normalizedCurrentIndex && !isMatchComplete(m) && isOurMatch(m),
+            );
+            const fallbackOurNextIndex = qualMatches.findIndex((m) => !isMatchComplete(m) && isOurMatch(m));
+            const anyOurMatchIndex = qualMatches.findIndex((m) => isOurMatch(m));
+            const normalizedOurIndex = ourNextIndex >= 0
+                ? ourNextIndex
+                : fallbackOurNextIndex >= 0
+                    ? fallbackOurNextIndex
+                    : anyOurMatchIndex;
+            const ourNextMatch = normalizedOurIndex >= 0 ? qualMatches[normalizedOurIndex] : null;
 
             const currentNumber = Number(currentMatch?.match_number);
             const ourNumber = Number(ourNextMatch?.match_number);
-            const matchesUntil = Number.isFinite(currentNumber) && Number.isFinite(ourNumber)
-                ? String(Math.max(0, ourNumber - currentNumber))
+            const matchesUntil = normalizedOurIndex >= 0
+                ? String(Math.max(0, normalizedOurIndex - normalizedCurrentIndex))
                 : "—";
 
             matchSchedule = {
