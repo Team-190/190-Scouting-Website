@@ -658,14 +658,37 @@
     const teamKey = String(teamNumber).replace(/\D/g, "");
     const teamMatches = qualData[teamKey];
     if (!teamMatches) return [];
-    return Object.values(teamMatches).sort(
-      (a: any, b: any) => a.Match - b.Match,
-    );
+
+    const rows: any[] = [];
+
+    if (Array.isArray(teamMatches)) {
+      for (const row of teamMatches) {
+        if (!row || typeof row !== "object") continue;
+        rows.push(row);
+      }
+    } else if (teamMatches && typeof teamMatches === "object") {
+      for (const [matchKey, matchData] of Object.entries(teamMatches)) {
+        if (Array.isArray(matchData)) {
+          for (const entry of matchData) {
+            if (!entry || typeof entry !== "object") continue;
+            rows.push({ Match: entry.Match ?? entry.match ?? matchKey, ...entry });
+          }
+        } else if (matchData && typeof matchData === "object") {
+          rows.push({ Match: (matchData as any).Match ?? (matchData as any).match ?? matchKey, ...(matchData as any) });
+        }
+      }
+    }
+
+    return rows.sort((a: any, b: any) => Number(a.Match ?? a.match ?? 0) - Number(b.Match ?? b.match ?? 0));
   }
 
   async function getPitDataForTeam(teamNumber: number): Promise<any> {
     const pitScouting = await readPitScoutingFromIDB({});
-    return pitScouting[String(teamNumber)] ?? null;
+    const teamData = pitScouting[String(teamNumber)] ?? null;
+    if (Array.isArray(teamData)) {
+      return teamData[teamData.length - 1] ?? null;
+    }
+    return teamData;
   }
 
   // ─── Qual Display Helpers ───────────────────────────────────────────────────
@@ -725,7 +748,7 @@
 
   function getQualMetricEntries(row: Record<string, any>): Array<[string, string]> {
     return Object.entries(row)
-      .filter(([key, value]) => !QUAL_METADATA_KEYS.has(key) && hasRenderableValue(value))
+      .filter(([key, value]) => !QUAL_METADATA_KEYS.has(key) && !key.startsWith("_") && hasRenderableValue(value))
       .map(([key, value]) => [humanizeKey(key), formatQualValue(key, value)]);
   }
 
