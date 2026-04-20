@@ -1,5 +1,7 @@
 <script>
 	import { onMount } from "svelte";
+	import "katex/dist/katex.min.css";
+	import renderMathInElement from "katex/contrib/auto-render";
 	import { fetchCOPRs, fetchMatchAlliances } from "../utils/api.js";
 	import { getIndexedDBStore } from "../utils/indexedDB";
 	import { estimateTeamPoints, estimateTeamPoints2 } from "../utils/pageUtils.js";
@@ -12,6 +14,21 @@
 	let exampleEfs1 = null;
 	let exampleEfs2 = null;
 	let exampleSource = "";
+	let infoPageEl;
+	const equationEfs1 = "$$\\mathrm{EFS}_1 = \\sum_{p \\in \\mathcal{P}} \\left(\\frac{T_{\\text{team}}}{T_{\\text{alliance}}}\\right) H_p$$";
+	const equationEfs2Rate = "$$r_{i,s} = \\frac{\\mathrm{COPR}_{i,s}}{t_{i,s}}$$";
+	const equationEfs2 = "$$\\mathrm{EFS}_2 = \\sum_{s \\in \\mathcal{S}} H_s \\left(\\frac{r_{\\text{team},s}}{\\sum_{i \\in A} r_{i,s}}\\right)$$";
+
+	function renderLatexEquations() {
+		if (!infoPageEl) return;
+		renderMathInElement(infoPageEl, {
+			throwOnError: false,
+			delimiters: [
+				{ left: "$$", right: "$$", display: true },
+				{ left: "$", right: "$", display: false },
+			],
+		});
+	}
 
 	function toNumber(value) {
 		const n = Number(value);
@@ -115,6 +132,8 @@
 	}
 
 	onMount(async () => {
+		renderLatexEquations();
+
 		exampleLoading = true;
 		exampleError = "";
 
@@ -186,7 +205,7 @@
 	});
 </script>
 
-<div class="info-page">
+<div class="info-page" bind:this={infoPageEl}>
 	<div class="fx-layer" aria-hidden="true">
 		<span class="orbit orbit-a"></span>
 		<span class="orbit orbit-b"></span>
@@ -229,9 +248,8 @@
 		</ul>
 		<div class="formula-block">
 			<p class="formula-title">EFS1 formula</p>
-			<p>
-				EFS1 = sum over phases [ (team FuelShootingTime / alliance FuelShootingTime)
-				x phaseHubPoints ]
+			<p class="latex-equation">
+				{equationEfs1}
 			</p>
 		</div>
 	</section>
@@ -267,12 +285,11 @@
 		</ul>
 		<div class="formula-block">
 			<p class="formula-title">EFS2 formula</p>
-			<p>
-				fuelPerSecondShift(team) = COPRshift(team) / shootingTimeShift(team)
+			<p class="latex-equation">
+				{equationEfs2Rate}
 			</p>
-			<p>
-				EFS2 = sum over shifts [ shiftHubPoints x (fuelPerSecondShift(team) /
-				sum fuelPerSecondShift(alliance teams)) ]
+			<p class="latex-equation">
+				{equationEfs2}
 			</p>
 		</div>
 		<p class="note">
@@ -622,6 +639,15 @@
 		font-weight: 700;
 		color: #fff;
 		margin-bottom: 0.3rem;
+	}
+
+	.latex-equation {
+		font-family: "Times New Roman", Times, serif;
+		font-size: 1rem;
+		line-height: 1.5;
+		letter-spacing: 0.01em;
+		word-break: break-word;
+		color: #f8f8f8;
 	}
 
 	.note {
