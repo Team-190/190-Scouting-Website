@@ -276,6 +276,7 @@
                   <div class="orbit-star">⭐</div>
                 </div>
               {/each}
+            
 
             <!-- Screen flash overlay -->
             <div class="flash-overlay"></div>
@@ -296,6 +297,7 @@
               <span>Gompei Madness</span>
             </button>
           {/if}
+
         </div>
       {/if}
 
@@ -400,6 +402,25 @@
   }
   .toggle-icon.rotated::after {
     transform: none;
+  }
+
+   .info-btn {
+    width: calc(100% - 2rem);
+    margin: 0.25rem 1rem 0;
+    border: 2px solid #c81b00;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #262626 0%, #383838 100%);
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 700;
+    padding: 0.55rem 0.75rem;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .info-btn:not(:disabled):hover {
+    background: linear-gradient(135deg, #333 0%, #444 100%);
+    border-color: #e02200;
   }
 
   .sidebar-content {
