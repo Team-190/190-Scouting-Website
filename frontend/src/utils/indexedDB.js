@@ -5,6 +5,7 @@ const DB_NAME = "scoutingDB";
 const DB_VERSION = 4;
 
 let dbInstance = null;
+let schemaRepairAttempted = false;
 
 const STORE_CONFIG = {
     scoutingData: { keyPath: "Id" },
@@ -74,6 +75,24 @@ function ensureStoreSchema(db, tx, storeName) {
     createStore(db, storeName);
 }
 
+function findMissingStores(db) {
+    return Object.keys(STORE_CONFIG).filter((name) => !db.objectStoreNames.contains(name));
+}
+
+function deleteDatabase() {
+    if (dbInstance) {
+        dbInstance.close();
+        dbInstance = null;
+    }
+
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.deleteDatabase(DB_NAME);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+        req.onblocked = () => reject(new Error("IndexedDB delete blocked by another open tab"));
+    });
+}
+
 // ─── OPEN / INIT ─────────────────────────────────────────────────────────────
 
 function openDB() {
@@ -98,7 +117,22 @@ function openDB() {
         };
 
         request.onsuccess = () => {
-            dbInstance = request.result;
+            const db = request.result;
+            const missingStores = findMissingStores(db);
+
+            if (missingStores.length > 0 && !schemaRepairAttempted) {
+                schemaRepairAttempted = true;
+                db.close();
+                dbInstance = null;
+
+                deleteDatabase()
+                    .then(() => openDB())
+                    .then(resolve)
+                    .catch(reject);
+                return;
+            }
+
+            dbInstance = db;
             dbInstance.onversionchange = () => {
                 dbInstance.close();
                 dbInstance = null;
@@ -115,8 +149,20 @@ function openDB() {
 
 export async function setIndexedDBStore(STORE, { rows = null, key = null, value = null } = {}) {
     const db = await openDB();
+
+    if (!db.objectStoreNames.contains(STORE)) {
+        console.warn(`[IndexedDB] Missing store: ${STORE}. Skipping write.`);
+        return;
+    }
+
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE, "readwrite");
+        let tx;
+        try {
+            tx = db.transaction(STORE, "readwrite");
+        } catch (e) {
+            reject(e);
+            return;
+        }
         const store = tx.objectStore(STORE);
         const keyPath = getExpectedKeyPath(STORE);
 
@@ -153,8 +199,19 @@ export async function setIndexedDBStore(STORE, { rows = null, key = null, value 
 
 export async function clearIndexedDBStore(STORE) {
     const db = await openDB();
+
+    if (!db.objectStoreNames.contains(STORE)) {
+        return;
+    }
+
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE, "readwrite");
+        let tx;
+        try {
+            tx = db.transaction(STORE, "readwrite");
+        } catch (e) {
+            reject(e);
+            return;
+        }
         const store = tx.objectStore(STORE);
         const request = store.clear();
         request.onsuccess = () => resolve();
@@ -188,8 +245,19 @@ function decompressObject(obj) {
 
 export async function getIndexedDBStore(STORE, key = null) {
     const db = await openDB();
+
+    if (!db.objectStoreNames.contains(STORE)) {
+        return key !== null ? null : [];
+    }
+
     return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE, "readonly");
+        let tx;
+        try {
+            tx = db.transaction(STORE, "readonly");
+        } catch (e) {
+            reject(e);
+            return;
+        }
         const store = tx.objectStore(STORE);
         let request;
 

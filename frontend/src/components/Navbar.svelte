@@ -200,63 +200,73 @@
         <span class="label">Pick Lists</span>
       </button>
 
-      {#if alliancesAvailable}
-        <div class="madness-wrapper">
-          {#if !elimsStarted}
-            <!-- 5 expanding shockwave rings -->
-            {#each Array(5) as _, i}
-              <div class="shockwave" style="--ri: {i}"></div>
-            {/each}
-
-            <!-- Smoke puffs -->
-            {#each Array(10) as _, i}
-              <div class="smoke-puff" style="--si: {i}"></div>
-            {/each}
-
-            <!-- Confetti burst -->
-            {#each Array(28) as _, i}
-              <div class="confetti" style="--ci: {i}">
-                {#if i % 6 === 0}★{:else if i % 6 === 1}●{:else if i % 6 === 2}■{:else if i % 6 === 3}♦{:else if i % 6 === 4}🏆{:else}⚡{/if}
-              </div>
-            {/each}
-
-            <!-- Orbiting stars -->
-            {#each Array(4) as _, i}
-              <div class="orbit-ring" style="--oi: {i}">
-                <div class="orbit-star">⭐</div>
-              </div>
-            {/each}
-
-            <!-- Lightning bolts -->
-            {#each Array(6) as _, i}
-              <div class="lightning" style="--li: {i}">⚡</div>
-            {/each}
-
-            <!-- Sparkles -->
-            <div class="sparkle-container">
-              {#each Array(12) as _, i}
-                <div class="sparkle" style="--i: {i}">✦</div>
+      <div class="bottom-actions">
+        {#if alliancesAvailable}
+          <div class="madness-wrapper">
+            {#if !elimsStarted}
+              <!-- 5 expanding shockwave rings -->
+              {#each Array(5) as _, i}
+                <div class="shockwave" style="--ri: {i}"></div>
               {/each}
-            </div>
 
-            <!-- Screen flash overlay -->
-            <div class="flash-overlay"></div>
+              <!-- Smoke puffs -->
+              {#each Array(10) as _, i}
+                <div class="smoke-puff" style="--si: {i}"></div>
+              {/each}
 
-            <button
-              class="madness-btn"
-              on:click={() => navigate("/marchMadness")}
-            >
-              <span class="madness-shine"></span>
-              <span class="madness-shine madness-shine-2"></span>
-              <span>Gompei Madness</span>
-            </button>
-          {:else}
-            <button class="madness-btn" on:click={() => navigate("/marchMadness")}>
-              <span>Gompei Madness</span>
-            </button>
-          {/if}
-        </div>
-      {/if}
+              <!-- Confetti burst -->
+              {#each Array(28) as _, i}
+                <div class="confetti" style="--ci: {i}">
+                  {#if i % 6 === 0}★{:else if i % 6 === 1}●{:else if i % 6 === 2}■{:else if i % 6 === 3}♦{:else if i % 6 === 4}🏆{:else}⚡{/if}
+                </div>
+              {/each}
+
+              <!-- Orbiting stars -->
+              {#each Array(4) as _, i}
+                <div class="orbit-ring" style="--oi: {i}">
+                  <div class="orbit-star">⭐</div>
+                </div>
+              {/each}
+
+              <!-- Lightning bolts -->
+              {#each Array(6) as _, i}
+                <div class="lightning" style="--li: {i}">⚡</div>
+              {/each}
+
+              <!-- Sparkles -->
+              <div class="sparkle-container">
+                {#each Array(12) as _, i}
+                  <div class="sparkle" style="--i: {i}">✦</div>
+                {/each}
+              </div>
+
+              <!-- Screen flash overlay -->
+              <div class="flash-overlay"></div>
+
+              <button
+                class="madness-btn"
+                on:click={() => navigate("/marchMadness")}
+              >
+                <span class="madness-shine"></span>
+                <span class="madness-shine madness-shine-2"></span>
+                <span>Gompei Madness</span>
+              </button>
+            {:else}
+              <button class="madness-btn" on:click={() => navigate("/marchMadness")}>
+                <span>Gompei Madness</span>
+              </button>
+            {/if}
+          </div>
+        {/if}
+
+        <button
+          class="info-btn"
+          on:click={() => navigate("/info")}
+          disabled={!($isSidebarOpen || isHovering)}
+        >
+          <span class="label">Info Page</span>
+        </button>
+      </div>
     </div>
   </div>
 </nav>
@@ -559,6 +569,15 @@
     opacity: 0.5;
   }
 
+  .bottom-actions {
+    margin-top: auto;
+    padding: 0.5rem 0 1rem;
+  }
+
+  .navbar.collapsed .bottom-actions {
+    display: none;
+  }
+
   /* ── Madness wrapper ── */
   .madness-wrapper {
     position: relative;
@@ -566,7 +585,6 @@
     align-items: center;
     justify-content: center;
     padding: 1rem;
-    margin-top: auto;
     animation: dropIn 0.8s cubic-bezier(0.22, 1.8, 0.36, 1) both;
   }
 
@@ -890,6 +908,25 @@
       0 0 20px 6px rgba(255, 215, 0, 1),
       0 0 40px 12px rgba(255, 165, 0, 0.7),
       inset 0 1px 1px rgba(255, 255, 255, 0.5);
+  }
+
+  .info-btn {
+    width: calc(100% - 2rem);
+    margin: 0.25rem 1rem 0;
+    border: 2px solid #c81b00;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #262626 0%, #383838 100%);
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 700;
+    padding: 0.55rem 0.75rem;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .info-btn:not(:disabled):hover {
+    background: linear-gradient(135deg, #333 0%, #444 100%);
+    border-color: #e02200;
   }
 
   @keyframes goldShimmer {
