@@ -2,18 +2,6 @@
 	import { onMount } from "svelte";
 	import "katex/dist/katex.min.css";
 	import renderMathInElement from "katex/contrib/auto-render";
-	import { fetchCOPRs, fetchMatchAlliances } from "../utils/api.js";
-	import { getIndexedDBStore } from "../utils/indexedDB";
-	import { estimateTeamPoints, estimateTeamPoints2 } from "../utils/pageUtils.js";
-
-	let exampleLoading = true;
-	let exampleError = "";
-	let exampleEventCode = "";
-	let exampleTeam = "";
-	let exampleMatch = null;
-	let exampleEfs1 = null;
-	let exampleEfs2 = null;
-	let exampleSource = "";
 	let infoPageEl;
 	const equationEfs1 = "$$\\mathrm{EFS}_1 = \\sum_{p \\in \\mathcal{P}} \\left(\\frac{T_{\\text{team}}}{T_{\\text{alliance}}}\\right) H_p$$";
 	const equationEfs2Rate = "$$r_{i,s} = \\frac{\\mathrm{COPR}_{i,s}}{t_{i,s}}$$";
@@ -30,178 +18,8 @@
 		});
 	}
 
-	function toNumber(value) {
-		const n = Number(value);
-		return Number.isFinite(n) ? n : 0;
-	}
-
-	function fmt(value) {
-		if (value === null || value === undefined || value === "") return "N/A";
-		return toNumber(value).toFixed(2);
-	}
-
-	function asNullableNumber(value) {
-		if (value === null || value === undefined || value === "") return null;
-		const n = Number(value);
-		return Number.isFinite(n) ? n : null;
-	}
-
-	function normalizeTeam(raw) {
-		return String(raw ?? "").replace(/\D/g, "");
-	}
-
-	function normalizeMatch(raw) {
-		const parsed = parseInt(String(raw ?? "").replace(/\D/g, ""), 10);
-		return Number.isFinite(parsed) ? parsed : 0;
-	}
-
-	function unwrapRows(rawRows) {
-		return (rawRows || []).map((item) =>
-			item && item.value !== undefined ? item.value : item,
-		);
-	}
-
-	function readPrecomputedEfs(row) {
-		if (!row || typeof row !== "object") {
-			return { efs1: null, efs2: null };
-		}
-
-		const efs1 =
-			asNullableNumber(row.EstimatedPoints) ??
-			asNullableNumber(row.estimatedPoints) ??
-			asNullableNumber(row.EFS1) ??
-			asNullableNumber(row.efs1) ??
-			asNullableNumber(row.EFS);
-
-		const efs2 =
-			asNullableNumber(row.EstimatedPoints2) ??
-			asNullableNumber(row.estimatedPoints2) ??
-			asNullableNumber(row.EFS2) ??
-			asNullableNumber(row.efs2);
-
-		return { efs1, efs2 };
-	}
-
-	function getExampleCandidate(rows, alliances) {
-		const candidates = rows
-			.filter((row) => row && row.RecordType !== "Match_Event")
-			.filter((row) => normalizeTeam(row.Team || row.team) && normalizeMatch(row.Match) > 0);
-
-		let fallback = null;
-
-		for (const row of candidates) {
-			const teamNum = normalizeTeam(row.Team || row.team);
-			const matchNum = normalizeMatch(row.Match);
-			if (!teamNum || !matchNum) continue;
-
-			const match = alliances.find(
-				(m) => m.comp_level === "qm" && Number(m.match_number) === matchNum,
-			);
-			if (!match) continue;
-
-			const redKeys = (match.alliances?.red?.team_keys || []).map((k) =>
-				String(k).replace("frc", ""),
-			);
-			const blueKeys = (match.alliances?.blue?.team_keys || []).map((k) =>
-				String(k).replace("frc", ""),
-			);
-			const onRed = redKeys.includes(teamNum);
-			const onBlue = blueKeys.includes(teamNum);
-			if (!onRed && !onBlue) continue;
-
-			const stored = readPrecomputedEfs(row);
-			const hasAnyStored = stored.efs1 !== null || stored.efs2 !== null;
-			if (hasAnyStored) {
-				return {
-					teamNum,
-					matchNum,
-					stored,
-				};
-			}
-
-			if (!fallback) {
-				fallback = {
-					teamNum,
-					matchNum,
-					stored,
-				};
-			}
-		}
-
-		return fallback;
-	}
-
-	onMount(async () => {
+	onMount(() => {
 		renderLatexEquations();
-
-		exampleLoading = true;
-		exampleError = "";
-
-		try {
-			const eventCode = localStorage.getItem("eventCode") || "";
-			exampleEventCode = eventCode;
-			if (!eventCode) {
-				exampleError = "No eventCode found in local storage.";
-				exampleLoading = false;
-				return;
-			}
-
-			const [rows, alliances] = await Promise.all([
-				getIndexedDBStore("scoutingData"),
-				fetchMatchAlliances(eventCode),
-			]);
-
-			const normalizedRows = unwrapRows(rows || []);
-			const result = getExampleCandidate(normalizedRows, alliances || []);
-			if (!result) {
-				exampleError =
-					"Could not build an example from current local data. Check that scouting rows include match/team values and completed match alliances include hub score breakdown.";
-				exampleLoading = false;
-				return;
-			}
-
-			let efs1 = result.stored?.efs1 ?? null;
-			let efs2 = result.stored?.efs2 ?? null;
-			let source = "Precomputed EFS values loaded from local scouting rows.";
-
-			if (efs1 === null || efs2 === null) {
-				const coprs = await fetchCOPRs(eventCode);
-				const coprSource = coprs?.coprs ? coprs.coprs : coprs;
-
-				if (efs1 === null) {
-					efs1 = estimateTeamPoints(
-						result.teamNum,
-						result.matchNum,
-						alliances || [],
-						normalizedRows,
-					);
-				}
-
-				if (efs2 === null) {
-					efs2 = estimateTeamPoints2(
-						result.teamNum,
-						result.matchNum,
-						coprSource || {},
-						normalizedRows,
-						normalizedRows,
-						alliances || [],
-					);
-				}
-
-				source =
-					"Using stored EFS when available, with calculated fallback for missing values.";
-			}
-
-			exampleTeam = result.teamNum;
-			exampleMatch = result.matchNum;
-			exampleEfs1 = efs1;
-			exampleEfs2 = efs2;
-			exampleSource = source;
-		} catch (err) {
-			exampleError = err?.message || "Failed to load local data example.";
-		} finally {
-			exampleLoading = false;
-		}
 	});
 </script>
 
@@ -297,40 +115,6 @@
 			shooting time. EFS2 is usually better when alliance roles change by phase,
 			because it attributes points shift-by-shift with separate per-phase rates.
 		</p>
-
-		<div class="example-block">
-			<h3>Live Local Example (Using pageUtils)</h3>
-			{#if exampleLoading}
-				<p>Loading local example...</p>
-			{:else if exampleError}
-				<p class="example-error">{exampleError}</p>
-			{:else}
-				<p class="example-meta">
-					Event: {exampleEventCode} | Team: frc{exampleTeam} | Match: Q{exampleMatch}
-				</p>
-				<p class="example-meta">{exampleSource}</p>
-				<div class="table-wrap">
-					<table>
-						<thead>
-							<tr>
-								<th>Metric</th>
-								<th>Value</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr>
-								<td>EFS1</td>
-								<td>{fmt(exampleEfs1)}</td>
-							</tr>
-							<tr>
-								<td>EFS2</td>
-								<td>{fmt(exampleEfs2)}</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
-			{/if}
-		</div>
 	</section>
 </div>
 
@@ -654,57 +438,6 @@
 		margin-top: 0.75rem;
 		font-size: 0.95rem;
 		color: #f3e6d5;
-	}
-
-	.example-block {
-		margin-top: 1rem;
-		padding-top: 0.9rem;
-		border-top: 1px solid rgba(255, 255, 255, 0.25);
-	}
-
-	.example-block h3 {
-		margin: 0 0 0.45rem;
-		font-size: 1.05rem;
-		color: #fff;
-	}
-
-	.example-meta {
-		margin-bottom: 0.65rem;
-		font-size: 0.92rem;
-		color: #ffd8c9;
-		text-shadow: 0 0 8px rgba(255, 213, 106, 0.2);
-	}
-
-	.example-error {
-		color: #ffb4b4;
-	}
-
-	.table-wrap {
-		overflow-x: auto;
-		border: 1px solid rgba(255, 255, 255, 0.25);
-		border-radius: 0.45rem;
-		background: rgba(7, 7, 7, 0.25);
-		box-shadow: 0 6px 16px rgba(0, 0, 0, 0.24);
-	}
-
-	.table-wrap table {
-		width: 100%;
-		border-collapse: collapse;
-		min-width: 38rem;
-	}
-
-	.table-wrap th,
-	.table-wrap td {
-		padding: 0.5rem 0.6rem;
-		text-align: left;
-		font-size: 0.88rem;
-		border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-	}
-
-	.table-wrap th {
-		background: linear-gradient(140deg, rgba(255, 213, 106, 0.24), rgba(255, 255, 255, 0.13));
-		font-weight: 700;
-		color: #fff;
 	}
 
 	@keyframes sparkleDrift {
