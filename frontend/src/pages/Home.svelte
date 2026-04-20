@@ -522,12 +522,19 @@
         --frc-190-black: #4d4d4d;
     }
 
+    :global(html, body) {
+        height: 100%;
+        overflow: hidden;
+    }
+
     .container {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        min-height: 100vh;
+        height: 100vh;
+        max-height: 100vh;
+        overflow: hidden;
         padding: 1.25rem;
         background: var(--wpi-gray);
         font-family: sans-serif;
