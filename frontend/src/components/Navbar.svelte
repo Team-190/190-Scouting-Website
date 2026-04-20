@@ -300,15 +300,25 @@
 
         </div>
       {/if}
+
       <button
-          class="info-btn"
-          on:click={() => navigate("/info")}
-          disabled={!($isSidebarOpen || isHovering)}
-        >
-          <span class="label">Info Page</span>
-        </button>
+        class="info-btn"
+        on:click={() => navigate("/info")}
+        disabled={!($isSidebarOpen || isHovering)}
+      >
+        <span class="label">Info Page</span>
+      </button>
+
+      <button
+        class="info-btn debug-btn"
+        on:click={() => navigate("/debug")}
+        disabled={!($isSidebarOpen || isHovering)}
+      >
+        <span class="label">Debug Page</span>
+      </button>
     </div>
   </div>
+</div>
 </nav>
 
 <style>
@@ -1026,6 +1036,17 @@
   .info-btn:not(:disabled):hover {
     background: linear-gradient(135deg, #333 0%, #444 100%);
     border-color: #e02200;
+  }
+
+  .debug-btn {
+    margin-top: 0.45rem;
+    border-color: #0c6da4;
+    background: linear-gradient(135deg, #1e2f3f 0%, #263f57 100%);
+  }
+
+  .debug-btn:not(:disabled):hover {
+    border-color: #2a92c7;
+    background: linear-gradient(135deg, #28445a 0%, #335975 100%);
   }
 
   @keyframes goldShimmer {
