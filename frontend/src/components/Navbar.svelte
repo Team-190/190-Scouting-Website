@@ -1150,6 +1150,7 @@
       left: 0;
       box-shadow: 2px 0 10px rgba(0, 0, 0, 0.35);
       overflow: hidden;
+      transition: width 1s, height 1s;
     }
 
     .navbar.mobile:not(.collapsed) .sidebar-content {
