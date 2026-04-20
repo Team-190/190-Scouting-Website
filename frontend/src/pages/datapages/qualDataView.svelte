@@ -27,6 +27,48 @@
   let showQual = true;
   let qualMatchIndexByTeam: Record<number, number> = {};
 
+  // ─── Picklist sorting ─────────────────────────────────────────────────────────
+  let showPicklistDropdown = false;
+  let picklists: Record<string, { name: string; teams: number[] }> = {};
+  let selectedPicklist: string | null = null;
+
+  function loadPicklists() {
+    try {
+      const raw = sessionStorage.getItem("picklists");
+      if (!raw) { picklists = {}; return; }
+      const parsed = JSON.parse(raw) as Record<string, any>;
+      const result: Record<string, { name: string; teams: number[] }> = {};
+      for (const [key, val] of Object.entries(parsed)) {
+        if (!val || typeof val !== "object") continue;
+        const displayName = String(val.name ?? key);
+        const teams: number[] = Array.isArray(val.teams)
+          ? val.teams.map((t: any) => Number(t?.team_number ?? t)).filter((n: number) => !isNaN(n))
+          : [];
+        result[key] = { name: displayName, teams };
+      }
+      picklists = result;
+    } catch {
+      picklists = {};
+    }
+  }
+
+  function getPicklistKeys(): string[] {
+    return Object.keys(picklists);
+  }
+
+  function getPicklistDisplayName(key: string): string {
+    return picklists[key]?.name ?? key;
+  }
+
+  function getPicklistTeamCount(key: string): number {
+    return picklists[key]?.teams.length ?? 0;
+  }
+
+  function selectPicklist(name: string | null) {
+    selectedPicklist = name;
+    showPicklistDropdown = false;
+  }
+
   function toggleTeamVisibility(team: number) {
     const next = new Set(hiddenTeams);
     if (next.has(team)) next.delete(team);
@@ -152,6 +194,7 @@
       showFilterDropdown = false;
       showMatchDropdown = false;
       showDataDropdown = false;
+      showPicklistDropdown = false;
     }
   }
 
@@ -508,6 +551,8 @@
     fieldImg = new Image();
     fieldImg.src = fieldImageSrc;
 
+    loadPicklists();
+
     try {
       const teamsResult = await fetchTeams(eventCode);
       teamsMap = new Map(
@@ -647,7 +692,25 @@
     if (updated.join(",") !== cardOrder.join(",")) cardOrder = updated;
   }
 
-  $: visibleCards = cardOrder.filter(t => !hiddenTeams.has(t));
+  // ─── Picklist-sorted card order ───────────────────────────────────────────────
+  $: sortedCardOrder = (() => {
+    if (!selectedPicklist || !picklists[selectedPicklist]) return cardOrder;
+
+    const picklistTeams = picklists[selectedPicklist].teams.map(Number);
+    const picklistSet = new Set(picklistTeams);
+
+    // Teams in the picklist that also have data, in picklist order
+    const cardOrderNums = cardOrder.map(Number);
+    const cardOrderSet = new Set(cardOrderNums);
+    const inList = picklistTeams.filter(t => cardOrderSet.has(t));
+
+    // Teams not in the picklist, preserving existing cardOrder
+    const notInList = cardOrderNums.filter(t => !picklistSet.has(t));
+
+    return [...inList, ...notInList];
+  })();
+
+  $: visibleCards = sortedCardOrder.filter(t => !hiddenTeams.has(t));
   $: hiddenCount = hiddenTeams.size;
 
   $: availableMatches = (() => {
@@ -702,6 +765,13 @@
       ...qualMatchIndexByTeam,
       [team]: Math.min(rows.length - 1, current + 1),
     };
+  }
+
+  // Return the rank of a team within the selected picklist (1-indexed), or null
+  function getPicklistRank(team: number): number | null {
+    if (!selectedPicklist || !picklists[selectedPicklist]) return null;
+    const idx = picklists[selectedPicklist].teams.map(Number).indexOf(Number(team));
+    return idx === -1 ? null : idx + 1;
   }
 
   $: if (colorblindMode) {
@@ -849,6 +919,60 @@
         {/if}
       </div>
 
+      <!-- Picklist sort dropdown -->
+      <div class="filter-dropdown-wrapper">
+        <button
+          class="filter-btn"
+          on:click|stopPropagation={() => { loadPicklists(); showPicklistDropdown = !showPicklistDropdown; }}
+        >
+          <span class="filter-icon">▼</span>
+          {#if selectedPicklist}
+            <span class="picklist-active-label">⭐ {getPicklistDisplayName(selectedPicklist)}</span>
+          {:else}
+            Sort by Picklist
+          {/if}
+        </button>
+
+        {#if showPicklistDropdown}
+          <div class="filter-dropdown">
+            <div class="filter-dropdown-header">
+              <span class="filter-dropdown-title">Sort by Picklist</span>
+              {#if selectedPicklist}
+                <div class="filter-actions">
+                  <button class="action-link" on:click={() => selectPicklist(null)}>Clear</button>
+                </div>
+              {/if}
+            </div>
+            <div class="filter-list">
+              {#if getPicklistKeys().length === 0}
+                <div class="picklist-empty">No picklists found in session.</div>
+              {:else}
+                <!-- "No sort" option -->
+                <button
+                  class="filter-item picklist-option"
+                  class:picklist-selected={selectedPicklist === null}
+                  on:click={() => selectPicklist(null)}
+                >
+                  <span class="picklist-radio">{selectedPicklist === null ? "●" : "○"}</span>
+                  <span class="filter-team-num" style="color: #888;">Default order</span>
+                </button>
+                {#each getPicklistKeys() as key}
+                  <button
+                    class="filter-item picklist-option"
+                    class:picklist-selected={selectedPicklist === key}
+                    on:click={() => selectPicklist(key)}
+                  >
+                    <span class="picklist-radio">{selectedPicklist === key ? "●" : "○"}</span>
+                    <span class="filter-team-num">{getPicklistDisplayName(key)}</span>
+                    <span class="filter-team-name">{getPicklistTeamCount(key)} teams</span>
+                  </button>
+                {/each}
+              {/if}
+            </div>
+          </div>
+        {/if}
+      </div>
+
       <!-- Colorblind mode dropdown -->
       <select
         bind:value={colorblindMode}
@@ -881,11 +1005,13 @@
           {@const teamName = teamsMap.get(team)}
           {@const qual = qualDataByTeam[team] ?? []}
           {@const pitEntries = pitDataByTeam[team] ?? []}
+          {@const picklistRank = getPicklistRank(team)}
           <!-- svelte-ignore a11y-no-static-element-interactions -->
           <div
             class="team-card"
             class:dragging={draggedTeam === team}
             class:drag-over={dragOverTeam === team && draggedTeam !== team}
+            class:picklist-highlighted={picklistRank !== null}
             draggable="true"
             on:dragstart={(e) => onDragStart(e, team)}
             on:dragover={(e) => onDragOver(e, team)}
@@ -894,6 +1020,13 @@
           >
             <!-- Drag handle hint -->
             <div class="drag-handle" title="Drag to reorder">⠿</div>
+
+            <!-- Picklist rank badge -->
+            {#if picklistRank !== null}
+              <div class="picklist-rank-badge" title="Rank in {getPicklistDisplayName(selectedPicklist)}">
+                #{picklistRank}
+              </div>
+            {/if}
 
             <!-- Card Header -->
             <div class="card-header">
@@ -1205,6 +1338,18 @@
     letter-spacing: 0.4px;
   }
 
+  /* Active picklist label inside the button */
+  .picklist-active-label {
+    color: #ffd966;
+    font-size: 0.85rem;
+    font-weight: 800;
+    letter-spacing: 0.2px;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .filter-dropdown {
     position: absolute;
     top: calc(100% + 6px);
@@ -1296,6 +1441,39 @@
     text-overflow: ellipsis;
   }
 
+  /* ── Picklist dropdown specifics ── */
+  .picklist-option {
+    background: none;
+    border: none;
+    width: 100%;
+    text-align: left;
+    color: inherit;
+    font-family: inherit;
+  }
+  .picklist-option.picklist-selected {
+    background: rgba(255, 217, 102, 0.08);
+  }
+  .picklist-option.picklist-selected .filter-team-num {
+    color: #ffd966;
+  }
+  .picklist-radio {
+    font-size: 0.75rem;
+    color: #888;
+    flex-shrink: 0;
+    width: 14px;
+    line-height: 1;
+  }
+  .picklist-option.picklist-selected .picklist-radio {
+    color: #ffd966;
+  }
+  .picklist-empty {
+    padding: 14px 16px;
+    font-size: 0.78rem;
+    color: #666;
+    font-style: italic;
+    text-align: center;
+  }
+
   /* ── Teams Grid ── */
   .teams-grid {
     display: grid;
@@ -1330,6 +1508,14 @@
     box-shadow: 0 0 0 3px rgba(255,255,255,0.25), 0 8px 30px rgba(200,27,0,0.3);
     transform: scale(1.01);
   }
+  .team-card.picklist-highlighted {
+    border-color: rgba(255, 217, 102, 0.5);
+    box-shadow: 0 4px 20px rgba(255,217,102,0.12);
+  }
+  .team-card.picklist-highlighted:hover {
+    border-color: #ffd966;
+    box-shadow: 0 8px 30px rgba(255,217,102,0.22);
+  }
 
   .drag-handle {
     position: absolute;
@@ -1345,11 +1531,32 @@
   }
   .team-card:hover .drag-handle { color: rgba(255,255,255,0.5); }
 
+  /* ── Picklist rank badge ── */
+  .picklist-rank-badge {
+    position: absolute;
+    top: 10px;
+    left: 12px;
+    background: rgba(255, 217, 102, 0.15);
+    border: 1px solid rgba(255, 217, 102, 0.5);
+    color: #ffd966;
+    font-size: 0.62rem;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    z-index: 2;
+    user-select: none;
+  }
+
   .card-header {
     display: flex; align-items: center; justify-content: space-between;
     padding: 14px 36px 12px 16px;
     background: linear-gradient(90deg, rgba(200,27,0,0.18) 0%, transparent 100%);
     border-bottom: 1px solid rgba(200,27,0,0.25);
+  }
+  /* Shift header content right when rank badge is showing */
+  .picklist-highlighted .card-header {
+    padding-left: 52px;
   }
   .team-identity { display: flex; flex-direction: column; gap: 2px; }
   .team-number { font-size: 1.5rem; font-weight: 900; color: var(--red); line-height: 1; }

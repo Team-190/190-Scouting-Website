@@ -210,11 +210,13 @@ app.get("/api/getQualitativeScouting", validateEventCode, async (req, res) => {
 
 app.get("/api/getPitScouting", validateEventCode, async (req, res) => {
   const { eventCode } = req;
-
   let localTeams = [];
   try {
-    if (req.query.localTeams)
-      localTeams = JSON.parse(decodeURIComponent(req.query.localTeams));
+    if (req.query.localTeams) {
+      const parsed = JSON.parse(decodeURIComponent(req.query.localTeams));
+      // Handle both array and object (use keys if object)
+      localTeams = Array.isArray(parsed) ? parsed : Object.keys(parsed);
+    }
   } catch (e) {}
 
   await ensureEventCodeExists("pitScoutingData", eventCode);
