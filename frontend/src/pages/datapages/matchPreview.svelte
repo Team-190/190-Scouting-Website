@@ -43,6 +43,8 @@
   } from "../../utils/pageUtils.js";
   import { getIndexedDBStore } from '../../utils/indexedDB';
   import { matchPreviewCache } from '../../stores/matchPreviewCache.js';
+  import { readQualScoutingFromIDB } from "../../utils/api.js";
+  import fieldImageSrc from "../../images/FieldImage.png";
 
   ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -87,6 +89,10 @@
   let domNodeRight, domNode4, domNode5;
   let gridInstance, gridInstance2, gridInstance3;
   let gridInstanceRight, gridInstance4, gridInstance5;
+
+  let qualScoutingByTeam: Record<string, any[]> = {};
+  let fieldImg: HTMLImageElement | null = null;
+  let autoPathCanvases: Map<HTMLCanvasElement, { matchRow: any }> = new Map();
 
   // ─── Value Helpers ────────────────────────────────────────────────────────────
 
@@ -198,6 +204,13 @@
     if (inverted) return val <= p25 ? 75 : val <= p50 ? 50 : val <= p75 ? 25 : 0;
     return val >= p75 ? 75 : val >= p50 ? 50 : val >= p25 ? 25 : 0;
   }
+
+  function getAutoPathRows(team: string): any[] {
+  const rows = qualScoutingByTeam[team] ?? [];
+  return rows.filter(r =>
+    r.AutoPath && Array.isArray(r.AutoPath) && r.AutoPath.length > 0
+  ).sort((a, b) => Number(b.Match ?? b.match ?? 0) - Number(a.Match ?? a.match ?? 0));
+}
 
   function colorFromStats(
     v: any,
@@ -697,6 +710,124 @@
       .map((node, i) => node && blueAlliance[i] ? buildGridForTeam(blueAlliance[i], node, globalStatsCache, allMatches, coprs) : null);
   }
 
+
+function drawAutoPath(canvas: HTMLCanvasElement, matchRow: any) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const W = canvas.width;
+  const H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  if (fieldImg && fieldImg.complete && fieldImg.naturalWidth > 0) {
+    const imgW = fieldImg.naturalWidth;
+    const imgH = fieldImg.naturalHeight;
+    const cropPct = 0.15;
+    const sx = imgW * cropPct;
+    const sw = imgW * (1 - 2 * cropPct);
+    const srcAspect = sw / imgH;
+    const dstAspect = W / H;
+    let finalSx = sx, finalSy = 0, finalSw = sw, finalSh = imgH;
+    const verticalBias = 0.6;
+    if (dstAspect > srcAspect) {
+      const needed = sw / dstAspect;
+      finalSy = (imgH - needed) * verticalBias;
+      finalSh = needed;
+    } else {
+      const needed = imgH * dstAspect;
+      finalSx = sx + (sw - needed) / 2;
+      finalSw = needed;
+    }
+    ctx.drawImage(fieldImg, finalSx, finalSy, finalSw, finalSh, 0, 0, W, H);
+  } else {
+    ctx.fillStyle = "#111";
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  const RECORDED_W = 1200;
+  const RECORDED_H = 600;
+  const scaleX = W / RECORDED_W;
+  const scaleY = H / RECORDED_H;
+
+  if (matchRow?.AutoPath && Array.isArray(matchRow.AutoPath)) {
+    const allPaths = matchRow.AutoPath.filter((path: any[]) => Array.isArray(path) && path.length >= 2);
+    if (allPaths.length === 0) return;
+
+    const allPoints: any[] = [];
+    allPaths.forEach((path: any[]) => allPoints.push(...path));
+
+    const px = (p: any) => p.x * scaleX;
+    const py = (p: any) => p.y * scaleY;
+    const totalPoints = allPoints.length;
+
+    const mode = COLOR_MODES[colorblindMode] || COLOR_MODES.normal;
+    const [r1, g1, b1] = mode.below;
+    const [r2, g2, b2] = mode.above;
+    const lerpCol = (t: number) => {
+      const r = Math.round(r1 + (r2 - r1) * t);
+      const g = Math.round(g1 + (g2 - g1) * t);
+      const b = Math.round(b1 + (b2 - b1) * t);
+      return `rgb(${r},${g},${b})`;
+    };
+
+    for (let i = 1; i < totalPoints; i++) {
+      const t = (i - 1) / (totalPoints - 1);
+      ctx.beginPath();
+      ctx.moveTo(px(allPoints[i - 1]), py(allPoints[i - 1]));
+      ctx.lineTo(px(allPoints[i]), py(allPoints[i]));
+      ctx.strokeStyle = lerpCol(t);
+      ctx.lineWidth = 2;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.stroke();
+    }
+
+    // Draw end dot
+    const last = allPoints[totalPoints - 1];
+    ctx.beginPath();
+    ctx.arc(px(last), py(last), 4, 0, Math.PI * 2);
+    ctx.fillStyle = lerpCol(1);
+    ctx.fill();
+
+    // Draw start dot
+    const first = allPoints[0];
+    ctx.beginPath();
+    ctx.arc(px(first), py(first), 4, 0, Math.PI * 2);
+    ctx.fillStyle = lerpCol(0);
+    ctx.fill();
+  }
+}
+
+function initAutoPathCanvas(canvas: HTMLCanvasElement, matchRow: any) {
+  autoPathCanvases.set(canvas, { matchRow });
+  const tryDraw = () => drawAutoPath(canvas, matchRow);
+  if (fieldImg && fieldImg.complete && fieldImg.naturalWidth > 0) {
+    tryDraw();
+  } else if (fieldImg) {
+    fieldImg.addEventListener("load", tryDraw, { once: true });
+  }
+  return {
+    update(newMatchRow: any) {
+      autoPathCanvases.set(canvas, { matchRow: newMatchRow });
+      drawAutoPath(canvas, newMatchRow);
+    },
+    destroy() {
+      autoPathCanvases.delete(canvas);
+    }
+  };
+}
+
+function getAutoPathForTeam(teamNum: string): any | null {
+  const rows = qualScoutingByTeam[teamNum] ?? [];
+  // Find the row matching the current match number if possible
+  const matchNum = selectedMatch ? selectedMatch.split("_")[1]?.replace(/\D/g, "") : null;
+  if (matchNum) {
+    const matchRow = rows.find(r => String(r.Match ?? r.match) === matchNum);
+    if (matchRow?.AutoPath) return matchRow;
+  }
+  // Fall back to most recent match with an AutoPath
+  return [...rows].reverse().find(r => r.AutoPath && Array.isArray(r.AutoPath) && r.AutoPath.length > 0) ?? null;
+}
+
   // ─── Event Handlers ───────────────────────────────────────────────────────────
 
   async function onMatchChange(e: Event) {
@@ -747,6 +878,10 @@
   function onColorblindChange(e: Event) {
     colorblindMode = (e.target as HTMLSelectElement).value;
     localStorage.setItem("colorblindMode", colorblindMode);
+    // Redraw auto path canvases with new color mode
+    for (const [canvas, { matchRow }] of autoPathCanvases) {
+      drawAutoPath(canvas, matchRow);
+    }
     loadAllAllianceTeams();
   }
 
@@ -974,6 +1109,28 @@
         try {
           const coprData = await fetchCOPRs(eventCode);
           coprs = coprData || {};
+          // Load qual scouting data for auto paths
+          const rawQual = await readQualScoutingFromIDB({});
+          const normalizedQual: Record<string, any[]> = {};
+          for (const [teamKey, teamData] of Object.entries(rawQual)) {
+            const numKey = String(teamKey).replace(/\D/g, "");
+            if (!teamData || typeof teamData !== "object") continue;
+            const rows: any[] = [];
+            if (Array.isArray(teamData)) {
+              rows.push(...teamData);
+            } else {
+              for (const matchData of Object.values(teamData as Record<string, any>)) {
+                if (Array.isArray(matchData)) rows.push(...matchData);
+                else if (matchData && typeof matchData === "object") rows.push(matchData);
+              }
+            }
+            normalizedQual[numKey] = rows.sort((a, b) => Number(a.Match ?? a.match ?? 0) - Number(b.Match ?? b.match ?? 0));
+          }
+          qualScoutingByTeam = normalizedQual;
+
+          // Load field image for auto path rendering
+          fieldImg = new Image();
+          fieldImg.src = fieldImageSrc;
         } catch (err) {
           console.warn("Failed to fetch COPRs:", err);
           coprs = {};
@@ -1056,6 +1213,7 @@
     {/if}
   </div>
 
+  <!-- Red Alliance -->
   <div class="grid-wrapper">
     <!-- Red Alliance -->
     <div class="grid-column">
@@ -1071,9 +1229,28 @@
                 OPR: {teamOPRs[team].toFixed(2)}
               </span>
             {/if}
-            <img src={fetchGraceRating(team)}  alt="Grace Rating"  style="width: 60px;" />
+            <img src={fetchGraceRating(team)} alt="Grace Rating" style="width: 60px;" />
             <img src={fetchAnanthRating(team)} alt="Ananth Rating" style="width: 60px;" />
           </h3>
+          {#if getAutoPathRows(team).length > 0}
+            {@const autoPathRows = getAutoPathRows(team)}
+            <div class="auto-path-gallery-wrapper">
+              <div class="auto-path-gallery-label">Auto Paths ({autoPathRows.length} match{autoPathRows.length !== 1 ? "es" : ""})</div>
+              <div class="auto-path-gallery">
+                {#each autoPathRows as pathRow}
+                  <div class="auto-path-gallery-item">
+                    <div class="auto-path-match-label">Match {pathRow.Match ?? pathRow.match}</div>
+                    <canvas use:initAutoPathCanvas={pathRow} width={300} height={150} class="auto-path-canvas"></canvas>
+                    <div class="path-legend-inline">
+                      <span class="legend-label">Start</span>
+                      <div class="legend-gradient" style="--start-color: rgb({COLOR_MODES[colorblindMode].below.join(',')}); --end-color: rgb({COLOR_MODES[colorblindMode].above.join(',')});"></div>
+                      <span class="legend-label">End</span>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            </div>
+          {/if}
           {#if i === 0}
             <div class="grid-container ag-theme-quartz" bind:this={domNode} style="height: {gridHeight}px;"></div>
           {:else if i === 1}
@@ -1084,7 +1261,6 @@
         </div>
       {/each}
     </div>
-
     <!-- Blue Alliance -->
     <div class="grid-column">
       {#each [0, 1, 2] as i}
@@ -1099,9 +1275,28 @@
                 OPR: {teamOPRs[team].toFixed(2)}
               </span>
             {/if}
-            <img src={fetchGraceRating(team)}  alt="Grace Rating"  style="width: 60px;" />
+            <img src={fetchGraceRating(team)} alt="Grace Rating" style="width: 60px;" />
             <img src={fetchAnanthRating(team)} alt="Ananth Rating" style="width: 60px;" />
           </h3>
+          {#if getAutoPathRows(team).length > 0}
+            {@const autoPathRows = getAutoPathRows(team)}
+            <div class="auto-path-gallery-wrapper">
+              <div class="auto-path-gallery-label">Auto Paths ({autoPathRows.length} match{autoPathRows.length !== 1 ? "es" : ""})</div>
+              <div class="auto-path-gallery">
+                {#each autoPathRows as pathRow}
+                  <div class="auto-path-gallery-item">
+                    <div class="auto-path-match-label">Match {pathRow.Match ?? pathRow.match}</div>
+                    <canvas use:initAutoPathCanvas={pathRow} width={300} height={150} class="auto-path-canvas"></canvas>
+                    <div class="path-legend-inline">
+                      <span class="legend-label">Start</span>
+                      <div class="legend-gradient" style="--start-color: rgb({COLOR_MODES[colorblindMode].below.join(',')}); --end-color: rgb({COLOR_MODES[colorblindMode].above.join(',')});"></div>
+                      <span class="legend-label">End</span>
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            </div>
+          {/if}
           {#if i === 0}
             <div class="grid-container ag-theme-quartz" bind:this={domNodeRight} style="height: {gridHeight}px;"></div>
           {:else if i === 1}
@@ -1112,8 +1307,10 @@
         </div>
       {/each}
     </div>
-  </div>
-</div>
+
+  </div> <!-- closes grid-wrapper -->
+
+</div> <!-- closes page-wrapper -->
 
 <style>
   :root {
@@ -1248,5 +1445,96 @@
     .team-label { font-size: 0.7rem; min-height: 35px; padding: 0.25rem 0.5rem; }
     .last-match-badge { font-size: 0.55rem; padding: 0.1rem 0.3rem; }
     .opr-badge { font-size: 0.65rem; margin-left: 0.2rem; }
+  }
+
+  .auto-path-gallery-wrapper {
+    margin-bottom: 0.5rem;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .auto-path-gallery-label {
+    padding: 4px 10px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: #ff9980;
+    background: rgba(200,27,0,0.15);
+    border-bottom: 1px solid rgba(200,27,0,0.2);
+  }
+
+  .auto-path-gallery {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    background: #0a0a0a;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(200,27,0,0.4) transparent;
+  }
+
+  .auto-path-gallery::-webkit-scrollbar { height: 4px; }
+  .auto-path-gallery::-webkit-scrollbar-track { background: transparent; }
+  .auto-path-gallery::-webkit-scrollbar-thumb { background: rgba(200,27,0,0.4); border-radius: 2px; }
+
+  .auto-path-gallery-item {
+    position: relative;
+    flex-shrink: 0;
+    width: 220px;
+    border-right: 1px solid rgba(255,255,255,0.06);
+  }
+  .auto-path-gallery-item:last-child { border-right: none; }
+
+  .auto-path-match-label {
+    padding: 3px 8px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.5);
+    background: rgba(255,255,255,0.04);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+
+  .auto-path-canvas {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .path-legend-inline {
+    position: absolute;
+    bottom: 4px; right: 6px;
+    display: flex; align-items: center; gap: 4px;
+    font-size: 0.6rem; font-weight: 700;
+    color: rgba(255,255,255,0.6);
+    letter-spacing: 0.5px; text-transform: uppercase;
+    pointer-events: none;
+  }
+  .legend-label { font-size: 0.6rem; opacity: 0.7; min-width: 24px; text-align: center; }
+  .legend-gradient {
+    width: 36px; height: 4px;
+    background: linear-gradient(to right, var(--start-color, #0077BE), var(--end-color, #FFD60A));
+    border-radius: 2px;
+  }
+
+  .grid-wrapper {
+    width: 100%;
+    max-width: none;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 1rem;
+    padding: 0 1rem 1rem 1rem;
+  }
+
+  .grid-column {
+    flex: 1;
+    min-width: 350px;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
   }
 </style>
