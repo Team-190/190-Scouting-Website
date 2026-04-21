@@ -6,6 +6,8 @@
 
   import Navbar from "./components/Navbar.svelte";
   import Home from "./pages/Home.svelte";
+  import DebugPage from "./pages/DebugPage.svelte";
+  import InfoPage from "./pages/Infopage.svelte";
   import AnanthPage from "./pages/datapages/ananthPage.svelte";
   import GracePage from "./pages/datapages/gracePage.svelte";
   import MarchMadness from "./pages/datapages/marchMadness.svelte";
@@ -19,6 +21,8 @@
 
   const routes = [
     { path: "/", component: Home },
+    { path: "/info", component: InfoPage },
+    { path: "/debug", component: DebugPage },
     { path: "/pickLists", component: PickLists },
     { path: "/singleMetric", component: SingleMetric },
     { path: "/teamView", component: TeamView },

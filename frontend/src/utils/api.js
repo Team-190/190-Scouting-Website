@@ -142,7 +142,26 @@ export async function fetchOPR(eventCode) {
 }
 
 export async function fetchCOPRs(eventCode) {
-  return readFromIndexedDB("COPR", eventCode, false);
+  const cached = await readFromIndexedDB("COPR", eventCode, false);
+  const hasCachedData =
+    cached && typeof cached === "object" && Object.keys(cached).length > 0;
+
+  if (hasCachedData) {
+    return cached;
+  }
+
+  // COPR may be backend-calculated and not yet persisted locally.
+  // Fall back to the backend endpoint and cache the result for subsequent reads.
+  const response = await fetchApi("/api/getCOPR", { eventCode });
+  if (!response.ok) {
+    return cached;
+  }
+
+  const json = await response.json();
+  if (json && typeof json === "object" && Object.keys(json).length > 0) {
+    await setIndexedDBStore("COPR", { key: eventCode, value: json });
+  }
+  return json;
 }
 
 export async function fetchAlliances(eventCode) {
