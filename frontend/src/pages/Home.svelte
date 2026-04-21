@@ -427,6 +427,9 @@
     }
 
     onMount(() => {
+        // Lock scroll only while the home page is active
+        document.body.classList.add("home-no-scroll");
+
         (async () => {
             await loadDbEvents();
             await refreshMatchSchedule();
@@ -439,6 +442,8 @@
         }, 1000 * 60);
 
         return () => {
+            // Restore normal scrolling when navigating away from home
+            document.body.classList.remove("home-no-scroll");
             clearInterval(scheduleTimer);
             if (autoDataRefreshTimer) {
                 clearInterval(autoDataRefreshTimer);
@@ -522,9 +527,13 @@
         --frc-190-black: #4d4d4d;
     }
 
-    :global(html, body) {
-        height: 100%;
+    /*
+     * Only applied while the home page is mounted (added/removed via JS).
+     * Other pages are completely unaffected.
+     */
+    :global(body.home-no-scroll) {
         overflow: hidden;
+        height: 100%;
     }
 
     .container {
