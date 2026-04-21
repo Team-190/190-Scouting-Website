@@ -70,6 +70,20 @@
 				{equationEfs1}
 			</p>
 		</div>
+
+		<div class="example-row-block">
+			<p class="example-row-title">Example Row (Fill In Later)</p>
+			<div class="phase-grid">
+				<div class="phase-box"><span class="phase-label">Auto</span><span class="phase-value"></span></div>
+				<div class="phase-box"><span class="phase-label">Transition</span><span class="phase-value"></span></div>
+				<div class="phase-box"><span class="phase-label">Shift 1</span><span class="phase-value"></span></div>
+				<div class="phase-box"><span class="phase-label">Shift 2</span><span class="phase-value"></span></div>
+				<div class="phase-box"><span class="phase-label">Shift 3</span><span class="phase-value"></span></div>
+				<div class="phase-box"><span class="phase-label">Shift 4</span><span class="phase-value"></span></div>
+				<div class="phase-box"><span class="phase-label">Endgame</span><span class="phase-value"></span></div>
+				<div class="phase-box total-box"><span class="phase-label">Total</span><span class="phase-value"></span></div>
+			</div>
+		</div>
 	</section>
 
 	<section class="info-part">
@@ -115,6 +129,20 @@
 			shooting time. EFS2 is usually better when alliance roles change by phase,
 			because it attributes points shift-by-shift with separate per-phase rates.
 		</p>
+
+		<div class="example-row-block">
+			<p class="example-row-title">Example Row (Fill In Later)</p>
+			<div class="phase-grid">
+				<div class="phase-box"><span class="phase-label">Auto</span><span class="phase-value"></span></div>
+				<div class="phase-box"><span class="phase-label">Transition</span><span class="phase-value"></span></div>
+				<div class="phase-box"><span class="phase-label">Shift 1</span><span class="phase-value"></span></div>
+				<div class="phase-box"><span class="phase-label">Shift 2</span><span class="phase-value"></span></div>
+				<div class="phase-box"><span class="phase-label">Shift 3</span><span class="phase-value"></span></div>
+				<div class="phase-box"><span class="phase-label">Shift 4</span><span class="phase-value"></span></div>
+				<div class="phase-box"><span class="phase-label">Endgame</span><span class="phase-value"></span></div>
+				<div class="phase-box total-box"><span class="phase-label">Total</span><span class="phase-value"></span></div>
+			</div>
+		</div>
 	</section>
 </div>
 
@@ -440,6 +468,58 @@
 		color: #f3e6d5;
 	}
 
+	.example-row-block {
+		margin-top: 0.9rem;
+		padding: 0.7rem 0.8rem;
+		border: 1px solid rgba(255, 255, 255, 0.24);
+		border-radius: 0.45rem;
+		background: rgba(0, 0, 0, 0.2);
+	}
+
+	.example-row-title {
+		margin: 0 0 0.55rem !important;
+		font-size: 0.88rem;
+		font-weight: 700;
+		color: #ffe0b8 !important;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+
+	.phase-grid {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 0.5rem;
+	}
+
+	.phase-box {
+		border: 1px solid rgba(255, 255, 255, 0.26);
+		border-radius: 0.4rem;
+		background: rgba(255, 255, 255, 0.06);
+		padding: 0.45rem 0.55rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+		min-height: 3.2rem;
+	}
+
+	.phase-label {
+		font-size: 0.78rem;
+		font-weight: 700;
+		color: #f8f8f8;
+		line-height: 1.2;
+	}
+
+	.phase-value {
+		display: block;
+		min-height: 1.15rem;
+		border-bottom: 1px dashed rgba(255, 255, 255, 0.35);
+	}
+
+	.total-box {
+		border-color: rgba(255, 213, 106, 0.75);
+		background: rgba(255, 213, 106, 0.12);
+	}
+
 	@keyframes sparkleDrift {
 		0% {
 			transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
@@ -611,6 +691,10 @@
 
 		.info-part:hover {
 			transform: none;
+		}
+
+		.phase-grid {
+			grid-template-columns: repeat(2, minmax(0, 1fr));
 		}
 	}
 
