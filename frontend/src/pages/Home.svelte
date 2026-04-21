@@ -54,6 +54,56 @@
         }
     }
 
+    function normalizeEntries(value) {
+        if (Array.isArray(value)) {
+            return value.filter((entry) => entry && typeof entry === "object");
+        }
+        if (value && typeof value === "object") {
+            return [value];
+        }
+        return [];
+    }
+
+    function mergeEntries(localValue, incomingValue) {
+        const merged = [...normalizeEntries(localValue)];
+        const seenIds = new Set(
+            merged
+                .map((entry) => String(entry?._entryId || ""))
+                .filter(Boolean),
+        );
+
+        for (const entry of normalizeEntries(incomingValue)) {
+            const entryId = String(entry?._entryId || "");
+            if (entryId && seenIds.has(entryId)) continue;
+            if (entryId) seenIds.add(entryId);
+            merged.push(entry);
+        }
+
+        return merged;
+    }
+
+    function countPitEntries(teamData) {
+        return normalizeEntries(teamData).length;
+    }
+
+    function countQualEntries(teamData) {
+        if (!teamData || typeof teamData !== "object") return 0;
+
+        if (Array.isArray(teamData)) {
+            return teamData.length;
+        }
+
+        if (teamData.Match != null || teamData.match != null) {
+            return 1;
+        }
+
+        let total = 0;
+        for (const matchData of Object.values(teamData)) {
+            total += normalizeEntries(matchData).length;
+        }
+        return total;
+    }
+
     function showNotification(message, type = "success", duration = 3000) {
         notification = { message, type };
         setTimeout(() => {
@@ -65,6 +115,37 @@
         return Number(
             match?.predicted_time || match?.time || match?.actual_time || match?.post_result_time || 0,
         );
+    }
+
+    function compareQualificationOrder(a, b) {
+        const aTimestamp = getScheduledTimestamp(a);
+        const bTimestamp = getScheduledTimestamp(b);
+        const aHasTimestamp = aTimestamp > 0;
+        const bHasTimestamp = bTimestamp > 0;
+
+        if (aHasTimestamp && bHasTimestamp && aTimestamp !== bTimestamp) {
+            return aTimestamp - bTimestamp;
+        }
+
+        // Prefer entries with known schedule timestamps; replayed matches can share
+        // match numbers and should be ordered by schedule when available.
+        if (aHasTimestamp !== bHasTimestamp) {
+            return aHasTimestamp ? -1 : 1;
+        }
+
+        const aMatchNumber = Number(a?.match_number);
+        const bMatchNumber = Number(b?.match_number);
+        if (Number.isFinite(aMatchNumber) && Number.isFinite(bMatchNumber) && aMatchNumber !== bMatchNumber) {
+            return aMatchNumber - bMatchNumber;
+        }
+
+        const aSetNumber = Number(a?.set_number);
+        const bSetNumber = Number(b?.set_number);
+        if (Number.isFinite(aSetNumber) && Number.isFinite(bSetNumber) && aSetNumber !== bSetNumber) {
+            return aSetNumber - bSetNumber;
+        }
+
+        return String(a?.key || "").localeCompare(String(b?.key || ""));
     }
 
     function isMatchComplete(match) {
@@ -82,6 +163,27 @@
         const redTeams = match?.alliances?.red?.team_keys || [];
         const blueTeams = match?.alliances?.blue?.team_keys || [];
         return [...redTeams, ...blueTeams].includes(OUR_TEAM_KEY);
+    }
+
+    function getCurrentMatchIndex(qualMatches) {
+        if (!Array.isArray(qualMatches) || qualMatches.length === 0) return -1;
+
+        // Prefer moving forward from the latest completed match so stale replay
+        // placeholders do not pin the UI on an old qualification number.
+        let latestCompletedIndex = -1;
+        for (let i = 0; i < qualMatches.length; i += 1) {
+            if (isMatchComplete(qualMatches[i])) {
+                latestCompletedIndex = i;
+            }
+        }
+
+        if (latestCompletedIndex >= 0 && latestCompletedIndex < qualMatches.length - 1) {
+            return latestCompletedIndex + 1;
+        }
+
+        const firstIncomplete = qualMatches.findIndex((m) => !isMatchComplete(m));
+        if (firstIncomplete >= 0) return firstIncomplete;
+        return qualMatches.length - 1;
     }
 
     function minutesUntil(timestampSec) {
@@ -111,7 +213,7 @@
 
             const qualMatches = (Array.isArray(allMatches) ? allMatches : [])
                 .filter((match) => match?.comp_level === "qm")
-                .sort((a, b) => Number(a?.match_number) - Number(b?.match_number));
+                .sort(compareQualificationOrder);
 
             if (qualMatches.length === 0) {
                 matchSchedule = {
@@ -124,14 +226,25 @@
                 return;
             }
 
-            const currentMatch = qualMatches.find((m) => !isMatchComplete(m)) || qualMatches[qualMatches.length - 1];
-            const ourNextMatch = qualMatches.find((m) => !isMatchComplete(m) && isOurMatch(m))
-                || qualMatches.find((m) => isOurMatch(m));
+            const normalizedCurrentIndex = getCurrentMatchIndex(qualMatches);
+            const currentMatch = qualMatches[normalizedCurrentIndex];
+
+            const ourNextIndex = qualMatches.findIndex(
+                (m, index) => index >= normalizedCurrentIndex && !isMatchComplete(m) && isOurMatch(m),
+            );
+            const fallbackOurNextIndex = qualMatches.findIndex((m) => !isMatchComplete(m) && isOurMatch(m));
+            const anyOurMatchIndex = qualMatches.findIndex((m) => isOurMatch(m));
+            const normalizedOurIndex = ourNextIndex >= 0
+                ? ourNextIndex
+                : fallbackOurNextIndex >= 0
+                    ? fallbackOurNextIndex
+                    : anyOurMatchIndex;
+            const ourNextMatch = normalizedOurIndex >= 0 ? qualMatches[normalizedOurIndex] : null;
 
             const currentNumber = Number(currentMatch?.match_number);
             const ourNumber = Number(ourNextMatch?.match_number);
-            const matchesUntil = Number.isFinite(currentNumber) && Number.isFinite(ourNumber)
-                ? String(Math.max(0, ourNumber - currentNumber))
+            const matchesUntil = normalizedOurIndex >= 0
+                ? String(Math.max(0, normalizedOurIndex - normalizedCurrentIndex))
                 : "—";
 
             matchSchedule = {
@@ -214,21 +327,27 @@
             }
 
             const localPit = forceFullRefresh ? {} : await readPitScoutingFromIDB({});
-            const pitTeams = Object.keys(localPit);
+            const pitCounts = {};
+            for (const [team, entries] of Object.entries(localPit)) {
+                pitCounts[team] = countPitEntries(entries);
+            }
 
-            const pitRes = await fetchPitScouting(eventCode, pitTeams);
+            const pitRes = await fetchPitScouting(eventCode, pitCounts);
             if (!pitRes.ok) {
                 throw new Error(`Failed to fetch pit scouting: HTTP ${pitRes.status}`);
             }
             const newPitData = await parseResponseJson(pitRes, {});
             
-            const combinedPit = { ...localPit, ...newPitData };
+            const combinedPit = { ...localPit };
+            for (const [team, incomingEntries] of Object.entries(newPitData || {})) {
+                combinedPit[team] = mergeEntries(combinedPit[team], incomingEntries);
+            }
             await writePitScoutingToIDB(combinedPit);
 
             const localQual = forceFullRefresh ? {} : await readQualScoutingFromIDB({});
             const qualCounts = {};
             for (const team in localQual) {
-                qualCounts[team] = Object.keys(localQual[team] || {}).length;
+                qualCounts[team] = countQualEntries(localQual[team]);
             }
 
             const qualRes = await fetchQualitativeScouting(eventCode, qualCounts);
@@ -239,7 +358,20 @@
             
             const combinedQual = { ...localQual };
             for (const team in newQualData) {
-                combinedQual[team] = { ...(combinedQual[team] || {}), ...newQualData[team] };
+                const localTeamData =
+                    combinedQual[team] && typeof combinedQual[team] === "object" && !Array.isArray(combinedQual[team])
+                        ? { ...combinedQual[team] }
+                        : {};
+                const incomingTeamData =
+                    newQualData[team] && typeof newQualData[team] === "object" && !Array.isArray(newQualData[team])
+                        ? newQualData[team]
+                        : {};
+
+                for (const [matchKey, incomingMatchData] of Object.entries(incomingTeamData)) {
+                    localTeamData[matchKey] = mergeEntries(localTeamData[matchKey], incomingMatchData);
+                }
+
+                combinedQual[team] = localTeamData;
             }
             await writeQualScoutingToIDB(combinedQual);
 
@@ -295,6 +427,9 @@
     }
 
     onMount(() => {
+        // Lock scroll only while the home page is active
+        document.body.classList.add("home-no-scroll");
+
         (async () => {
             await loadDbEvents();
             await refreshMatchSchedule();
@@ -307,6 +442,8 @@
         }, 1000 * 60);
 
         return () => {
+            // Restore normal scrolling when navigating away from home
+            document.body.classList.remove("home-no-scroll");
             clearInterval(scheduleTimer);
             if (autoDataRefreshTimer) {
                 clearInterval(autoDataRefreshTimer);
@@ -390,12 +527,23 @@
         --frc-190-black: #4d4d4d;
     }
 
+    /*
+     * Only applied while the home page is mounted (added/removed via JS).
+     * Other pages are completely unaffected.
+     */
+    :global(body.home-no-scroll) {
+        overflow: hidden;
+        height: 100%;
+    }
+
     .container {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        min-height: 100vh;
+        height: 100vh;
+        max-height: 100vh;
+        overflow: hidden;
         padding: 1.25rem;
         background: var(--wpi-gray);
         font-family: sans-serif;
