@@ -23,6 +23,11 @@ const getAPILink = () => {
 const defaultAPILink = getAPILink();
 
 import { getIndexedDBStore, setIndexedDBStore } from "./indexedDB";
+import {
+  compressData,
+  getCompressionProtocol,
+  isCompressedEnvelope,
+} from "./compression";
 
 function fetchApi(path, query = {}) {
   const params = new URLSearchParams();
@@ -35,6 +40,54 @@ function fetchApi(path, query = {}) {
   const queryString = params.toString();
   const route = `${defaultAPILink}${path}${queryString ? `?${queryString}` : ""}`;
   return fetch(route);
+}
+
+async function postApi(path, payload = {}) {
+  const route = `${defaultAPILink}${path}`;
+  const protocol = getCompressionProtocol();
+
+  const sendPayload = (body) =>
+    fetch(route, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+  let compressedPayload = null;
+  try {
+    compressedPayload = compressData(payload);
+    if (!isCompressedEnvelope(compressedPayload)) {
+      throw new Error("Compression did not return a valid envelope");
+    }
+  } catch (error) {
+    console.warn("Payload compression failed, sending plain JSON", error);
+    return sendPayload(payload);
+  }
+
+  const compressedResponse = await sendPayload(compressedPayload);
+  if (compressedResponse.status !== 400 && compressedResponse.status !== 415) {
+    return compressedResponse;
+  }
+
+  console.warn(
+    `Compressed POST failed with status ${compressedResponse.status}; retrying plain JSON`,
+    { path, protocol },
+  );
+  return sendPayload(payload);
+}
+
+async function postApiExpectText(path, payload = {}) {
+  const response = await postApi(path, payload);
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `HTTP error! status: ${response.status}, message: ${errorText}`,
+    );
+  }
+
+  const result = await response.text();
+  console.log("Success:", result);
+  return result;
 }
 
 export function fetchEvents() {
@@ -60,10 +113,18 @@ export function fetchQualitativeScouting(eventCode, localCounts = {}) {
   });
 }
 
-export function fetchPitScouting(eventCode, localTeams = []) {
+export function fetchPitScouting(eventCode, localState = {}) {
+  if (Array.isArray(localState)) {
+    // Backward compatibility for older call sites still passing team arrays.
+    return fetchApi("/api/getPitScouting", {
+      eventCode,
+      localTeams: JSON.stringify(localState),
+    });
+  }
+
   return fetchApi("/api/getPitScouting", {
     eventCode,
-    localTeams: JSON.stringify(localTeams),
+    localCounts: JSON.stringify(localState || {}),
   });
 }
 
@@ -185,11 +246,7 @@ export async function fetchElimsHaveStarted(eventCode) {
 export async function refreshEventCaches(eventCode) {
   try {
     // First, trigger the backend to populate its JSON caches
-    await fetch(`${defaultAPILink}/api/postEventCode`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ eventCode }),
-    });
+    await postApi("/api/postEventCode", { eventCode });
 
     // Now fetch all the cached data from the backend and store in IndexedDB
     const results = await Promise.allSettled([
@@ -278,6 +335,61 @@ export async function refreshEventCaches(eventCode) {
 const PIT_QUEUE_KEY = "pitScouting";
 const QUAL_QUEUE_KEY = "scoutingData";
 
+function createClientEntryId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function normalizeTeamKey(team) {
+  const stripped = String(team ?? "").replace(/\D/g, "");
+  return stripped || String(team ?? "");
+}
+
+function ensureEntryPayload(formData, providedEntryId = null) {
+  const entryId = String(
+    providedEntryId
+      || (formData && typeof formData === "object" ? formData._entryId : "")
+      || createClientEntryId(),
+  );
+
+  if (formData && typeof formData === "object" && !Array.isArray(formData)) {
+    return {
+      entryId,
+      payload: {
+        ...formData,
+        _entryId: entryId,
+      },
+    };
+  }
+
+  return {
+    entryId,
+    payload: {
+      value: formData,
+      _entryId: entryId,
+    },
+  };
+}
+
+function appendUniqueEntry(existingValue, nextEntry) {
+  const normalizedExisting = Array.isArray(existingValue)
+    ? existingValue
+    : existingValue && typeof existingValue === "object"
+      ? [existingValue]
+      : [];
+
+  const nextEntryId = String(nextEntry?._entryId || "");
+  if (
+    nextEntryId
+    && normalizedExisting.some(
+      (entry) => String(entry?._entryId || "") === nextEntryId,
+    )
+  ) {
+    return normalizedExisting;
+  }
+
+  return [...normalizedExisting, nextEntry];
+}
+
 function canUseLocalStorage() {
   return typeof window !== "undefined" && typeof localStorage !== "undefined";
 }
@@ -297,6 +409,45 @@ function writeLocalJson(key, value) {
   if (!canUseLocalStorage()) return;
   localStorage.setItem(key, JSON.stringify(value));
 }
+
+// Version migration: Clear stale cache when IndexedDB version bumps
+function migrateStorageIfNeeded() {
+  if (!canUseLocalStorage()) return;
+  
+  const STORAGE_VERSION_KEY = "__storageVersion";
+  const CURRENT_VERSION = 5;
+  const lastVersion = readLocalJson(STORAGE_VERSION_KEY, 0);
+  
+  if (lastVersion !== CURRENT_VERSION) {
+    // Clear cache entries that may cause conflicts after schema updates
+    const keysToMigrate = [
+      "localPitCounts",
+      "localQualCounts",
+      "cachedPitData",
+      "cachedQualData",
+    ];
+    
+    for (const key of keysToMigrate) {
+      try {
+        localStorage.removeItem(key);
+      } catch {
+        // Silently ignore if removal fails
+      }
+    }
+    
+    // Update version marker
+    try {
+      localStorage.setItem(STORAGE_VERSION_KEY, JSON.stringify(CURRENT_VERSION));
+    } catch {
+      // Silently ignore if write fails
+    }
+    
+    console.log(`[Migration] Updated storage from v${lastVersion} to v${CURRENT_VERSION}`);
+  }
+}
+
+// Run migration on module load
+migrateStorageIfNeeded();
 
 /**
  * Read pit scouting data from IndexedDB
@@ -353,15 +504,26 @@ function readQueue(key) {
 
 async function updatePitMirror(team, formData) {
   const pitData = await readPitScoutingFromIDB({});
-  pitData[String(team)] = formData;
+  const teamKey = normalizeTeamKey(team);
+  const { payload } = ensureEntryPayload(formData);
+  pitData[teamKey] = appendUniqueEntry(pitData[teamKey], payload);
   await writePitScoutingToIDB(pitData);
 }
 
 async function updateQualMirror(team, match, formData) {
   const qualData = await readQualScoutingFromIDB({});
-  const teamKey = String(team).replace(/\D/g, "");
-  qualData[teamKey] ||= {};
-  qualData[teamKey][String(match)] = formData;
+  const teamKey = normalizeTeamKey(team);
+  const matchKey = String(match);
+  const { payload } = ensureEntryPayload(formData);
+
+  if (!qualData[teamKey] || typeof qualData[teamKey] !== "object" || Array.isArray(qualData[teamKey])) {
+    qualData[teamKey] = {};
+  }
+
+  qualData[teamKey][matchKey] = appendUniqueEntry(
+    qualData[teamKey][matchKey],
+    payload,
+  );
   await writeQualScoutingToIDB(qualData);
 }
 
@@ -385,10 +547,11 @@ export async function hasServerConnection(timeoutMs = 2500) {
 }
 
 export async function queuePitScoutingForSync(event, team, formData) {
+  const { entryId, payload } = ensureEntryPayload(formData);
   const queue = readQueue(PIT_QUEUE_KEY);
-  queue.push({ event, team: String(team), formData });
+  queue.push({ event, team: String(team), formData: payload, entryId });
   writeLocalJson(PIT_QUEUE_KEY, queue);
-  await updatePitMirror(team, formData);
+  await updatePitMirror(team, payload);
   return queue.length;
 }
 
@@ -398,10 +561,17 @@ export async function queueQualitativeScoutingForSync(
   match,
   formData,
 ) {
+  const { entryId, payload } = ensureEntryPayload(formData);
   const queue = readQueue(QUAL_QUEUE_KEY);
-  queue.push({ event, team: String(team), match: String(match), formData });
+  queue.push({
+    event,
+    team: String(team),
+    match: String(match),
+    formData: payload,
+    entryId,
+  });
   writeLocalJson(QUAL_QUEUE_KEY, queue);
-  await updateQualMirror(team, match, formData);
+  await updateQualMirror(team, match, payload);
   return queue.length;
 }
 
@@ -422,23 +592,30 @@ export async function flushPitScoutingQueue() {
     const item = queue[i];
     const event = item.event || localStorage.getItem("eventCode");
     const team = item.team || item.teamNumber;
-    const formData = item.formData || item;
+    const { entryId, payload } = ensureEntryPayload(item.formData || item, item.entryId);
+    const normalizedItem = {
+      ...item,
+      event,
+      team: String(team || ""),
+      formData: payload,
+      entryId,
+    };
 
-    if (!event || !team || !formData) {
-      remaining.push(item);
+    if (!event || !team || !payload) {
+      remaining.push(normalizedItem);
       continue;
     }
 
     try {
-      const response = await postPitScouting(event, team, formData);
+      const response = await postPitScouting(event, team, payload);
       if (response.ok) {
         uploaded += 1;
-        await updatePitMirror(team, formData);
+        await updatePitMirror(team, payload);
       } else {
-        remaining.push(item);
+        remaining.push(normalizedItem);
       }
     } catch {
-      remaining.push(item, ...queue.slice(i + 1));
+      remaining.push(normalizedItem, ...queue.slice(i + 1));
       break;
     }
   }
@@ -465,10 +642,18 @@ export async function flushQualitativeScoutingQueue() {
     const event = item.event || localStorage.getItem("eventCode");
     const team = item.team || item.Team;
     const match = item.match || item.Match;
-    const formData = item.formData || item;
+    const { entryId, payload } = ensureEntryPayload(item.formData || item, item.entryId);
+    const normalizedItem = {
+      ...item,
+      event,
+      team: String(team || ""),
+      match: String(match || ""),
+      formData: payload,
+      entryId,
+    };
 
-    if (!event || !team || !match || !formData) {
-      remaining.push(item);
+    if (!event || !team || !match || !payload) {
+      remaining.push(normalizedItem);
       continue;
     }
 
@@ -477,16 +662,16 @@ export async function flushQualitativeScoutingQueue() {
         event,
         team,
         match,
-        formData,
+        payload,
       );
       if (response.ok) {
         uploaded += 1;
-        await updateQualMirror(team, match, formData);
+        await updateQualMirror(team, match, payload);
       } else {
-        remaining.push(item);
+        remaining.push(normalizedItem);
       }
     } catch {
-      remaining.push(item, ...queue.slice(i + 1));
+      remaining.push(normalizedItem, ...queue.slice(i + 1));
       break;
     }
   }
@@ -585,94 +770,32 @@ export async function fetchStatboticsMatchPrediction(matchKey) {
 ////////////// POST Methods \\\\\\\\\\\\\\
 ////////////// POST Methods \\\\\\\\\\\\\\
 
+// Generic POST helper that wraps the shared postApi logic
+async function makePostRequest(endpoint, payload, expectText = false) {
+  const response = await (expectText ? postApiExpectText : postApi)(endpoint, payload);
+  return response;
+}
+
 export async function postEventCode(eventCode) {
-  const response = await fetch(`${defaultAPILink}/api/postEventCode`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ eventCode }),
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `HTTP error! status: ${response.status}, message: ${errorText}`,
-    );
-  }
-  const result = await response.text();
-  console.log("Success:", result);
-  return result;
+  return makePostRequest("/api/postEventCode", { eventCode }, true);
 }
 
 export async function postGracePage(event, team, rating) {
-  const response = await fetch(`${defaultAPILink}/api/postRatings`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ event, team, rating }),
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `HTTP error! status: ${response.status}, message: ${errorText}`,
-    );
-  }
-  const result = await response.text();
-  console.log("Success:", result);
-  return result;
+  return makePostRequest("/api/postRatings", { event, team, rating }, true);
 }
 
 export async function postAnanthPage(event, team, rating) {
-  const response = await fetch(`${defaultAPILink}/api/postHPRatings`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ event, team, rating }),
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `HTTP error! status: ${response.status}, message: ${errorText}`,
-    );
-  }
-  const result = await response.text();
-  console.log("Success:", result);
-  return result;
+  return makePostRequest("/api/postHPRatings", { event, team, rating }, true);
 }
 
 export async function postPitScouting(event, team, formData) {
-  const response = await fetch(`${defaultAPILink}/api/postPitScouting`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ event, team, formData }),
-  });
-  return response;
+  return makePostRequest("/api/postPitScouting", { event, team, formData });
 }
 
 export async function postQualitativeScouting(event, team, match, formData) {
-  const response = await fetch(
-    `${defaultAPILink}/api/postQualitativeScouting`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ event, team, match, formData }),
-    },
-  );
-  return response;
+  return makePostRequest("/api/postQualitativeScouting", { event, team, match, formData });
 }
 
 export async function postGompeiMadnessBracket(bracket) {
-  const response = await fetch(
-    `${defaultAPILink}/api/postGompeiMadnessBracket`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ bracket }),
-    },
-  );
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `HTTP error! status: ${response.status}, message: ${errorText}`,
-    );
-  }
-  const result = await response.text();
-  console.log("Success:", result);
-  return result;
+  return makePostRequest("/api/postGompeiMadnessBracket", { bracket }, true);
 }
