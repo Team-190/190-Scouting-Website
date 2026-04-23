@@ -148,7 +148,16 @@ const scoutingWriteQueues = new Map();
 
 const validateEventCode = (req, res, next) => {
   const code = req.query.eventCode || req.body?.event;
-  if (!code) return res.sendStatus(403);
+  if (!code) {
+    console.error("validateEventCode failed", {
+      url: req.originalUrl || req.url,
+      method: req.method,
+      query: req.query,
+      body: req.body,
+      bodyKeys: req.body ? Object.keys(req.body) : null,
+    });
+    return res.sendStatus(403);
+  }
   req.eventCode = code;
   next();
 };
@@ -332,12 +341,25 @@ app.use((req, res, next) => {
     return next();
   }
 
-  if (!isCompressedPayload(req.body)) {
+  const isCompressed = isCompressedPayload(req.body);
+  if (!isCompressed) {
+    appendRunLog("debug", "Received non-compressed payload", {
+      url: req.originalUrl || req.url,
+      method: req.method,
+      bodyKeys: req.body ? Object.keys(req.body) : null,
+    });
     return next();
   }
 
   try {
+    const original = JSON.parse(JSON.stringify(req.body));
     req.body = decodeCompressedPayload(req.body);
+    appendRunLog("debug", "Decompressed payload successfully", {
+      url: req.originalUrl || req.url,
+      method: req.method,
+      originalKeys: Object.keys(original),
+      decompressedKeys: Object.keys(req.body),
+    });
     return next();
   } catch (error) {
     console.error("Failed to decode compressed payload", {
@@ -745,11 +767,19 @@ app.post("/api/postEventCode", async (req, res) => {
     || req.query?.event;
   const code = String(rawCode || "").trim();
 
+  appendRunLog("debug", "postEventCode received", {
+    rawCode,
+    code,
+    body: req.body,
+    query: req.query,
+  });
+
   if (!code) {
     console.log("Event code could not be retrieved");
     return res.status(400).json({
       error: "Event code is required",
       expected: ["body.eventCode", "body.event", "query.eventCode", "query.event"],
+      received: { body: req.body, query: req.query },
     });
   }
 

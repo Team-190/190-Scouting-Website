@@ -46,12 +46,14 @@ async function postApi(path, payload = {}) {
   const route = `${defaultAPILink}${path}`;
   const protocol = getCompressionProtocol();
 
-  const sendPayload = (body) =>
-    fetch(route, {
+  const sendPayload = (body) => {
+    console.log(`[postApi] Sending to ${path}:`, body);
+    return fetch(route, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+  };
 
   let compressedPayload = null;
   try {
@@ -59,6 +61,7 @@ async function postApi(path, payload = {}) {
     if (!isCompressedEnvelope(compressedPayload)) {
       throw new Error("Compression did not return a valid envelope");
     }
+    console.log(`[postApi] Compressed payload for ${path}:`, compressedPayload);
   } catch (error) {
     console.warn("Payload compression failed, sending plain JSON", error);
     return sendPayload(payload);
