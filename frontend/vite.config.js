@@ -10,7 +10,8 @@ export default defineConfig({
   plugins: [svelte()],
   define: {
     __RUNTIME_PORTS__: JSON.stringify(runtimeConstants.ports),
-    __RUNTIME_SERVER_HOST__: JSON.stringify(runtimeConstants.server.host)
+    __RUNTIME_SERVER_HOST__: JSON.stringify(runtimeConstants.server.host),
+    __RUNTIME_COMPRESSION__: JSON.stringify(runtimeConstants.compression)
   },
   server: {
     port: frontendPort,

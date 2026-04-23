@@ -2,7 +2,7 @@
 import { compressData, decompressData } from './compression.js';
 
 const DB_NAME = "scoutingDB";
-const DB_VERSION = 4;
+const DB_VERSION = 5; // Bumped for compression protocol update and storage migration
 
 let dbInstance = null;
 let schemaRepairAttempted = false;
