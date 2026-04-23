@@ -26,6 +26,7 @@
     B2: { alliance: "blue", index: 1 },
     B3: { alliance: "blue", index: 2 },
   };
+  const STARTING_LOCATIONS = ["Far Trench", "Far Bump", "Hub", "Near Bump", "Near Trench"]
   const TELEOP_QUESTIONS = [
     {
       id: "autoActions",
@@ -139,6 +140,7 @@
   let assignedTeamNumber = "";
   let matchAlliances = [];
   let loadingAssignments = true;
+  let autoStartPosition = "";
 
   let canvasEl = null;
   let ctx = null;
@@ -440,6 +442,7 @@
       ScouterName: scouterName,
       ScoutStation: selectedStation,
       Alliance: alliance,
+      AutoStartPosition: autoStartPosition,
       AutoPath: normalizedPaths,
       ...teleopAnswers,
     };
@@ -485,6 +488,7 @@
     teleopAnswers = {};
     matchNumber += 1;
     submitStatus = null;
+    autoStartPosition = "";
     TELEOP_QUESTIONS.forEach((q) => {
       teleopAnswers[q.id] = q.type === "slider" ? 0 : "";
     });
@@ -539,6 +543,14 @@
             <select id="match-select" bind:value={matchNumber} class="styled-select">
               {#each availableMatchNumbers as num}
                 <option value={num}>Match {num}</option>
+              {/each}
+            </select>
+          </div>
+          <div class="field-group">
+            <label for="auto-start">Auto Start Location</label>
+            <select id="auto-start" bind:value={autoStartPosition} class="styled-select">
+              {#each STARTING_LOCATIONS as position}
+                <option value={position}>{position}</option>
               {/each}
             </select>
           </div>
