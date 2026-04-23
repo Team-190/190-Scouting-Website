@@ -455,6 +455,7 @@
   ]);
 
   const QUAL_LABEL_OVERRIDES: Record<string, string> = {
+    autoStartPosition: "Auto Start Position",
     autoActions: "Autonomous Actions",
     travelMethod: "Travel Method",
     travelTroubles: "Travel Troubles",
@@ -475,6 +476,7 @@
   };
 
   const QUAL_FIELD_ORDER = [
+    "autoStartPosition",
     "autoActions",
     "travelMethod",
     "travelTroubles",
@@ -1160,7 +1162,6 @@
                     {@const rowKey = getQualRowKey(team, matchRow, matchIndex)}
                     <div class="qual-match-block">
                       <div class="qual-match-header">Match {matchRow.Match ?? matchRow.match}</div>
-
                       {#if matchRow?.AutoPath && Array.isArray(matchRow.AutoPath) && matchRow.AutoPath.length > 0}
                         <div class="auto-path-wrapper">
                           <div class="progress-bar-container" style="--progress: {progressByCanvasId[`canvas-${rowKey}`] ?? 0}">

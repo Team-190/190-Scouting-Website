@@ -442,6 +442,7 @@
       ScouterName: scouterName,
       ScoutStation: selectedStation,
       Alliance: alliance,
+      AutoStartPosition: autoStartPosition,
       AutoPath: normalizedPaths,
       ...teleopAnswers,
     };
@@ -487,6 +488,7 @@
     teleopAnswers = {};
     matchNumber += 1;
     submitStatus = null;
+    autoStartPosition = "";
     TELEOP_QUESTIONS.forEach((q) => {
       teleopAnswers[q.id] = q.type === "slider" ? 0 : "";
     });
