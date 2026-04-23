@@ -15,6 +15,7 @@
         writeQualScoutingToIDB,
     } from "../utils/api";
     import { clearAllStores, getIndexedDBStore, getLastId, setIndexedDBStore } from '../utils/indexedDB';
+    
 
     let eventCode = localStorage.getItem("eventCode");
     let isLoading = false;
