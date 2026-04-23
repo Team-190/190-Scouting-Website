@@ -162,40 +162,40 @@
   }
 
    async function uploadAllLocalStorageData() {
-        await withLoading(async () => {
-            const code = localStorage.getItem("eventCode");
-            if (!code) throw new Error("No event code found in localStorage");
+    await withLoading(async () => {
+        const code = localStorage.getItem("eventCode");
+        if (!code) throw new Error("No event code found in localStorage");
 
-            const { pit, qual } = await flushOfflineScoutingQueues();
+        const { pit, qual } = await flushOfflineScoutingQueues();
 
-            const totalUploaded = pit.uploaded + qual.uploaded;
-            const totalRemaining = pit.remaining + qual.remaining;
+        const totalUploaded = pit.uploaded + qual.uploaded;
+        const totalRemaining = pit.remaining + qual.remaining;
 
-            if (totalRemaining > 0 && totalUploaded === 0) {
-                throw new Error(
-                    `No connection to server — ${totalRemaining} item(s) still queued`
-                );
-            }
+        // Nothing was queued at all — not an error
+        if (totalUploaded === 0 && totalRemaining === 0) {
+            showNotification("Nothing to upload — queue is empty.");
+            return;
+        }
 
-            if (totalRemaining > 0) {
-                // Partial success — show as success but mention remaining
-                showNotification(
-                    `Uploaded ${totalUploaded} item(s), ${totalRemaining} still queued (offline?)`,
-                    "success"
-                );
-                return;
-            }
-
-            // All flushed — surface the counts
-            showNotification(
-                `Uploaded ${totalUploaded} item(s) successfully!`
+        if (totalRemaining > 0 && totalUploaded === 0) {
+            throw new Error(
+                `No connection to server — ${totalRemaining} item(s) still queued`
             );
-        }, 
-        // withLoading's own success message is only shown if we didn't call 
-        // showNotification ourselves above, so make it a fallback
-        "Upload complete!", 
-        "Failed to upload — check server connection");
-    }
+        }
+
+        if (totalRemaining > 0) {
+            showNotification(
+                `Uploaded ${totalUploaded} item(s), ${totalRemaining} still queued (offline?)`,
+                "success"
+            );
+            return;
+        }
+
+        showNotification(`Uploaded ${totalUploaded} item(s) successfully!`);
+    },
+    "Upload complete!",
+    "Failed to upload — check server connection");
+}
 
   async function refreshStores() {
     loading = true;
