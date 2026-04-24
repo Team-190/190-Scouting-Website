@@ -114,8 +114,18 @@ function isCompressedPayload(body) {
   return Boolean(
     body
       && typeof body === "object"
-      && (body[COMPRESSED_ENVELOPE_FLAG] === true || body.__compressed === true),
+      && (
+        body[COMPRESSED_ENVELOPE_FLAG] === true
+        || body.__compressed === true
+        || body.compressed === true
+      ),
   );
+}
+
+function normalizeBase64Input(value) {
+  const normalized = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
+  const padLength = (4 - (normalized.length % 4)) % 4;
+  return normalized + "=".repeat(padLength);
 }
 
 // Decompress incoming request payloads using shared compression protocol
@@ -128,7 +138,7 @@ function decodeCompressedPayload(envelope) {
     throw new Error("Missing compressed payload data");
   }
 
-  const encoded = Buffer.from(envelope.data, "base64");
+  const encoded = Buffer.from(normalizeBase64Input(envelope.data), "base64");
   const version = Number(envelope.__version || COMPRESSED_DEFAULT_VERSION);
 
   if (version === 2) {
