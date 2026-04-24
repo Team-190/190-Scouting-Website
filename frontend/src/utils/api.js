@@ -68,7 +68,7 @@ async function postApi(path, payload = {}) {
   }
 
   const compressedResponse = await sendPayload(compressedPayload);
-  if (compressedResponse.status !== 400 && compressedResponse.status !== 415) {
+  if (![400, 403, 415].includes(compressedResponse.status)) {
     return compressedResponse;
   }
 
