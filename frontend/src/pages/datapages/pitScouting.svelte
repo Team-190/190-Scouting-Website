@@ -3,7 +3,6 @@
     import {
         fetchTeams,
         flushPitScoutingQueue,
-        hasServerConnection,
         queuePitScoutingForSync,
         readPitScoutingFromIDB,
     } from "../../utils/api";
@@ -130,14 +129,6 @@
                 ? { ...team, hasData: true }
                 : team
         );
-
-        const connected = await hasServerConnection();
-        if (!connected) {
-            submitStatus = { type: "local", message: `✓ Data saved offline. Will upload when you're back online.` };
-            clearForm();
-            submitting = false;
-            return;
-        }
 
         const result = await flushPitScoutingQueue();
         if (result.remaining === 0 && result.uploaded > 0) {
