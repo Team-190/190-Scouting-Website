@@ -29,6 +29,7 @@
   let selectedRecords = [];
   let isLoading = false;
   let notification = null;
+  let db = null;
 
   function showNotification(message, type = "success", duration = 3000) {
     notification = { message, type };
@@ -123,44 +124,64 @@
     }
   }
 
-  function clearData() {
-    if (
-      confirm(
-        "Are you sure you want to clear all scouting data? This cannot be undone.",
-      )
-    ) {
-      // localStorage
-      localStorage.clear();
+async function clearData() {
+    if (!confirm("Are you sure you want to clear all scouting data? This cannot be undone.")) {
+        return;
+    }
 
-      // sessionStorage
-      sessionStorage.clear();
+    // Close the debug page's own open DB connection first
+    if (db && typeof db.close === "function") {
+        db.close();
+        db = null;
+    }
 
-      // Cookies
-      document.cookie.split(";").forEach((cookie) => {
+    // localStorage + sessionStorage
+    localStorage.clear();
+    sessionStorage.clear();
+
+    // Cookies
+    document.cookie.split(";").forEach((cookie) => {
         const name = cookie.split("=")[0].trim();
         document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
-      });
+    });
 
-      // All IndexedDB databases
-      if (indexedDB.databases) {
-        indexedDB.databases().then((dbs) => {
-          dbs.forEach((db) => indexedDB.deleteDatabase(db.name));
-        });
-      } else {
-        indexedDB.deleteDatabase(DB_NAME); // fallback
-      }
-
-      // Service Worker caches
-      if ("caches" in window) {
-        caches.keys().then((keys) => {
-          keys.forEach((key) => caches.delete(key));
-        });
-      }
-
-      refreshStores();
+    // All IndexedDB databases — fully awaited
+    try {
+        const dbs = indexedDB.databases ? await indexedDB.databases() : [{ name: DB_NAME }];
+        await Promise.all(
+            dbs.map(
+                (db) =>
+                    new Promise((resolve) => {
+                        const req = indexedDB.deleteDatabase(db.name);
+                        req.onsuccess = () => resolve();
+                        req.onerror = () => {
+                            console.error(`Failed to delete DB: ${db.name}`, req.error);
+                            resolve();
+                        };
+                        req.onblocked = () => {
+                            console.warn(`Delete still blocked for DB: ${db.name} — other tabs may be open`);
+                            resolve();
+                        };
+                    }),
+            ),
+        );
+    } catch (err) {
+        console.error("Failed to delete IndexedDB databases:", err);
     }
-  }
 
+    // Service Worker caches
+    if ("caches" in window) {
+        try {
+            const keys = await caches.keys();
+            await Promise.all(keys.map((key) => caches.delete(key)));
+        } catch (err) {
+            console.error("Failed to clear caches:", err);
+        }
+    }
+
+    // Reload to release all remaining DB connections and reflect cleared state
+    location.reload();
+}
    async function uploadAllLocalStorageData() {
     await withLoading(async () => {
         const code = localStorage.getItem("eventCode");
@@ -197,7 +218,7 @@
     "Failed to upload — check server connection");
 }
 
-  async function refreshStores() {
+async function refreshStores() {
     loading = true;
     error = "";
     storeSummaries = [];
@@ -205,26 +226,34 @@
     selectedRecords = [];
 
     try {
-      eventCode = localStorage.getItem("eventCode") || "";
-      const db = await openDatabase();
+        eventCode = localStorage.getItem("eventCode") || "";
+        
+        // Close any existing connection before opening a new one
+        if (db && typeof db.close === "function") {
+            db.close();
+            db = null;
+        }
+        
+        db = await openDatabase();
 
-      const summaries = [];
-      for (const storeName of STORE_NAMES) {
-        const records = await readStoreRecords(db, storeName);
-        summaries.push(formatSummary(storeName, records));
-      }
+        const summaries = [];
+        for (const storeName of STORE_NAMES) {
+            const records = await readStoreRecords(db, storeName);
+            summaries.push(formatSummary(storeName, records));
+        }
 
-      storeSummaries = summaries;
-      if (db && typeof db.close === "function") {
-        db.close();
-      }
+        storeSummaries = summaries;
     } catch (err) {
-      error = err?.message || "Failed to read IndexedDB debug data.";
+        error = err?.message || "Failed to read IndexedDB debug data.";
     } finally {
-      loading = false;
+        // Close after reading so it's not held open
+        if (db && typeof db.close === "function") {
+            db.close();
+            db = null;
+        }
+        loading = false;
     }
-  }
-
+}
   function inspectStore(storeName) {
     selectedStore = storeName;
     const summary = storeSummaries.find((item) => item.storeName === storeName);
