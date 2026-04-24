@@ -3,6 +3,7 @@
   import fieldImageSrc from "../../images/FieldImage.png";
   import {
     flushQualitativeScoutingQueue,
+    hasServerConnection,
     queueQualitativeScoutingForSync,
   } from "../../utils/api";
   import { getEventCode } from "../../utils/pageUtils";
@@ -446,7 +447,17 @@
       ...teleopAnswers,
     };
 
-    await queueQualitativeScoutingForSync(eventCode, record.Team, record.Match, record);
+    queueQualitativeScoutingForSync(eventCode, record.Team, record.Match, record);
+
+    const connected = await hasServerConnection();
+    if (!connected) {
+      submitStatus = {
+        type: "local",
+        message: `✓ Data saved offline. Will upload when you're back online.`,
+      };
+      phase = "done";
+      return;
+    }
 
     const result = await flushQualitativeScoutingQueue();
     if (result.uploaded > 0 && result.remaining === 0) {
