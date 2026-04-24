@@ -145,6 +145,13 @@ function openDB() {
     });
 }
 
+export function closeDB() {
+    if (dbInstance) {
+        dbInstance.close();
+        dbInstance = null;
+    }
+}
+
 // ─── WRITE ──────────────────────────────────────────────────────────────────
 
 export async function setIndexedDBStore(STORE, { rows = null, key = null, value = null } = {}) {
