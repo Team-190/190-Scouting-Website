@@ -147,7 +147,11 @@ const scoutingWriteQueues = new Map();
 // ─── HELPER FUNCTIONS ───────────────────────────────────────────────────────
 
 const validateEventCode = (req, res, next) => {
-  const code = req.query.eventCode || req.body?.event;
+  const code =
+    req.query?.eventCode
+    || req.query?.event
+    || req.body?.event
+    || req.body?.eventCode;
   if (!code) {
     console.error("validateEventCode failed", {
       url: req.originalUrl || req.url,
