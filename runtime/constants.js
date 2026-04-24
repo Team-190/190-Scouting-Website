@@ -7,7 +7,7 @@ const RUNTIME_CONSTANTS = Object.freeze({
         host: "localhost",
     }),
     compression: Object.freeze({
-        envelopeFlag: "compressed",
+        envelopeFlag: "__compressed",
         version: 2,
     }),
 });

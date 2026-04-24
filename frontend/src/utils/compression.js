@@ -14,16 +14,6 @@ const COMPRESSION_PROTOCOL =
 const ENVELOPE_FLAG = COMPRESSION_PROTOCOL.envelopeFlag || '__compressed';
 const ENVELOPE_VERSION = Number(COMPRESSION_PROTOCOL.version || 2);
 
-function toBase64Url(base64) {
-    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-}
-
-function fromBase64Url(base64Url) {
-    const normalized = String(base64Url || '').replace(/-/g, '+').replace(/_/g, '/');
-    const padLength = (4 - (normalized.length % 4)) % 4;
-    return normalized + '='.repeat(padLength);
-}
-
 export function getCompressionProtocol() {
     return {
         envelopeFlag: ENVELOPE_FLAG,
@@ -33,7 +23,7 @@ export function getCompressionProtocol() {
 
 export function isCompressedEnvelope(value) {
     if (!value || typeof value !== 'object') return false;
-    return value[ENVELOPE_FLAG] === true || value.__compressed === true || value.compressed === true;
+    return value[ENVELOPE_FLAG] === true || value.__compressed === true;
 }
 
 /**
@@ -55,13 +45,12 @@ export function compressData(obj) {
             binaryString += String.fromCharCode(compressed[i]);
         }
         const base64 = btoa(binaryString);
-        const base64Url = toBase64Url(base64);
         
         // Mark as compressed with version for future algorithm changes
         return {
             [ENVELOPE_FLAG]: true,
             __version: ENVELOPE_VERSION,
-            data: base64Url
+            data: base64
         };
     } catch (error) {
         console.warn("Compression failed, storing uncompressed:", error);
@@ -83,7 +72,7 @@ export function decompressData(value) {
         }
         
         // Decode from base64
-        const binaryString = atob(fromBase64Url(value.data));
+        const binaryString = atob(value.data);
         const bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) {
             bytes[i] = binaryString.charCodeAt(i);
