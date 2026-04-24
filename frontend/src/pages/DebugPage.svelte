@@ -1,7 +1,13 @@
 <script>
   import { decompressData } from "../utils/compression.js";
-  import { postEventCode } from "../utils/api";
- import { flushOfflineScoutingQueues } from "../utils/api";
+  import { flushOfflineScoutingQueues, postEventCode } from "../utils/api";
+  import {
+    clearAllStores,
+    getIndexedDBStore,
+    getLastId,
+    setIndexedDBStore,
+    closeDB,
+  } from "../utils/indexedDB";
 
   const DB_NAME = "scoutingDB";
   const STORE_NAMES = [
@@ -124,16 +130,26 @@
     }
   }
 
-async function clearData() {
-    if (!confirm("Are you sure you want to clear all scouting data? This cannot be undone.")) {
-        return;
+  async function clearData() {
+    if (
+      !confirm(
+        "Are you sure you want to clear all scouting data? This cannot be undone.",
+      )
+    ) {
+      return;
     }
 
-    // Close the debug page's own open DB connection first
+    // Close the debug page's own open DB connection
     if (db && typeof db.close === "function") {
-        db.close();
-        db = null;
+      db.close();
+      db = null;
     }
+
+    // Close the shared dbInstance held by the indexedDB utility
+    closeDB();
+
+    // Small yield to let connections fully release
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     // localStorage + sessionStorage
     localStorage.clear();
@@ -141,49 +157,51 @@ async function clearData() {
 
     // Cookies
     document.cookie.split(";").forEach((cookie) => {
-        const name = cookie.split("=")[0].trim();
-        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
+      const name = cookie.split("=")[0].trim();
+      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
     });
 
     // All IndexedDB databases — fully awaited
     try {
-        const dbs = indexedDB.databases ? await indexedDB.databases() : [{ name: DB_NAME }];
-        await Promise.all(
-            dbs.map(
-                (db) =>
-                    new Promise((resolve) => {
-                        const req = indexedDB.deleteDatabase(db.name);
-                        req.onsuccess = () => resolve();
-                        req.onerror = () => {
-                            console.error(`Failed to delete DB: ${db.name}`, req.error);
-                            resolve();
-                        };
-                        req.onblocked = () => {
-                            console.warn(`Delete still blocked for DB: ${db.name} — other tabs may be open`);
-                            resolve();
-                        };
-                    }),
-            ),
-        );
+      const dbs = indexedDB.databases
+        ? await indexedDB.databases()
+        : [{ name: DB_NAME }];
+      await Promise.all(
+        dbs.map(
+          (dbInfo) =>
+            new Promise((resolve) => {
+              const req = indexedDB.deleteDatabase(dbInfo.name);
+              req.onsuccess = () => resolve();
+              req.onerror = () => {
+                console.error(`Failed to delete DB: ${dbInfo.name}`, req.error);
+                resolve();
+              };
+              req.onblocked = () => {
+                console.warn(`Still blocked: ${dbInfo.name}`);
+                resolve();
+              };
+            }),
+        ),
+      );
     } catch (err) {
-        console.error("Failed to delete IndexedDB databases:", err);
+      console.error("Failed to delete IndexedDB databases:", err);
     }
 
     // Service Worker caches
     if ("caches" in window) {
-        try {
-            const keys = await caches.keys();
-            await Promise.all(keys.map((key) => caches.delete(key)));
-        } catch (err) {
-            console.error("Failed to clear caches:", err);
-        }
+      try {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((key) => caches.delete(key)));
+      } catch (err) {
+        console.error("Failed to clear caches:", err);
+      }
     }
 
-    // Reload to release all remaining DB connections and reflect cleared state
     location.reload();
-}
-   async function uploadAllLocalStorageData() {
-    await withLoading(async () => {
+  }
+  async function uploadAllLocalStorageData() {
+    await withLoading(
+      async () => {
         const code = localStorage.getItem("eventCode");
         if (!code) throw new Error("No event code found in localStorage");
 
@@ -194,31 +212,32 @@ async function clearData() {
 
         // Nothing was queued at all — not an error
         if (totalUploaded === 0 && totalRemaining === 0) {
-            showNotification("Nothing to upload — queue is empty.");
-            return;
+          showNotification("Nothing to upload — queue is empty.");
+          return;
         }
 
         if (totalRemaining > 0 && totalUploaded === 0) {
-            throw new Error(
-                `No connection to server — ${totalRemaining} item(s) still queued`
-            );
+          throw new Error(
+            `No connection to server — ${totalRemaining} item(s) still queued`,
+          );
         }
 
         if (totalRemaining > 0) {
-            showNotification(
-                `Uploaded ${totalUploaded} item(s), ${totalRemaining} still queued (offline?)`,
-                "success"
-            );
-            return;
+          showNotification(
+            `Uploaded ${totalUploaded} item(s), ${totalRemaining} still queued (offline?)`,
+            "success",
+          );
+          return;
         }
 
         showNotification(`Uploaded ${totalUploaded} item(s) successfully!`);
-    },
-    "Upload complete!",
-    "Failed to upload — check server connection");
-}
+      },
+      "Upload complete!",
+      "Failed to upload — check server connection",
+    );
+  }
 
-async function refreshStores() {
+  async function refreshStores() {
     loading = true;
     error = "";
     storeSummaries = [];
@@ -226,34 +245,34 @@ async function refreshStores() {
     selectedRecords = [];
 
     try {
-        eventCode = localStorage.getItem("eventCode") || "";
-        
-        // Close any existing connection before opening a new one
-        if (db && typeof db.close === "function") {
-            db.close();
-            db = null;
-        }
-        
-        db = await openDatabase();
+      eventCode = localStorage.getItem("eventCode") || "";
 
-        const summaries = [];
-        for (const storeName of STORE_NAMES) {
-            const records = await readStoreRecords(db, storeName);
-            summaries.push(formatSummary(storeName, records));
-        }
+      // Close any existing connection before opening a new one
+      if (db && typeof db.close === "function") {
+        db.close();
+        db = null;
+      }
 
-        storeSummaries = summaries;
+      db = await openDatabase();
+
+      const summaries = [];
+      for (const storeName of STORE_NAMES) {
+        const records = await readStoreRecords(db, storeName);
+        summaries.push(formatSummary(storeName, records));
+      }
+
+      storeSummaries = summaries;
     } catch (err) {
-        error = err?.message || "Failed to read IndexedDB debug data.";
+      error = err?.message || "Failed to read IndexedDB debug data.";
     } finally {
-        // Close after reading so it's not held open
-        if (db && typeof db.close === "function") {
-            db.close();
-            db = null;
-        }
-        loading = false;
+      // Close after reading so it's not held open
+      if (db && typeof db.close === "function") {
+        db.close();
+        db = null;
+      }
+      loading = false;
     }
-}
+  }
   function inspectStore(storeName) {
     selectedStore = storeName;
     const summary = storeSummaries.find((item) => item.storeName === storeName);
