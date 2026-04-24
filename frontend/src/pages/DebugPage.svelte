@@ -131,26 +131,22 @@
   }
 
   async function clearData() {
-    if (
-      !confirm(
-        "Are you sure you want to clear all scouting data? This cannot be undone.",
-      )
-    ) {
-      return;
+    if (!confirm("Are you sure you want to clear all scouting data? This cannot be undone.")) {
+        return;
     }
 
     // Close both open connections
     if (db && typeof db.close === "function") {
-      db.close();
-      db = null;
+        db.close();
+        db = null;
     }
     closeDB();
 
-    // Clear all IDB store contents (no delete, no block issues)
+    // Clear all IDB store contents
     try {
-      await clearAllStores();
+        await clearAllStores();
     } catch (err) {
-      console.error("Failed to clear IDB stores:", err);
+        console.error("Failed to clear IDB stores:", err);
     }
 
     // localStorage + sessionStorage
@@ -159,22 +155,33 @@
 
     // Cookies
     document.cookie.split(";").forEach((cookie) => {
-      const name = cookie.split("=")[0].trim();
-      document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
+        const name = cookie.split("=")[0].trim();
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
     });
 
     // Service Worker caches
     if ("caches" in window) {
-      try {
-        const keys = await caches.keys();
-        await Promise.all(keys.map((key) => caches.delete(key)));
-      } catch (err) {
-        console.error("Failed to clear caches:", err);
-      }
+        try {
+            const keys = await caches.keys();
+            await Promise.all(keys.map((key) => caches.delete(key)));
+        } catch (err) {
+            console.error("Failed to clear caches:", err);
+        }
     }
 
-    location.reload();
-  }
+    // Unregister all service workers
+    if ("serviceWorker" in navigator) {
+        try {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(registrations.map((reg) => reg.unregister()));
+        } catch (err) {
+            console.error("Failed to unregister service workers:", err);
+        }
+    }
+
+    // Hard reload — bypasses browser cache entirely
+    location.href = location.href;
+}
   async function uploadAllLocalStorageData() {
     await withLoading(
       async () => {
