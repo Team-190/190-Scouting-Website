@@ -135,52 +135,192 @@
         return;
     }
 
-    // Close both open connections
-    if (db && typeof db.close === "function") {
-        db.close();
-        db = null;
-    }
-    closeDB();
-
-    // Clear all IDB store contents
     try {
-        await clearAllStores();
+        isLoading = true;
+        
+        // Set a flag to indicate we're clearing (prevents auto-fetch on reload)
+        localStorage.setItem("__clearingData", "true");
+        
+        // Close both open connections
+        if (db && typeof db.close === "function") {
+            db.close();
+            db = null;
+        }
+        closeDB();
+
+        // Give a small delay to ensure connections are fully closed
+        await new Promise(resolve => setTimeout(resolve, 150));
+
+        // Delete ALL IndexedDB databases (most thorough approach)
+        try {
+            // Try using the modern IndexedDB.databases() API first
+            if (indexedDB.databases && typeof indexedDB.databases === "function") {
+                try {
+                    const dbs = await indexedDB.databases();
+                    for (const dbInfo of dbs) {
+                        // Retry logic for blocked deletes
+                        let retries = 0;
+                        const maxRetries = 5;
+                        
+                        while (retries < maxRetries) {
+                            try {
+                                await new Promise((resolve, reject) => {
+                                    const request = indexedDB.deleteDatabase(dbInfo.name);
+                                let resolved = false;
+                                
+                                // Timeout: if blocked for too long, assume it will complete eventually
+                                const timeout = setTimeout(() => {
+                                    if (!resolved) {
+                                        resolved = true;
+                                        console.warn(`Delete for ${dbInfo.name} is blocked but proceeding anyway`);
+                                        resolve();
+                                    }
+                                }, 1000);
+                                
+                                request.onsuccess = () => {
+                                    if (!resolved) {
+                                        resolved = true;
+                                        clearTimeout(timeout);
+                                        console.log(`Deleted IndexedDB: ${dbInfo.name}`);
+                                        resolve();
+                                    }
+                                };
+                                
+                                request.onerror = () => {
+                                    if (!resolved) {
+                                        resolved = true;
+                                        clearTimeout(timeout);
+                                        console.error(`Error deleting ${dbInfo.name}:`, request.error);
+                                        reject(request.error);
+                                    }
+                                };
+                                
+                                request.onblocked = () => {
+                                    console.warn(`Delete blocked for ${dbInfo.name}, will retry...`);
+                                };
+                            });
+                            
+                            break; // Success, exit retry loop
+                        } catch (err) {
+                            retries++;
+                            if (retries < maxRetries) {
+                                console.log(`Retry ${retries}/${maxRetries} for ${dbInfo.name}`);
+                                await new Promise(resolve => setTimeout(resolve, 250));
+                            } else {
+                                console.error(`Failed to delete ${dbInfo.name} after ${maxRetries} retries`);
+                                throw err;
+                            }
+                        }
+                        }
+                    }
+                } catch (err) {
+                    console.warn("Failed to enumerate IndexedDB databases:", err);
+                    // Fallback to deleting known database
+                    throw err;
+                }
+            } else {
+                // Fallback: delete known database
+                let retries = 0;
+                const maxRetries = 5;
+                
+                while (retries < maxRetries) {
+                    try {
+                        await new Promise((resolve, reject) => {
+                            const request = indexedDB.deleteDatabase("scoutingDB");
+                            let resolved = false;
+                            
+                            // Timeout: if blocked for too long, assume it will complete eventually
+                            const timeout = setTimeout(() => {
+                                if (!resolved) {
+                                    resolved = true;
+                                    console.warn("Delete for scoutingDB is blocked but proceeding anyway");
+                                    resolve();
+                                }
+                            }, 1000);
+                            
+                            request.onsuccess = () => {
+                                if (!resolved) {
+                                    resolved = true;
+                                    clearTimeout(timeout);
+                                    console.log("IndexedDB (scoutingDB) deleted successfully");
+                                    resolve();
+                                }
+                            };
+                            
+                            request.onerror = () => {
+                                if (!resolved) {
+                                    resolved = true;
+                                    clearTimeout(timeout);
+                                    reject(request.error);
+                                }
+                            };
+                        });
+                        break;
+                    } catch (err) {
+                        retries++;
+                        if (retries < maxRetries) {
+                            await new Promise(resolve => setTimeout(resolve, 250));
+                        } else {
+                            throw err;
+                        }
+                    }
+                }
+            }
+        } catch (err) {
+            console.error("Error deleting IndexedDB:", err);
+        }
+
+        // localStorage + sessionStorage - do this AFTER IndexedDB deletion
+        const eventCode = localStorage.getItem("eventCode");
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        // Restore the clearing flag
+        localStorage.setItem("__clearingData", "true");
+        if (eventCode) localStorage.setItem("__clearedEventCode", eventCode);
+
+        // Cookies
+        document.cookie.split(";").forEach((cookie) => {
+            const name = cookie.split("=")[0].trim();
+            if (name && name !== "__clearingData" && name !== "__clearedEventCode") {
+                document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
+            }
+        });
+
+        // Service Worker caches
+        if ("caches" in window) {
+            try {
+                const keys = await caches.keys();
+                await Promise.all(keys.map((key) => caches.delete(key)));
+                console.log("Caches cleared");
+            } catch (err) {
+                console.error("Failed to clear caches:", err);
+            }
+        }
+
+        // Unregister all service workers
+        if ("serviceWorker" in navigator) {
+            try {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                await Promise.all(registrations.map((reg) => reg.unregister()));
+                console.log("Service workers unregistered");
+            } catch (err) {
+                console.error("Failed to unregister service workers:", err);
+            }
+        }
+
+        // Wait a bit to ensure everything is cleaned up
+        await new Promise(resolve => setTimeout(resolve, 300));
+
+        // Hard reload — bypasses browser cache entirely
+        // Use query parameter to force fresh request
+        const baseUrl = location.href.split('?')[0].split('#')[0];
+        location.href = baseUrl + '?nocache=' + Date.now();
     } catch (err) {
-        console.error("Failed to clear IDB stores:", err);
+        console.error("Error during clearData:", err);
+        showNotification(`Error clearing data: ${err.message}`, "error", 5000);
+        isLoading = false;
     }
-
-    // localStorage + sessionStorage
-    localStorage.clear();
-    sessionStorage.clear();
-
-    // Cookies
-    document.cookie.split(";").forEach((cookie) => {
-        const name = cookie.split("=")[0].trim();
-        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
-    });
-
-    // Service Worker caches
-    if ("caches" in window) {
-        try {
-            const keys = await caches.keys();
-            await Promise.all(keys.map((key) => caches.delete(key)));
-        } catch (err) {
-            console.error("Failed to clear caches:", err);
-        }
-    }
-
-    // Unregister all service workers
-    if ("serviceWorker" in navigator) {
-        try {
-            const registrations = await navigator.serviceWorker.getRegistrations();
-            await Promise.all(registrations.map((reg) => reg.unregister()));
-        } catch (err) {
-            console.error("Failed to unregister service workers:", err);
-        }
-    }
-
-    // Hard reload — bypasses browser cache entirely
-    location.href = location.href;
 }
   async function uploadAllLocalStorageData() {
     await withLoading(
@@ -286,7 +426,13 @@
     await navigator.clipboard.writeText(toJson(payload));
   }
 
-  refreshStores();
+  // Check if we just cleared data - if so, skip refresh since page will reload
+  if (typeof localStorage !== 'undefined' && !localStorage.getItem("__clearingData")) {
+    refreshStores();
+  } else if (typeof localStorage !== 'undefined') {
+    // Remove the flag for next page load
+    localStorage.removeItem("__clearingData");
+  }
 </script>
 
 <div class="debug-page">
@@ -320,7 +466,12 @@
       >
         Copy Decompressed JSON
       </button>
-      <button onclick={clearData}>Clear Data</button>
+      <button
+        onclick={() => clearData()}
+        disabled={isLoading}
+      >
+        {isLoading ? "Clearing..." : "Clear Data"}
+      </button>
       <button onclick={uploadAllLocalStorageData} disabled={isLoading}>
         {isLoading ? "Uploading..." : "Upload localStorage"}
       </button>

@@ -84,12 +84,15 @@ function deleteDatabase() {
         dbInstance.close();
         dbInstance = null;
     }
+    
+    // Reset schema repair flag so next open attempt doesn't skip repair
+    schemaRepairAttempted = false;
 
     return new Promise((resolve, reject) => {
         const req = indexedDB.deleteDatabase(DB_NAME);
         req.onsuccess = () => resolve();
         req.onerror = () => reject(req.error);
-        req.onblocked = () => reject(new Error("IndexedDB delete blocked by another open tab"));
+        req.onblocked = () => console.warn("IndexedDB delete blocked by another open tab");
     });
 }
 
@@ -134,8 +137,10 @@ function openDB() {
 
             dbInstance = db;
             dbInstance.onversionchange = () => {
-                dbInstance.close();
-                dbInstance = null;
+                if (dbInstance) {
+                    dbInstance.close();
+                    dbInstance = null;
+                }
             };
             resolve(dbInstance);
         };
