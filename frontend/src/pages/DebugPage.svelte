@@ -139,17 +139,19 @@
       return;
     }
 
-    // Close the debug page's own open DB connection
+    // Close both open connections
     if (db && typeof db.close === "function") {
       db.close();
       db = null;
     }
-
-    // Close the shared dbInstance held by the indexedDB utility
     closeDB();
 
-    // Small yield to let connections fully release
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    // Clear all IDB store contents (no delete, no block issues)
+    try {
+      await clearAllStores();
+    } catch (err) {
+      console.error("Failed to clear IDB stores:", err);
+    }
 
     // localStorage + sessionStorage
     localStorage.clear();
@@ -160,32 +162,6 @@
       const name = cookie.split("=")[0].trim();
       document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
     });
-
-    // All IndexedDB databases — fully awaited
-    try {
-      const dbs = indexedDB.databases
-        ? await indexedDB.databases()
-        : [{ name: DB_NAME }];
-      await Promise.all(
-        dbs.map(
-          (dbInfo) =>
-            new Promise((resolve) => {
-              const req = indexedDB.deleteDatabase(dbInfo.name);
-              req.onsuccess = () => resolve();
-              req.onerror = () => {
-                console.error(`Failed to delete DB: ${dbInfo.name}`, req.error);
-                resolve();
-              };
-              req.onblocked = () => {
-                console.warn(`Still blocked: ${dbInfo.name}`);
-                resolve();
-              };
-            }),
-        ),
-      );
-    } catch (err) {
-      console.error("Failed to delete IndexedDB databases:", err);
-    }
 
     // Service Worker caches
     if ("caches" in window) {
