@@ -1,10 +1,8 @@
 const VITE_BACKEND_PORT = 8000;
 const VITE_FRONTEND_PORT = 5173;
-const VITE_TESTING = String(import.meta.env.VITE_TESTING ?? "1");
+const VITE_TESTING = String(import.meta.env.VITE_TESTING ?? "");
 const DEFAULT_SERVER_HOST = import.meta.env.VITE_SERVER_IP || "localhost";
-const SERVER = VITE_TESTING === "0"
-    ? DEFAULT_SERVER_HOST
-    : "localhost";
+const LOCAL_DEV_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1"]);
 
 // Determine API endpoint based on access method
 // Local dev (http://localhost:5173): Call backend directly on http://localhost:8000
@@ -12,12 +10,17 @@ const SERVER = VITE_TESTING === "0"
 const getAPILink = () => {
   if (typeof window === 'undefined') return '';
 
-    const isFrontendRuntime = window.location.port === String(VITE_FRONTEND_PORT);
-    if (!isFrontendRuntime) {
-        return '';
-    }
+  const host = window.location.hostname;
+  const port = window.location.port;
+  const isFrontendRuntime = port === String(VITE_FRONTEND_PORT);
+  const isLocalDevHost = LOCAL_DEV_HOSTS.has(host);
 
-    return `http://${SERVER}:${VITE_BACKEND_PORT}`;
+  // Only use direct backend port in local dev. In production, always use same-origin /api.
+  if (isFrontendRuntime && isLocalDevHost && VITE_TESTING !== "0") {
+    return `http://${DEFAULT_SERVER_HOST}:${VITE_BACKEND_PORT}`;
+  }
+
+  return '';
 };
 
 const defaultAPILink = getAPILink();
@@ -531,16 +534,16 @@ async function updateQualMirror(team, match, formData) {
 }
 
 export async function hasServerConnection(timeoutMs = 2500) {
-  if (typeof navigator !== "undefined" && !navigator.onLine) {
-    return false;
-  }
-
   try {
     const timeout = new Promise((_, reject) =>
       setTimeout(() => reject(new Error("Request timed out")), timeoutMs),
     );
     const response = await Promise.race([
-      fetch(`${defaultAPILink}/api/health`),
+      fetch(`${defaultAPILink}/api/health`, {
+        method: "GET",
+        cache: "no-store",
+        credentials: "same-origin",
+      }),
       timeout,
     ]);
     return response?.ok === true;
@@ -582,10 +585,6 @@ export async function flushPitScoutingQueue() {
   const queue = readQueue(PIT_QUEUE_KEY);
   if (queue.length === 0) {
     return { uploaded: 0, remaining: 0 };
-  }
-
-  if (!(await hasServerConnection())) {
-    return { uploaded: 0, remaining: queue.length };
   }
 
   const remaining = [];
@@ -631,10 +630,6 @@ export async function flushQualitativeScoutingQueue() {
   const queue = readQueue(QUAL_QUEUE_KEY);
   if (queue.length === 0) {
     return { uploaded: 0, remaining: 0 };
-  }
-
-  if (!(await hasServerConnection())) {
-    return { uploaded: 0, remaining: queue.length };
   }
 
   const remaining = [];
@@ -780,7 +775,17 @@ async function makePostRequest(endpoint, payload, expectText = false) {
 }
 
 export async function postEventCode(eventCode) {
-  return makePostRequest("/api/postEventCode", { eventCode }, true);
+  const normalizedCode = String(
+    eventCode
+      ?? (canUseLocalStorage() ? localStorage.getItem("eventCode") : "")
+      ?? "",
+  ).trim();
+
+  if (!normalizedCode) {
+    throw new Error("No event code selected");
+  }
+
+  return makePostRequest("/api/postEventCode", { eventCode: normalizedCode }, true);
 }
 
 export async function postGracePage(event, team, rating) {
