@@ -45,6 +45,7 @@ app.use((req, res, next) => {
 const eventCodes = new Set();
 let bracket;
 let refreshTimer;
+const fileMutationLocks = new Map();
 
 // ─── HELPER FUNCTIONS ───────────────────────────────────────────────────────
 
@@ -70,6 +71,73 @@ async function ensureEventCodeExists(filename, eventCode) {
   return data;
 }
 
+function normalizeEntries(value) {
+  if (Array.isArray(value)) {
+    return value.filter((entry) => entry && typeof entry === "object");
+  }
+  if (value && typeof value === "object") {
+    return [value];
+  }
+  return [];
+}
+
+function appendUniqueEntry(existingValue, nextEntry) {
+  const existingEntries = normalizeEntries(existingValue);
+  const nextEntryId = String(nextEntry?._entryId || "");
+
+  if (
+    nextEntryId
+    && existingEntries.some((entry) => String(entry?._entryId || "") === nextEntryId)
+  ) {
+    return existingEntries;
+  }
+
+  return [...existingEntries, nextEntry];
+}
+
+function countPitEntries(teamData) {
+  return normalizeEntries(teamData).length;
+}
+
+function countQualEntries(teamData) {
+  if (!teamData || typeof teamData !== "object") return 0;
+
+  if (Array.isArray(teamData)) {
+    return teamData.length;
+  }
+
+  if (teamData.Match != null || teamData.match != null) {
+    return 1;
+  }
+
+  let total = 0;
+  for (const matchData of Object.values(teamData)) {
+    total += normalizeEntries(matchData).length;
+  }
+  return total;
+}
+
+async function mutateEventFile(filename, mutator) {
+  const previous = fileMutationLocks.get(filename) || Promise.resolve();
+
+  const next = previous
+    .catch(() => {})
+    .then(async () => {
+      const fileData = await database.readJSONFile(filename);
+      const updatedData = (await mutator(fileData || {})) || fileData || {};
+      await database.writeJSONFile(filename, updatedData);
+      return updatedData;
+    });
+
+  fileMutationLocks.set(filename, next);
+
+  return next.finally(() => {
+    if (fileMutationLocks.get(filename) === next) {
+      fileMutationLocks.delete(filename);
+    }
+  });
+}
+
 async function postRatingHelper(req, res, filename) {
   const { event, rating, team } = req.body;
 
@@ -79,17 +147,19 @@ async function postRatingHelper(req, res, filename) {
     return res.sendStatus(400);
   }
 
-  let fileData = await ensureEventCodeExists(filename, event);
-  fileData[event] ||= {};
+  await mutateEventFile(filename, (fileData) => {
+    fileData[event] ||= {};
 
-  if (fileData[event][team]) {
-    let nextRating = Object.keys(fileData[event][team]).length;
-    fileData[event][team][nextRating] = rating;
-  } else {
-    fileData[event][team] = { 0: rating };
-  }
+    if (fileData[event][team]) {
+      const nextRating = Object.keys(fileData[event][team]).length;
+      fileData[event][team][nextRating] = rating;
+    } else {
+      fileData[event][team] = { 0: rating };
+    }
 
-  database.writeJSONFile(filename, fileData);
+    return fileData;
+  });
+
   res.sendStatus(200);
 }
 
@@ -213,7 +283,7 @@ app.get("/api/getQualitativeScouting", validateEventCode, async (req, res) => {
 
   let filtered = {};
   for (let team in result) {
-    let backendCount = Object.keys(result[team]).length;
+    let backendCount = countQualEntries(result[team]);
     if (!localCounts[team] || localCounts[team] < backendCount) {
       filtered[team] = result[team];
     }
@@ -225,6 +295,8 @@ app.get("/api/getQualitativeScouting", validateEventCode, async (req, res) => {
 app.get("/api/getPitScouting", validateEventCode, async (req, res) => {
   const { eventCode } = req;
   let localTeams = [];
+  let localCounts = {};
+
   try {
     if (req.query.localTeams) {
       const parsed = JSON.parse(decodeURIComponent(req.query.localTeams));
@@ -233,14 +305,31 @@ app.get("/api/getPitScouting", validateEventCode, async (req, res) => {
     }
   } catch (e) {}
 
+  try {
+    if (req.query.localCounts) {
+      const parsed = JSON.parse(decodeURIComponent(req.query.localCounts));
+      localCounts = parsed && typeof parsed === "object" ? parsed : {};
+    }
+  } catch (e) {}
+
   await ensureEventCodeExists("pitScoutingData", eventCode);
   let result = await getEventData("pitScoutingData", eventCode);
 
   let filtered = {};
   for (const [team, data] of Object.entries(result)) {
-    if (!localTeams.includes(team)) {
-      const { robotPicturePreview, ...rest } = data;
-      filtered[team] = rest;
+    if (localTeams.length > 0) {
+      if (!localTeams.includes(team)) {
+        const entries = normalizeEntries(data).map(({ robotPicturePreview, ...rest }) => rest);
+        filtered[team] = Array.isArray(data) ? entries : entries[0] || {};
+      }
+      continue;
+    }
+
+    const backendCount = countPitEntries(data);
+    const localCount = Number(localCounts[team] || 0);
+    if (localCount < backendCount) {
+      const entries = normalizeEntries(data).map(({ robotPicturePreview, ...rest }) => rest);
+      filtered[team] = Array.isArray(data) ? entries : entries[0] || {};
     }
   }
 
@@ -254,7 +343,11 @@ app.get("/api/getPitScoutingImage", validateEventCode, async (req, res) => {
 
   try {
     let data = await getEventData("pitScoutingData", eventCode);
-    const result = data[teamNumber]?.["robotPicturePreview"];
+    const entries = normalizeEntries(data[teamNumber]);
+    const latestWithImage = [...entries]
+      .reverse()
+      .find((entry) => entry && typeof entry === "object" && entry.robotPicturePreview);
+    const result = latestWithImage?.robotPicturePreview;
     if (!result) return res.sendStatus(404);
     res.send(result);
   } catch (e) {
@@ -494,11 +587,12 @@ app.post("/api/postPitScouting", validateEventCode, async (req, res) => {
   }
 
   console.log("Pit scouting data:", formData);
-  let fileData = await ensureEventCodeExists("pitScoutingData", event);
-  fileData[event] ||= {};
-  fileData[event][team] = formData;
+  await mutateEventFile("pitScoutingData", (fileData) => {
+    fileData[event] ||= {};
+    fileData[event][team] = appendUniqueEntry(fileData[event][team], formData);
+    return fileData;
+  });
 
-  database.writeJSONFile("pitScoutingData", fileData);
   res.sendStatus(200);
 });
 
@@ -512,12 +606,16 @@ app.post("/api/postQualitativeScouting", validateEventCode, async (req, res) => 
   }
 
   console.log("Qual scouting data:", formData);
-  let fileData = await ensureEventCodeExists("qualitativeScoutingData", event);
-  fileData[event] ||= {};
-  fileData[event][team] ||= {};
-  fileData[event][team][match] = formData;
+  await mutateEventFile("qualitativeScoutingData", (fileData) => {
+    fileData[event] ||= {};
+    fileData[event][team] ||= {};
+    fileData[event][team][match] = appendUniqueEntry(
+      fileData[event][team][match],
+      formData,
+    );
+    return fileData;
+  });
 
-  database.writeJSONFile("qualitativeScoutingData", fileData);
   res.sendStatus(200);
 });
 

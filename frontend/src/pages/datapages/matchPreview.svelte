@@ -585,6 +585,20 @@
 
   // ─── Auto Path ────────────────────────────────────────────────────────────────
 
+  function getAutoPaths(row: any): any[] {
+    const nestedPaths = row?.qual?.auto?.path;
+    if (Array.isArray(nestedPaths)) {
+      return nestedPaths.filter((path: any) => Array.isArray(path) && path.length >= 2);
+    }
+
+    const legacyPaths = row?.AutoPath;
+    if (Array.isArray(legacyPaths)) {
+      return legacyPaths.filter((path: any) => Array.isArray(path) && path.length >= 2);
+    }
+
+    return [];
+  }
+
   function drawAutoPath(canvas: HTMLCanvasElement, matchRow: any) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -625,11 +639,8 @@
     const scaleX = W / RECORDED_W;
     const scaleY = H / RECORDED_H;
 
-    if (matchRow?.AutoPath && Array.isArray(matchRow.AutoPath)) {
-      const allPaths = matchRow.AutoPath.filter(
-        (path: any[]) => Array.isArray(path) && path.length >= 2,
-      );
-      if (allPaths.length === 0) return;
+    const allPaths = getAutoPaths(matchRow);
+    if (allPaths.length > 0) {
       const allPoints: any[] = [];
       allPaths.forEach((path: any[]) => allPoints.push(...path));
       const px = (p: any) => p.x * scaleX;
@@ -685,9 +696,7 @@
   function getAutoPathRows(team: string): any[] {
     const rows = qualScoutingByTeam[team] ?? [];
     return rows
-      .filter(
-        (r) => r.AutoPath && Array.isArray(r.AutoPath) && r.AutoPath.length > 0,
-      )
+      .filter((r) => getAutoPaths(r).length > 0)
       .sort(
         (a, b) =>
           Number(b.Match ?? b.match ?? 0) - Number(a.Match ?? a.match ?? 0),

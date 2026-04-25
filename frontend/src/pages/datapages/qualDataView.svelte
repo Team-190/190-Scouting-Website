@@ -681,6 +681,20 @@
       ]);
   }
 
+  function getAutoPaths(row: any): any[] {
+    const nestedPaths = row?.qual?.auto?.path;
+    if (Array.isArray(nestedPaths)) {
+      return nestedPaths.filter((path: any) => Array.isArray(path) && path.length >= 2);
+    }
+
+    const legacyPaths = row?.AutoPath;
+    if (Array.isArray(legacyPaths)) {
+      return legacyPaths.filter((path: any) => Array.isArray(path) && path.length >= 2);
+    }
+
+    return [];
+  }
+
   // ─── Mount ────────────────────────────────────────────────────────────────────
   onMount(async () => {
     isLoading = true;
@@ -1356,7 +1370,7 @@
                         Match {matchRow.Match ?? matchRow.match}
                       </div>
 
-                      {#if matchRow?.AutoPath && Array.isArray(matchRow.AutoPath) && matchRow.AutoPath.length > 0}
+                      {#if getAutoPaths(matchRow).length > 0}
                         <div class="auto-path-wrapper">
                           <div
                             class="progress-bar-container"

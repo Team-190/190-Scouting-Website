@@ -508,6 +508,10 @@
     const teamForRecord = String(teamNumber || assignedTeamNumber || "").trim();
 
     const qualSection = {
+      auto: {
+        startPosition: autoStartPosition,
+        path: normalizedPaths,
+      },
       defense: {
         types: scoutingQuestions.defenseTypes,
         effectiveness: scoutingQuestions.defenseEffectiveness,
@@ -524,8 +528,7 @@
 
     const quantSection = {
       shootingBalls: quantCounters.shootingBalls,
-      shootFeedingBalls: quantCounters.shootFeedingBalls,
-      trenchFeedingBalls: quantCounters.trenchFeedingBalls,
+      feedingBalls: quantCounters.shootFeedingBalls + quantCounters.trenchFeedingBalls,
       trenchCycles: quantCounters.trenchCycles,
       bumpCycles: quantCounters.bumpCycles,
     };
@@ -539,21 +542,6 @@
       Alliance: alliance,
       qual: qualSection,
       quant: quantSection,
-
-      // Compatibility mirror fields for existing consumers.
-      AutoStartPosition: autoStartPosition,
-      AutoPath: normalizedPaths,
-      defenseTypes: scoutingQuestions.defenseTypes,
-      defenseEffectiveness: scoutingQuestions.defenseEffectiveness,
-      defenseComments: scoutingQuestions.defenseComments,
-      avoidanceTypes: scoutingQuestions.avoidanceTypes,
-      avoidanceEffectiveness: scoutingQuestions.avoidanceEffectiveness,
-      defenseAvoidance: scoutingQuestions.avoidanceComments,
-      matchEvents: scoutingQuestions.matchEvents.join(", "),
-      otherNotes: scoutingQuestions.otherComments,
-      fuelScored: quantCounters.shootingBalls,
-      trenchFeedVolume: quantCounters.trenchCycles,
-      bumpFeedVolume: quantCounters.bumpCycles,
     };
 
     await queueQualitativeScoutingForSync(eventCode, record.Team, record.Match, record);
