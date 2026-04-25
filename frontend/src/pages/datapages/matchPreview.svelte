@@ -846,9 +846,7 @@
             {@const currentPath = autoPathRows[autoIdx]}
             <div class="auto-path-viewer">
               <div class="auto-path-tab-bar">
-                <span class="auto-path-tab-label">
-                  <span class="section-icon">🤖 </span> Auto</span>
-                
+                <span class="auto-path-tab-label"> <span class="section-icon">🤖</span> Auto</span>
                 <div class="auto-path-tabs">
                   {#each autoPathRows as pathRow, tabIdx}
                     <button
@@ -989,7 +987,7 @@
             {@const currentPath = autoPathRows[autoIdx]}
             <div class="auto-path-viewer">
               <div class="auto-path-tab-bar">
-                <span class="auto-path-tab-label"><span class="section-icon">🤖 </span> Auto</span>
+                <span class="auto-path-tab-label"> <span class="section-icon">🤖</span> Auto</span>
                 <div class="auto-path-tabs">
                   {#each autoPathRows as pathRow, tabIdx}
                     <button
