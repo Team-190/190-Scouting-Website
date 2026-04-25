@@ -22,6 +22,7 @@ vi.mock('echarts', () => ({
 vi.mock('../../utils/api.js', () => ({
     fetchEvents: vi.fn().mockResolvedValue({ ok: true, json: async () => ([]) }),
     fetchTeams: vi.fn().mockResolvedValue({ _teams: {}, _teamNumbers: [] }),
+    readPitScoutingFromIDB: vi.fn().mockResolvedValue({}),
     fetchAvailableTeams: vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [] }) }),
     fetchAllData: vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [] }) }),
     fetchSingleMetric: vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
