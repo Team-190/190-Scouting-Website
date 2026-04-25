@@ -6,6 +6,26 @@
 
 import pako from 'pako';
 
+const COMPRESSION_PROTOCOL =
+    typeof __RUNTIME_COMPRESSION__ === 'object' && __RUNTIME_COMPRESSION__
+        ? __RUNTIME_COMPRESSION__
+        : { envelopeFlag: '__compressed', version: 2 };
+
+const ENVELOPE_FLAG = COMPRESSION_PROTOCOL.envelopeFlag || '__compressed';
+const ENVELOPE_VERSION = Number(COMPRESSION_PROTOCOL.version || 2);
+
+export function getCompressionProtocol() {
+    return {
+        envelopeFlag: ENVELOPE_FLAG,
+        version: ENVELOPE_VERSION,
+    };
+}
+
+export function isCompressedEnvelope(value) {
+    if (!value || typeof value !== 'object') return false;
+    return value[ENVELOPE_FLAG] === true || value.__compressed === true;
+}
+
 /**
  * Compress a JSON object using gzip compression for much better ratios
  * @param {any} obj - The object to compress
@@ -28,8 +48,8 @@ export function compressData(obj) {
         
         // Mark as compressed with version for future algorithm changes
         return {
-            __compressed: true,
-            __version: 2, // Version 2 = gzip compression
+            [ENVELOPE_FLAG]: true,
+            __version: ENVELOPE_VERSION,
             data: base64
         };
     } catch (error) {
@@ -47,7 +67,7 @@ export function compressData(obj) {
 export function decompressData(value) {
     try {
         // Check if it's actually compressed
-        if (!value || typeof value !== 'object' || !value.__compressed) {
+        if (!isCompressedEnvelope(value)) {
             return value;
         }
         
@@ -59,7 +79,7 @@ export function decompressData(value) {
         }
         
         // Handle different compression versions
-        const version = value.__version || 1;
+        const version = Number(value.__version || 1);
         
         if (version === 2) {
             // Gzip decompression (current version)

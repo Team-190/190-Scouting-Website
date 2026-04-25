@@ -3,10 +3,7 @@
   import { onMount } from "svelte";
   import logo from "../images/frc190_Logo.png";
   import { isSidebarOpen } from "../stores/sidebarState.js";
-  import {
-      fetchAlliances,
-      fetchElimsHaveStarted,
-  } from "../utils/api.js";
+  import { fetchAlliances, fetchElimsHaveStarted } from "../utils/api.js";
 
   let alliancesAvailable = false;
   let elimsStarted = false;
@@ -113,131 +110,173 @@
   });
 </script>
 
-<nav class="navbar" class:collapsed={!$isSidebarOpen && !isHovering} class:mobile={isMobile} on:mouseenter={handleMouseEnter} on:mouseleave={handleMouseLeave}>
-  <button class="toggle-btn" on:click={toggleSidebar} aria-label="Toggle sidebar">
+<nav
+  class="navbar"
+  class:collapsed={!$isSidebarOpen && !isHovering}
+  class:mobile={isMobile}
+  on:mouseenter={handleMouseEnter}
+  on:mouseleave={handleMouseLeave}
+>
+  <button
+    class="toggle-btn"
+    on:click={toggleSidebar}
+    aria-label="Toggle sidebar"
+  >
     <span class="toggle-icon" class:rotated={$isSidebarOpen}></span>
   </button>
 
   <div class="sidebar-content">
-    <div class="logo-section" on:click={() => navigate("/")} role="button" tabindex="0" on:keydown={(e) => e.key === "Enter" && navigate("/")}>
+    <div
+      class="logo-section"
+      on:click={() => navigate("/")}
+      role="button"
+      tabindex="0"
+      on:keydown={(e) => e.key === "Enter" && navigate("/")}
+    >
       <img src={logo} alt="FRC 190 Logo" class="logo" />
     </div>
 
     <div class="nav-links" class:disabled={!($isSidebarOpen || isHovering)}>
       <!-- Data Collection Dropdown -->
       <div class="dropdown" class:disabled={!($isSidebarOpen || isHovering)}>
-        <button 
-          class="dropdown-toggle" 
-          on:click={() => toggleMenu('dataCollection')}
+        <button
+          class="dropdown-toggle"
+          on:click={() => toggleMenu("dataCollection")}
           disabled={!($isSidebarOpen || isHovering)}
         >
           <span class="label">Data Collection</span>
-          <span class="dropdown-arrow" class:expanded={expandedMenu === 'dataCollection'}>▼</span>
+          <span
+            class="dropdown-arrow"
+            class:expanded={expandedMenu === "dataCollection"}>▼</span
+          >
         </button>
-        {#if expandedMenu === 'dataCollection'}
+        {#if expandedMenu === "dataCollection"}
           <div class="dropdown-menu">
-            <button on:click={() => navigate("/pitScouting")} class="dropdown-item">
+            <button
+              on:click={() => navigate("/pitScouting")}
+              class="dropdown-item"
+            >
               Pit Scouting
             </button>
-            <button on:click={() => navigate("/qualPage")} class="dropdown-item">
+            <button
+              on:click={() => navigate("/qualPage")}
+              class="dropdown-item"
+            >
               Qual Scouting
             </button>
           </div>
         {/if}
       </div>
-      
+
       <!-- Ratings Dropdown -->
       <div class="dropdown" class:disabled={!($isSidebarOpen || isHovering)}>
-        <button 
-          class="dropdown-toggle" 
-          on:click={() => toggleMenu('ratings')}
+        <button
+          class="dropdown-toggle"
+          on:click={() => toggleMenu("ratings")}
           disabled={!($isSidebarOpen || isHovering)}
         >
           <span class="label">Ratings</span>
-          <span class="dropdown-arrow" class:expanded={expandedMenu === 'ratings'}>▼</span>
+          <span
+            class="dropdown-arrow"
+            class:expanded={expandedMenu === "ratings"}>▼</span
+          >
         </button>
-        {#if expandedMenu === 'ratings'}
+        {#if expandedMenu === "ratings"}
           <div class="dropdown-menu">
-            <button on:click={() => navigate("/gracePage")} class="dropdown-item">
+            <button
+              on:click={() => navigate("/gracePage")}
+              class="dropdown-item"
+            >
               Grace Page
             </button>
-            <button on:click={() => navigate("/ananthPage")} class="dropdown-item">
+            <button
+              on:click={() => navigate("/ananthPage")}
+              class="dropdown-item"
+            >
               Ananth Page
             </button>
           </div>
         {/if}
       </div>
-      
+
       <!-- View Data Dropdown -->
       <div class="dropdown" class:disabled={!($isSidebarOpen || isHovering)}>
-        <button 
-          class="dropdown-toggle" 
-          on:click={() => toggleMenu('viewData')}
+        <button
+          class="dropdown-toggle"
+          on:click={() => toggleMenu("viewData")}
           disabled={!($isSidebarOpen || isHovering)}
         >
           <span class="label">View Data</span>
-          <span class="dropdown-arrow" class:expanded={expandedMenu === 'viewData'}>▼</span>
+          <span
+            class="dropdown-arrow"
+            class:expanded={expandedMenu === "viewData"}>▼</span
+          >
         </button>
-        {#if expandedMenu === 'viewData'}
+        {#if expandedMenu === "viewData"}
           <div class="dropdown-menu">
-            <button on:click={() => navigate("/singleMetric")} class="dropdown-item">
+            <button
+              on:click={() => navigate("/singleMetric")}
+              class="dropdown-item"
+            >
               Event View
             </button>
-            <button on:click={() => navigate("/teamView")} class="dropdown-item">
+            <button
+              on:click={() => navigate("/teamView")}
+              class="dropdown-item"
+            >
               Team View
             </button>
-            <button on:click={() => navigate("/matchPreview")} class="dropdown-item">
+            <button
+              on:click={() => navigate("/matchPreview")}
+              class="dropdown-item"
+            >
               Match Preview
             </button>
-            <button on:click={() => navigate("/qualDataView")} class="dropdown-item">
+            <button
+              on:click={() => navigate("/qualDataView")}
+              class="dropdown-item"
+            >
               Qualitative Data
             </button>
           </div>
         {/if}
       </div>
-      
-      <button on:click={() => navigate("/pickLists")} disabled={!($isSidebarOpen || isHovering)}>
+
+      <button
+        on:click={() => navigate("/pickLists")}
+        disabled={!($isSidebarOpen || isHovering)}
+      >
         <span class="label">Pick Lists</span>
       </button>
 
-      {#if alliancesAvailable}
-        <div class="madness-wrapper">
-          {#if !elimsStarted}
-            <!-- 5 expanding shockwave rings -->
-            {#each Array(5) as _, i}
-              <div class="shockwave" style="--ri: {i}"></div>
-            {/each}
-
-            <!-- Smoke puffs -->
-            {#each Array(10) as _, i}
-              <div class="smoke-puff" style="--si: {i}"></div>
-            {/each}
-
-            <!-- Confetti burst -->
-            {#each Array(28) as _, i}
-              <div class="confetti" style="--ci: {i}">
-                {#if i % 6 === 0}★{:else if i % 6 === 1}●{:else if i % 6 === 2}■{:else if i % 6 === 3}♦{:else if i % 6 === 4}🏆{:else}⚡{/if}
-              </div>
-            {/each}
-
-            <!-- Orbiting stars -->
-            {#each Array(4) as _, i}
-              <div class="orbit-ring" style="--oi: {i}">
-                <div class="orbit-star">⭐</div>
-              </div>
-            {/each}
-
-            <!-- Lightning bolts -->
-            {#each Array(6) as _, i}
-              <div class="lightning" style="--li: {i}">⚡</div>
-            {/each}
-
-            <!-- Sparkles -->
-            <div class="sparkle-container">
-              {#each Array(12) as _, i}
-                <div class="sparkle" style="--i: {i}">✦</div>
+      <div class="bottom-actions">
+        {#if alliancesAvailable}
+          <div class="madness-wrapper">
+            {#if !elimsStarted}
+              <!-- 5 expanding shockwave rings -->
+              {#each Array(5) as _, i}
+                <div class="shockwave" style="--ri: {i}"></div>
               {/each}
-            </div>
+
+              <!-- Smoke puffs -->
+              {#each Array(10) as _, i}
+                <div class="smoke-puff" style="--si: {i}"></div>
+              {/each}
+
+              <!-- Confetti burst -->
+              {#each Array(28) as _, i}
+                <div class="confetti" style="--ci: {i}">
+                  {#if i % 6 === 0}★{:else if i % 6 === 1}●{:else if i % 6 === 2}■{:else if i % 6 === 3}♦{:else if i % 6 === 4}🏆{:else}⚡{/if}
+                </div>
+              {/each}
+
+              <!-- Orbiting stars -->
+              {#each Array(4) as _, i}
+                <div class="orbit-ring" style="--oi: {i}">
+                  <div class="orbit-star">⭐</div>
+                </div>
+              {/each}
+            
 
             <!-- Screen flash overlay -->
             <div class="flash-overlay"></div>
@@ -251,14 +290,35 @@
               <span>Gompei Madness</span>
             </button>
           {:else}
-            <button class="madness-btn" on:click={() => navigate("/marchMadness")}>
+            <button
+              class="madness-btn"
+              on:click={() => navigate("/marchMadness")}
+            >
               <span>Gompei Madness</span>
             </button>
           {/if}
+
         </div>
       {/if}
+
+      <button
+        class="info-btn"
+        on:click={() => navigate("/info")}
+        disabled={!($isSidebarOpen || isHovering)}
+      >
+        <span class="label">Info Page</span>
+      </button>
+
+      <button
+        class="info-btn debug-btn"
+        on:click={() => navigate("/debug")}
+        disabled={!($isSidebarOpen || isHovering)}
+      >
+        <span class="label">Debug Page</span>
+      </button>
     </div>
   </div>
+</div>
 </nav>
 
 <style>
@@ -344,6 +404,25 @@
     transform: none;
   }
 
+   .info-btn {
+    width: calc(100% - 2rem);
+    margin: 0.25rem 1rem 0;
+    border: 2px solid #c81b00;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #262626 0%, #383838 100%);
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 700;
+    padding: 0.55rem 0.75rem;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .info-btn:not(:disabled):hover {
+    background: linear-gradient(135deg, #333 0%, #444 100%);
+    border-color: #e02200;
+  }
+
   .sidebar-content {
     display: flex;
     flex-direction: column;
@@ -417,7 +496,9 @@
     color: white;
     cursor: pointer;
     padding: 1rem;
-    transition: background-color 0.2s, opacity 0.2s;
+    transition:
+      background-color 0.2s,
+      opacity 0.2s;
     display: flex;
     align-items: center;
     gap: 1rem;
@@ -469,7 +550,9 @@
     color: white;
     cursor: pointer;
     padding: 1rem;
-    transition: background-color 0.2s, opacity 0.2s;
+    transition:
+      background-color 0.2s,
+      opacity 0.2s;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -507,10 +590,7 @@
   }
 
   .dropdown-menu {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
+    position: static;
     background-color: #222;
     border-left: 3px solid #c81b00;
     padding: 0;
@@ -559,6 +639,15 @@
     opacity: 0.5;
   }
 
+  .bottom-actions {
+    margin-top: auto;
+    padding: 0.5rem 0 1rem;
+  }
+
+  .navbar.collapsed .bottom-actions {
+    display: none;
+  }
+
   /* ── Madness wrapper ── */
   .madness-wrapper {
     position: relative;
@@ -566,7 +655,6 @@
     align-items: center;
     justify-content: center;
     padding: 1rem;
-    margin-top: auto;
     animation: dropIn 0.8s cubic-bezier(0.22, 1.8, 0.36, 1) both;
   }
 
@@ -616,7 +704,7 @@
       opacity: 0;
     }
   }
-  
+
   .shockwave {
     position: absolute;
     inset: -4px;
@@ -811,18 +899,54 @@
     transform: translate(-50%, -50%);
   }
 
-  .sparkle:nth-child(1) { top: -5%;  left: 50%;  }
-  .sparkle:nth-child(2) { top: 5%;   left: 82%;  }
-  .sparkle:nth-child(3) { top: 50%;  left: 108%; }
-  .sparkle:nth-child(4) { top: 95%;  left: 82%;  }
-  .sparkle:nth-child(5) { top: 105%; left: 50%;  }
-  .sparkle:nth-child(6) { top: 95%;  left: 18%;  }
-  .sparkle:nth-child(7) { top: 50%;  left: -8%;  }
-  .sparkle:nth-child(8) { top: 5%;   left: 18%;  }
-  .sparkle:nth-child(9) { top: -10%; left: 30%;  }
-  .sparkle:nth-child(10){ top: -10%; left: 70%;  }
-  .sparkle:nth-child(11){ top: 110%; left: 30%;  }
-  .sparkle:nth-child(12){ top: 110%; left: 70%;  }
+  .sparkle:nth-child(1) {
+    top: -5%;
+    left: 50%;
+  }
+  .sparkle:nth-child(2) {
+    top: 5%;
+    left: 82%;
+  }
+  .sparkle:nth-child(3) {
+    top: 50%;
+    left: 108%;
+  }
+  .sparkle:nth-child(4) {
+    top: 95%;
+    left: 82%;
+  }
+  .sparkle:nth-child(5) {
+    top: 105%;
+    left: 50%;
+  }
+  .sparkle:nth-child(6) {
+    top: 95%;
+    left: 18%;
+  }
+  .sparkle:nth-child(7) {
+    top: 50%;
+    left: -8%;
+  }
+  .sparkle:nth-child(8) {
+    top: 5%;
+    left: 18%;
+  }
+  .sparkle:nth-child(9) {
+    top: -10%;
+    left: 30%;
+  }
+  .sparkle:nth-child(10) {
+    top: -10%;
+    left: 70%;
+  }
+  .sparkle:nth-child(11) {
+    top: 110%;
+    left: 30%;
+  }
+  .sparkle:nth-child(12) {
+    top: 110%;
+    left: 70%;
+  }
 
   @keyframes sparklePop {
     0% {
@@ -892,10 +1016,46 @@
       inset 0 1px 1px rgba(255, 255, 255, 0.5);
   }
 
+  .info-btn {
+    width: calc(100% - 2rem);
+    margin: 0.25rem 1rem 0;
+    border: 2px solid #c81b00;
+    border-radius: 6px;
+    background: linear-gradient(135deg, #262626 0%, #383838 100%);
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 700;
+    padding: 0.55rem 0.75rem;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .info-btn:not(:disabled):hover {
+    background: linear-gradient(135deg, #333 0%, #444 100%);
+    border-color: #e02200;
+  }
+
+  .debug-btn {
+    margin-top: 0.45rem;
+    border-color: #0c6da4;
+    background: linear-gradient(135deg, #1e2f3f 0%, #263f57 100%);
+  }
+
+  .debug-btn:not(:disabled):hover {
+    border-color: #2a92c7;
+    background: linear-gradient(135deg, #28445a 0%, #335975 100%);
+  }
+
   @keyframes goldShimmer {
-    0%   { background-position: 0%   50%; }
-    50%  { background-position: 100% 50%; }
-    100% { background-position: 0%   50%; }
+    0% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0% 50%;
+    }
   }
 
   @keyframes glowPulse {
@@ -913,13 +1073,29 @@
   }
 
   @keyframes btnWiggle {
-    0%,  85%, 100% { transform: rotate(0deg)  scale(1);    }
-    87%            { transform: rotate(-5deg) scale(1.08); }
-    89%            { transform: rotate(5deg)  scale(1.08); }
-    91%            { transform: rotate(-4deg) scale(1.06); }
-    93%            { transform: rotate(4deg)  scale(1.06); }
-    95%            { transform: rotate(-2deg) scale(1.03); }
-    97%            { transform: rotate(2deg)  scale(1.02); }
+    0%,
+    85%,
+    100% {
+      transform: rotate(0deg) scale(1);
+    }
+    87% {
+      transform: rotate(-5deg) scale(1.08);
+    }
+    89% {
+      transform: rotate(5deg) scale(1.08);
+    }
+    91% {
+      transform: rotate(-4deg) scale(1.06);
+    }
+    93% {
+      transform: rotate(4deg) scale(1.06);
+    }
+    95% {
+      transform: rotate(-2deg) scale(1.03);
+    }
+    97% {
+      transform: rotate(2deg) scale(1.02);
+    }
   }
 
   /* Double shine sweep */
@@ -945,32 +1121,46 @@
   }
 
   @keyframes shineSweep {
-    0%   { left: -75%;  }
-    55%  { left: 125%;  }
-    100% { left: 125%;  }
+    0% {
+      left: -75%;
+    }
+    55% {
+      left: 125%;
+    }
+    100% {
+      left: 125%;
+    }
   }
 
   @media (max-width: 768px) {
     .navbar {
-      width: min(82vw, 320px);
-      transform: translateX(calc(-100% + 56px));
-      transition: transform 0.3s ease;
-      box-shadow: 2px 0 10px rgba(0, 0, 0, 0.35);
-    }
-
-    .navbar.collapsed {
-      width: min(82vw, 320px);
-      transform: translateX(calc(-100% + 56px));
+      position: fixed;
+      width: 56px;
+      height: 56px;
+      transition: none;
+      box-shadow: none;
+      z-index: 1000;
+      overflow: visible;
     }
 
     .navbar.mobile:not(.collapsed) {
-      transform: translateX(0);
+      width: min(82vw, 320px);
+      height: 100dvh;
+      top: 0;
+      left: 0;
+      box-shadow: 2px 0 10px rgba(0, 0, 0, 0.35);
+      overflow: hidden;
+      transition: width 1s, height 1s;
+    }
+
+    .navbar.mobile:not(.collapsed) .sidebar-content {
+      overflow-y: auto;
+      overflow-x: hidden;
+      /* Allow the content to scroll within the fixed-height navbar */
+      max-height: calc(100dvh - 2.9rem);
     }
 
     .toggle-btn {
-      top: 0.6rem;
-      left: auto;
-      right: 0.5rem;
       background: rgba(0, 0, 0, 0.25);
       border-radius: 8px;
       padding: 0.55rem;
@@ -978,7 +1168,6 @@
 
     .sidebar-content {
       margin-top: 2.9rem;
-      overflow-y: auto;
     }
 
     .logo {
