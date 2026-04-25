@@ -112,7 +112,7 @@
 
         const apiFormData = {
             teamNumber: selectedTeam,
-            ...Object.fromEntries(boolFields.map(f => [f, boolToYN(formData[f])])),
+            ...Object.fromEntries(boolFields.map(f => [f, boolToYN(formData[f])])) as Record<typeof boolFields[number], string>,
             ...Object.fromEntries(plainFields.map(f => [f, formData[f]])),
         };
 
@@ -603,7 +603,6 @@
         padding: 1.5rem;
         text-align: center;
         border-bottom: 3px solid var(--frc-190-red);
-        position: sticky;
         top: 0;
         z-index: 100;
         box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);

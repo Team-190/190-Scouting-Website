@@ -318,8 +318,20 @@
     const scaleX = W / RECORDED_W;
     const scaleY = H / RECORDED_H;
 
-    if (matchRow?.AutoPath && Array.isArray(matchRow.AutoPath)) {
-      const allPaths = matchRow.AutoPath.filter(
+    // Handle both old and new data structures
+    let autoPath = null;
+    
+    // New nested structure
+    if (matchRow?.qual?.auto?.path && Array.isArray(matchRow.qual.auto.path)) {
+      autoPath = matchRow.qual.auto.path;
+    }
+    // Old flat structure
+    else if (matchRow?.AutoPath && Array.isArray(matchRow.AutoPath)) {
+      autoPath = matchRow.AutoPath;
+    }
+    
+    if (autoPath) {
+      const allPaths = autoPath.filter(
         (path: any[]) => Array.isArray(path) && path.length >= 2,
       );
       if (allPaths.length === 0) return;
@@ -496,48 +508,36 @@
     "alliance",
     "AutoPath",
     "autoPath",
+    "AutoStartPosition",
+    "autoStartPosition",
+    "qual",
+    "quant",
     "_id",
     "id",
   ]);
 
   const QUAL_LABEL_OVERRIDES: Record<string, string> = {
-    autoActions: "Autonomous Actions",
-    travelMethod: "Travel Method",
-    travelTroubles: "Travel Troubles",
-    fuelScored: "Fuel Scored",
-    fuelCollectionPosition: "Fuel Collection Position",
-    shooterEfficiency: "Shooter Efficiency",
-    inactivePeriod: "Inactive Period",
-    trenchFeedVolume: "Trench Feed Volume",
-    bumpFeedVolume: "Bump Feed Volume",
+    defenseTypes: "Defense Types",
     defenseEffectiveness: "Defense Effectiveness",
-    defenseAvoidance: "Defense Avoidance",
-    intakeEfficiency: "Intake Efficiency",
-    penalties: "Penalties",
-    drivingQuality: "Driving Quality",
+    defenseComments: "Defense Comments",
+    avoidanceTypes: "Avoidance Types",
+    avoidanceEffectiveness: "Avoidance Effectiveness", 
+    avoidanceComments: "Avoidance Comments",
     matchEvents: "Match Events",
     otherNotes: "Notes",
-    climbQuality: "Climb Quality",
+    AutoStartPosition: "Auto Start Position",
   };
 
   const QUAL_FIELD_ORDER = [
-    "autoActions",
-    "travelMethod",
-    "travelTroubles",
-    "fuelScored",
-    "fuelCollectionPosition",
-    "shooterEfficiency",
-    "inactivePeriod",
-    "trenchFeedVolume",
-    "bumpFeedVolume",
+    "defenseTypes",
     "defenseEffectiveness",
-    "defenseAvoidance",
-    "intakeEfficiency",
-    "penalties",
-    "drivingQuality",
+    "defenseComments",
+    "avoidanceTypes", 
+    "avoidanceEffectiveness",
+    "avoidanceComments",
     "matchEvents",
     "otherNotes",
-    "climbQuality",
+    "AutoStartPosition",
   ];
 
   const QUAL_FIELD_ORDER_INDEX = new Map(
@@ -573,16 +573,94 @@
   function formatQualValue(key: string, value: any): string {
     if (key === "fuelScored") return formatSliderValue(value);
     if (typeof value === "boolean") return value ? "Yes" : "No";
-    if (Array.isArray(value) || typeof value === "object") {
+    if (Array.isArray(value)) {
+      // Handle arrays of strings (like defenseTypes, matchEvents)
+      if (value.every(item => typeof item === "string")) {
+        return value.join(", ");
+      }
+      // For other arrays, use JSON.stringify
+      return JSON.stringify(value);
+    }
+    if (typeof value === "object") {
       return JSON.stringify(value);
     }
     return String(value);
   }
 
+  function normalizeDataForDisplay(row: Record<string, any>): Record<string, any> {
+    // Handle new nested structure with qual/quant sections
+    if (row.qual && typeof row.qual === 'object') {
+      const normalized: Record<string, any> = {};
+      
+      // Extract qual section data only
+      if (row.qual.auto && typeof row.qual.auto === 'object') {
+        if (row.qual.auto.startPosition) {
+          normalized.AutoStartPosition = row.qual.auto.startPosition;
+        }
+        if (row.qual.auto.path && Array.isArray(row.qual.auto.path)) {
+          normalized.AutoPath = row.qual.auto.path;
+        }
+      }
+      
+      if (row.qual.defense && typeof row.qual.defense === 'object') {
+        if (row.qual.defense.types && Array.isArray(row.qual.defense.types)) {
+          normalized.defenseTypes = row.qual.defense.types;
+        }
+        if (row.qual.defense.effectiveness !== undefined) {
+          normalized.defenseEffectiveness = row.qual.defense.effectiveness;
+        }
+        if (row.qual.defense.comments) {
+          normalized.defenseComments = row.qual.defense.comments;
+        }
+      }
+      
+      if (row.qual.avoidance && typeof row.qual.avoidance === 'object') {
+        if (row.qual.avoidance.types && Array.isArray(row.qual.avoidance.types)) {
+          normalized.avoidanceTypes = row.qual.avoidance.types;
+        }
+        if (row.qual.avoidance.effectiveness !== undefined) {
+          normalized.avoidanceEffectiveness = row.qual.avoidance.effectiveness;
+        }
+        if (row.qual.avoidance.comments) {
+          normalized.avoidanceComments = row.qual.avoidance.comments;
+        }
+      }
+      
+      if (row.qual.matchEvents && Array.isArray(row.qual.matchEvents)) {
+        normalized.matchEvents = row.qual.matchEvents;
+      }
+      
+      if (row.qual.comments) {
+        normalized.otherNotes = row.qual.comments;
+      }
+      
+      // DO NOT extract quant section data - we only want qual data on this page
+      return normalized;
+    }
+    
+    // For old flat structure, filter out quant-related fields
+    const filtered: Record<string, any> = {};
+    const quantFields = [
+      'fuelScored', 'feedingBalls', 'trenchFeedVolume', 'bumpFeedVolume',
+      'shootingBalls', 'trenchCycles', 'bumpCycles'
+    ];
+    
+    for (const [key, value] of Object.entries(row)) {
+      if (!quantFields.includes(key)) {
+        filtered[key] = value;
+      }
+    }
+    
+    return filtered;
+  }
+
   function getQualMetricEntries(
     row: Record<string, any>,
   ): Array<[string, string]> {
-    return Object.entries(row)
+    // Normalize data to handle both old and new formats
+    const normalizedRow = normalizeDataForDisplay(row);
+    
+    return Object.entries(normalizedRow)
       .filter(
         ([key, value]) =>
           !QUAL_METADATA_KEYS.has(key) &&

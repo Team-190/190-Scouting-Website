@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import fieldImageSrc from "../../images/FieldImage.png";
   import {
+    fetchPitScouting,
     flushQualitativeScoutingQueue,
     queueQualitativeScoutingForSync,
   } from "../../utils/api";
@@ -34,6 +35,7 @@
     "Tipped over",
     "Yellow card",
     "Red card",
+    "No Show",
   ];
 
   const STATION_LOOKUP: Record<string, { alliance: string; index: number }> = {
@@ -81,22 +83,26 @@
 
   let quantCounters = {
     shootingBalls: 0,
-    feedingBalls: 0,
+    shootFeedingBalls: 0,
+    trenchFeedingBalls: 0,
     trenchCycles: 0,
     bumpCycles: 0,
   };
 
   let scoutingQuestions: ScoutingQuestions = getDefaultQuestions();
 
+  let pitData: any = null;
+  let loadingPitData = false;
+
   let submitStatus: null | { type: "local" | "server" | "partial"; message: string } = null;
 
   function getDefaultQuestions(): ScoutingQuestions {
     return {
       defenseTypes: [],
-      defenseEffectiveness: 3,
+      defenseEffectiveness: null,
       defenseComments: "",
       avoidanceTypes: [],
-      avoidanceEffectiveness: 3,
+      avoidanceEffectiveness: null,
       avoidanceComments: "",
       matchEvents: [],
       otherComments: "",
@@ -203,6 +209,47 @@
     }
   }
 
+  async function loadPitData(teamNumber: string) {
+    if (!teamNumber) {
+      pitData = null;
+      return;
+    }
+
+    loadingPitData = true;
+    try {
+      const response = await fetchPitScouting(eventCode, {});
+      const data = await response.json();
+      
+      console.log("Pit data loaded:", data);
+      console.log("Looking for team:", teamNumber);
+      
+      // Find pit data for this team - handle both string and number keys
+      if (data && typeof data === 'object') {
+        // Try direct team number match first
+        pitData = data[teamNumber] || data[String(teamNumber)] || null;
+        
+        // If not found, try looking through all entries
+        if (!pitData) {
+          for (const [key, value] of Object.entries(data)) {
+            if (key === teamNumber || key === String(teamNumber)) {
+              pitData = value;
+              break;
+            }
+          }
+        }
+        
+        console.log("Found pit data for team:", pitData);
+      } else {
+        pitData = null;
+      }
+    } catch (error) {
+      console.error("Error loading pit data:", error);
+      pitData = null;
+    } finally {
+      loadingPitData = false;
+    }
+  }
+
   onMount(() => {
     loadMatchAlliances();
   });
@@ -214,6 +261,7 @@
   $: assignedTeamNumber = resolveAssignedTeam(matchNumber, selectedStation, matchAlliances);
   $: teamNumber = assignedTeamNumber || "";
   $: alliance = selectedStation.startsWith("B") ? "Blue" : "Red";
+  $: if (teamNumber) loadPitData(teamNumber);
 
   function initCanvas(node: HTMLCanvasElement) {
     canvasEl = node;
@@ -430,10 +478,18 @@
     key: "defenseEffectiveness" | "avoidanceEffectiveness",
     value: number,
   ) {
-    scoutingQuestions = {
-      ...scoutingQuestions,
-      [key]: value,
-    };
+    // Toggle off if clicking the same value again
+    if (scoutingQuestions[key] === value) {
+      scoutingQuestions = {
+        ...scoutingQuestions,
+        [key]: null, // Clear selection completely
+      };
+    } else {
+      scoutingQuestions = {
+        ...scoutingQuestions,
+        [key]: value,
+      };
+    }
   }
 
   function proceedToTeleop() {
@@ -452,10 +508,6 @@
     const teamForRecord = String(teamNumber || assignedTeamNumber || "").trim();
 
     const qualSection = {
-      auto: {
-        startPosition: autoStartPosition,
-        path: normalizedPaths,
-      },
       defense: {
         types: scoutingQuestions.defenseTypes,
         effectiveness: scoutingQuestions.defenseEffectiveness,
@@ -472,7 +524,8 @@
 
     const quantSection = {
       shootingBalls: quantCounters.shootingBalls,
-      feedingBalls: quantCounters.feedingBalls,
+      shootFeedingBalls: quantCounters.shootFeedingBalls,
+      trenchFeedingBalls: quantCounters.trenchFeedingBalls,
       trenchCycles: quantCounters.trenchCycles,
       bumpCycles: quantCounters.bumpCycles,
     };
@@ -524,6 +577,9 @@
     }
 
     phase = "done";
+    
+    // Scroll to top of page after submission
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   function resetForm() {
@@ -536,7 +592,8 @@
     submitStatus = null;
     quantCounters = {
       shootingBalls: 0,
-      feedingBalls: 0,
+      shootFeedingBalls: 0,
+      trenchFeedingBalls: 0,
       trenchCycles: 0,
       bumpCycles: 0,
     };
@@ -675,13 +732,24 @@
         </div>
 
         <div class="counter-card">
-          <h3>Feeding Balls</h3>
-          <div class="counter-value">{quantCounters.feedingBalls}</div>
+          <h3>Shoot Feeding Balls</h3>
+          <div class="counter-value">{quantCounters.shootFeedingBalls}</div>
           <div class="counter-actions wide">
-            <button class="counter-btn neg" on:click={() => adjustCounter('feedingBalls', -10)}>-10</button>
-            <button class="counter-btn neg" on:click={() => adjustCounter('feedingBalls', -5)}>-5</button>
-            <button class="counter-btn pos" on:click={() => adjustCounter('feedingBalls', 5)}>+5</button>
-            <button class="counter-btn pos" on:click={() => adjustCounter('feedingBalls', 10)}>+10</button>
+            <button class="counter-btn neg" on:click={() => adjustCounter('shootFeedingBalls', -10)}>-10</button>
+            <button class="counter-btn neg" on:click={() => adjustCounter('shootFeedingBalls', -5)}>-5</button>
+            <button class="counter-btn pos" on:click={() => adjustCounter('shootFeedingBalls', 5)}>+5</button>
+            <button class="counter-btn pos" on:click={() => adjustCounter('shootFeedingBalls', 10)}>+10</button>
+          </div>
+        </div>
+
+        <div class="counter-card">
+          <h3>Trench Feeding Balls</h3>
+          <div class="counter-value">{quantCounters.trenchFeedingBalls}</div>
+          <div class="counter-actions wide">
+            <button class="counter-btn neg" on:click={() => adjustCounter('trenchFeedingBalls', -10)}>-10</button>
+            <button class="counter-btn neg" on:click={() => adjustCounter('trenchFeedingBalls', -5)}>-5</button>
+            <button class="counter-btn pos" on:click={() => adjustCounter('trenchFeedingBalls', 5)}>+5</button>
+            <button class="counter-btn pos" on:click={() => adjustCounter('trenchFeedingBalls', 10)}>+10</button>
           </div>
         </div>
 
@@ -703,6 +771,43 @@
           </div>
         </div>
       </div>
+
+      <!-- Pit Scouting Data Display -->
+      {#if pitData}
+        <div class="pit-data-section">
+          <h3 class="pit-data-title">Team {teamNumber} Pit Data</h3>
+          <div class="pit-data-grid">
+            {#if pitData.quantityBallsHopper !== undefined && pitData.quantityBallsHopper !== null}
+              <div class="pit-data-item">
+                <span class="pit-data-label">Hopper Size:</span>
+                <span class="pit-data-value">{pitData.quantityBallsHopper}</span>
+              </div>
+            {/if}
+            
+            {#if pitData.avgShootSpeed !== undefined && pitData.avgShootSpeed !== null}
+              <div class="pit-data-item">
+                <span class="pit-data-label">Shooting Speed:</span>
+                <span class="pit-data-value">{pitData.avgShootSpeed}</span>
+              </div>
+            {/if}
+            
+            {#if pitData.avgIntakeSpeed !== undefined && pitData.avgIntakeSpeed !== null}
+              <div class="pit-data-item">
+                <span class="pit-data-label">Intaking Speed:</span>
+                <span class="pit-data-value">{pitData.avgIntakeSpeed}</span>
+              </div>
+            {/if}
+          </div>
+        </div>
+      {:else if loadingPitData}
+        <div class="pit-data-section">
+          <h3 class="pit-data-title">Loading pit data...</h3>
+        </div>
+      {:else if teamNumber}
+        <div class="pit-data-section">
+          <h3 class="pit-data-title">No pit data available for Team {teamNumber}</h3>
+        </div>
+      {/if}
 
       <div class="teleop-actions">
         <button class="back-btn" on:click={() => (phase = 'auto')}>← Back to Auto</button>
@@ -1314,6 +1419,7 @@
     gap: 0.7rem;
     align-items: center;
     margin-top: 0.35rem;
+    flex-wrap: wrap;
   }
 
   .back-btn {
@@ -1431,6 +1537,53 @@
     .chip-grid {
       grid-template-columns: 1fr 1fr;
     }
+  }
+
+  /* Pit Data Section Styles */
+  .pit-data-section {
+    background: rgba(0, 48, 135, 0.1);
+    border: 1px solid rgba(0, 48, 135, 0.3);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-top: 1rem;
+  }
+
+  .pit-data-title {
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin: 0 0 0.8rem 0;
+    text-align: center;
+  }
+
+  .pit-data-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 0.8rem;
+  }
+
+  .pit-data-item {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.3rem;
+    padding: 0.8rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .pit-data-label {
+    color: #aaa;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .pit-data-value {
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 700;
   }
 
   @media (max-width: 768px) {
