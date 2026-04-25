@@ -29,6 +29,7 @@
     "msnodesqlv8": "^5.1.5",
     "mssql": "^12.2.0",
     "nodemon": "^3.1.11",
+    "pako": "^2.1.0",
     "pg": "^8.16.3"
   },
   "devDependencies": {

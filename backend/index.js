@@ -16,6 +16,7 @@ const externalAPI = require("./externalApi.js");
 const session = require("express-session");
 const cors = require("cors");
 const runtimeConstants = require("../runtime/constants");
+const { decompressData, isCompressedEnvelope } = require("./compression.js");
 require('dotenv').config({ path: path.resolve(__dirname, '../.env'), override: true });
 
 const app = express();
@@ -116,6 +117,19 @@ if (typeof refreshTimer.unref === "function") {
 }
 
 app.use(express.json());
+
+// Decompress any compressed payloads before processing
+app.use((req, res, next) => {
+  if (req.method !== 'POST') return next();
+  
+  if (isCompressedEnvelope(req.body)) {
+    const decompressed = decompressData(req.body);
+    req.body = decompressed;
+    console.log(`[Decompression] Decompressed POST ${req.path}`, decompressed);
+  }
+  
+  next();
+});
 
 app.use(
   compression({
@@ -479,7 +493,7 @@ app.post("/api/postPitScouting", validateEventCode, async (req, res) => {
     return res.sendStatus(400);
   }
 
-  console.log(formData);
+  console.log("Pit scouting data:", formData);
   let fileData = await ensureEventCodeExists("pitScoutingData", event);
   fileData[event] ||= {};
   fileData[event][team] = formData;
@@ -497,7 +511,7 @@ app.post("/api/postQualitativeScouting", validateEventCode, async (req, res) => 
     return res.sendStatus(400);
   }
 
-  console.log(formData);
+  console.log("Qual scouting data:", formData);
   let fileData = await ensureEventCodeExists("qualitativeScoutingData", event);
   fileData[event] ||= {};
   fileData[event][team] ||= {};
