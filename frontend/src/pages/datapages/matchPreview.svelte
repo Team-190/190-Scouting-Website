@@ -1,11 +1,4 @@
 <script lang="ts">
-  import {
-      AllCommunityModule,
-      createGrid,
-      ModuleRegistry,
-  } from "ag-grid-community";
-  import "ag-grid-community/styles/ag-grid.css";
-  import "ag-grid-community/styles/ag-theme-quartz.css";
   import { onMount, tick } from "svelte";
   import * as barGraph from "../../pages/graphcode/bar.js";
   import * as lineGraph from "../../pages/graphcode/line.js";
@@ -13,38 +6,24 @@
   import * as radarGraph from "../../pages/graphcode/radar.js";
   import * as scatterGraph from "../../pages/graphcode/scatter.js";
   import {
-      fetchAnanthPage,
-      fetchGracePage,
-      fetchMatchAlliances,
-      fetchOPR,
-      fetchCOPRs,
-      fetchStatboticsMatchPrediction,
+    fetchAnanthPage,
+    fetchGracePage,
+    fetchMatchAlliances,
+    fetchOPR,
+    fetchCOPRs,
+    fetchStatboticsMatchPrediction,
+    readQualScoutingFromIDB,
   } from "../../utils/api.js";
   import {
-      BOOLEAN_METRICS,
-      CLIMBSTATE_METRIC,
-      COLOR_MODES,
-      ELIM_LEVEL_ORDER,
-      EXCLUDED_FIELDS,
-      getAnanthRatings,
-      getGraceRatings,
-      HEADER_HEIGHT,
-      INVERTED_METRICS,
-      lerpColor,
-      mean,
-      median,
-      METADATA_KEYS,
-      METRIC_DISPLAY_NAMES,
-      percentile,
-      ROW_HEIGHT,
-      sd,
-      estimateTeamPoints,
-      estimateTeamPoints2,
+    COLOR_MODES,
+    ELIM_LEVEL_ORDER,
+    getAnanthRatings,
+    getGraceRatings,
+    percentile,
   } from "../../utils/pageUtils.js";
-  import { getIndexedDBStore } from '../../utils/indexedDB';
-  import { matchPreviewCache } from '../../stores/matchPreviewCache.js';
-
-  ModuleRegistry.registerModules([AllCommunityModule]);
+  import { getIndexedDBStore } from "../../utils/indexedDB";
+  import { matchPreviewCache } from "../../stores/matchPreviewCache.js";
+  import fieldImageSrc from "../../images/FieldImage.png";
 
   // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -52,245 +31,294 @@
   const AnanthRating = getAnanthRatings();
   const GraceRating = getGraceRatings();
 
+  // ─── Qual field config (from qualitative scouting page) ──────────────────────
+
+  const QUAL_METADATA_KEYS = new Set([
+    "RecordType",
+    "recordType",
+    "Match",
+    "match",
+    "Team",
+    "team",
+    "ScouterName",
+    "scouterName",
+    "ScoutStation",
+    "scoutStation",
+    "Alliance",
+    "alliance",
+    "AutoPath",
+    "autoPath",
+    "_id",
+    "id",
+  ]);
+
+  const QUAL_LABEL_OVERRIDES: Record<string, string> = {
+    autoActions: "Autonomous Actions",
+    travelMethod: "Travel Method",
+    travelTroubles: "Travel Troubles",
+    fuelScored: "Fuel Scored",
+    fuelCollectionPosition: "Fuel Collection Position",
+    shooterEfficiency: "Shooter Efficiency",
+    inactivePeriod: "Inactive Period",
+    trenchFeedVolume: "Trench Feed Volume",
+    bumpFeedVolume: "Bump Feed Volume",
+    defenseEffectiveness: "Defense Effectiveness",
+    defenseAvoidance: "Defense Avoidance",
+    intakeEfficiency: "Intake Efficiency",
+    penalties: "Penalties",
+    drivingQuality: "Driving Quality",
+    matchEvents: "Match Events",
+    otherNotes: "Notes",
+    climbQuality: "Climb Quality",
+  };
+
+  const QUAL_FIELD_ORDER = [
+    "autoActions",
+    "travelMethod",
+    "travelTroubles",
+    "fuelScored",
+    "fuelCollectionPosition",
+    "shooterEfficiency",
+    "inactivePeriod",
+    "trenchFeedVolume",
+    "bumpFeedVolume",
+    "defenseEffectiveness",
+    "defenseAvoidance",
+    "intakeEfficiency",
+    "penalties",
+    "drivingQuality",
+    "matchEvents",
+    "otherNotes",
+    "climbQuality",
+  ];
+
+  const QUAL_FIELD_ORDER_INDEX = new Map(
+    QUAL_FIELD_ORDER.map((field, index) => [field, index]),
+  );
+
+  function humanizeQualKey(key: string): string {
+    if (QUAL_LABEL_OVERRIDES[key]) return QUAL_LABEL_OVERRIDES[key];
+    return key
+      .replace(/([a-z])([A-Z])/g, "$1 $2")
+      .replace(/[_-]+/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase())
+      .trim();
+  }
+
+  function hasRenderableQualValue(value: any): boolean {
+    if (value === null || value === undefined) return false;
+    if (typeof value === "string") return value.trim() !== "";
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === "object") return Object.keys(value).length > 0;
+    return true;
+  }
+
+  function formatSliderValue(value: any): string {
+    const num = Number(value);
+    if (!isFinite(num) || num <= 0) return "None (0)";
+    if (num <= 2) return `A little (${num})`;
+    if (num <= 5) return `Moderate (${num})`;
+    if (num <= 8) return `A lot (${num})`;
+    return `Tons (${num})`;
+  }
+
+  function formatQualValue(key: string, value: any): string {
+    if (key === "fuelScored") return formatSliderValue(value);
+    if (typeof value === "boolean") return value ? "Yes" : "No";
+    if (Array.isArray(value) || typeof value === "object")
+      return JSON.stringify(value);
+    return String(value);
+  }
+
+  function getQualMetricEntries(
+    row: Record<string, any>,
+  ): Array<[string, string]> {
+    return Object.entries(row)
+      .filter(
+        ([key, value]) =>
+          !QUAL_METADATA_KEYS.has(key) &&
+          !key.startsWith("_") &&
+          hasRenderableQualValue(value),
+      )
+      .sort(([aKey], [bKey]) => {
+        const aOrder =
+          QUAL_FIELD_ORDER_INDEX.get(aKey) ?? Number.MAX_SAFE_INTEGER;
+        const bOrder =
+          QUAL_FIELD_ORDER_INDEX.get(bKey) ?? Number.MAX_SAFE_INTEGER;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return humanizeQualKey(aKey).localeCompare(humanizeQualKey(bKey));
+      })
+      .map(([key, value]) => [
+        humanizeQualKey(key),
+        formatQualValue(key, value),
+      ]);
+  }
+
+  // ─── Qual data helpers ────────────────────────────────────────────────────────
+
+  function normalizeTeamKey(team: any): string {
+    const stripped = String(team ?? "").replace(/\D/g, "");
+    return stripped || String(team ?? "");
+  }
+
+  function normalizeEntries(value: any): any[] {
+    if (Array.isArray(value))
+      return value.filter((e) => e && typeof e === "object");
+    if (value && typeof value === "object") return [value];
+    return [];
+  }
+
+  function normalizeQualRows(teamKey: string, teamData: any): any[] {
+    const normalizedTeamKey = normalizeTeamKey(teamKey);
+    const rows: any[] = [];
+    if (!teamData || typeof teamData !== "object") return rows;
+
+    if (Array.isArray(teamData)) {
+      for (const row of teamData) {
+        if (!row || typeof row !== "object") continue;
+        rows.push({ Team: row.Team ?? row.team ?? normalizedTeamKey, ...row });
+      }
+      return rows.sort(
+        (a, b) =>
+          Number(a.Match ?? a.match ?? 0) - Number(b.Match ?? b.match ?? 0),
+      );
+    }
+
+    if (teamData.Match != null || teamData.match != null) {
+      rows.push({
+        Team: teamData.Team ?? teamData.team ?? normalizedTeamKey,
+        ...teamData,
+      });
+      return rows;
+    }
+
+    for (const [matchKey, matchValue] of Object.entries(teamData)) {
+      for (const entry of normalizeEntries(matchValue)) {
+        rows.push({
+          Team: entry.Team ?? entry.team ?? normalizedTeamKey,
+          Match: entry.Match ?? entry.match ?? matchKey,
+          ...entry,
+        });
+      }
+    }
+    return rows.sort(
+      (a, b) =>
+        Number(a.Match ?? a.match ?? 0) - Number(b.Match ?? b.match ?? 0),
+    );
+  }
+
   // ─── State ────────────────────────────────────────────────────────────────────
 
   let eventCode: string = "";
   let colorblindMode = localStorage.getItem("colorblindMode") || "normal";
-  let gridHeight = 400;
-  let teamViewData: any[] | null = null;
-  let graceData: any = null;   // was typo'd as garceData in original
+  let graceData: any = null;
   let ananthData: any = null;
-  let cache: Record<string, any[]> = {};
   let allMatches: any[] = [];
   let selectedMatch = "";
   let statboticsRedWinProb: number | null = null;
   let redAlliance: string[] = ["", "", ""];
   let blueAlliance: string[] = ["", "", ""];
-  let coprs: Record<string, any> = {};
 
-  /**
-   * OPR values keyed by bare team number string (no "frc" prefix).
-   * e.g. { "254": 72.3, "1678": 55.1 }
-   * Populated once in onMount via fetchOPR from externalApi.js.
-   */
   let teamOPRs: Record<string, number> = {};
-
-  let selectedTeam: string | null = null;
-  let charts: any[] = [];
-  let showDropdown = false;
   let isLoading = false;
-  let autoOnly = false;
-  let globalStatsCache: Record<string, any> = {};
+  let fieldImg: HTMLImageElement | null = null;
 
-  // Six grid DOM nodes / instances (3 red, 3 blue)
-  let domNode, domNode2, domNode3;
-  let domNodeRight, domNode4, domNode5;
-  let gridInstance, gridInstance2, gridInstance3;
-  let gridInstanceRight, gridInstance4, gridInstance5;
+  // Qual scouting data keyed by bare team number string
+  let qualScoutingByTeam: Record<string, any[]> = {};
 
-  // ─── Value Helpers ────────────────────────────────────────────────────────────
+  // Per-team pagination index for qual notes in the preview
+  let qualMatchIndexByTeam: Record<string, number> = {};
 
-  /**
-   * Extracts values from merged data format.
-   * Metric fields are stored as [autoValue, fullMatchValue].
-   * @param data - array of merged row objects
-   * @param useAuto - if true, extract index 0 (auto); if false, extract index 1 (full)
-   */
-  function extractValues(data: any[], useAuto: boolean): any[] {
-    const idx = useAuto ? 0 : 1;
-    return data.map((row) => {
-      const flat: any = {};
-      for (const key of Object.keys(row)) {
-        const val = row[key];
-        flat[key] = METADATA_KEYS.has(key)
-          ? val
-          : Array.isArray(val) && val.length === 2
-            ? val[idx]
-            : val;
-      }
-      return flat;
-    });
+  // Per-team pagination index for auto path viewer
+  let autoPathIndexByTeam: Record<string, number> = {};
+
+  // Auto path canvases
+  let autoPathCanvases: Map<HTMLCanvasElement, { matchRow: any }> = new Map();
+
+  // ─── Rating Helpers ───────────────────────────────────────────────────────────
+
+  function fetchGraceRating(team: number | string): string {
+    const teamKey = String(team);
+    if (!graceData || graceData[teamKey] === undefined)
+      return GraceRating[GraceRating.length - 1];
+    const entry = graceData[teamKey];
+    return GraceRating[
+      entry[Object.keys(entry)[Object.keys(entry).length - 1]]
+    ];
   }
 
-  function isNumeric(n: any): boolean {
-    if (n === null || n === undefined || n === "" || typeof n === "boolean") return false;
-    return !isNaN(parseFloat(n)) && isFinite(n);
+  function fetchAnanthRating(team: number | string): string {
+    const teamKey = String(team);
+    if (!ananthData || ananthData[teamKey] === undefined)
+      return AnanthRating[AnanthRating.length - 1];
+    const entry = ananthData[teamKey];
+    return AnanthRating[
+      entry[Object.keys(entry)[Object.keys(entry).length - 1]]
+    ];
   }
 
-  function normalizeValue(value: any): string {
-    if (value === null || value === undefined) return "";
-    if (typeof value === "boolean") return value ? "Yes" : "No";
-    return String(value);
-  }
+  // ─── OPR Color ────────────────────────────────────────────────────────────────
 
-  function checkIsNumericMetric(metric: string, data: any[]): boolean {
-    if (!data?.length) return false;
-    let hasData = false;
-    for (const row of data) {
-      const v = row[metric];
-      if (v !== undefined && v !== null && v !== "") {
-        hasData = true;
-        if (!isNumeric(v)) return false;
-      }
-    }
-    return hasData;
+  function lerpColorRGB(a: number[], b: number[], t: number): string {
+    const r = Math.round(a[0] + (b[0] - a[0]) * t);
+    const g = Math.round(a[1] + (b[1] - a[1]) * t);
+    const bb = Math.round(a[2] + (b[2] - a[2]) * t);
+    return `rgb(${r},${g},${bb})`;
   }
-
-  // ─── Color Helpers ────────────────────────────────────────────────────────────
 
   function textColorForBg(bg: string): string {
     if (!bg) return "black";
     const s = String(bg).trim().toLowerCase();
-    const darkList = [
-      "black", "#000", "#000000", "rgb(0,0,0)", "#4d4d4d", "rgb(77,77,77)",
-      "#808080", "rgb(128,128,128)", "rgb(128, 128, 128)",
-      "#0000ff", "#00f", "rgb(0,0,255)", "#ff0000", "#f00", "rgb(255,0,0)", "#333",
-    ];
-    if (darkList.includes(s)) return "white";
     if (s.startsWith("rgb")) {
       const parts = s.match(/\d+/g);
       if (parts) {
-        const brightness = (Number(parts[0]) * 299 + Number(parts[1]) * 587 + Number(parts[2]) * 114) / 1000;
+        const brightness =
+          (Number(parts[0]) * 299 +
+            Number(parts[1]) * 587 +
+            Number(parts[2]) * 114) /
+          1000;
         return brightness > 128 ? "black" : "white";
       }
     }
     return "black";
   }
 
-  function getBooleanColor(v: any): string {
-    if (v === null || v === undefined || v === "" || v === -1) return "#808080";
-    if (typeof v === "boolean") return v ? "#00FF00" : "#000000";
-    const s = String(v).toLowerCase().trim();
-    if (s === "yes" || s === "true" || s === "1") return "#00FF00";
-    if (s === "no" || s === "false") return "#000000";
-    if (s === "0") return "#808080";
-    if (isNumeric(v)) return Number(v) === 0 ? "#808080" : Number(v) > 0 ? "#00FF00" : "#000000";
-    return "#808080";
-  }
-
-  function getClimbStateColor(climbState: any, attemptClimb: any): string {
-    if (climbState === null || climbState === undefined || climbState === "" || climbState === -1)
-      return "#808080";
-    const s = String(climbState).toLowerCase().trim();
-    if (s === "no_climb" || s === "no climb" || s === "noclimb") {
-      const a = String(attemptClimb ?? "").toLowerCase().trim();
-      return (a === "yes" || a === "true" || a === "1" || attemptClimb === true || attemptClimb === 1)
-        ? "#FF0000"
-        : "#000000";
-    }
-    return { l1: "#FFFF00", l2: "#00FF00", l3: "#0000FF" }[s] ?? "#808080";
-  }
-
-  function getAlexBgColor(p: number | null, isAlexMode = false): string {
-    if (p === null || p === undefined) return "#4D4D4D";
-    if (isAlexMode)
-      return ({ 75: "#0000FF", 50: "#00FF00", 25: "#FFFF00", 0: "#FF0000" }[p] ?? "#4D4D4D");
-    return ({ 0: "#000000", 20: "#FF0000", 40: "#FFFF00", 60: "#00FF00", 80: "#0000FF" }[p] ?? "#4D4D4D");
-  }
-
-  function getAlexValuePercentile(v: any, stats: any, inverted = false): number | null {
-    if (!isNumeric(v)) return null;
-    const val = Number(v);
-    if (val === -1 || val === 0) return null;
-    // Fixed: original had `!stats?.p25 == null` which is always false
-    if (stats?.p25 == null || stats?.p50 == null || stats?.p75 == null) return null;
-    const { p25, p50, p75 } = stats;
-    if (inverted) return val <= p25 ? 75 : val <= p50 ? 50 : val <= p75 ? 25 : 0;
-    return val >= p75 ? 75 : val >= p50 ? 50 : val >= p25 ? 25 : 0;
-  }
-
-  function colorFromStats(
-    v: any,
-    stats: any,
-    inverted = false,
-    metricName: string | null = null,
-    attemptClimbValue: any = null,
-  ): string {
-    if (metricName === CLIMBSTATE_METRIC) return getClimbStateColor(v, attemptClimbValue);
-    if (BOOLEAN_METRICS.includes(metricName)) return getBooleanColor(v);
-    if (!isNumeric(v)) return "#4D4D4D";
-
-    const val = Number(v);
-    if (val === -1) return "#4D4D4D";
-    if (val === 0) return "#000";
-
-    if (colorblindMode === "alex") {
-      const q = getAlexValuePercentile(val, stats, inverted);
-      return q !== null ? getAlexBgColor(q, true) : "#333";
-    }
-
-    const mode = COLOR_MODES[colorblindMode];
-    const { p25, p50, p75 } = stats ?? {};
-    if (p25 == null || p50 == null || p75 == null) return "rgb(180,180,180)";
-    if (p25 === p50 && p50 === p75) return lerpColor(mode.below, mode.above, 0.5);
-
-    let t: number;
-    if (inverted) {
-      if (val <= p25)      t = Math.min(1, 0.75 + ((p25 - val) / Math.max(p50 - p25, 0.001)) * 0.25);
-      else if (val <= p50) t = 0.5 + 0.25 * (1 - (val - p25) / Math.max(p50 - p25, 0.001));
-      else if (val <= p75) t = 0.25 + 0.25 * (1 - (val - p50) / Math.max(p75 - p50, 0.001));
-      else                 t = Math.max(0, 0.25 * (1 - (val - p75) / Math.max(p75 - p50, 0.001)));
-    } else {
-      if (val >= p75)      t = Math.min(1, 0.75 + ((val - p75) / Math.max(p75 - p50, 0.001)) * 0.25);
-      else if (val >= p50) t = 0.5 + 0.25 * ((val - p50) / Math.max(p75 - p50, 0.001));
-      else if (val >= p25) t = 0.25 + 0.25 * ((val - p25) / Math.max(p50 - p25, 0.001));
-      else                 t = Math.max(0, 0.25 * (1 - (p25 - val) / Math.max(p50 - p25, 0.001)));
-    }
-
-    t = Math.max(0, Math.min(1, t));
-    return t < 0.5
-      ? lerpColor(mode.below, mode.mid, t * 2)
-      : lerpColor(mode.mid, mode.above, (t - 0.5) * 2);
-  }
-
-  /**
-   * Returns background and text color for a team's OPR badge,
-   * colored relative to all other teams at the event.
-   */
   function getOPRColor(teamNum: string): { bg: string; color: string } {
     const oprVal = teamOPRs[teamNum];
     if (oprVal == null) return { bg: "rgba(0,0,0,0.3)", color: "white" };
-
-    const allVals = Object.values(teamOPRs).filter((v) => v != null) as number[];
+    const allVals = Object.values(teamOPRs).filter(
+      (v) => v != null,
+    ) as number[];
     if (allVals.length < 2) return { bg: "rgba(0,0,0,0.3)", color: "white" };
 
     const mu = allVals.reduce((a, b) => a + b, 0) / allVals.length;
-    const stats = {
-      mean: mu,
-      sd: Math.sqrt(allVals.reduce((s, v) => s + (v - mu) ** 2, 0) / allVals.length),
-      p25: percentile(allVals, 25),
-      p50: percentile(allVals, 50),
-      p75: percentile(allVals, 75),
-    };
+    const p25 = percentile(allVals, 25);
+    const p50 = percentile(allVals, 50);
+    const p75 = percentile(allVals, 75);
+    if (p25 === p50 && p50 === p75)
+      return { bg: "rgba(180,180,180,1)", color: "black" };
 
-    const bg = colorFromStats(oprVal, stats, false, "OPR");
+    const mode = COLOR_MODES[colorblindMode];
+    let t: number;
+    const val = oprVal;
+    if (val >= p75)
+      t = Math.min(1, 0.75 + ((val - p75) / Math.max(p75 - p50, 0.001)) * 0.25);
+    else if (val >= p50)
+      t = 0.5 + 0.25 * ((val - p50) / Math.max(p75 - p50, 0.001));
+    else if (val >= p25)
+      t = 0.25 + 0.25 * ((val - p25) / Math.max(p50 - p25, 0.001));
+    else t = Math.max(0, 0.25 * (1 - (p25 - val) / Math.max(p50 - p25, 0.001)));
+    t = Math.max(0, Math.min(1, t));
+
+    const bg =
+      t < 0.5
+        ? lerpColorRGB(mode.below, mode.mid, t * 2)
+        : lerpColorRGB(mode.mid, mode.above, (t - 0.5) * 2);
     return { bg, color: textColorForBg(bg) };
-  }
-
-  // ─── Rating Helpers ───────────────────────────────────────────────────────────
-
-  /** Returns the src URL for the most recent grace rating image, defaulting to horse. */
-  function fetchGraceRating(team: number | string): string {
-    const teamKey = String(team);
-    if (!graceData || graceData[teamKey] === undefined) return GraceRating[GraceRating.length - 1];
-    const entry = graceData[teamKey];
-    return GraceRating[entry[Object.keys(entry)[Object.keys(entry).length - 1]]];
-  }
-
-  /** Returns the src URL for the most recent ananth rating image, defaulting to horse. */
-  function fetchAnanthRating(team: number | string): string {
-    const teamKey = String(team);
-    if (!ananthData || ananthData[teamKey] === undefined) return AnanthRating[AnanthRating.length - 1];
-    const entry = ananthData[teamKey];
-    return AnanthRating[entry[Object.keys(entry)[Object.keys(entry).length - 1]]];
   }
 
   // ─── Match Fetching ───────────────────────────────────────────────────────────
 
-  /**
-   * Fetches and sorts all matches for the event from the local backend.
-   * Returns an empty array on failure.
-   */
   async function fetchEventMatches(code: string): Promise<any[]> {
     try {
       const data = await fetchMatchAlliances(code);
@@ -298,10 +326,12 @@
       return data
         .filter((m) => ["qm", "ef", "qf", "sf", "f"].includes(m.comp_level))
         .sort((a, b) => {
-          const levelDiff = ELIM_LEVEL_ORDER[a.comp_level] - ELIM_LEVEL_ORDER[b.comp_level];
+          const levelDiff =
+            ELIM_LEVEL_ORDER[a.comp_level] - ELIM_LEVEL_ORDER[b.comp_level];
           if (levelDiff !== 0) return levelDiff;
           if (a.comp_level !== "qm") {
-            const setDiff = (Number(a.set_number) || 0) - (Number(b.set_number) || 0);
+            const setDiff =
+              (Number(a.set_number) || 0) - (Number(b.set_number) || 0);
             if (setDiff !== 0) return setDiff;
           }
           return (Number(a.match_number) || 0) - (Number(b.match_number) || 0);
@@ -319,16 +349,19 @@
     const teamKey = `frc${teamNumber}`;
     const currentIdx = allMatches.findIndex((m) => m.key === selectedMatch);
     const prev = currentIdx >= 0 ? allMatches.slice(0, currentIdx) : allMatches;
-
     for (let i = prev.length - 1; i >= 0; i--) {
       const m = prev[i];
-      const all = [...(m.alliances?.red?.team_keys ?? []), ...(m.alliances?.blue?.team_keys ?? [])];
+      const all = [
+        ...(m.alliances?.red?.team_keys ?? []),
+        ...(m.alliances?.blue?.team_keys ?? []),
+      ];
       if (all.includes(teamKey)) {
         if (m.comp_level === "qm") return `Q${m.match_number}`;
         if (m.comp_level === "f") return `F${m.match_number}`;
-        const elimIdx = allMatches
-          .filter((x) => x.comp_level !== "qm" && x.comp_level !== "f")
-          .indexOf(m) + 1;
+        const elimIdx =
+          allMatches
+            .filter((x) => x.comp_level !== "qm" && x.comp_level !== "f")
+            .indexOf(m) + 1;
         return `M${elimIdx}`;
       }
     }
@@ -339,18 +372,31 @@
     if (!allMatches?.length) return;
     const parts = matchKey.split("_");
     if (parts.length < 2) return;
-
     const matchPart = parts[1];
     let compLevel: string, remainder: string;
 
-    if      (matchPart.startsWith("qm")) { compLevel = "qm"; remainder = matchPart.slice(2); }
-    else if (matchPart.startsWith("ef")) { compLevel = "ef"; remainder = matchPart.slice(2); }
-    else if (matchPart.startsWith("qf")) { compLevel = "qf"; remainder = matchPart.slice(2); }
-    else if (matchPart.startsWith("sf")) { compLevel = "sf"; remainder = matchPart.slice(2); }
-    else if (matchPart.startsWith("f"))  { compLevel = "f";  remainder = matchPart.slice(1); }
-    else { console.error("Unknown comp level in match key:", matchKey); return; }
+    if (matchPart.startsWith("qm")) {
+      compLevel = "qm";
+      remainder = matchPart.slice(2);
+    } else if (matchPart.startsWith("ef")) {
+      compLevel = "ef";
+      remainder = matchPart.slice(2);
+    } else if (matchPart.startsWith("qf")) {
+      compLevel = "qf";
+      remainder = matchPart.slice(2);
+    } else if (matchPart.startsWith("sf")) {
+      compLevel = "sf";
+      remainder = matchPart.slice(2);
+    } else if (matchPart.startsWith("f")) {
+      compLevel = "f";
+      remainder = matchPart.slice(1);
+    } else {
+      console.error("Unknown comp level in match key:", matchKey);
+      return;
+    }
 
-    let setNumber = 1, matchNumber = 1;
+    let setNumber = 1,
+      matchNumber = 1;
     if (compLevel === "qm") {
       matchNumber = parseInt(remainder);
     } else if (remainder.includes("m")) {
@@ -361,37 +407,50 @@
       matchNumber = parseInt(remainder);
     }
 
-    if (isNaN(matchNumber)) { console.error("Could not parse match number:", matchKey); return; }
+    if (isNaN(matchNumber)) {
+      console.error("Could not parse match number:", matchKey);
+      return;
+    }
 
-    const match = compLevel === "qm"
-      ? allMatches.find((m) => m.comp_level === compLevel && m.match_number === matchNumber)
-      : allMatches.find(
-          (m) => m.comp_level === compLevel && m.match_number === matchNumber && m.set_number === setNumber,
-        );
+    const match =
+      compLevel === "qm"
+        ? allMatches.find(
+            (m) => m.comp_level === compLevel && m.match_number === matchNumber,
+          )
+        : allMatches.find(
+            (m) =>
+              m.comp_level === compLevel &&
+              m.match_number === matchNumber &&
+              m.set_number === setNumber,
+          );
 
-    if (!match) { console.warn("Match not found:", matchKey); return; }
+    if (!match) {
+      console.warn("Match not found:", matchKey);
+      return;
+    }
 
-    redAlliance  = match.alliances.red.team_keys.map((k) => k.replace("frc", ""));
-    blueAlliance = match.alliances.blue.team_keys.map((k) => k.replace("frc", ""));
+    redAlliance = match.alliances.red.team_keys.map((k) =>
+      k.replace("frc", ""),
+    );
+    blueAlliance = match.alliances.blue.team_keys.map((k) =>
+      k.replace("frc", ""),
+    );
 
-    await tick();
-    loadAllAllianceTeams();
+    // Reset pagination for new match teams
+    [...redAlliance, ...blueAlliance].forEach((t) => {
+      if (t) qualMatchIndexByTeam[t] = 0;
+    });
+    qualMatchIndexByTeam = { ...qualMatchIndexByTeam };
   }
 
-  /**
-   * Fetches Statbotics prediction for the currently selected match.
-   * Stores the red alliance win probability as a [0,1] fraction.
-   */
   async function loadStatboticsWinProb(matchKey: string) {
     if (!matchKey) {
       statboticsRedWinProb = null;
       return;
     }
-
     try {
       const data = await fetchStatboticsMatchPrediction(matchKey);
       const redProb = Number(data?.pred?.red_win_prob);
-
       statboticsRedWinProb = Number.isFinite(redProb)
         ? Math.max(0, Math.min(1, redProb))
         : null;
@@ -401,300 +460,161 @@
     }
   }
 
-  // ─── Match Aggregation ────────────────────────────────────────────────────────
+  // ─── Qual notes helpers ───────────────────────────────────────────────────────
 
-  /**
-   * Aggregates multiple scouting rows for the same match number into one row.
-   * Numeric fields are summed; string fields take the last non-empty value.
-   */
-  function aggregateMatches(rawData: any[]): any[] {
-    const grouped: Record<string, any[]> = {};
-    rawData.forEach((row) => {
-      const m = row.Match || row.match;
-      if (!m) return;
-      if (!grouped[m]) grouped[m] = [];
-      grouped[m].push(row);
-    });
-
-    return Object.keys(grouped)
-      .map((matchNum) => {
-        const rows = grouped[matchNum].sort(
-          (a, b) => (Number(a.Id || a.id) || 0) - (Number(b.Id || b.id) || 0),
-        );
-        const aggregated = { ...rows[0] };
-
-        const allKeys = new Set<string>();
-        rows.forEach((r) =>
-          Object.keys(r).forEach((k) => { if (!EXCLUDED_FIELDS.has(k)) allKeys.add(k); }),
-        );
-
-        const fieldState: Record<string, { type: string; val: any }> = {};
-        allKeys.forEach((k) => { fieldState[k] = { type: "none", val: 0 }; });
-
-        rows.forEach((row) => {
-          allKeys.forEach((key) => {
-            const val = row[key];
-            if (val === -1 || val === "-1" || val === "-" || val === null || val === undefined || val === "") return;
-            const state = fieldState[key];
-            if (state.type === "string") {
-              if (!isNumeric(val)) state.val = val;
-            } else if (state.type === "numeric") {
-              if (isNumeric(val)) state.val += Number(val);
-              else { state.type = "string"; state.val = val; }
-            } else {
-              if (isNumeric(val)) { state.type = "numeric"; state.val = Number(val); }
-              else { state.type = "string"; state.val = val; }
-            }
-          });
-        });
-
-        allKeys.forEach((key) => { aggregated[key] = fieldState[key].val; });
-        return aggregated;
-      })
-      .sort((a, b) => (a.Match || a.match) - (b.Match || b.match));
+  function getQualRowsForTeam(teamNum: string): any[] {
+    return qualScoutingByTeam[teamNum] ?? [];
   }
 
-  // ─── Global Stats ─────────────────────────────────────────────────────────────
+  function previousQualMatch(team: string) {
+    const rows = getQualRowsForTeam(team);
+    if (!rows.length) return;
+    const current = qualMatchIndexByTeam[team] ?? 0;
+    qualMatchIndexByTeam = {
+      ...qualMatchIndexByTeam,
+      [team]: Math.max(0, current - 1),
+    };
+  }
 
-  function computeGlobalStats(metric: string, allRows: any[]): any {
-    if (BOOLEAN_METRICS.includes(metric))  return { mean: 0, sd: 0, isNumeric: false, isBoolean: true };
-    if (metric === CLIMBSTATE_METRIC)       return { mean: 0, sd: 0, isNumeric: false, isClimbState: true };
+  function nextQualMatch(team: string) {
+    const rows = getQualRowsForTeam(team);
+    if (!rows.length) return;
+    const current = qualMatchIndexByTeam[team] ?? 0;
+    qualMatchIndexByTeam = {
+      ...qualMatchIndexByTeam,
+      [team]: Math.min(rows.length - 1, current + 1),
+    };
+  }
 
-    let hasData = false, isNumericMetric = true;
-    for (const r of allRows) {
-      const v = r[metric];
-      if (v !== undefined && v !== null && v !== "") {
-        hasData = true;
-        if (!isNumeric(v)) { isNumericMetric = false; break; }
+  function previousAutoPath(team: string) {
+    const rows = getAutoPathRows(team);
+    if (!rows.length) return;
+    const current = autoPathIndexByTeam[team] ?? 0;
+    autoPathIndexByTeam = {
+      ...autoPathIndexByTeam,
+      [team]: Math.max(0, current - 1),
+    };
+  }
+
+  function nextAutoPath(team: string) {
+    const rows = getAutoPathRows(team);
+    if (!rows.length) return;
+    const current = autoPathIndexByTeam[team] ?? 0;
+    autoPathIndexByTeam = {
+      ...autoPathIndexByTeam,
+      [team]: Math.min(rows.length - 1, current + 1),
+    };
+  }
+
+  // ─── Auto Path ────────────────────────────────────────────────────────────────
+
+  function drawAutoPath(canvas: HTMLCanvasElement, matchRow: any) {
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const W = canvas.width;
+    const H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    if (fieldImg && fieldImg.complete && fieldImg.naturalWidth > 0) {
+      const imgW = fieldImg.naturalWidth;
+      const imgH = fieldImg.naturalHeight;
+      const cropPct = 0.15;
+      const sx = imgW * cropPct;
+      const sw = imgW * (1 - 2 * cropPct);
+      const srcAspect = sw / imgH;
+      const dstAspect = W / H;
+      let finalSx = sx,
+        finalSy = 0,
+        finalSw = sw,
+        finalSh = imgH;
+      const verticalBias = 0.6;
+      if (dstAspect > srcAspect) {
+        const needed = sw / dstAspect;
+        finalSy = (imgH - needed) * verticalBias;
+        finalSh = needed;
+      } else {
+        const needed = imgH * dstAspect;
+        finalSx = sx + (sw - needed) / 2;
+        finalSw = needed;
       }
+      ctx.drawImage(fieldImg, finalSx, finalSy, finalSw, finalSh, 0, 0, W, H);
+    } else {
+      ctx.fillStyle = "#111";
+      ctx.fillRect(0, 0, W, H);
     }
-    if (!hasData || !isNumericMetric) return { mean: 0, sd: 0, isNumeric: false };
 
-    const vals = allRows
-      .map((r) => r[metric])
-      .filter((v) => isNumeric(v) && Number(v) !== 0)
-      .map(Number);
-    const mu = vals.length ? mean(vals) : 0;
-    return {
-      mean: mu,
-      sd: vals.length ? sd(vals, mu) : 0,
-      isNumeric: true,
-      p25: percentile(vals, 25),
-      p50: percentile(vals, 50),
-      p75: percentile(vals, 75),
-    };
-  }
+    const RECORDED_W = 1200;
+    const RECORDED_H = 600;
+    const scaleX = W / RECORDED_W;
+    const scaleY = H / RECORDED_H;
 
-  // ─── Grid Building ────────────────────────────────────────────────────────────
-
-  function buildGridForTeam(teamNumber: string, domElement: HTMLElement, cachedGlobalStats: Record<string, any>, allMatchesData: any[], coprsData: Record<string, any>): any {
-    if (!teamViewData || !domElement) return null;
-
-    let data = teamViewData.filter((el) => {
-      const raw = el.Team || el.team;
-      return raw && String(raw).replace(/\D/g, "") === String(teamNumber).replace(/\D/g, "");
-    });
-    if (!data.length) return null;
-
-    data = aggregateMatches(data);
-    
-    // Calculate EFS and EFS2 for each match
-    data = data.map((matchRow) => {
-      const matchNum = matchRow.Match || matchRow.match;
-      const efs = estimateTeamPoints(teamNumber, matchNum, allMatchesData, teamViewData);
-      
-      // Get raw rows for this team/match for EFS2 calculation
-      const teamClean = String(teamNumber).replace(/\D/g, "");
-      const teamRows = teamViewData.filter(
-        (r) => String(r.Team || r.team || "").replace(/\D/g, "") === teamClean &&
-               Number(r.Match || r.match) === matchNum &&
-               r.RecordType !== "Match_Event"
+    if (matchRow?.AutoPath && Array.isArray(matchRow.AutoPath)) {
+      const allPaths = matchRow.AutoPath.filter(
+        (path: any[]) => Array.isArray(path) && path.length >= 2,
       );
-      
-      // Pass same rows for both - the data already has FuelShootingPhases split by phase
-      const efs2 = teamRows.length > 0 ? estimateTeamPoints2(teamNumber, matchNum, coprsData, teamRows, teamRows, allMatchesData) : 0;
-      
-      return {
-        ...matchRow,
-        EstimatedPoints: efs ?? 0,
-        EstimatedPoints2: efs2 ?? 0,
-      };
-    });
-    
-    const matchNums = data.map((m) => m.Match || m.match);
-    const qLabels   = matchNums.map((_, i) => `Q${i + 1}`);
-    const displayMetrics = Object.keys(data[0]).filter((k) => !EXCLUDED_FIELDS.has(k));
+      if (allPaths.length === 0) return;
+      const allPoints: any[] = [];
+      allPaths.forEach((path: any[]) => allPoints.push(...path));
+      const px = (p: any) => p.x * scaleX;
+      const py = (p: any) => p.y * scaleY;
+      const totalPoints = allPoints.length;
+      const mode = COLOR_MODES[colorblindMode] || COLOR_MODES.normal;
+      const [r1, g1, b1] = mode.below;
+      const [r2, g2, b2] = mode.above;
+      const lerpCol = (t: number) =>
+        `rgb(${Math.round(r1 + (r2 - r1) * t)},${Math.round(g1 + (g2 - g1) * t)},${Math.round(b1 + (b2 - b1) * t)})`;
 
-    // Compute stats for EFS and EFS2 locally
-    const efsValues = data.map((d) => d.EstimatedPoints).filter((v) => isNumeric(v) && Number(v) !== 0).map(Number);
-    const efs2Values = data.map((d) => d.EstimatedPoints2).filter((v) => isNumeric(v) && Number(v) !== 0).map(Number);
-    
-    const globalStats = {
-      ...cachedGlobalStats,
-      EstimatedPoints: {
-        mean: efsValues.length ? mean(efsValues) : 0,
-        sd: efsValues.length ? sd(efsValues, mean(efsValues)) : 0,
-        isNumeric: true,
-        p25: percentile(efsValues, 25),
-        p50: percentile(efsValues, 50),
-        p75: percentile(efsValues, 75),
-      },
-      EstimatedPoints2: {
-        mean: efs2Values.length ? mean(efs2Values) : 0,
-        sd: efs2Values.length ? sd(efs2Values, mean(efs2Values)) : 0,
-        isNumeric: true,
-        p25: percentile(efs2Values, 25),
-        p50: percentile(efs2Values, 50),
-        p75: percentile(efs2Values, 75),
-      },
-    };
-
-    const rowData = displayMetrics.map((metric) => {
-      const row: any = { metric };
-      const values: number[] = [];
-      const isNumericMetric = globalStats[metric]?.isNumeric ?? false;
-
-      qLabels.forEach((q, i) => {
-        const val = data[i]?.[metric];
-        if (isNumericMetric) {
-          const num = isNumeric(val) ? Number(val) : 0;
-          row[q] = num;
-          values.push(num);
-        } else {
-          row[q] = normalizeValue(val);
-        }
-      });
-
-      row.mean   = isNumericMetric && values.length ? Number(mean(values).toFixed(2))   : null;
-      row.median = isNumericMetric && values.length ? Number(median(values).toFixed(2)) : null;
-      row.alexPercentile = null;
-      
-      // Calculate percentile only for numeric metrics
-      if (isNumericMetric && row.mean !== null) {
-        const stats = globalStats[metric];
-        if (stats?.isNumeric && stats?.p25 != null && stats?.p50 != null && stats?.p75 != null) {
-          const inverted = INVERTED_METRICS.includes(metric);
-          if (inverted) {
-            row.alexPercentile = row.mean <= stats.p25 ? 75 : row.mean <= stats.p50 ? 50 : row.mean <= stats.p75 ? 25 : 0;
-          } else {
-            row.alexPercentile = row.mean >= stats.p75 ? 75 : row.mean >= stats.p50 ? 50 : row.mean >= stats.p25 ? 25 : 0;
-          }
-        }
+      for (let i = 1; i < totalPoints; i++) {
+        const t = (i - 1) / (totalPoints - 1);
+        ctx.beginPath();
+        ctx.moveTo(px(allPoints[i - 1]), py(allPoints[i - 1]));
+        ctx.lineTo(px(allPoints[i]), py(allPoints[i]));
+        ctx.strokeStyle = lerpCol(t);
+        ctx.lineWidth = 2;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.stroke();
       }
-      return row;
-    });
-
-    const qCellStyle = (params) => {
-      const metric   = params.data.metric;
-      const stats    = globalStats[metric] ?? {};
-      const inverted = INVERTED_METRICS.includes(metric);
-      const val      = params.value;
-
-      if (!stats.isNumeric) {
-        if (metric === CLIMBSTATE_METRIC) {
-          const bg = getClimbStateColor(val, null);
-          return { background: bg, color: textColorForBg(bg), fontSize: "11px", fontWeight: 600, textAlign: "center" };
-        }
-        if (BOOLEAN_METRICS.includes(metric)) {
-          const bg = getBooleanColor(val);
-          return { background: bg, color: textColorForBg(bg), fontSize: "11px", fontWeight: 600, textAlign: "center" };
-        }
-        return { background: "#333", color: "white", fontSize: "11px", fontWeight: 600, textAlign: "center", border: "1px solid #555" };
-      }
-
-      const bg = colorFromStats(isNumeric(val) ? Number(val) : 0, stats, inverted, metric);
-      return { background: bg, color: textColorForBg(bg), fontSize: "12px", fontWeight: 600, textAlign: "center" };
-    };
-
-    const statCellStyle = (params) => {
-      const stats    = globalStats[params.data.metric] ?? {};
-      const inverted = INVERTED_METRICS.includes(params.data.metric);
-      const base     = { fontSize: "12px", fontWeight: "bold", textAlign: "center" };
-      if (params.value === 0 || params.value === null)
-        return { background: "#4D4D4D", color: "white", ...base };
-      const bg = colorFromStats(params.value, stats, inverted, params.data.metric);
-      return { background: bg, color: textColorForBg(bg), ...base };
-    };
-
-    const statValueFormatter = (params) => {
-      if (params.value === null || params.value === undefined) return "";
-      const num = Number(params.value);
-      return num === 0 ? "0" : num.toFixed(2);
-    };
-
-    const columnDefs = [
-      {
-        headerName: "Metric", field: "metric", pinned: "left" as "left", width: 100,
-        headerClass: "header-center", cellClass: "cell-center",
-        cellStyle: { background: "#C81B00", color: "white", fontSize: "12px", fontWeight: "bold", textAlign: "center" },
-        valueFormatter: (params) => METRIC_DISPLAY_NAMES.get(params.value) || params.value,
-      },
-      ...qLabels.map((q, i) => ({
-        headerName: String(matchNums[i]), field: q, flex: 1, minWidth: 40,
-        headerClass: "header-center", cellClass: "cell-center",
-        cellStyle: qCellStyle,
-        valueFormatter: (params) => {
-          const metric = params.data.metric;
-          if (!globalStats[metric]?.isNumeric) return String(normalizeValue(params.value));
-          const num = isNumeric(params.value) ? Number(params.value) : 0;
-          return num === 0 ? "0" : num.toFixed(2);
-        },
-      })),
-      {
-        headerName: "Mean", field: "mean", flex: 1, minWidth: 45,
-        headerClass: "header-center", cellClass: "cell-center",
-        cellStyle: statCellStyle, valueFormatter: statValueFormatter,
-      },
-      {
-        headerName: "Med.", field: "median", flex: 1, minWidth: 45,
-        headerClass: "header-center", cellClass: "cell-center",
-        cellStyle: statCellStyle, valueFormatter: statValueFormatter,
-      },
-      {
-        headerName: "Per.", field: "alexPercentile", flex: 1, minWidth: 45,
-        headerClass: "header-center", cellClass: "cell-center",
-        cellStyle: (params) => {
-          if (params.value === null || params.value === undefined) return { background: "#4D4D4D", color: "white", fontSize: "12px", fontWeight: "bold", textAlign: "center" };
-          const colors: Record<number, string> = { 75: "#0000FF", 50: "#00FF00", 25: "#FFFF00", 0: "#FF0000" };
-          const bg = colors[params.value] || "#4D4D4D";
-          return { background: bg, color: textColorForBg(bg), fontSize: "12px", fontWeight: "bold", textAlign: "center" };
-        },
-        valueFormatter: (params) => params.value !== null && params.value !== undefined ? String(params.value) : "",
-      },
-    ];
-
-    gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT + 6;
-
-    return createGrid(domElement, {
-      rowData,
-      columnDefs,
-      rowHeight: ROW_HEIGHT,
-      headerHeight: HEADER_HEIGHT,
-      domLayout: "normal",
-      defaultColDef: {
-        resizable: false, sortable: false, suppressMovable: true,
-        cellStyle: { fontSize: "14px" },
-      },
-      suppressColumnVirtualisation: false,
-      suppressHorizontalScroll: false,
-      suppressVerticalScroll: false,
-    });
+      const last = allPoints[totalPoints - 1];
+      ctx.beginPath();
+      ctx.arc(px(last), py(last), 4, 0, Math.PI * 2);
+      ctx.fillStyle = lerpCol(1);
+      ctx.fill();
+      const first = allPoints[0];
+      ctx.beginPath();
+      ctx.arc(px(first), py(first), 4, 0, Math.PI * 2);
+      ctx.fillStyle = lerpCol(0);
+      ctx.fill();
+    }
   }
 
-  function destroyAllGrids() {
-    [gridInstance, gridInstance2, gridInstance3, gridInstanceRight, gridInstance4, gridInstance5]
-      .forEach((g) => { if (g) g.destroy(); });
+  function initAutoPathCanvas(canvas: HTMLCanvasElement, matchRow: any) {
+    autoPathCanvases.set(canvas, { matchRow });
+    const tryDraw = () => drawAutoPath(canvas, matchRow);
+    if (fieldImg && fieldImg.complete && fieldImg.naturalWidth > 0) tryDraw();
+    else if (fieldImg)
+      fieldImg.addEventListener("load", tryDraw, { once: true });
+    return {
+      update(newMatchRow: any) {
+        autoPathCanvases.set(canvas, { matchRow: newMatchRow });
+        drawAutoPath(canvas, newMatchRow);
+      },
+      destroy() {
+        autoPathCanvases.delete(canvas);
+      },
+    };
   }
 
-  function loadAllAllianceTeams() {
-    if (!teamViewData) return;
-    destroyAllGrids();
-
-    [gridInstance, gridInstance2, gridInstance3] = [domNode, domNode2, domNode3]
-      .map((node, i) => node && redAlliance[i] ? buildGridForTeam(redAlliance[i], node, globalStatsCache, allMatches, coprs) : null);
-
-    [gridInstanceRight, gridInstance4, gridInstance5] = [domNodeRight, domNode4, domNode5]
-      .map((node, i) => node && blueAlliance[i] ? buildGridForTeam(blueAlliance[i], node, globalStatsCache, allMatches, coprs) : null);
+  function getAutoPathRows(team: string): any[] {
+    const rows = qualScoutingByTeam[team] ?? [];
+    return rows
+      .filter(
+        (r) => r.AutoPath && Array.isArray(r.AutoPath) && r.AutoPath.length > 0,
+      )
+      .sort(
+        (a, b) =>
+          Number(b.Match ?? b.match ?? 0) - Number(a.Match ?? a.match ?? 0),
+      );
   }
 
   // ─── Event Handlers ───────────────────────────────────────────────────────────
@@ -704,24 +624,10 @@
     try {
       selectedMatch = (e.target as HTMLSelectElement).value;
       localStorage.setItem(SELECTED_MATCH_KEY, selectedMatch);
-      
-      // Ensure eventCode is set before fetching COPRs
       if (!eventCode) {
         const stored = localStorage.getItem("eventCode");
         if (stored) eventCode = stored;
       }
-      
-      // Fetch COPRs for EFS2 calculations
-      if (eventCode) {
-        try {
-          const coprData = await fetchCOPRs(eventCode);
-          coprs = coprData || {};
-        } catch (err) {
-          console.warn("Failed to fetch COPRs:", err);
-          coprs = {};
-        }
-      }
-      
       await Promise.all([
         loadMatchData(selectedMatch),
         loadStatboticsWinProb(selectedMatch),
@@ -731,170 +637,23 @@
     }
   }
 
-  /**
-   * Load the selected match from localStorage, or use first available match
-   */
   function getInitialMatch(matches: any[]): string {
     if (!matches.length) return "";
     const saved = localStorage.getItem(SELECTED_MATCH_KEY);
-    // Only use saved match if it's still available
-    if (saved && matches.some((m) => m.key === saved)) {
-      return saved;
-    }
+    if (saved && matches.some((m) => m.key === saved)) return saved;
     return matches[0].key;
   }
 
   function onColorblindChange(e: Event) {
     colorblindMode = (e.target as HTMLSelectElement).value;
     localStorage.setItem("colorblindMode", colorblindMode);
-    loadAllAllianceTeams();
-  }
-
-  // ─── Charts ───────────────────────────────────────────────────────────────────
-
-  $: metricOptions =
-    teamViewData?.length > 0
-      ? Object.keys(teamViewData[0]).filter(
-          (k) =>
-            !["id", "created_at", "team", "match", "record_type", "scouter_name", "scouter_error"].includes(k) &&
-            checkIsNumericMetric(k, teamViewData),
-        )
-      : [];
-
-  // Compute global stats cache when teamViewData changes (not on every match selection)
-  $: if (teamViewData?.length > 0) {
-    const displayMetrics = Object.keys(teamViewData[0]).filter((k) => !EXCLUDED_FIELDS.has(k));
-    const newCache: Record<string, any> = {};
-    displayMetrics.forEach((metric) => {
-      newCache[metric] = computeGlobalStats(metric, teamViewData);
-    });
-    globalStatsCache = newCache;
-    
-    // Update cache store with new stats
-    if (eventCode && allMatches?.length) {
-      matchPreviewCache.setData(eventCode, teamViewData, allMatches, teamOPRs, graceData, ananthData, globalStatsCache);
-    }
-  }
-
-  function addChart(type: string) {
-    charts = [
-      ...charts,
-      { id: crypto.randomUUID(), type, el: null, instance: null, yAxisMetric: metricOptions[0] || "" },
-    ];
-  }
-
-  function removeChart(id: string) {
-    charts = charts.filter((c) => {
-      if (c.id === id) { c.instance?.dispose(); return false; }
-      return true;
-    });
-  }
-
-  $: {
-    charts.forEach((chart) => {
-      if (chart.el && !chart.instance) {
-        const creators = { bar: barGraph, line: lineGraph, pie: pieGraph, scatter: scatterGraph, radar: radarGraph };
-        chart.instance = creators[chart.type]?.createChart(chart.el);
-        if (chart.instance && selectedTeam) updateChartDataset(chart);
-      }
-    });
-  }
-
-  $: if (selectedTeam) {
-    charts.forEach((c) => { if (c.instance) updateChartDataset(c); });
-  }
-
-  function updateChartDataset(chart: any) {
-    if (!chart.instance) return;
-    const data    = cache[selectedTeam] || [];
-    const numeric = checkIsNumericMetric(chart.yAxisMetric, data);
-    const axisLabel = { color: "#ffffff" };
-    const title   = `Team ${selectedTeam} - ${chart.yAxisMetric.replaceAll("_", " ")}`;
-    let option: any;
-
-    if (!numeric && chart.type !== "pie" && chart.type !== "radar") {
-      option = {
-        title: { text: "This chart requires numeric data.", left: "center", top: "center", textStyle: { color: "#ffffff", fontSize: 16 } },
-        xAxis: { show: false }, yAxis: { show: false }, series: [],
-      };
-    } else {
-      const labels = data.map((_, i) => `Q${i + 1}`);
-      const vals   = data.map((d) => isNumeric(d[chart.yAxisMetric]) ? Number(d[chart.yAxisMetric]) : 0);
-
-      if (chart.type === "bar") {
-        option = {
-          title: { text: title, textStyle: { color: "#ffffff", fontSize: 16 } },
-          tooltip: { trigger: "axis" },
-          xAxis: { type: "category", data: labels, axisLabel },
-          yAxis: { type: "value", axisLabel },
-          series: [{ data: vals, type: "bar", name: `Team ${selectedTeam}`, itemStyle: { color: "#C81B00" }, label: { show: true, color: "#ffffff" } }],
-        };
-      } else if (chart.type === "line") {
-        option = {
-          title: { text: title, textStyle: { color: "#ffffff", fontSize: 16 } },
-          tooltip: { trigger: "axis" },
-          xAxis: { type: "category", data: labels, axisLabel },
-          yAxis: { type: "value", axisLabel },
-          series: [{ data: vals, type: "line", name: `Team ${selectedTeam}`, lineStyle: { color: "#C81B00" }, itemStyle: { color: "#C81B00" }, label: { show: true, color: "#ffffff" } }],
-        };
-      } else if (chart.type === "pie") {
-        const pieData = numeric
-          ? data.map((d, i) => ({ value: Number(d[chart.yAxisMetric] ?? 0), name: `Q${i + 1}` }))
-          : Object.entries(
-              data.reduce((acc, d) => {
-                const v = normalizeValue(d[chart.yAxisMetric]);
-                acc[v] = (acc[v] || 0) + 1;
-                return acc;
-              }, {}),
-            ).map(([name, value]) => ({ name, value }));
-        option = {
-          tooltip: { trigger: "item" },
-          title: { text: title },
-          series: [{ type: "pie", data: pieData, name: chart.yAxisMetric, radius: "60%" }],
-        };
-      } else if (chart.type === "scatter") {
-        const scatterData = data
-          .map((d, i) => isNumeric(d[chart.yAxisMetric]) ? [i + 1, Number(d[chart.yAxisMetric])] : null)
-          .filter((p) => p && p[1] !== 0);
-        option = {
-          title: { text: title, textStyle: { color: "#ffffff", fontSize: 16 } },
-          tooltip: { trigger: "axis" },
-          xAxis: { type: "category", axisLabel }, yAxis: { type: "value", axisLabel },
-          series: [{ symbolSize: 12, data: scatterData, type: "scatter", name: `Team ${selectedTeam}`, itemStyle: { color: "#C81B00" }, label: { show: true, color: "#ffffff" } }],
-        };
-      } else if (chart.type === "radar") {
-        const numericMetrics = metricOptions.filter((k) => checkIsNumericMetric(k, data));
-        if (!numericMetrics.length) {
-          option = {
-            title: { text: "No numeric metrics available.", left: "center", top: "center", textStyle: { color: "#fff", fontSize: 16 } },
-          };
-        } else {
-          const avgValues = numericMetrics.map((k) => {
-            const v = data.map((d) => (isNumeric(d[k]) ? Number(d[k]) : 0));
-            return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0;
-          });
-          // Fixed: original computed Math.max(...teamViewData.map(() => 0), 1) — always 1.
-          // Now correctly finds the actual max value per metric across all teams.
-          const maxValues = numericMetrics.map((k) =>
-            Math.max(...(teamViewData ?? []).map((d) => (isNumeric(d[k]) ? Number(d[k]) : 0)), 1),
-          );
-          option = {
-            tooltip: { trigger: "item" },
-            radar: { indicator: numericMetrics.map((k, i) => ({ name: k, max: maxValues[i] })) },
-            series: [{
-              type: "radar",
-              data: [{ value: avgValues, name: `Team ${selectedTeam}`, areaStyle: { opacity: 0.3 }, lineStyle: { color: "#C81B00" }, itemStyle: { color: "#C81B00" } }],
-            }],
-          };
-        }
-      }
-    }
-    if (option) chart.instance.setOption(option, true);
+    for (const [canvas, { matchRow }] of autoPathCanvases)
+      drawAutoPath(canvas, matchRow);
   }
 
   // ─── Reactive ─────────────────────────────────────────────────────────────────
 
-  $: lastScoutedMatches = teamViewData
+  $: lastScoutedMatches = allMatches.length
     ? {
         r0: getLastPlayedMatch(redAlliance[0]),
         r1: getLastPlayedMatch(redAlliance[1]),
@@ -912,71 +671,56 @@
     try {
       eventCode = localStorage.getItem("eventCode") || "";
 
-      // Check if cache is valid for this event
+      fieldImg = new Image();
+      fieldImg.src = fieldImageSrc;
+
+      // Check cache
       if (eventCode && matchPreviewCache.isValid(eventCode)) {
         const cached = matchPreviewCache.get(eventCode);
         if (cached) {
-          teamViewData = cached.teamViewData;
           allMatches = cached.allMatches;
           teamOPRs = cached.teamOPRs;
           graceData = cached.graceData;
           ananthData = cached.ananthData;
-          globalStatsCache = cached.globalStatsCache;
-
-          // Fetch COPRs even from cache before loading match data
-          try {
-            const coprData = await fetchCOPRs(eventCode);
-            coprs = coprData || {};
-          } catch (err) {
-            console.warn("Failed to fetch COPRs:", err);
-            coprs = {};
-          }
-
-          if (allMatches?.length) {
-            selectedMatch = getInitialMatch(allMatches);
-            await tick();
-            await Promise.all([
-              loadMatchData(selectedMatch),
-              loadStatboticsWinProb(selectedMatch),
-            ]);
-          }
-          return;
         }
       }
 
-      // Load fresh data if cache is invalid
-      const stored = await getIndexedDBStore("scoutingData") || [];
-      // Unwrap the value property if it exists (from compressed storage)
-      const parsed = (stored || []).map(item => item.value !== undefined ? item.value : item);
-      teamViewData = extractValues(parsed, autoOnly);
-
       if (eventCode) {
-        // Grace / ananth ratings are non-critical — fetch in background
         fetchGracePage(eventCode)
           .then((r) => r.json())
-          .then((d) => { graceData = d; })
-          .catch((e) => console.error("Failed to fetch grace data:", e));
-
+          .then((d) => {
+            graceData = d;
+          })
+          .catch(() => {});
         fetchAnanthPage(eventCode)
           .then((r) => r.json())
-          .then((d) => { ananthData = d; })
-          .catch((e) => console.error("Failed to fetch ananth data:", e));
+          .then((d) => {
+            ananthData = d;
+          })
+          .catch(() => {});
 
-        // fetchOPR returns { oprs, dprs, ccwms } with "frc254"-style keys — strip prefix
         const { oprs } = await fetchOPR(eventCode);
         teamOPRs = Object.fromEntries(
-          Object.entries(oprs).map(([k, v]) => [k.replace("frc", ""), v as number]),
+          Object.entries(oprs).map(([k, v]) => [
+            k.replace("frc", ""),
+            v as number,
+          ]),
         );
 
-        allMatches = await fetchEventMatches(eventCode);
+        if (!allMatches.length) allMatches = await fetchEventMatches(eventCode);
 
-        // Fetch COPRs for EFS2 calculations
+        // Load qual scouting data
         try {
-          const coprData = await fetchCOPRs(eventCode);
-          coprs = coprData || {};
+          const rawQual = await readQualScoutingFromIDB({});
+          const normalized: Record<string, any[]> = {};
+          for (const [teamKey, teamData] of Object.entries(rawQual)) {
+            const numKey = normalizeTeamKey(teamKey);
+            if (!teamData || typeof teamData !== "object") continue;
+            normalized[numKey] = normalizeQualRows(numKey, teamData);
+          }
+          qualScoutingByTeam = normalized;
         } catch (err) {
-          console.warn("Failed to fetch COPRs:", err);
-          coprs = {};
+          console.warn("Failed to load qual scouting:", err);
         }
       }
 
@@ -987,11 +731,6 @@
           loadMatchData(selectedMatch),
           loadStatboticsWinProb(selectedMatch),
         ]);
-      }
-
-      // Save to cache after loading
-      if (eventCode && teamViewData && allMatches) {
-        matchPreviewCache.setData(eventCode, teamViewData, allMatches, teamOPRs, graceData, ananthData, globalStatsCache);
       }
     } finally {
       isLoading = false;
@@ -1016,25 +755,32 @@
   <div class="controls">
     <div>
       <label for="match-select">Match:</label>
-      <select id="match-select" bind:value={selectedMatch} on:change={onMatchChange}>
+      <select
+        id="match-select"
+        bind:value={selectedMatch}
+        on:change={onMatchChange}
+      >
         {#each allMatches as match, index}
           {@const elimIndex =
-            allMatches.slice(0, index).filter((m) => m.comp_level !== "qm" && m.comp_level !== "f").length + 1}
+            allMatches
+              .slice(0, index)
+              .filter((m) => m.comp_level !== "qm" && m.comp_level !== "f")
+              .length + 1}
           <option value={match.key}>
-            {#if match.comp_level === "qm"}
-              Q{match.match_number}
-            {:else if match.comp_level === "f"}
-              F{match.match_number}
-            {:else}
-              M{elimIndex}
-            {/if}
+            {#if match.comp_level === "qm"}Q{match.match_number}
+            {:else if match.comp_level === "f"}F{match.match_number}
+            {:else}M{elimIndex}{/if}
           </option>
         {/each}
       </select>
     </div>
     <div>
       <label for="colorblind-select">Colorblind Mode:</label>
-      <select id="colorblind-select" bind:value={colorblindMode} on:change={onColorblindChange}>
+      <select
+        id="colorblind-select"
+        bind:value={colorblindMode}
+        on:change={onColorblindChange}
+      >
         {#each Object.entries(COLOR_MODES) as [key, mode]}
           <option value={key}>{mode.name}</option>
         {/each}
@@ -1061,26 +807,141 @@
     <div class="grid-column">
       {#each [0, 1, 2] as i}
         {@const team = redAlliance[i]}
-        {@const last = [lastScoutedMatches.r0, lastScoutedMatches.r1, lastScoutedMatches.r2][i]}
+        {@const last = [
+          lastScoutedMatches.r0,
+          lastScoutedMatches.r1,
+          lastScoutedMatches.r2,
+        ][i]}
+        {@const qualRows = getQualRowsForTeam(team)}
+        {@const autoPathRows = getAutoPathRows(team)}
         <div class="team-box">
           <h3 class="team-label red-label">
             <span class="last-match-badge">Last: {last}</span>
             Red {i + 1} - Team {team}
             {#if teamOPRs[team]}
-              <span class="opr-badge" style="background: {getOPRColor(team).bg}; color: {getOPRColor(team).color};">
+              <span
+                class="opr-badge"
+                style="background: {getOPRColor(team).bg}; color: {getOPRColor(
+                  team,
+                ).color};"
+              >
                 OPR: {teamOPRs[team].toFixed(2)}
               </span>
             {/if}
-            <img src={fetchGraceRating(team)}  alt="Grace Rating"  style="width: 60px;" />
-            <img src={fetchAnanthRating(team)} alt="Ananth Rating" style="width: 60px;" />
+            <img
+              src={fetchGraceRating(team)}
+              alt="Grace Rating"
+              style="width: 60px;"
+            />
+            <img
+              src={fetchAnanthRating(team)}
+              alt="Ananth Rating"
+              style="width: 60px;"
+            />
           </h3>
-          {#if i === 0}
-            <div class="grid-container ag-theme-quartz" bind:this={domNode} style="height: {gridHeight}px;"></div>
-          {:else if i === 1}
-            <div class="grid-container ag-theme-quartz" bind:this={domNode2} style="height: {gridHeight}px;"></div>
-          {:else}
-            <div class="grid-container ag-theme-quartz" bind:this={domNode3} style="height: {gridHeight}px;"></div>
+
+          <!-- Auto Paths -->
+          {#if autoPathRows.length > 0}
+            {@const autoIdx = autoPathIndexByTeam[team] ?? 0}
+            {@const currentPath = autoPathRows[autoIdx]}
+            <div class="auto-path-viewer">
+              <div class="auto-path-tab-bar">
+                <span class="auto-path-tab-label">
+                  <span class="section-icon">🤖</span> Auto</span
+                >
+                <div class="auto-path-tabs">
+                  {#each autoPathRows as pathRow, tabIdx}
+                    <button
+                      class="auto-path-tab"
+                      class:active={tabIdx === autoIdx}
+                      on:click={() => {
+                        autoPathIndexByTeam = {
+                          ...autoPathIndexByTeam,
+                          [team]: tabIdx,
+                        };
+                      }}
+                    >
+                      Q{pathRow.Match ?? pathRow.match}
+                    </button>
+                  {/each}
+                </div>
+              </div>
+              <div class="auto-path-canvas-wrapper">
+                <canvas
+                  use:initAutoPathCanvas={currentPath}
+                  width={600}
+                  height={300}
+                  class="auto-path-canvas-full"
+                ></canvas>
+                <div class="path-legend-inline">
+                  <span class="legend-label">Start</span>
+                  <div
+                    class="legend-gradient"
+                    style="--start-color: rgb({COLOR_MODES[
+                      colorblindMode
+                    ].below.join(',')}); --end-color: rgb({COLOR_MODES[
+                      colorblindMode
+                    ].above.join(',')});"
+                  ></div>
+                  <span class="legend-label">End</span>
+                </div>
+              </div>
+            </div>
           {/if}
+
+          <!-- Qual Notes -->
+          <div class="qual-panel">
+            {#if qualRows.length === 0}
+              <div class="qual-empty">No qualitative data for Team {team}.</div>
+            {:else}
+              <div class="qual-section-header">
+                <div class="qual-section-title">
+                  <span class="section-icon">📝</span> Qualitative Notes
+                </div>
+                <div class="qual-pagination-controls">
+                  <button
+                    class="qual-page-btn"
+                    on:click={() => previousQualMatch(team)}
+                    disabled={(qualMatchIndexByTeam[team] ?? 0) <= 0}>◀</button
+                  >
+                  <span class="qual-page-indicator"
+                    >{(qualMatchIndexByTeam[team] ?? 0) +
+                      1}/{qualRows.length}</span
+                  >
+                  <button
+                    class="qual-page-btn"
+                    on:click={() => nextQualMatch(team)}
+                    disabled={(qualMatchIndexByTeam[team] ?? 0) >=
+                      qualRows.length - 1}>▶</button
+                  >
+                </div>
+              </div>
+              {#each qualRows.slice(qualMatchIndexByTeam[team] ?? 0, (qualMatchIndexByTeam[team] ?? 0) + 1) as matchRow}
+                <div class="qual-match-block">
+                  <div class="qual-match-header">
+                    Match {matchRow.Match ?? matchRow.match}
+                  </div>
+                  <div class="qual-rows">
+                    {#if getQualMetricEntries(matchRow).length === 0}
+                      <div class="qual-row-item">
+                        <span class="qual-row-lbl">Notes</span>
+                        <span class="qual-row-val"
+                          >No qualitative responses recorded.</span
+                        >
+                      </div>
+                    {:else}
+                      {#each getQualMetricEntries(matchRow) as [label, value]}
+                        <div class="qual-row-item">
+                          <span class="qual-row-lbl">{label}</span>
+                          <span class="qual-row-val">{value}</span>
+                        </div>
+                      {/each}
+                    {/if}
+                  </div>
+                </div>
+              {/each}
+            {/if}
+          </div>
         </div>
       {/each}
     </div>
@@ -1089,26 +950,141 @@
     <div class="grid-column">
       {#each [0, 1, 2] as i}
         {@const team = blueAlliance[i]}
-        {@const last = [lastScoutedMatches.b0, lastScoutedMatches.b1, lastScoutedMatches.b2][i]}
+        {@const last = [
+          lastScoutedMatches.b0,
+          lastScoutedMatches.b1,
+          lastScoutedMatches.b2,
+        ][i]}
+        {@const qualRows = getQualRowsForTeam(team)}
+        {@const autoPathRows = getAutoPathRows(team)}
         <div class="team-box">
           <h3 class="team-label blue-label">
             <span class="last-match-badge">Last: {last}</span>
             Blue {i + 1} - Team {team}
             {#if teamOPRs[team]}
-              <span class="opr-badge" style="background: {getOPRColor(team).bg}; color: {getOPRColor(team).color};">
+              <span
+                class="opr-badge"
+                style="background: {getOPRColor(team).bg}; color: {getOPRColor(
+                  team,
+                ).color};"
+              >
                 OPR: {teamOPRs[team].toFixed(2)}
               </span>
             {/if}
-            <img src={fetchGraceRating(team)}  alt="Grace Rating"  style="width: 60px;" />
-            <img src={fetchAnanthRating(team)} alt="Ananth Rating" style="width: 60px;" />
+            <img
+              src={fetchGraceRating(team)}
+              alt="Grace Rating"
+              style="width: 60px;"
+            />
+            <img
+              src={fetchAnanthRating(team)}
+              alt="Ananth Rating"
+              style="width: 60px;"
+            />
           </h3>
-          {#if i === 0}
-            <div class="grid-container ag-theme-quartz" bind:this={domNodeRight} style="height: {gridHeight}px;"></div>
-          {:else if i === 1}
-            <div class="grid-container ag-theme-quartz" bind:this={domNode4} style="height: {gridHeight}px;"></div>
-          {:else}
-            <div class="grid-container ag-theme-quartz" bind:this={domNode5} style="height: {gridHeight}px;"></div>
+
+          <!-- Auto Paths -->
+          {#if autoPathRows.length > 0}
+            {@const autoIdx = autoPathIndexByTeam[team] ?? 0}
+            {@const currentPath = autoPathRows[autoIdx]}
+            <div class="auto-path-viewer">
+              <div class="auto-path-tab-bar">
+                <span class="auto-path-tab-label">
+                  <span class="section-icon">🤖</span> Auto</span
+                >
+                <div class="auto-path-tabs">
+                  {#each autoPathRows as pathRow, tabIdx}
+                    <button
+                      class="auto-path-tab"
+                      class:active={tabIdx === autoIdx}
+                      on:click={() => {
+                        autoPathIndexByTeam = {
+                          ...autoPathIndexByTeam,
+                          [team]: tabIdx,
+                        };
+                      }}
+                    >
+                      Q{pathRow.Match ?? pathRow.match}
+                    </button>
+                  {/each}
+                </div>
+              </div>
+              <div class="auto-path-canvas-wrapper">
+                <canvas
+                  use:initAutoPathCanvas={currentPath}
+                  width={600}
+                  height={300}
+                  class="auto-path-canvas-full"
+                ></canvas>
+                <div class="path-legend-inline">
+                  <span class="legend-label">Start</span>
+                  <div
+                    class="legend-gradient"
+                    style="--start-color: rgb({COLOR_MODES[
+                      colorblindMode
+                    ].below.join(',')}); --end-color: rgb({COLOR_MODES[
+                      colorblindMode
+                    ].above.join(',')});"
+                  ></div>
+                  <span class="legend-label">End</span>
+                </div>
+              </div>
+            </div>
           {/if}
+
+          <!-- Qual Notes -->
+          <div class="qual-panel">
+            {#if qualRows.length === 0}
+              <div class="qual-empty">No qualitative data for Team {team}.</div>
+            {:else}
+              <div class="qual-section-header">
+                <div class="qual-section-title">
+                  <span class="section-icon">📝</span> Qualitative Notes
+                </div>
+                <div class="qual-pagination-controls">
+                  <button
+                    class="qual-page-btn"
+                    on:click={() => previousQualMatch(team)}
+                    disabled={(qualMatchIndexByTeam[team] ?? 0) <= 0}>◀</button
+                  >
+                  <span class="qual-page-indicator"
+                    >{(qualMatchIndexByTeam[team] ?? 0) +
+                      1}/{qualRows.length}</span
+                  >
+                  <button
+                    class="qual-page-btn"
+                    on:click={() => nextQualMatch(team)}
+                    disabled={(qualMatchIndexByTeam[team] ?? 0) >=
+                      qualRows.length - 1}>▶</button
+                  >
+                </div>
+              </div>
+              {#each qualRows.slice(qualMatchIndexByTeam[team] ?? 0, (qualMatchIndexByTeam[team] ?? 0) + 1) as matchRow}
+                <div class="qual-match-block">
+                  <div class="qual-match-header">
+                    Match {matchRow.Match ?? matchRow.match}
+                  </div>
+                  <div class="qual-rows">
+                    {#if getQualMetricEntries(matchRow).length === 0}
+                      <div class="qual-row-item">
+                        <span class="qual-row-lbl">Notes</span>
+                        <span class="qual-row-val"
+                          >No qualitative responses recorded.</span
+                        >
+                      </div>
+                    {:else}
+                      {#each getQualMetricEntries(matchRow) as [label, value]}
+                        <div class="qual-row-item">
+                          <span class="qual-row-lbl">{label}</span>
+                          <span class="qual-row-val">{value}</span>
+                        </div>
+                      {/each}
+                    {/if}
+                  </div>
+                </div>
+              {/each}
+            {/if}
+          </div>
         </div>
       {/each}
     </div>
@@ -1120,94 +1096,502 @@
     --frc-190-red: #c81b00;
     --wpi-gray: #a9b0b7;
     --frc-190-black: #4d4d4d;
+    --dark: #1a1a1a;
+    --dark2: #2d2d2d;
+    --dark3: #3a3a3a;
   }
 
   .loading-spinner-overlay {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
     background-color: rgba(0, 0, 0, 0.5);
-    display: flex; justify-content: center; align-items: center;
+    display: flex;
+    justify-content: center;
+    align-items: center;
     z-index: 9999;
   }
   .loading-spinner {
     border: 8px solid rgba(255, 255, 255, 0.3);
     border-left-color: var(--frc-190-red);
-    border-radius: 50%; width: 50px; height: 50px;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
     animation: spin 1s linear infinite;
   }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  :global(html), :global(body) { margin: 0; padding: 0; background: var(--wpi-gray); height: auto; width: 100vw; overflow-x: hidden; }
-  :global(*) { box-sizing: border-box; }
-  .page-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: auto; padding: 1rem; background: var(--wpi-gray); }
-
-  :global(select option:checked) { background: var(--frc-190-red); color: white; font-size: 18px; }
-  :global(select option) { background: #333; color: white; padding: 8px; }
-  :global(.ag-header-cell) { background: var(--frc-190-red) !important; color: white !important; font-size: 14px; font-weight: bold; }
-  :global(.ag-header-cell.header-center .ag-header-cell-label) { justify-content: center; text-align: center; width: 100%; color: white !important; font-size: 14px; }
-  :global(.cell-center) { text-align: center !important; }
-  :global(.ag-theme-quartz .ag-root-wrapper) { --ag-font-size: 14px; border: 3px solid var(--frc-190-red); border-radius: 8px; overflow: hidden; }
-  :global(.ag-body-viewport) { overflow-y: hidden !important; overflow-x: hidden !important; }
-  :global(.ag-center-cols-viewport) { overflow-y: hidden !important; overflow-x: hidden !important; }
-  :global(.ag-body-vertical-scroll) { display: none !important; }
-  :global(.ag-body-horizontal-scroll) { display: none !important; }
-
-  .page-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; min-height: auto; padding: 1rem; background: var(--wpi-gray); }
-  .header-section { text-align: center; margin-bottom: 1rem; }
-  .header-section h1 { color: var(--frc-190-red); font-size: 1.8rem; font-weight: 800; margin: 0 0 0.3rem; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); letter-spacing: 1px; }
-  .header-section .subtitle { color: var(--frc-190-black); font-size: 0.9rem; margin: 0; }
-
-  .controls { padding: 1rem; background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%); color: white; font-size: 1rem; display: flex; gap: 1.5rem; align-items: center; justify-content: center; width: 100%; max-width: 1200px; border-radius: 10px; margin-bottom: 1rem; border: 2px solid var(--frc-190-red); box-shadow: 0 4px 15px rgba(0,0,0,0.3); flex-wrap: wrap; }
-  .controls label { font-weight: 600; color: #fff; font-size: 0.95rem; }
-
-  .statbotics-banner { width: 100%; max-width: 1200px; display: flex; gap: 0.75rem; align-items: center; justify-content: center; flex-wrap: wrap; margin-bottom: 1rem; padding: 0.65rem 0.9rem; border-radius: 10px; border: 2px solid #1f4a6a; background: linear-gradient(135deg, #0f2435 0%, #18374f 100%); color: #fff; font-weight: 700; }
-  .statbotics-label { text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.8rem; color: #b9d9ef; }
-  .statbotics-red, .statbotics-blue, .statbotics-na { padding: 0.2rem 0.7rem; border-radius: 999px; font-size: 0.85rem; }
-  .statbotics-red { background: rgba(200, 27, 0, 0.35); border: 1px solid rgba(200, 27, 0, 0.65); }
-  .statbotics-blue { background: rgba(0, 102, 204, 0.35); border: 1px solid rgba(0, 102, 204, 0.7); }
-  .statbotics-na { background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); }
-  .favorite { box-shadow: 0 0 0 2px rgba(255,255,255,0.28) inset; }
-
-  select { margin-left: 0.5rem; padding: 0.5rem 1rem; background: linear-gradient(135deg, #333 0%, #444 100%); color: white; font-size: 0.9rem; border: 2px solid var(--frc-190-red); border-radius: 6px; cursor: pointer; transition: all 0.3s ease; }
-  select:hover { background: linear-gradient(135deg, #444 0%, #555 100%); border-color: #e02200; }
-  select:focus { outline: none; box-shadow: 0 0 0 3px rgba(200, 27, 0, 0.4); }
-
-  .grid-wrapper { width: 100%; max-width: none; display: flex; align-items: flex-start; justify-content: center; gap: 1rem; flex-wrap: wrap; padding: 0 1rem 1rem 1rem; }
-  .grid-column { flex: 1; min-width: 350px; display: flex; flex-direction: column; gap: 1rem; }
-  .team-box { display: flex; flex-direction: column; }
-
-  .team-label { margin: 0 0 0.5rem; padding: 0.5rem 1rem; font-size: 1rem; font-weight: 700; text-align: center; border-radius: 6px 6px 0 0; text-shadow: 1px 1px 2px rgba(0,0,0,0.3); position: relative; height: auto; min-height: 50px; width: 100%; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; }
-  .last-match-badge { position: absolute; top: 0.3rem; left: 0.5rem; background: rgba(0,0,0,0.45); color: #fff; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.03em; padding: 0.2rem 0.5rem; border-radius: 4px; line-height: 1.2; white-space: nowrap; pointer-events: none; }
-  .red-label  { background: var(--frc-190-red); color: white; }
-  .blue-label { background: linear-gradient(135deg, #003d7a 0%, #0066cc 100%); color: white; }
-
-  .grid-container { width: 100%; background: var(--frc-190-black); border-radius: 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.4); overflow: hidden; }
-  .opr-badge { margin-left: 0.5rem; padding: 0.2rem 0.75rem; background: rgba(0,0,0,0.3); border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
-
-  /* Tablet */
-  @media (max-width: 1024px) {
-    .page-wrapper { padding: 0.75rem; }
-    .header-section h1 { font-size: 1.5rem; }
-    .header-section .subtitle { font-size: 0.8rem; }
-    .controls { gap: 1rem; padding: 0.75rem; }
-    .statbotics-banner { padding: 0.55rem 0.75rem; }
-    .grid-wrapper { gap: 0.75rem; }
-    .grid-column { min-width: 280px; }
-    .team-label { font-size: 0.9rem; min-height: 45px; padding: 0.4rem 0.8rem; }
-    .grid-container { border-radius: 6px; }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
-  /* Mobile */
+  :global(html),
+  :global(body) {
+    margin: 0;
+    padding: 0;
+    background: var(--wpi-gray);
+    height: auto;
+    width: 100vw;
+    overflow-x: hidden;
+  }
+  :global(*) {
+    box-sizing: border-box;
+  }
+
+  .page-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: auto;
+    padding: 1rem;
+    background: var(--wpi-gray);
+  }
+
+  .header-section {
+    text-align: center;
+    margin-bottom: 1rem;
+  }
+  .header-section h1 {
+    color: var(--frc-190-red);
+    font-size: 1.8rem;
+    font-weight: 800;
+    margin: 0 0 0.3rem;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+    letter-spacing: 1px;
+  }
+  .header-section .subtitle {
+    color: var(--frc-190-black);
+    font-size: 0.9rem;
+    margin: 0;
+  }
+
+  .controls {
+    padding: 1rem;
+    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+    color: white;
+    font-size: 1rem;
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 1200px;
+    border-radius: 10px;
+    margin-bottom: 1rem;
+    border: 2px solid var(--frc-190-red);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    flex-wrap: wrap;
+  }
+  .controls label {
+    font-weight: 600;
+    color: #fff;
+    font-size: 0.95rem;
+  }
+
+  select {
+    margin-left: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: linear-gradient(135deg, #333 0%, #444 100%);
+    color: white;
+    font-size: 0.9rem;
+    border: 2px solid var(--frc-190-red);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  select:hover {
+    background: linear-gradient(135deg, #444 0%, #555 100%);
+    border-color: #e02200;
+  }
+  select:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(200, 27, 0, 0.4);
+  }
+
+  :global(select option:checked) {
+    background: var(--frc-190-red);
+    color: white;
+  }
+  :global(select option) {
+    background: #333;
+    color: white;
+    padding: 8px;
+  }
+
+  .statbotics-banner {
+    width: 100%;
+    max-width: 1200px;
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+    padding: 0.65rem 0.9rem;
+    border-radius: 10px;
+    border: 2px solid #1f4a6a;
+    background: linear-gradient(135deg, #0f2435 0%, #18374f 100%);
+    color: #fff;
+    font-weight: 700;
+  }
+  .statbotics-label {
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.8rem;
+    color: #b9d9ef;
+  }
+  .statbotics-red,
+  .statbotics-blue,
+  .statbotics-na {
+    padding: 0.2rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+  }
+  .statbotics-red {
+    background: rgba(200, 27, 0, 0.35);
+    border: 1px solid rgba(200, 27, 0, 0.65);
+  }
+  .statbotics-blue {
+    background: rgba(0, 102, 204, 0.35);
+    border: 1px solid rgba(0, 102, 204, 0.7);
+  }
+  .statbotics-na {
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+  }
+  .favorite {
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.28) inset;
+  }
+
+  .grid-wrapper {
+    width: 100%;
+    max-width: none;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    padding: 0 1rem 1rem 1rem;
+  }
+  .grid-column {
+    flex: 1;
+    min-width: 350px;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .team-box {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .team-label {
+    margin: 0 0 0.5rem;
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+    font-weight: 700;
+    text-align: center;
+    border-radius: 6px 6px 0 0;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+    position: relative;
+    height: auto;
+    min-height: 50px;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .last-match-badge {
+    position: absolute;
+    top: 0.3rem;
+    left: 0.5rem;
+    background: rgba(0, 0, 0, 0.45);
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    line-height: 1.2;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .red-label {
+    background: var(--frc-190-red);
+    color: white;
+  }
+  .blue-label {
+    background: linear-gradient(135deg, #003d7a 0%, #0066cc 100%);
+    color: white;
+  }
+  .opr-badge {
+    margin-left: 0.5rem;
+    padding: 0.2rem 0.75rem;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+
+  /* Auto path viewer — browser-tab style */
+  .auto-path-viewer {
+    margin-bottom: 0.5rem;
+    border-radius: 6px 6px 6px 6px;
+    overflow: hidden;
+    border: 1px solid rgba(200, 27, 0, 0.3);
+    background: #0a0a0a;
+  }
+
+  /* Tab bar — sits like a browser chrome */
+  .auto-path-tab-bar {
+    display: flex;
+    align-items: flex-end;
+    gap: 0;
+    background: #111;
+    border-bottom: 2px solid rgba(200, 27, 0, 0.4);
+    padding: 0 0 0 10px;
+    min-height: 34px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .auto-path-tab-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .auto-path-tab-label {
+    font-size: 0.6rem;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: #ff9980;
+    white-space: nowrap;
+    padding: 0 10px 6px 0;
+    align-self: center;
+    flex-shrink: 0;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    margin-right: 6px;
+  }
+
+  .auto-path-tabs {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    flex-shrink: 1;
+    min-width: 0;
+  }
+
+  .auto-path-tab {
+    position: relative;
+    padding: 5px 8px 6px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    border: none;
+    border-radius: 6px 6px 0 0;
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+      background 0.15s,
+      color 0.15s;
+    background: #1c1c1c;
+    color: #888;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: -2px;
+    flex-shrink: 1;
+  }
+  .auto-path-tab:hover:not(.active) {
+    background: #262626;
+    color: #bbb;
+  }
+  .auto-path-tab.active {
+    background: #0a0a0a; /* matches canvas bg — tab "opens" into content */
+    color: #ff9980;
+    border-top: 2px solid var(--frc-190-red);
+    border-left: 1px solid rgba(200, 27, 0, 0.4);
+    border-right: 1px solid rgba(200, 27, 0, 0.4);
+    /* cover the bottom border so it looks connected */
+    border-bottom: 2px solid #0a0a0a;
+    z-index: 1;
+  }
+
+  .auto-path-pagination {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .auto-path-canvas-wrapper {
+    position: relative;
+    width: 100%;
+    background: #0a0a0a;
+  }
+  .auto-path-canvas-full {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .path-legend-inline {
+    position: absolute;
+    bottom: 6px;
+    right: 8px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.6);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    pointer-events: none;
+  }
+  .legend-label {
+    font-size: 0.6rem;
+    opacity: 0.7;
+    min-width: 24px;
+    text-align: center;
+  }
+  .legend-gradient {
+    width: 36px;
+    height: 4px;
+    background: linear-gradient(
+      to right,
+      var(--start-color, #0077be),
+      var(--end-color, #ffd60a)
+    );
+    border-radius: 2px;
+  }
+
+  /* Qual panel */
+  .qual-panel {
+    background: linear-gradient(160deg, var(--dark) 0%, var(--dark2) 100%);
+    border: 2px solid rgba(200, 27, 0, 0.35);
+    border-radius: 0 0 8px 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  }
+  .qual-empty {
+    padding: 20px;
+    text-align: center;
+    color: #555;
+    font-size: 0.85rem;
+    font-style: italic;
+  }
+  .qual-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px 8px;
+    border-bottom: 1px solid rgba(200, 27, 0, 0.25);
+    background: rgba(200, 27, 0, 0.1);
+  }
+  .qual-section-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--frc-190-red);
+  }
+  .section-icon {
+    font-size: 0.85rem;
+  }
+  .qual-pagination-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .qual-page-btn {
+    border: 1px solid rgba(200, 27, 0, 0.45);
+    background: rgba(255, 255, 255, 0.06);
+    color: #ddd;
+    border-radius: 6px;
+    width: 24px;
+    height: 24px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    font-size: 0.7rem;
+  }
+  .qual-page-btn:hover:not(:disabled) {
+    background: rgba(200, 27, 0, 0.22);
+    color: #fff;
+  }
+  .qual-page-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+  .qual-page-indicator {
+    min-width: 46px;
+    text-align: center;
+    font-size: 0.66rem;
+    color: #bbb;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+  }
+  .qual-match-block {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 0;
+    overflow: hidden;
+  }
+  .qual-match-header {
+    background: rgba(200, 27, 0, 0.15);
+    border-bottom: 1px solid rgba(200, 27, 0, 0.25);
+    color: #ff9980;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    padding: 5px 10px;
+  }
+  .qual-rows {
+    padding: 6px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .qual-row-item {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.02);
+  }
+  .qual-row-lbl {
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--frc-190-red);
+  }
+  .qual-row-val {
+    font-size: 0.82rem;
+    color: #ccc;
+    line-height: 1.4;
+  }
+
+  /* Responsive */
   @media (max-width: 900px), (hover: none) and (pointer: coarse) {
-    .page-wrapper { padding: 0.5rem; }
-    .header-section { margin-bottom: 0.75rem; }
-    .header-section h1 { font-size: 1.2rem; margin-bottom: 0.2rem; }
-    .header-section .subtitle { font-size: 0.75rem; }
-    .controls { gap: 0.75rem; padding: 0.6rem; font-size: 0.85rem; flex-direction: column; }
-    .controls label { font-size: 0.8rem; }
-    .statbotics-banner { padding: 0.5rem 0.6rem; gap: 0.45rem; }
-    .statbotics-label { font-size: 0.72rem; }
-    .statbotics-red, .statbotics-blue, .statbotics-na { font-size: 0.75rem; }
-    select { margin-left: 0; margin-top: 0.3rem; padding: 0.4rem 0.8rem; font-size: 0.8rem; width: 100%; }
+    .page-wrapper {
+      padding: 0.5rem;
+    }
+    .controls {
+      gap: 0.75rem;
+      padding: 0.6rem;
+      flex-direction: column;
+    }
     .grid-wrapper {
       display: block !important;
       width: 100%;
@@ -1224,29 +1608,19 @@
       width: 100%;
       margin-bottom: 0.6rem;
     }
-    .team-box:last-child {
-      margin-bottom: 0;
+    select {
+      margin-left: 0;
+      margin-top: 0.3rem;
+      width: 100%;
     }
-    .team-label { font-size: 0.8rem; min-height: 40px; padding: 0.3rem 0.6rem; }
-    .last-match-badge { font-size: 0.6rem; padding: 0.15rem 0.4rem; }
-    .opr-badge { font-size: 0.7rem; margin-left: 0.25rem; padding: 0.15rem 0.5rem; }
   }
-
-  /* Small Mobile */
   @media (max-width: 480px) {
-    .page-wrapper { padding: 0.4rem; }
-    .header-section { margin-bottom: 0.5rem; }
-    .header-section h1 { font-size: 1rem; }
-    .header-section .subtitle { font-size: 0.7rem; }
-    .controls { gap: 0.5rem; padding: 0.5rem; font-size: 0.75rem; }
-    .controls label { font-size: 0.7rem; }
-    .statbotics-banner { padding: 0.45rem 0.5rem; }
-    .statbotics-label { font-size: 0.66rem; }
-    .statbotics-red, .statbotics-blue, .statbotics-na { font-size: 0.68rem; padding: 0.15rem 0.5rem; }
-    select { margin-left: 0; padding: 0.3rem 0.6rem; font-size: 0.7rem; }
-    .grid-wrapper { gap: 0.4rem; }
-    .team-label { font-size: 0.7rem; min-height: 35px; padding: 0.25rem 0.5rem; }
-    .last-match-badge { font-size: 0.55rem; padding: 0.1rem 0.3rem; }
-    .opr-badge { font-size: 0.65rem; margin-left: 0.2rem; }
+    .header-section h1 {
+      font-size: 1rem;
+    }
+    .team-label {
+      font-size: 0.7rem;
+      min-height: 35px;
+    }
   }
 </style>

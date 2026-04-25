@@ -1,7 +1,17 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { COLOR_MODES, getColorblindMode, getEventCode } from "../../utils/pageUtils.js";
-  import { fetchTeams, fetchQualitativeScouting, fetchPitScouting, readPitScoutingFromIDB, readQualScoutingFromIDB } from "../../utils/api.js";
+  import {
+    COLOR_MODES,
+    getColorblindMode,
+    getEventCode,
+  } from "../../utils/pageUtils.js";
+  import {
+    fetchTeams,
+    fetchQualitativeScouting,
+    fetchPitScouting,
+    readPitScoutingFromIDB,
+    readQualScoutingFromIDB,
+  } from "../../utils/api.js";
   import fieldImageSrc from "../../images/FieldImage.png";
 
   let eventCode = getEventCode();
@@ -35,14 +45,19 @@
   function loadPicklists() {
     try {
       const raw = sessionStorage.getItem("picklists");
-      if (!raw) { picklists = {}; return; }
+      if (!raw) {
+        picklists = {};
+        return;
+      }
       const parsed = JSON.parse(raw) as Record<string, any>;
       const result: Record<string, { name: string; teams: number[] }> = {};
       for (const [key, val] of Object.entries(parsed)) {
         if (!val || typeof val !== "object") continue;
         const displayName = String(val.name ?? key);
         const teams: number[] = Array.isArray(val.teams)
-          ? val.teams.map((t: any) => Number(t?.team_number ?? t)).filter((n: number) => !isNaN(n))
+          ? val.teams
+              .map((t: any) => Number(t?.team_number ?? t))
+              .filter((n: number) => !isNaN(n))
           : [];
         result[key] = { name: displayName, teams };
       }
@@ -83,8 +98,12 @@
     selectedMatches = next;
   }
 
-  function showAll() { hiddenTeams = new Set(); }
-  function hideAll() { hiddenTeams = new Set(teamsWithData); }
+  function showAll() {
+    hiddenTeams = new Set();
+  }
+  function hideAll() {
+    hiddenTeams = new Set(teamsWithData);
+  }
 
   function normalizeTeamKey(team: any): string {
     const stripped = String(team ?? "").replace(/\D/g, "");
@@ -104,9 +123,7 @@
   function mergeEntries(localValue: any, incomingValue: any): any[] {
     const merged = [...normalizeEntries(localValue)];
     const seenIds = new Set(
-      merged
-        .map((entry) => String(entry?._entryId || ""))
-        .filter(Boolean),
+      merged.map((entry) => String(entry?._entryId || "")).filter(Boolean),
     );
 
     for (const entry of normalizeEntries(incomingValue)) {
@@ -151,7 +168,10 @@
           ...row,
         });
       }
-      return rows.sort((a, b) => Number(a.Match ?? a.match ?? 0) - Number(b.Match ?? b.match ?? 0));
+      return rows.sort(
+        (a, b) =>
+          Number(a.Match ?? a.match ?? 0) - Number(b.Match ?? b.match ?? 0),
+      );
     }
 
     if (teamData.Match != null || teamData.match != null) {
@@ -172,7 +192,10 @@
       }
     }
 
-    return rows.sort((a, b) => Number(a.Match ?? a.match ?? 0) - Number(b.Match ?? b.match ?? 0));
+    return rows.sort(
+      (a, b) =>
+        Number(a.Match ?? a.match ?? 0) - Number(b.Match ?? b.match ?? 0),
+    );
   }
 
   function normalizePitEntries(teamData: any): any[] {
@@ -237,19 +260,30 @@
   }
 
   // ─── Auto Path Animation ──────────────────────────────────────────────────────
-  let animationState: Map<HTMLCanvasElement, { isAnimating: boolean; progress: number; frameId: number | null; lastTime: number }> = new Map();
+  let animationState: Map<
+    HTMLCanvasElement,
+    {
+      isAnimating: boolean;
+      progress: number;
+      frameId: number | null;
+      lastTime: number;
+    }
+  > = new Map();
   let animationDuration = 5000; // 5 seconds for full path
   let progressByCanvasId: Record<string, number> = {};
 
   // ─── Auto Path Canvas ─────────────────────────────────────────────────────────
 
-  function drawAutoPath(canvas: HTMLCanvasElement, matchRow: any, progress: number = 1) {
+  function drawAutoPath(
+    canvas: HTMLCanvasElement,
+    matchRow: any,
+    progress: number = 1,
+  ) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const W = canvas.width;
     const H = canvas.height;
     ctx.clearRect(0, 0, W, H);
-
 
     if (fieldImg && fieldImg.complete && fieldImg.naturalWidth > 0) {
       const imgW = fieldImg.naturalWidth;
@@ -259,7 +293,10 @@
       const sw = imgW * (1 - 2 * cropPct);
       const srcAspect = sw / imgH;
       const dstAspect = W / H;
-      let finalSx = sx, finalSy = 0, finalSw = sw, finalSh = imgH;
+      let finalSx = sx,
+        finalSy = 0,
+        finalSw = sw,
+        finalSh = imgH;
       const verticalBias = 0.6;
       if (dstAspect > srcAspect) {
         const needed = sw / dstAspect;
@@ -277,59 +314,61 @@
     }
 
     const RECORDED_W = 1200;
-  const RECORDED_H = 600;
-  const scaleX = W / RECORDED_W;
-  const scaleY = H / RECORDED_H;
+    const RECORDED_H = 600;
+    const scaleX = W / RECORDED_W;
+    const scaleY = H / RECORDED_H;
 
-  if (matchRow?.AutoPath && Array.isArray(matchRow.AutoPath)) {
-    const allPaths = matchRow.AutoPath.filter((path: any[]) => Array.isArray(path) && path.length >= 2);
-    if (allPaths.length === 0) return;
+    if (matchRow?.AutoPath && Array.isArray(matchRow.AutoPath)) {
+      const allPaths = matchRow.AutoPath.filter(
+        (path: any[]) => Array.isArray(path) && path.length >= 2,
+      );
+      if (allPaths.length === 0) return;
 
-    const px = (p: any) => p.x * scaleX;
-    const py = (p: any) => p.y * scaleY;
+      const px = (p: any) => p.x * scaleX;
+      const py = (p: any) => p.y * scaleY;
 
-    // Flatten all points into single array
-    const allPoints: any[] = [];
-    allPaths.forEach((path: any[]) => allPoints.push(...path));
+      // Flatten all points into single array
+      const allPoints: any[] = [];
+      allPaths.forEach((path: any[]) => allPoints.push(...path));
 
-    const totalPoints = allPoints.length;
-    // progress (0–1) now maps to point INDEX, not distance
-    const targetIndex = Math.floor(progress * (totalPoints - 1));
+      const totalPoints = allPoints.length;
+      // progress (0–1) now maps to point INDEX, not distance
+      const targetIndex = Math.floor(progress * (totalPoints - 1));
 
-    const modeColors = COLOR_MODES[colorblindMode] || COLOR_MODES.normal;
-    const [r1, g1, b1] = modeColors.below;
-    const [r2, g2, b2] = modeColors.above;
-    const lerpColor = (t: number) => {
-      const r = Math.round(r1 + (r2 - r1) * t);
-      const g = Math.round(g1 + (g2 - g1) * t);
-      const b = Math.round(b1 + (b2 - b1) * t);
-      return `rgb(${r},${g},${b})`;
-    };
+      const modeColors = COLOR_MODES[colorblindMode] || COLOR_MODES.normal;
+      const [r1, g1, b1] = modeColors.below;
+      const [r2, g2, b2] = modeColors.above;
+      const lerpColor = (t: number) => {
+        const r = Math.round(r1 + (r2 - r1) * t);
+        const g = Math.round(g1 + (g2 - g1) * t);
+        const b = Math.round(b1 + (b2 - b1) * t);
+        return `rgb(${r},${g},${b})`;
+      };
 
-    // Draw segments up to targetIndex — each segment advances by 1 point = 1 time unit
-    for (let i = 1; i <= targetIndex && i < totalPoints; i++) {
-      const t = (i - 1) / (totalPoints - 1);
-      ctx.beginPath();
-      ctx.moveTo(px(allPoints[i - 1]), py(allPoints[i - 1]));
-      ctx.lineTo(px(allPoints[i]), py(allPoints[i]));
-      ctx.strokeStyle = lerpColor(t);
-      ctx.lineWidth = 2;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.stroke();
-    }
+      // Draw segments up to targetIndex — each segment advances by 1 point = 1 time unit
+      for (let i = 1; i <= targetIndex && i < totalPoints; i++) {
+        const t = (i - 1) / (totalPoints - 1);
+        ctx.beginPath();
+        ctx.moveTo(px(allPoints[i - 1]), py(allPoints[i - 1]));
+        ctx.lineTo(px(allPoints[i]), py(allPoints[i]));
+        ctx.strokeStyle = lerpColor(t);
+        ctx.lineWidth = 2;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.stroke();
+      }
 
-    // Draw current position dot
-    if (targetIndex < totalPoints) {
-      const cur = allPoints[targetIndex];
-      const t = targetIndex / (totalPoints - 1);
-      ctx.beginPath();
-      ctx.arc(px(cur), py(cur), 4, 0, Math.PI * 2);
-      ctx.fillStyle = lerpColor(t);
-      ctx.fill();
+      // Draw current position dot
+      if (targetIndex < totalPoints) {
+        const cur = allPoints[targetIndex];
+        const t = targetIndex / (totalPoints - 1);
+        ctx.beginPath();
+        ctx.arc(px(cur), py(cur), 4, 0, Math.PI * 2);
+        ctx.fillStyle = lerpColor(t);
+        ctx.fill();
+      }
     }
   }
-}
 
   function initMatchCanvas(
     canvas: HTMLCanvasElement,
@@ -339,28 +378,34 @@
     let rowKey = payload?.rowKey || String(Date.now());
     let canvasId = `canvas-${rowKey}`;
 
-    animationState.set(canvas, { isAnimating: false, progress: 1, frameId: null, lastTime: Date.now() });
+    animationState.set(canvas, {
+      isAnimating: false,
+      progress: 1,
+      frameId: null,
+      lastTime: Date.now(),
+    });
     progressByCanvasId[canvasId] = 1;
     (canvas as any).animationCanvasId = canvasId;
     (canvas as any).matchRowData = matchRow;
     canvasesByTeamMatch.set(canvasId, canvas);
-    
-    const tryDraw = () => drawAutoPath(canvas, matchRow, animationState.get(canvas)?.progress ?? 0);
+
+    const tryDraw = () =>
+      drawAutoPath(canvas, matchRow, animationState.get(canvas)?.progress ?? 0);
     if (fieldImg && fieldImg.complete && fieldImg.naturalWidth > 0) {
       tryDraw();
     } else if (fieldImg) {
       fieldImg.addEventListener("load", tryDraw, { once: true });
     }
-    
+
     // Start animation loop
     const animate = () => {
       const state = animationState.get(canvas);
       if (!state) return;
-      
+
       const now = Date.now();
       const elapsed = now - state.lastTime;
       state.lastTime = now;
-      
+
       if (state.isAnimating) {
         state.progress += elapsed / animationDuration;
         if (state.progress >= 1) {
@@ -368,27 +413,27 @@
         }
         progressByCanvasId[canvasId] = state.progress;
       }
-      
+
       drawAutoPath(canvas, matchRow, state.progress);
       state.frameId = requestAnimationFrame(animate);
     };
-    
+
     // Toggle play/pause on click
     const handleClick = () => {
       const animState = animationState.get(canvas);
       if (animState) {
         animState.isAnimating = !animState.isAnimating;
         animState.lastTime = Date.now();
-        
+
         // Start animation loop if not already running
         if (animState.isAnimating && !animState.frameId) {
           animState.frameId = requestAnimationFrame(animate);
         }
       }
     };
-    
+
     canvas.addEventListener("click", handleClick);
-    
+
     return {
       update(newPayload: { matchRow: any; rowKey: string }) {
         matchRow = newPayload?.matchRow;
@@ -402,7 +447,8 @@
           canvasId = nextCanvasId;
           rowKey = nextRowKey;
           (canvas as any).animationCanvasId = canvasId;
-          progressByCanvasId[canvasId] = animationState.get(canvas)?.progress ?? 1;
+          progressByCanvasId[canvasId] =
+            animationState.get(canvas)?.progress ?? 1;
           canvasesByTeamMatch.set(canvasId, canvas);
         }
 
@@ -417,7 +463,7 @@
         animationState.delete(canvas);
         canvasesByTeamMatch.delete(canvasId);
         delete progressByCanvasId[canvasId];
-      }
+      },
     };
   }
 
@@ -455,7 +501,6 @@
   ]);
 
   const QUAL_LABEL_OVERRIDES: Record<string, string> = {
-    autoStartPosition: "Auto Start Position",
     autoActions: "Autonomous Actions",
     travelMethod: "Travel Method",
     travelTroubles: "Travel Troubles",
@@ -476,7 +521,6 @@
   };
 
   const QUAL_FIELD_ORDER = [
-    "autoStartPosition",
     "autoActions",
     "travelMethod",
     "travelTroubles",
@@ -535,16 +579,28 @@
     return String(value);
   }
 
-  function getQualMetricEntries(row: Record<string, any>): Array<[string, string]> {
+  function getQualMetricEntries(
+    row: Record<string, any>,
+  ): Array<[string, string]> {
     return Object.entries(row)
-      .filter(([key, value]) => !QUAL_METADATA_KEYS.has(key) && !key.startsWith("_") && hasRenderableQualValue(value))
+      .filter(
+        ([key, value]) =>
+          !QUAL_METADATA_KEYS.has(key) &&
+          !key.startsWith("_") &&
+          hasRenderableQualValue(value),
+      )
       .sort(([aKey], [bKey]) => {
-        const aOrder = QUAL_FIELD_ORDER_INDEX.get(aKey) ?? Number.MAX_SAFE_INTEGER;
-        const bOrder = QUAL_FIELD_ORDER_INDEX.get(bKey) ?? Number.MAX_SAFE_INTEGER;
+        const aOrder =
+          QUAL_FIELD_ORDER_INDEX.get(aKey) ?? Number.MAX_SAFE_INTEGER;
+        const bOrder =
+          QUAL_FIELD_ORDER_INDEX.get(bKey) ?? Number.MAX_SAFE_INTEGER;
         if (aOrder !== bOrder) return aOrder - bOrder;
         return humanizeQualKey(aKey).localeCompare(humanizeQualKey(bKey));
       })
-      .map(([key, value]) => [humanizeQualKey(key), formatQualValue(key, value)]);
+      .map(([key, value]) => [
+        humanizeQualKey(key),
+        formatQualValue(key, value),
+      ]);
   }
 
   // ─── Mount ────────────────────────────────────────────────────────────────────
@@ -558,7 +614,10 @@
     try {
       const teamsResult = await fetchTeams(eventCode);
       teamsMap = new Map(
-        Object.entries(teamsResult._teams).map(([k, v]) => [Number(k), v as string])
+        Object.entries(teamsResult._teams).map(([k, v]) => [
+          Number(k),
+          v as string,
+        ]),
       );
       teamNumbers = teamsResult._teamNumbers as number[];
 
@@ -574,7 +633,10 @@
         localCounts[team] = countQualEntries(matches);
       }
 
-      const qualResponse = await fetchQualitativeScouting(eventCode, localCounts);
+      const qualResponse = await fetchQualitativeScouting(
+        eventCode,
+        localCounts,
+      );
       const qualRaw = await qualResponse.json();
       const pitResponse = await fetchPitScouting(eventCode, localPitCounts);
       const pitRaw = await pitResponse.json();
@@ -600,7 +662,8 @@
 
         for (const [teamKey, teamData] of Object.entries(source)) {
           const normalizedTeamKey = normalizeTeamKey(teamKey);
-          if (!mergedQualRaw[normalizedTeamKey]) mergedQualRaw[normalizedTeamKey] = {};
+          if (!mergedQualRaw[normalizedTeamKey])
+            mergedQualRaw[normalizedTeamKey] = {};
 
           if (!teamData || typeof teamData !== "object") continue;
 
@@ -616,8 +679,13 @@
             continue;
           }
 
-          if ((teamData as any).Match != null || (teamData as any).match != null) {
-            const matchKey = String((teamData as any).Match ?? (teamData as any).match ?? "");
+          if (
+            (teamData as any).Match != null ||
+            (teamData as any).match != null
+          ) {
+            const matchKey = String(
+              (teamData as any).Match ?? (teamData as any).match ?? "",
+            );
             if (matchKey) {
               mergedQualRaw[normalizedTeamKey][matchKey] = mergeEntries(
                 mergedQualRaw[normalizedTeamKey][matchKey],
@@ -627,7 +695,9 @@
             continue;
           }
 
-          for (const [matchKey, matchData] of Object.entries(teamData as Record<string, any>)) {
+          for (const [matchKey, matchData] of Object.entries(
+            teamData as Record<string, any>,
+          )) {
             mergedQualRaw[normalizedTeamKey][matchKey] = mergeEntries(
               mergedQualRaw[normalizedTeamKey][matchKey],
               matchData,
@@ -649,12 +719,11 @@
 
         if (Array.isArray(source)) {
           for (const row of source) {
-            const teamKey = normalizeTeamKey(row?.Team ?? row?.team ?? row?.teamNumber ?? "");
-            if (!teamKey) continue;
-            mergedPitRaw[teamKey] = mergeEntries(
-              mergedPitRaw[teamKey],
-              row,
+            const teamKey = normalizeTeamKey(
+              row?.Team ?? row?.team ?? row?.teamNumber ?? "",
             );
+            if (!teamKey) continue;
+            mergedPitRaw[teamKey] = mergeEntries(mergedPitRaw[teamKey], row);
           }
           continue;
         }
@@ -681,15 +750,15 @@
   });
 
   $: teamsWithData = teamNumbers.filter(
-    (t) => qualDataByTeam[t]?.length > 0 || (pitDataByTeam[t]?.length ?? 0) > 0
+    (t) => qualDataByTeam[t]?.length > 0 || (pitDataByTeam[t]?.length ?? 0) > 0,
   );
 
   $: {
     const existing = new Set(cardOrder);
     const incoming = teamsWithData;
     const updated = [
-      ...cardOrder.filter(t => incoming.includes(t)),
-      ...incoming.filter(t => !existing.has(t)),
+      ...cardOrder.filter((t) => incoming.includes(t)),
+      ...incoming.filter((t) => !existing.has(t)),
     ];
     if (updated.join(",") !== cardOrder.join(",")) cardOrder = updated;
   }
@@ -704,15 +773,15 @@
     // Teams in the picklist that also have data, in picklist order
     const cardOrderNums = cardOrder.map(Number);
     const cardOrderSet = new Set(cardOrderNums);
-    const inList = picklistTeams.filter(t => cardOrderSet.has(t));
+    const inList = picklistTeams.filter((t) => cardOrderSet.has(t));
 
     // Teams not in the picklist, preserving existing cardOrder
-    const notInList = cardOrderNums.filter(t => !picklistSet.has(t));
+    const notInList = cardOrderNums.filter((t) => !picklistSet.has(t));
 
     return [...inList, ...notInList];
   })();
 
-  $: visibleCards = sortedCardOrder.filter(t => !hiddenTeams.has(t));
+  $: visibleCards = sortedCardOrder.filter((t) => !hiddenTeams.has(t));
   $: hiddenCount = hiddenTeams.size;
 
   $: availableMatches = (() => {
@@ -727,15 +796,18 @@
   })();
 
   $: filteredQualByTeam = (() => {
-  const result: Record<number, any[]> = {};
-  for (const team of visibleCards) {
-    const rows = qualDataByTeam[team] ?? [];
-    result[team] = selectedMatches.size === 0
-      ? rows
-      : rows.filter(r => !selectedMatches.has(String(r.Match ?? r.match)));
-  }
-  return result;
-})();
+    const result: Record<number, any[]> = {};
+    for (const team of visibleCards) {
+      const rows = qualDataByTeam[team] ?? [];
+      result[team] =
+        selectedMatches.size === 0
+          ? rows
+          : rows.filter(
+              (r) => !selectedMatches.has(String(r.Match ?? r.match)),
+            );
+    }
+    return result;
+  })();
 
   $: {
     // Keep per-team pagination index valid as filters/data change.
@@ -772,7 +844,9 @@
   // Return the rank of a team within the selected picklist (1-indexed), or null
   function getPicklistRank(team: number): number | null {
     if (!selectedPicklist || !picklists[selectedPicklist]) return null;
-    const idx = picklists[selectedPicklist].teams.map(Number).indexOf(Number(team));
+    const idx = picklists[selectedPicklist].teams
+      .map(Number)
+      .indexOf(Number(team));
     return idx === -1 ? null : idx + 1;
   }
 
@@ -785,7 +859,6 @@
       }
     }
   }
-
 </script>
 
 <svelte:window on:click={handleOutsideClick} />
@@ -808,12 +881,12 @@
   {#if !isLoading}
     <!-- Controls bar -->
     <div class="controls-bar">
-
       <!-- Team filter dropdown -->
       <div class="filter-dropdown-wrapper">
         <button
           class="filter-btn"
-          on:click|stopPropagation={() => (showFilterDropdown = !showFilterDropdown)}
+          on:click|stopPropagation={() =>
+            (showFilterDropdown = !showFilterDropdown)}
         >
           <span class="filter-icon">▼</span>
           Teams
@@ -855,10 +928,13 @@
       <div class="filter-dropdown-wrapper">
         <button
           class="filter-btn"
-          on:click|stopPropagation={() => (showMatchDropdown = !showMatchDropdown)}
+          on:click|stopPropagation={() =>
+            (showMatchDropdown = !showMatchDropdown)}
         >
           <span class="filter-icon">▼</span>
-          {selectedMatches.size === 0 ? "All Matches" : `${availableMatches.length - selectedMatches.size} match${availableMatches.length - selectedMatches.size !== 1 ? "es" : ""}`}
+          {selectedMatches.size === 0
+            ? "All Matches"
+            : `${availableMatches.length - selectedMatches.size} match${availableMatches.length - selectedMatches.size !== 1 ? "es" : ""}`}
         </button>
 
         {#if showMatchDropdown}
@@ -866,9 +942,17 @@
             <div class="filter-dropdown-header">
               <span class="filter-dropdown-title">Filter Matches</span>
               <div class="filter-actions">
-                <button class="action-link" on:click={() => selectedMatches = new Set()}>All</button>
+                <button
+                  class="action-link"
+                  on:click={() => (selectedMatches = new Set())}>All</button
+                >
                 <span class="action-divider">·</span>
-                <button class="action-link" on:click={() => selectedMatches = new Set(availableMatches.map(String))}>None</button>
+                <button
+                  class="action-link"
+                  on:click={() =>
+                    (selectedMatches = new Set(availableMatches.map(String)))}
+                  >None</button
+                >
               </div>
             </div>
             <div class="filter-list">
@@ -891,10 +975,17 @@
       <div class="filter-dropdown-wrapper">
         <button
           class="filter-btn"
-          on:click|stopPropagation={() => (showDataDropdown = !showDataDropdown)}
+          on:click|stopPropagation={() =>
+            (showDataDropdown = !showDataDropdown)}
         >
           <span class="filter-icon">▼</span>
-          {showPit && showQual ? "Pit & Qual" : showPit ? "Pit Only" : showQual ? "Qual Only" : "No Data"}
+          {showPit && showQual
+            ? "Pit & Qual"
+            : showPit
+              ? "Pit Only"
+              : showQual
+                ? "Qual Only"
+                : "No Data"}
         </button>
 
         {#if showDataDropdown}
@@ -902,9 +993,21 @@
             <div class="filter-dropdown-header">
               <span class="filter-dropdown-title">Data to Show</span>
               <div class="filter-actions">
-                <button class="action-link" on:click={() => { showPit = true; showQual = true; }}>All</button>
+                <button
+                  class="action-link"
+                  on:click={() => {
+                    showPit = true;
+                    showQual = true;
+                  }}>All</button
+                >
                 <span class="action-divider">·</span>
-                <button class="action-link" on:click={() => { showPit = false; showQual = false; }}>None</button>
+                <button
+                  class="action-link"
+                  on:click={() => {
+                    showPit = false;
+                    showQual = false;
+                  }}>None</button
+                >
               </div>
             </div>
             <div class="filter-list">
@@ -925,11 +1028,16 @@
       <div class="filter-dropdown-wrapper">
         <button
           class="filter-btn"
-          on:click|stopPropagation={() => { loadPicklists(); showPicklistDropdown = !showPicklistDropdown; }}
+          on:click|stopPropagation={() => {
+            loadPicklists();
+            showPicklistDropdown = !showPicklistDropdown;
+          }}
         >
           <span class="filter-icon">▼</span>
           {#if selectedPicklist}
-            <span class="picklist-active-label">⭐ {getPicklistDisplayName(selectedPicklist)}</span>
+            <span class="picklist-active-label"
+              >⭐ {getPicklistDisplayName(selectedPicklist)}</span
+            >
           {:else}
             Sort by Picklist
           {/if}
@@ -941,7 +1049,10 @@
               <span class="filter-dropdown-title">Sort by Picklist</span>
               {#if selectedPicklist}
                 <div class="filter-actions">
-                  <button class="action-link" on:click={() => selectPicklist(null)}>Clear</button>
+                  <button
+                    class="action-link"
+                    on:click={() => selectPicklist(null)}>Clear</button
+                  >
                 </div>
               {/if}
             </div>
@@ -955,8 +1066,12 @@
                   class:picklist-selected={selectedPicklist === null}
                   on:click={() => selectPicklist(null)}
                 >
-                  <span class="picklist-radio">{selectedPicklist === null ? "●" : "○"}</span>
-                  <span class="filter-team-num" style="color: #888;">Default order</span>
+                  <span class="picklist-radio"
+                    >{selectedPicklist === null ? "●" : "○"}</span
+                  >
+                  <span class="filter-team-num" style="color: #888;"
+                    >Default order</span
+                  >
                 </button>
                 {#each getPicklistKeys() as key}
                   <button
@@ -964,9 +1079,15 @@
                     class:picklist-selected={selectedPicklist === key}
                     on:click={() => selectPicklist(key)}
                   >
-                    <span class="picklist-radio">{selectedPicklist === key ? "●" : "○"}</span>
-                    <span class="filter-team-num">{getPicklistDisplayName(key)}</span>
-                    <span class="filter-team-name">{getPicklistTeamCount(key)} teams</span>
+                    <span class="picklist-radio"
+                      >{selectedPicklist === key ? "●" : "○"}</span
+                    >
+                    <span class="filter-team-num"
+                      >{getPicklistDisplayName(key)}</span
+                    >
+                    <span class="filter-team-name"
+                      >{getPicklistTeamCount(key)} teams</span
+                    >
                   </button>
                 {/each}
               {/if}
@@ -1025,7 +1146,10 @@
 
             <!-- Picklist rank badge -->
             {#if picklistRank !== null}
-              <div class="picklist-rank-badge" title="Rank in {getPicklistDisplayName(selectedPicklist)}">
+              <div
+                class="picklist-rank-badge"
+                title="Rank in {getPicklistDisplayName(selectedPicklist)}"
+              >
                 #{picklistRank}
               </div>
             {/if}
@@ -1043,7 +1167,9 @@
                   <span class="badge badge-pit">PIT {pitEntries.length}</span>
                 {/if}
                 {#if qual.length > 0}
-                  <span class="badge badge-qual">{qual.length} match{qual.length !== 1 ? "es" : ""}</span>
+                  <span class="badge badge-qual"
+                    >{qual.length} match{qual.length !== 1 ? "es" : ""}</span
+                  >
                 {/if}
               </div>
             </div>
@@ -1064,12 +1190,7 @@
                     <div class="info-group">
                       <div class="info-group-title">Robot Info</div>
                       <div class="info-rows">
-                        {#each [
-                          ["Frame Size", pit.framesize],
-                          ["Start Height", pit.startingHeight],
-                          ["Full Extension", pit.fullExtensionHeight],
-                          ["Hopper Capacity", pit.quantityBallsHopper],
-                        ] as [label, value]}
+                        {#each [["Frame Size", pit.framesize], ["Start Height", pit.startingHeight], ["Full Extension", pit.fullExtensionHeight], ["Hopper Capacity", pit.quantityBallsHopper]] as [label, value]}
                           {#if value !== undefined && value !== null && value !== ""}
                             <div class="info-row">
                               <span class="info-lbl">{label}</span>
@@ -1085,12 +1206,7 @@
                     <div class="info-group">
                       <div class="info-group-title">Performance</div>
                       <div class="info-rows">
-                        {#each [
-                          ["Intake Speed", pit.avgIntakeSpeed],
-                          ["Shoot Speed", pit.avgShootSpeed],
-                          ["Accuracy", pit.accuracy],
-                          ["Climb Levels", pit.climbLevels],
-                        ] as [label, value]}
+                        {#each [["Intake Speed", pit.avgIntakeSpeed], ["Shoot Speed", pit.avgShootSpeed], ["Accuracy", pit.accuracy], ["Climb Levels", pit.climbLevels]] as [label, value]}
                           {#if value !== undefined && value !== null && value !== ""}
                             <div class="info-row">
                               <span class="info-lbl">{label}</span>
@@ -1102,21 +1218,15 @@
                     </div>
                   {/if}
 
-                  {#if [pit.overBump, pit.throughTrench, pit.climbDuringAuto, pit.canUseHP, pit.canUseDepot, pit.canFeed].some(v => v !== undefined && v !== null && v !== "")}
+                  {#if [pit.overBump, pit.throughTrench, pit.climbDuringAuto, pit.canUseHP, pit.canUseDepot, pit.canFeed].some((v) => v !== undefined && v !== null && v !== "")}
                     <div class="info-group">
                       <div class="info-group-title">Capabilities</div>
                       <div class="capabilities-grid">
-                        {#each [
-                          ["Over Bump", pit.overBump],
-                          ["Trench", pit.throughTrench],
-                          ["Auto Climb", pit.climbDuringAuto],
-                          ["Use HP", pit.canUseHP],
-                          ["Use Depot", pit.canUseDepot],
-                          ["Can Feed", pit.canFeed],
-                        ] as [label, val]}
+                        {#each [["Over Bump", pit.overBump], ["Trench", pit.throughTrench], ["Auto Climb", pit.climbDuringAuto], ["Use HP", pit.canUseHP], ["Use Depot", pit.canUseDepot], ["Can Feed", pit.canFeed]] as [label, val]}
                           {#if val !== undefined && val !== null && val !== ""}
                             <div class="cap-chip {capabilityClass(val)}">
-                              <span class="cap-icon">{capabilityIcon(val)}</span>
+                              <span class="cap-icon">{capabilityIcon(val)}</span
+                              >
                               <span class="cap-label">{label}</span>
                             </div>
                           {/if}
@@ -1145,12 +1255,15 @@
                       ◀
                     </button>
                     <span class="qual-page-indicator">
-                      {(qualMatchIndexByTeam[team] ?? 0) + 1}/{(filteredQualByTeam[team] ?? []).length}
+                      {(qualMatchIndexByTeam[team] ?? 0) + 1}/{(
+                        filteredQualByTeam[team] ?? []
+                      ).length}
                     </span>
                     <button
                       class="qual-page-btn"
                       on:click={() => nextQualMatch(team)}
-                      disabled={(qualMatchIndexByTeam[team] ?? 0) >= ((filteredQualByTeam[team] ?? []).length - 1)}
+                      disabled={(qualMatchIndexByTeam[team] ?? 0) >=
+                        (filteredQualByTeam[team] ?? []).length - 1}
                       aria-label="Next match"
                     >
                       ▶
@@ -1161,10 +1274,18 @@
                   {#each (filteredQualByTeam[team] ?? []).slice(qualMatchIndexByTeam[team] ?? 0, (qualMatchIndexByTeam[team] ?? 0) + 1) as matchRow, matchIndex (getQualRowKey(team, matchRow, matchIndex))}
                     {@const rowKey = getQualRowKey(team, matchRow, matchIndex)}
                     <div class="qual-match-block">
-                      <div class="qual-match-header">Match {matchRow.Match ?? matchRow.match}</div>
+                      <div class="qual-match-header">
+                        Match {matchRow.Match ?? matchRow.match}
+                      </div>
+
                       {#if matchRow?.AutoPath && Array.isArray(matchRow.AutoPath) && matchRow.AutoPath.length > 0}
                         <div class="auto-path-wrapper">
-                          <div class="progress-bar-container" style="--progress: {progressByCanvasId[`canvas-${rowKey}`] ?? 0}">
+                          <div
+                            class="progress-bar-container"
+                            style="--progress: {progressByCanvasId[
+                              `canvas-${rowKey}`
+                            ] ?? 0}"
+                          >
                             <div class="progress-bar-fill"></div>
                           </div>
                           <canvas
@@ -1175,9 +1296,20 @@
                           ></canvas>
                           <div class="path-legend-inline">
                             <span class="legend-label">Start</span>
-                            <div class="legend-gradient" style="--start-color: rgb({COLOR_MODES[colorblindMode].below.join(',')}); --end-color: rgb({COLOR_MODES[colorblindMode].above.join(',')});"></div>
+                            <div
+                              class="legend-gradient"
+                              style="--start-color: rgb({COLOR_MODES[
+                                colorblindMode
+                              ].below.join(
+                                ',',
+                              )}); --end-color: rgb({COLOR_MODES[
+                                colorblindMode
+                              ].above.join(',')});"
+                            ></div>
                             <span class="legend-label">End</span>
-                            <span class="legend-mode-name">{COLOR_MODES[colorblindMode].name}</span>
+                            <span class="legend-mode-name"
+                              >{COLOR_MODES[colorblindMode].name}</span
+                            >
                           </div>
                         </div>
                       {/if}
@@ -1186,7 +1318,9 @@
                         {#if getQualMetricEntries(matchRow).length === 0}
                           <div class="qual-row-item">
                             <span class="qual-row-lbl">Notes</span>
-                            <span class="qual-row-val">No qualitative responses recorded.</span>
+                            <span class="qual-row-val"
+                              >No qualitative responses recorded.</span
+                            >
                           </div>
                         {:else}
                           {#each getQualMetricEntries(matchRow) as [label, value]}
@@ -1224,43 +1358,74 @@
     --border: rgba(200, 27, 0, 0.35);
   }
 
-  :global(html), :global(body) {
-    margin: 0; padding: 0;
+  :global(html),
+  :global(body) {
+    margin: 0;
+    padding: 0;
     background: var(--gray);
     min-height: 100vh;
     overflow-x: hidden;
   }
-  :global(*) { box-sizing: border-box; }
+  :global(*) {
+    box-sizing: border-box;
+  }
 
   .loading-overlay {
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.6);
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    gap: 16px; z-index: 9999;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    z-index: 9999;
   }
   .spinner {
-    width: 52px; height: 52px;
-    border: 6px solid rgba(255,255,255,0.2);
+    width: 52px;
+    height: 52px;
+    border: 6px solid rgba(255, 255, 255, 0.2);
     border-left-color: var(--red);
     border-radius: 50%;
     animation: spin 0.9s linear infinite;
   }
-  .loading-text { color: white; font-size: 1rem; font-weight: 600; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text {
+    color: white;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
 
   .page-wrapper {
-    display: flex; flex-direction: column; align-items: center;
-    min-height: 100vh; padding: 24px 20px 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 24px 20px 60px;
     background: var(--gray);
   }
 
-  .header-section { text-align: center; margin-bottom: 20px; }
-  .header-section h1 {
-    color: var(--red); font-size: 2.4rem; font-weight: 800;
-    margin: 0 0 4px; text-shadow: 2px 2px 6px rgba(0,0,0,0.25); letter-spacing: 1px;
+  .header-section {
+    text-align: center;
+    margin-bottom: 20px;
   }
-  .header-section .subtitle { color: #555; font-size: 0.95rem; margin: 0; }
+  .header-section h1 {
+    color: var(--red);
+    font-size: 2.4rem;
+    font-weight: 800;
+    margin: 0 0 4px;
+    text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.25);
+    letter-spacing: 1px;
+  }
+  .header-section .subtitle {
+    color: #555;
+    font-size: 0.95rem;
+    margin: 0;
+  }
 
   /* ── Controls Bar ── */
   .controls-bar {
@@ -1288,12 +1453,14 @@
     font-size: 0.9rem;
     font-weight: 700;
     cursor: pointer;
-    transition: background 0.2s, box-shadow 0.2s;
+    transition:
+      background 0.2s,
+      box-shadow 0.2s;
   }
 
   .colorblind-select:hover {
     background: linear-gradient(135deg, var(--dark2) 0%, var(--dark3) 100%);
-    box-shadow: 0 0 0 3px rgba(200,27,0,0.25);
+    box-shadow: 0 0 0 3px rgba(200, 27, 0, 0.25);
   }
 
   .colorblind-select option {
@@ -1318,12 +1485,14 @@
     font-size: 0.9rem;
     font-weight: 700;
     cursor: pointer;
-    transition: background 0.2s, box-shadow 0.2s;
+    transition:
+      background 0.2s,
+      box-shadow 0.2s;
     letter-spacing: 0.3px;
   }
   .filter-btn:hover {
     background: linear-gradient(135deg, var(--dark2) 0%, var(--dark3) 100%);
-    box-shadow: 0 0 0 3px rgba(200,27,0,0.25);
+    box-shadow: 0 0 0 3px rgba(200, 27, 0, 0.25);
   }
   .filter-icon {
     font-size: 0.65rem;
@@ -1360,7 +1529,7 @@
     background: linear-gradient(160deg, #1e1e1e 0%, #2a2a2a 100%);
     border: 2px solid var(--red);
     border-radius: 10px;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
     z-index: 1000;
     overflow: hidden;
     display: flex;
@@ -1372,8 +1541,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 10px 14px 8px;
-    border-bottom: 1px solid rgba(200,27,0,0.25);
-    background: rgba(200,27,0,0.1);
+    border-bottom: 1px solid rgba(200, 27, 0, 0.25);
+    background: rgba(200, 27, 0, 0.1);
     flex-shrink: 0;
   }
   .filter-dropdown-title {
@@ -1399,17 +1568,29 @@
     border-radius: 3px;
     transition: color 0.15s;
   }
-  .action-link:hover { color: white; }
-  .action-divider { color: #555; font-size: 0.75rem; }
+  .action-link:hover {
+    color: white;
+  }
+  .action-divider {
+    color: #555;
+    font-size: 0.75rem;
+  }
 
   .filter-list {
     overflow-y: auto;
     padding: 6px 0;
     flex: 1;
   }
-  .filter-list::-webkit-scrollbar { width: 6px; }
-  .filter-list::-webkit-scrollbar-track { background: transparent; }
-  .filter-list::-webkit-scrollbar-thumb { background: rgba(200,27,0,0.4); border-radius: 3px; }
+  .filter-list::-webkit-scrollbar {
+    width: 6px;
+  }
+  .filter-list::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .filter-list::-webkit-scrollbar-thumb {
+    background: rgba(200, 27, 0, 0.4);
+    border-radius: 3px;
+  }
 
   .filter-item {
     display: flex;
@@ -1419,7 +1600,9 @@
     cursor: pointer;
     transition: background 0.1s;
   }
-  .filter-item:hover { background: rgba(255,255,255,0.05); }
+  .filter-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
   .filter-item input[type="checkbox"] {
     width: 15px;
     height: 15px;
@@ -1479,7 +1662,9 @@
   .teams-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-    gap: 20px; width: 100%; max-width: 1400px;
+    gap: 20px;
+    width: 100%;
+    max-width: 1400px;
   }
 
   /* ── Team Card ── */
@@ -1487,35 +1672,45 @@
     position: relative;
     background: linear-gradient(160deg, var(--dark) 0%, var(--dark2) 100%);
     border: 2px solid var(--border);
-    border-radius: 12px; overflow: hidden;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-    transition: border-color 0.2s, box-shadow 0.2s, opacity 0.15s, transform 0.15s;
-    display: flex; flex-direction: column;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    transition:
+      border-color 0.2s,
+      box-shadow 0.2s,
+      opacity 0.15s,
+      transform 0.15s;
+    display: flex;
+    flex-direction: column;
     cursor: grab;
   }
   .team-card:hover {
     border-color: var(--red);
-    box-shadow: 0 8px 30px rgba(200,27,0,0.2);
+    box-shadow: 0 8px 30px rgba(200, 27, 0, 0.2);
   }
-  .team-card:active { cursor: grabbing; }
+  .team-card:active {
+    cursor: grabbing;
+  }
   .team-card.dragging {
     opacity: 0.4;
     transform: scale(0.97);
     border-color: var(--red);
-    box-shadow: 0 12px 40px rgba(200,27,0,0.35);
+    box-shadow: 0 12px 40px rgba(200, 27, 0, 0.35);
   }
   .team-card.drag-over {
     border-color: #fff;
-    box-shadow: 0 0 0 3px rgba(255,255,255,0.25), 0 8px 30px rgba(200,27,0,0.3);
+    box-shadow:
+      0 0 0 3px rgba(255, 255, 255, 0.25),
+      0 8px 30px rgba(200, 27, 0, 0.3);
     transform: scale(1.01);
   }
   .team-card.picklist-highlighted {
     border-color: rgba(255, 217, 102, 0.5);
-    box-shadow: 0 4px 20px rgba(255,217,102,0.12);
+    box-shadow: 0 4px 20px rgba(255, 217, 102, 0.12);
   }
   .team-card.picklist-highlighted:hover {
     border-color: #ffd966;
-    box-shadow: 0 8px 30px rgba(255,217,102,0.22);
+    box-shadow: 0 8px 30px rgba(255, 217, 102, 0.22);
   }
 
   .drag-handle {
@@ -1523,14 +1718,16 @@
     top: 10px;
     right: 12px;
     font-size: 1.1rem;
-    color: rgba(255,255,255,0.2);
+    color: rgba(255, 255, 255, 0.2);
     line-height: 1;
     cursor: grab;
     transition: color 0.15s;
     z-index: 2;
     user-select: none;
   }
-  .team-card:hover .drag-handle { color: rgba(255,255,255,0.5); }
+  .team-card:hover .drag-handle {
+    color: rgba(255, 255, 255, 0.5);
+  }
 
   /* ── Picklist rank badge ── */
   .picklist-rank-badge {
@@ -1550,41 +1747,81 @@
   }
 
   .card-header {
-    display: flex; align-items: center; justify-content: space-between;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     padding: 14px 36px 12px 16px;
-    background: linear-gradient(90deg, rgba(200,27,0,0.18) 0%, transparent 100%);
-    border-bottom: 1px solid rgba(200,27,0,0.25);
+    background: linear-gradient(
+      90deg,
+      rgba(200, 27, 0, 0.18) 0%,
+      transparent 100%
+    );
+    border-bottom: 1px solid rgba(200, 27, 0, 0.25);
   }
   /* Shift header content right when rank badge is showing */
   .picklist-highlighted .card-header {
     padding-left: 52px;
   }
-  .team-identity { display: flex; flex-direction: column; gap: 2px; }
-  .team-number { font-size: 1.5rem; font-weight: 900; color: var(--red); line-height: 1; }
-  .team-name { font-size: 0.78rem; font-weight: 600; color: #bbb; }
+  .team-identity {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .team-number {
+    font-size: 1.5rem;
+    font-weight: 900;
+    color: var(--red);
+    line-height: 1;
+  }
+  .team-name {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #bbb;
+  }
 
-  .card-badges { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .card-badges {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
   .badge {
-    padding: 3px 8px; border-radius: 4px;
-    font-size: 0.65rem; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
   }
   .badge-pit {
-    background: rgba(200,27,0,0.2); border: 1px solid rgba(200,27,0,0.5); color: #ff8070;
+    background: rgba(200, 27, 0, 0.2);
+    border: 1px solid rgba(200, 27, 0, 0.5);
+    color: #ff8070;
   }
   .badge-qual {
-    background: rgba(40,160,80,0.18); border: 1px solid rgba(40,160,80,0.45); color: #60dd90;
+    background: rgba(40, 160, 80, 0.18);
+    border: 1px solid rgba(40, 160, 80, 0.45);
+    color: #60dd90;
   }
 
   .card-section {
     padding: 14px 16px;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   }
-  .card-section:last-child { border-bottom: none; }
+  .card-section:last-child {
+    border-bottom: none;
+  }
 
   .section-label {
-    display: flex; align-items: center; gap: 6px;
-    font-size: 0.72rem; font-weight: 800; letter-spacing: 1px; text-transform: uppercase;
-    color: var(--red); margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--red);
+    margin-bottom: 10px;
   }
 
   .qual-section-header {
@@ -1606,8 +1843,8 @@
   }
 
   .qual-page-btn {
-    border: 1px solid rgba(200,27,0,0.45);
-    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(200, 27, 0, 0.45);
+    background: rgba(255, 255, 255, 0.06);
     color: #ddd;
     border-radius: 6px;
     width: 24px;
@@ -1622,7 +1859,7 @@
   }
 
   .qual-page-btn:hover:not(:disabled) {
-    background: rgba(200,27,0,0.22);
+    background: rgba(200, 27, 0, 0.22);
     color: #fff;
   }
 
@@ -1640,53 +1877,112 @@
     letter-spacing: 0.4px;
   }
 
-  .info-group { margin-bottom: 10px; }
-  .info-group:last-child { margin-bottom: 0; }
+  .info-group {
+    margin-bottom: 10px;
+  }
+  .info-group:last-child {
+    margin-bottom: 0;
+  }
   .info-group-title {
-    font-size: 0.65rem; font-weight: 700; letter-spacing: 0.8px;
-    text-transform: uppercase; color: #666; margin-bottom: 5px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: #666;
+    margin-bottom: 5px;
   }
-  .info-rows { display: flex; flex-direction: column; gap: 3px; }
+  .info-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
   .info-row {
-    display: flex; justify-content: space-between; align-items: baseline;
-    padding: 4px 8px; background: rgba(255,255,255,0.04); border-radius: 5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 4px 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 5px;
   }
-  .info-lbl { font-size: 0.75rem; color: #888; font-weight: 600; }
-  .info-val { font-size: 0.82rem; color: #ddd; font-weight: 600; text-align: right; max-width: 60%; word-break: break-word; }
+  .info-lbl {
+    font-size: 0.75rem;
+    color: #888;
+    font-weight: 600;
+  }
+  .info-val {
+    font-size: 0.82rem;
+    color: #ddd;
+    font-weight: 600;
+    text-align: right;
+    max-width: 60%;
+    word-break: break-word;
+  }
 
-  .capabilities-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+  .capabilities-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
   .cap-chip {
-    display: flex; align-items: center; gap: 4px;
-    padding: 4px 9px; border-radius: 20px; font-size: 0.72rem; font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 9px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 700;
   }
-  .cap-yes { background: rgba(40,160,80,0.18); border: 1px solid rgba(40,160,80,0.45); color: #60dd90; }
-  .cap-no { background: rgba(200,27,0,0.14); border: 1px solid rgba(200,27,0,0.4); color: #ff8070; }
-  .cap-neutral { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #aaa; }
+  .cap-yes {
+    background: rgba(40, 160, 80, 0.18);
+    border: 1px solid rgba(40, 160, 80, 0.45);
+    color: #60dd90;
+  }
+  .cap-no {
+    background: rgba(200, 27, 0, 0.14);
+    border: 1px solid rgba(200, 27, 0, 0.4);
+    color: #ff8070;
+  }
+  .cap-neutral {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #aaa;
+  }
 
-  .qual-matches { display: flex; flex-direction: column; gap: 10px; }
+  .qual-matches {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
   .qual-match-block {
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.07);
-    border-radius: 7px; overflow: hidden;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 7px;
+    overflow: hidden;
   }
   .qual-match-header {
-    background: rgba(200,27,0,0.15);
-    border-bottom: 1px solid rgba(200,27,0,0.25);
-    color: #ff9980; font-size: 0.72rem; font-weight: 800;
-    letter-spacing: 0.8px; text-transform: uppercase; padding: 5px 10px;
+    background: rgba(200, 27, 0, 0.15);
+    border-bottom: 1px solid rgba(200, 27, 0, 0.25);
+    color: #ff9980;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    padding: 5px 10px;
   }
 
   .auto-path-wrapper {
     position: relative;
     background: #0a0a0a;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     user-select: none;
   }
   .progress-bar-container {
     position: absolute;
-    top: 0; left: 0; right: 0;
+    top: 0;
+    left: 0;
+    right: 0;
     height: 3px;
-    background: rgba(255,255,255,0.1);
+    background: rgba(255, 255, 255, 0.1);
     z-index: 10;
     overflow: hidden;
   }
@@ -1703,11 +1999,16 @@
   }
   .path-legend-inline {
     position: absolute;
-    bottom: 6px; right: 8px;
-    display: flex; align-items: center; gap: 8px;
-    font-size: 0.65rem; font-weight: 700;
-    color: rgba(255,255,255,0.7);
-    letter-spacing: 0.5px; text-transform: uppercase;
+    bottom: 6px;
+    right: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.7);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
     pointer-events: none;
   }
   .legend-label {
@@ -1716,35 +2017,76 @@
     min-width: 28px;
     text-align: center;
   }
-  .legend-gradient { 
-    width: 60px; height: 6px; 
-    background: linear-gradient(to right, var(--start-color, #0077BE), var(--end-color, #FFD60A));
+  .legend-gradient {
+    width: 60px;
+    height: 6px;
+    background: linear-gradient(
+      to right,
+      var(--start-color, #0077be),
+      var(--end-color, #ffd60a)
+    );
     border-radius: 3px;
   }
   .legend-mode-name {
-    color: rgba(255,255,255,0.7);
+    color: rgba(255, 255, 255, 0.7);
     font-size: 0.65rem;
     font-weight: 700;
     margin-left: 4px;
   }
 
-  .qual-rows { padding: 6px 8px; display: flex; flex-direction: column; gap: 3px; }
+  .qual-rows {
+    padding: 6px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
   .qual-row-item {
-    display: flex; flex-direction: column; gap: 1px;
-    padding: 4px 6px; border-radius: 4px; background: rgba(255,255,255,0.02);
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.02);
   }
   .qual-row-lbl {
-    font-size: 0.65rem; font-weight: 800; letter-spacing: 0.6px;
-    text-transform: uppercase; color: var(--red);
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--red);
   }
-  .qual-row-val { font-size: 0.82rem; color: #ccc; line-height: 1.4; }
+  .qual-row-val {
+    font-size: 0.82rem;
+    color: #ccc;
+    line-height: 1.4;
+  }
 
-  .card-empty { padding: 20px; text-align: center; color: #555; font-size: 0.85rem; font-style: italic; }
-  .empty-state { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 80px; color: #666; }
-  .empty-icon { font-size: 3rem; }
-  .empty-state p { font-size: 1rem; margin: 0; }
+  .card-empty {
+    padding: 20px;
+    text-align: center;
+    color: #555;
+    font-size: 0.85rem;
+    font-style: italic;
+  }
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin-top: 80px;
+    color: #666;
+  }
+  .empty-icon {
+    font-size: 3rem;
+  }
+  .empty-state p {
+    font-size: 1rem;
+    margin: 0;
+  }
 
   @media (max-width: 700px) {
-    .teams-grid { grid-template-columns: 1fr; }
+    .teams-grid {
+      grid-template-columns: 1fr;
+    }
   }
 </style>
