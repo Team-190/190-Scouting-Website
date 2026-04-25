@@ -846,7 +846,9 @@
             {@const currentPath = autoPathRows[autoIdx]}
             <div class="auto-path-viewer">
               <div class="auto-path-tab-bar">
-                <span class="auto-path-tab-label"> <span class="section-icon">🤖</span> Auto</span>
+                <span class="auto-path-tab-label">
+                  <span class="section-icon">🤖</span> Auto</span
+                >
                 <div class="auto-path-tabs">
                   {#each autoPathRows as pathRow, tabIdx}
                     <button
@@ -987,7 +989,9 @@
             {@const currentPath = autoPathRows[autoIdx]}
             <div class="auto-path-viewer">
               <div class="auto-path-tab-bar">
-                <span class="auto-path-tab-label"> <span class="section-icon">🤖</span> Auto</span>
+                <span class="auto-path-tab-label">
+                  <span class="section-icon">🤖</span> Auto</span
+                >
                 <div class="auto-path-tabs">
                   {#each autoPathRows as pathRow, tabIdx}
                     <button
@@ -1377,13 +1381,14 @@
     display: flex;
     align-items: flex-end;
     gap: 2px;
-    flex-shrink: 0;
+    flex-shrink: 1;
+    min-width: 0;
   }
 
   .auto-path-tab {
     position: relative;
-    padding: 5px 14px 6px;
-    font-size: 0.72rem;
+    padding: 5px 8px 6px;
+    font-size: 0.65rem;
     font-weight: 700;
     letter-spacing: 0.3px;
     border: none;
@@ -1393,14 +1398,13 @@
     transition:
       background 0.15s,
       color 0.15s;
-    /* inactive tab */
     background: #1c1c1c;
     color: #888;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     border-left: 1px solid rgba(255, 255, 255, 0.08);
     border-right: 1px solid rgba(255, 255, 255, 0.08);
-    /* sits just above the bottom border */
     margin-bottom: -2px;
+    flex-shrink: 1;
   }
   .auto-path-tab:hover:not(.active) {
     background: #262626;
