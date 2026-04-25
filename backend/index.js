@@ -11,8 +11,6 @@ const path = require("path");
 const compression = require("compression");
 const fs = require("fs");
 const https = require("https");
-const util = require("util");
-const zlib = require("zlib");
 const database = require("./database.js");
 const externalAPI = require("./externalApi.js");
 const session = require("express-session");
@@ -22,146 +20,36 @@ require('dotenv').config({ path: path.resolve(__dirname, '../.env'), override: t
 
 const app = express();
 
-const logsDir = path.resolve(__dirname, "../logs");
-if (!fs.existsSync(logsDir)) {
-  fs.mkdirSync(logsDir, { recursive: true });
-}
+const logFilePath = "./logs/testing.csv";
 
-const runLogFile = path.join(
-  logsDir,
-  `server-${new Date().toISOString().replace(/[:.]/g, "-")}.log`,
-);
+app.use((req, res, next) => {
+    let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
-function serializeLogValue(value) {
-  if (value instanceof Error) {
-    return value.stack || value.message || String(value);
-  }
+    if (ip === "::1") {
+        ip = "127.0.0.1";
+    } else if (ip.includes("::ffff:")) {
+        ip = ip.split("::ffff:")[1];
+    }
 
-  if (typeof value === "string") {
-    return value;
-  }
+    const timestamp = new Date().toISOString();
+    const logEntry = `"${ip}","${timestamp}","${req.method}","${req.url}"\n`;
 
-  try {
-    return JSON.stringify(value);
-  } catch (_) {
-    return util.inspect(value, {
-      depth: null,
-      maxArrayLength: null,
-      breakLength: Infinity,
+    fs.appendFile(logFilePath, logEntry, (err) => {
+        if (err) console.error("Log write failed", err);
     });
-  }
-}
 
-function appendRunLog(level, message, details = null) {
-  const timestamp = new Date().toISOString();
-  const formattedDetails = details == null ? "" : ` ${serializeLogValue(details)}`;
-  const line = `[${timestamp}] [${String(level).toUpperCase()}] ${message}${formattedDetails}\n`;
-
-  try {
-    fs.appendFileSync(runLogFile, line, "utf8");
-  } catch (error) {
-    process.stderr.write(`Failed to append server log: ${error.message}\n`);
-  }
-}
-
-const originalConsole = {
-  log: console.log.bind(console),
-  info: console.info.bind(console),
-  warn: console.warn.bind(console),
-  error: console.error.bind(console),
-  debug: console.debug ? console.debug.bind(console) : console.log.bind(console),
-};
-
-function wrapConsoleMethod(method) {
-  return (...args) => {
-    appendRunLog(method, args.map((arg) => serializeLogValue(arg)).join(" "));
-    originalConsole[method](...args);
-  };
-}
-
-console.log = wrapConsoleMethod("log");
-console.info = wrapConsoleMethod("info");
-console.warn = wrapConsoleMethod("warn");
-console.error = wrapConsoleMethod("error");
-console.debug = wrapConsoleMethod("debug");
-
-function getClientIp(req) {
-  let ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown";
-
-  if (ip === "::1") {
-    ip = "127.0.0.1";
-  } else if (typeof ip === "string" && ip.includes("::ffff:")) {
-    ip = ip.split("::ffff:")[1];
-  }
-
-  if (typeof ip === "string" && ip.includes(",")) {
-    ip = ip.split(",")[0].trim();
-  }
-
-  return ip;
-}
-
-appendRunLog("info", "Server logging initialized", {
-  pid: process.pid,
-  logFile: runLogFile,
+    next();
 });
-
-const COMPRESSION_PROTOCOL = runtimeConstants.compression || {};
-const COMPRESSED_ENVELOPE_FLAG = COMPRESSION_PROTOCOL.envelopeFlag || "__compressed";
-const COMPRESSED_DEFAULT_VERSION = Number(COMPRESSION_PROTOCOL.version || 2);
-
-function isCompressedPayload(body) {
-  return Boolean(
-    body
-      && typeof body === "object"
-      && (body[COMPRESSED_ENVELOPE_FLAG] === true || body.__compressed === true),
-  );
-}
-
-// Decompress incoming request payloads using shared compression protocol
-function decodeCompressedPayload(envelope) {
-  if (!envelope || typeof envelope !== "object") {
-    throw new Error("Invalid compressed payload envelope");
-  }
-
-  if (!envelope.data || typeof envelope.data !== "string") {
-    throw new Error("Missing compressed payload data");
-  }
-
-  const encoded = Buffer.from(envelope.data, "base64");
-  const version = Number(envelope.__version || COMPRESSED_DEFAULT_VERSION);
-
-  if (version === 2) {
-    const uncompressed = zlib.gunzipSync(encoded);
-    return JSON.parse(uncompressed.toString("utf8"));
-  }
-
-  return JSON.parse(encoded.toString("utf8"));
-}
 
 const eventCodes = new Set();
 let bracket;
 let refreshTimer;
-const scoutingWriteQueues = new Map();
 
 // ─── HELPER FUNCTIONS ───────────────────────────────────────────────────────
 
 const validateEventCode = (req, res, next) => {
-  const code =
-    req.query?.eventCode
-    || req.query?.event
-    || req.body?.event
-    || req.body?.eventCode;
-  if (!code) {
-    console.error("validateEventCode failed", {
-      url: req.originalUrl || req.url,
-      method: req.method,
-      query: req.query,
-      body: req.body,
-      bodyKeys: req.body ? Object.keys(req.body) : null,
-    });
-    return res.sendStatus(403);
-  }
+  const code = req.query.eventCode || req.body.event;
+  if (!code) return res.sendStatus(403);
   req.eventCode = code;
   next();
 };
@@ -204,89 +92,6 @@ async function postRatingHelper(req, res, filename) {
   res.sendStatus(200);
 }
 
-function appendScoutingEntry(existingValue, nextEntry) {
-  if (Array.isArray(existingValue)) {
-    return [...existingValue, nextEntry];
-  }
-
-  if (existingValue && typeof existingValue === "object") {
-    return [existingValue, nextEntry];
-  }
-
-  return [nextEntry];
-}
-
-function countQualEntries(teamData) {
-  if (!teamData) return 0;
-
-  if (Array.isArray(teamData)) {
-    return teamData.length;
-  }
-
-  if (typeof teamData !== "object") {
-    return 0;
-  }
-
-  if (teamData.Match != null || teamData.match != null) {
-    return 1;
-  }
-
-  let total = 0;
-  for (const matchEntries of Object.values(teamData)) {
-    if (Array.isArray(matchEntries)) {
-      total += matchEntries.length;
-    } else if (matchEntries && typeof matchEntries === "object") {
-      total += 1;
-    }
-  }
-
-  return total;
-}
-
-function countPitEntries(teamData) {
-  if (!teamData) return 0;
-  if (Array.isArray(teamData)) return teamData.length;
-  if (typeof teamData === "object") return 1;
-  return 0;
-}
-
-function stripPitImage(entry) {
-  if (!entry || typeof entry !== "object") {
-    return entry;
-  }
-
-  const { robotPicturePreview, ...rest } = entry;
-  return rest;
-}
-
-async function withScoutingFileWriteLock(filename, updater) {
-  const previous = scoutingWriteQueues.get(filename) || Promise.resolve();
-
-  const next = previous
-    .catch(() => {})
-    .then(async () => {
-      const fileData = await database.readJSONFile(filename);
-      const safeData =
-        fileData && typeof fileData === "object" && !Array.isArray(fileData)
-          ? fileData
-          : {};
-
-      const updatedData = await updater(safeData);
-      await database.writeJSONFile(filename, updatedData);
-      return updatedData;
-    });
-
-  scoutingWriteQueues.set(filename, next);
-
-  try {
-    return await next;
-  } finally {
-    if (scoutingWriteQueues.get(filename) === next) {
-      scoutingWriteQueues.delete(filename);
-    }
-  }
-}
-
 const VITE_BACKEND_PORT = Number(runtimeConstants.ports.backend);
 const VITE_FRONTEND_PORT = Number(runtimeConstants.ports.frontend);
 const VITE_TESTING = String(process.env.VITE_TESTING ?? "1");
@@ -310,95 +115,7 @@ if (typeof refreshTimer.unref === "function") {
   refreshTimer.unref();
 }
 
-app.use(express.json({ limit: "15mb" }));
-
-app.use((error, req, res, next) => {
-  if (!error) {
-    return next();
-  }
-
-  if (error.type === "entity.too.large") {
-    console.error("Payload too large", {
-      ip: getClientIp(req),
-      method: req.method,
-      url: req.originalUrl || req.url,
-      limit: "15mb",
-    });
-    return res.status(413).json({ error: "Payload too large" });
-  }
-
-  if (error instanceof SyntaxError && error.status === 400 && "body" in error) {
-    console.error("Invalid JSON payload", {
-      ip: getClientIp(req),
-      method: req.method,
-      url: req.originalUrl || req.url,
-      message: error.message,
-    });
-    return res.status(400).json({ error: "Invalid JSON payload" });
-  }
-
-  return next(error);
-});
-
-app.use((req, res, next) => {
-  if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
-    return next();
-  }
-
-  const isCompressed = isCompressedPayload(req.body);
-  if (!isCompressed) {
-    appendRunLog("debug", "Received non-compressed payload", {
-      url: req.originalUrl || req.url,
-      method: req.method,
-      bodyKeys: req.body ? Object.keys(req.body) : null,
-    });
-    return next();
-  }
-
-  try {
-    const original = JSON.parse(JSON.stringify(req.body));
-    req.body = decodeCompressedPayload(req.body);
-    appendRunLog("debug", "Decompressed payload successfully", {
-      url: req.originalUrl || req.url,
-      method: req.method,
-      originalKeys: Object.keys(original),
-      decompressedKeys: Object.keys(req.body),
-    });
-    return next();
-  } catch (error) {
-    console.error("Failed to decode compressed payload", {
-      path: req.url,
-      ip: getClientIp(req),
-      error: error.message,
-    });
-    return res.status(400).json({ error: "Invalid compressed payload" });
-  }
-});
-
-app.use((req, res, next) => {
-  const ip = getClientIp(req);
-
-  appendRunLog("request", "Incoming request", {
-    ip,
-    method: req.method,
-    url: req.originalUrl || req.url,
-    query: req.query,
-    body: ["POST", "PUT", "PATCH", "DELETE"].includes(req.method)
-      ? req.body
-      : undefined,
-  });
-
-  res.on("finish", () => {
-    appendRunLog("response", "Completed request", {
-      ip,
-      method: req.method,
-      url: req.originalUrl || req.url,
-      statusCode: res.statusCode,
-    });
-  });
-
-  next();
-});
+app.use(express.json());
 
 app.use(
   compression({
@@ -482,9 +199,8 @@ app.get("/api/getQualitativeScouting", validateEventCode, async (req, res) => {
 
   let filtered = {};
   for (let team in result) {
-    const backendCount = countQualEntries(result[team]);
-    const localCount = Number(localCounts[team] ?? 0);
-    if (!Number.isFinite(localCount) || localCount < backendCount) {
+    let backendCount = Object.keys(result[team]).length;
+    if (!localCounts[team] || localCounts[team] < backendCount) {
       filtered[team] = result[team];
     }
   }
@@ -494,13 +210,6 @@ app.get("/api/getQualitativeScouting", validateEventCode, async (req, res) => {
 
 app.get("/api/getPitScouting", validateEventCode, async (req, res) => {
   const { eventCode } = req;
-
-  let localCounts = {};
-  try {
-    if (req.query.localCounts)
-      localCounts = JSON.parse(decodeURIComponent(req.query.localCounts));
-  } catch (e) {}
-
   let localTeams = [];
   try {
     if (req.query.localTeams) {
@@ -515,19 +224,9 @@ app.get("/api/getPitScouting", validateEventCode, async (req, res) => {
 
   let filtered = {};
   for (const [team, data] of Object.entries(result)) {
-    const hasLocalCount = Object.prototype.hasOwnProperty.call(localCounts, team);
-    const backendCount = countPitEntries(data);
-    const localCount = Number(localCounts[team] ?? 0);
-    const needsUpdate = hasLocalCount
-      ? !Number.isFinite(localCount) || localCount < backendCount
-      : !localTeams.includes(team);
-
-    if (needsUpdate) {
-      if (Array.isArray(data)) {
-        filtered[team] = data.map((entry) => stripPitImage(entry));
-      } else {
-        filtered[team] = stripPitImage(data);
-      }
+    if (!localTeams.includes(team)) {
+      const { robotPicturePreview, ...rest } = data;
+      filtered[team] = rest;
     }
   }
 
@@ -541,21 +240,9 @@ app.get("/api/getPitScoutingImage", validateEventCode, async (req, res) => {
 
   try {
     let data = await getEventData("pitScoutingData", eventCode);
-    const teamEntries = data[teamNumber];
-
-    if (Array.isArray(teamEntries)) {
-      for (let i = teamEntries.length - 1; i >= 0; i--) {
-        const result = teamEntries[i]?.robotPicturePreview;
-        if (result) {
-          return res.send(result);
-        }
-      }
-      return res.sendStatus(404);
-    }
-
-    const result = teamEntries?.robotPicturePreview;
+    const result = data[teamNumber]?.["robotPicturePreview"];
     if (!result) return res.sendStatus(404);
-    return res.send(result);
+    res.send(result);
   } catch (e) {
     return res.sendStatus(404);
   }
@@ -764,29 +451,11 @@ app.get("/api/getMatchScores", async (req, res) => {
 // ─── POST ROUTES ─────────────────────────────────────────────────────────────
 
 app.post("/api/postEventCode", async (req, res) => {
-  const rawCode =
-    req.body?.eventCode
-    || req.body?.event
-    || req.query?.eventCode
-    || req.query?.event;
-  const code = String(rawCode || "").trim();
-
-  appendRunLog("debug", "postEventCode received", {
-    rawCode,
-    code,
-    body: req.body,
-    query: req.query,
-  });
-
+  const code = req.body.eventCode;
   if (!code) {
     console.log("Event code could not be retrieved");
-    return res.status(400).json({
-      error: "Event code is required",
-      expected: ["body.eventCode", "body.event", "query.eventCode", "query.event"],
-      received: { body: req.body, query: req.query },
-    });
+    return res.sendStatus(400);
   }
-
   console.log(`Event code received: ${code}`);
   eventCodes.add(code);
   externalAPI.populateEventData(code);
@@ -802,8 +471,7 @@ app.post("/api/postHPRatings", (req, res) => {
 });
 
 app.post("/api/postPitScouting", validateEventCode, async (req, res) => {
-  const event = req.eventCode;
-  const { team, formData } = req.body;
+  const { event, team, formData } = req.body;
 
   if (!formData || !team) {
     console.log("One or more fields could not be retrieved");
@@ -812,19 +480,16 @@ app.post("/api/postPitScouting", validateEventCode, async (req, res) => {
   }
 
   console.log(formData);
-  const teamKey = String(team).replace(/\D/g, "") || String(team);
-  await withScoutingFileWriteLock("pitScoutingData", async (fileData) => {
-    fileData[event] ||= {};
-    fileData[event][teamKey] = appendScoutingEntry(fileData[event][teamKey], formData);
-    return fileData;
-  });
+  let fileData = await ensureEventCodeExists("pitScoutingData", event);
+  fileData[event] ||= {};
+  fileData[event][team] = formData;
 
+  database.writeJSONFile("pitScoutingData", fileData);
   res.sendStatus(200);
 });
 
 app.post("/api/postQualitativeScouting", validateEventCode, async (req, res) => {
-  const event = req.eventCode;
-  const { match, team, formData } = req.body;
+  const { event, match, team, formData } = req.body;
 
   if (formData == null || team == null || match == null) {
     console.log("One or more fields could not be retrieved");
@@ -833,18 +498,12 @@ app.post("/api/postQualitativeScouting", validateEventCode, async (req, res) => 
   }
 
   console.log(formData);
-  const teamKey = String(team).replace(/\D/g, "") || String(team);
-  const matchKey = String(match);
-  await withScoutingFileWriteLock("qualitativeScoutingData", async (fileData) => {
-    fileData[event] ||= {};
-    fileData[event][teamKey] ||= {};
-    fileData[event][teamKey][matchKey] = appendScoutingEntry(
-      fileData[event][teamKey][matchKey],
-      formData,
-    );
-    return fileData;
-  });
+  let fileData = await ensureEventCodeExists("qualitativeScoutingData", event);
+  fileData[event] ||= {};
+  fileData[event][team] ||= {};
+  fileData[event][team][match] = formData;
 
+  database.writeJSONFile("qualitativeScoutingData", fileData);
   res.sendStatus(200);
 });
 
