@@ -62,27 +62,43 @@
     inactivePeriod: "Inactive Period",
     trenchFeedVolume: "Trench Feed Volume",
     bumpFeedVolume: "Bump Feed Volume",
+    defenseTypes: "Defense Types",
     defenseEffectiveness: "Defense Effectiveness",
-    defenseAvoidance: "Defense Avoidance",
+    defenseComments: "Defense Notes",
+    avoidanceTypes: "Avoidance Types",
+    avoidanceEffectiveness: "Avoidance Effectiveness",
+    defenseAvoidance: "Avoidance Notes",
     intakeEfficiency: "Intake Efficiency",
     penalties: "Penalties",
     drivingQuality: "Driving Quality",
     matchEvents: "Match Events",
     otherNotes: "Notes",
     climbQuality: "Climb Quality",
+    shootingBalls: "Balls Shot",
+    feedingBalls: "Balls Fed",
+    trenchCycles: "Trench Cycles",
+    bumpCycles: "Bump Cycles",
   };
 
   const QUAL_FIELD_ORDER = [
     "autoActions",
     "travelMethod",
     "travelTroubles",
+    "shootingBalls",
+    "feedingBalls",
     "fuelScored",
     "fuelCollectionPosition",
     "shooterEfficiency",
     "inactivePeriod",
+    "trenchCycles",
     "trenchFeedVolume",
+    "bumpCycles",
     "bumpFeedVolume",
+    "defenseTypes",
     "defenseEffectiveness",
+    "defenseComments",
+    "avoidanceTypes",
+    "avoidanceEffectiveness",
     "defenseAvoidance",
     "intakeEfficiency",
     "penalties",
@@ -95,6 +111,35 @@
   const QUAL_FIELD_ORDER_INDEX = new Map(
     QUAL_FIELD_ORDER.map((field, index) => [field, index]),
   );
+
+  // Keys shown as large stat tiles
+  const METRIC_KEYS = new Set([
+    "fuelScored", "shootingBalls", "feedingBalls",
+    "trenchCycles", "trenchFeedVolume", "bumpCycles", "bumpFeedVolume",
+  ]);
+  // Keys shown as 1–5 dot ratings
+  const RATING_KEYS = new Set([
+    "defenseEffectiveness", "avoidanceEffectiveness",
+    "intakeEfficiency", "drivingQuality", "shooterEfficiency", "climbQuality",
+  ]);
+  // Keys whose value is an array of descriptor strings → shown as pills
+  const PILL_ARRAY_KEYS = new Set(["defenseTypes", "avoidanceTypes", "autoActions"]);
+  // Keys shown as alert badges
+  const EVENT_KEYS = new Set(["matchEvents"]);
+  // Keys shown as italicised note text
+  const NOTE_KEYS = new Set([
+    "defenseComments", "defenseAvoidance", "otherNotes",
+    "travelTroubles", "inactivePeriod", "penalties",
+  ]);
+
+  type QualFieldKind = "metric" | "rating" | "pills" | "event" | "note" | "default";
+
+  interface QualEntry {
+    key: string;
+    label: string;
+    value: any;
+    kind: QualFieldKind;
+  }
 
   function humanizeQualKey(key: string): string {
     if (QUAL_LABEL_OVERRIDES[key]) return QUAL_LABEL_OVERRIDES[key];
@@ -113,45 +158,77 @@
     return true;
   }
 
-  function formatSliderValue(value: any): string {
-    const num = Number(value);
-    if (!isFinite(num) || num <= 0) return "None (0)";
-    if (num <= 2) return `A little (${num})`;
-    if (num <= 5) return `Moderate (${num})`;
-    if (num <= 8) return `A lot (${num})`;
-    return `Tons (${num})`;
+  // Flatten nested qual/quant sub-objects into a flat record
+  function flattenQualRow(row: Record<string, any>): Record<string, any> {
+    const flat: Record<string, any> = { ...row };
+    if (row.quant && typeof row.quant === "object") {
+      for (const [k, v] of Object.entries(row.quant)) {
+        if (!(k in flat)) flat[k] = v;
+      }
+    }
+    if (row.qual && typeof row.qual === "object") {
+      const q = row.qual as any;
+      if (q.defense) {
+        if (q.defense.types?.length && !flat.defenseTypes) flat.defenseTypes = q.defense.types;
+        if (q.defense.effectiveness != null && !flat.defenseEffectiveness) flat.defenseEffectiveness = q.defense.effectiveness;
+        if (q.defense.comments && !flat.defenseComments) flat.defenseComments = q.defense.comments;
+      }
+      if (q.avoidance) {
+        if (q.avoidance.types?.length && !flat.avoidanceTypes) flat.avoidanceTypes = q.avoidance.types;
+        if (q.avoidance.effectiveness != null && !flat.avoidanceEffectiveness) flat.avoidanceEffectiveness = q.avoidance.effectiveness;
+        if (q.avoidance.comments && !flat.defenseAvoidance) flat.defenseAvoidance = q.avoidance.comments;
+      }
+      if (q.matchEvents?.length && !flat.matchEvents) flat.matchEvents = q.matchEvents;
+      if (q.comments && !flat.otherNotes) flat.otherNotes = q.comments;
+    }
+    return flat;
   }
 
-  function formatQualValue(key: string, value: any): string {
-    if (key === "fuelScored") return formatSliderValue(value);
-    if (typeof value === "boolean") return value ? "Yes" : "No";
-    if (Array.isArray(value) || typeof value === "object")
-      return JSON.stringify(value);
-    return String(value);
-  }
-
-  function getQualMetricEntries(
-    row: Record<string, any>,
-  ): Array<[string, string]> {
+  function getQualEntries(rawRow: Record<string, any>): QualEntry[] {
+    const row = flattenQualRow(rawRow);
     return Object.entries(row)
-      .filter(
-        ([key, value]) =>
-          !QUAL_METADATA_KEYS.has(key) &&
-          !key.startsWith("_") &&
-          hasRenderableQualValue(value),
+      .filter(([key, value]) =>
+        !QUAL_METADATA_KEYS.has(key) &&
+        !key.startsWith("_") &&
+        // skip nested sub-objects that we already flattened
+        !(key === "qual" || key === "quant") &&
+        hasRenderableQualValue(value),
       )
       .sort(([aKey], [bKey]) => {
-        const aOrder =
-          QUAL_FIELD_ORDER_INDEX.get(aKey) ?? Number.MAX_SAFE_INTEGER;
-        const bOrder =
-          QUAL_FIELD_ORDER_INDEX.get(bKey) ?? Number.MAX_SAFE_INTEGER;
+        const aOrder = QUAL_FIELD_ORDER_INDEX.get(aKey) ?? Number.MAX_SAFE_INTEGER;
+        const bOrder = QUAL_FIELD_ORDER_INDEX.get(bKey) ?? Number.MAX_SAFE_INTEGER;
         if (aOrder !== bOrder) return aOrder - bOrder;
         return humanizeQualKey(aKey).localeCompare(humanizeQualKey(bKey));
       })
-      .map(([key, value]) => [
-        humanizeQualKey(key),
-        formatQualValue(key, value),
-      ]);
+      .map(([key, value]): QualEntry => {
+        let kind: QualFieldKind = "default";
+        if (METRIC_KEYS.has(key)) kind = "metric";
+        else if (RATING_KEYS.has(key)) kind = "rating";
+        else if (PILL_ARRAY_KEYS.has(key)) kind = "pills";
+        else if (EVENT_KEYS.has(key)) kind = "event";
+        else if (NOTE_KEYS.has(key)) kind = "note";
+        return { key, label: humanizeQualKey(key), value, kind };
+      });
+  }
+
+  function toStringArray(value: any): string[] {
+    if (Array.isArray(value)) return value.map(String);
+    if (typeof value === "string") return [value];
+    return [String(value)];
+  }
+
+  function getEventClass(event: string): string {
+    const e = event.toLowerCase();
+    if (e.includes("red card")) return "event-red-card";
+    if (e.includes("yellow card")) return "event-yellow-card";
+    if (e.includes("foul") || e.includes("penalty")) return "event-foul";
+    if (e.includes("disabled") || e.includes("e-stop")) return "event-disabled";
+    return "event-default";
+  }
+
+  // Kept for backward-compatibility (not used in template anymore)
+  function getQualMetricEntries(row: Record<string, any>): Array<[string, string]> {
+    return getQualEntries(row).map(({ label, value }) => [label, String(value)]);
   }
 
   // ─── Qual data helpers ────────────────────────────────────────────────────────
@@ -917,27 +994,69 @@
                 </div>
               </div>
               {#each qualRows.slice(qualMatchIndexByTeam[team] ?? 0, (qualMatchIndexByTeam[team] ?? 0) + 1) as matchRow}
+                {@const entries = getQualEntries(matchRow)}
+                {@const metricEntries = entries.filter(e => e.kind === "metric")}
+                {@const otherEntries = entries.filter(e => e.kind !== "metric")}
                 <div class="qual-match-block">
                   <div class="qual-match-header">
                     Match {matchRow.Match ?? matchRow.match}
                   </div>
-                  <div class="qual-rows">
-                    {#if getQualMetricEntries(matchRow).length === 0}
-                      <div class="qual-row-item">
-                        <span class="qual-row-lbl">Notes</span>
-                        <span class="qual-row-val"
-                          >No qualitative responses recorded.</span
-                        >
+                  {#if entries.length === 0}
+                    <div class="qual-empty">No qualitative responses recorded.</div>
+                  {:else}
+                    <!-- Metric tiles row -->
+                    {#if metricEntries.length > 0}
+                      <div class="qual-metric-tiles">
+                        {#each metricEntries as entry}
+                          <div class="qual-metric-tile">
+                            <span class="qual-metric-val">{entry.value}</span>
+                            <span class="qual-metric-lbl">{entry.label}</span>
+                          </div>
+                        {/each}
                       </div>
-                    {:else}
-                      {#each getQualMetricEntries(matchRow) as [label, value]}
-                        <div class="qual-row-item">
-                          <span class="qual-row-lbl">{label}</span>
-                          <span class="qual-row-val">{value}</span>
-                        </div>
-                      {/each}
                     {/if}
-                  </div>
+                    <!-- Remaining fields -->
+                    <div class="qual-rows">
+                      {#each otherEntries as entry}
+                        {#if entry.kind === "rating"}
+                          <div class="qual-row-item">
+                            <span class="qual-row-lbl">{entry.label}</span>
+                            <div class="qual-rating-dots">
+                              {#each [1,2,3,4,5] as dot}
+                                <span class="qual-dot" class:filled={dot <= Number(entry.value)}></span>
+                              {/each}
+                              <span class="qual-rating-num">{entry.value}/5</span>
+                            </div>
+                          </div>
+                        {:else if entry.kind === "pills"}
+                          <div class="qual-row-item">
+                            <span class="qual-row-lbl">{entry.label}</span>
+                            <div class="qual-pills">
+                              {#each toStringArray(entry.value) as pill}
+                                <span class="qual-pill">{pill}</span>
+                              {/each}
+                            </div>
+                          </div>
+                        {:else if entry.kind === "event"}
+                          <div class="qual-events-row">
+                            {#each toStringArray(entry.value) as ev}
+                              <span class="qual-event-badge {getEventClass(ev)}">{ev}</span>
+                            {/each}
+                          </div>
+                        {:else if entry.kind === "note"}
+                          <div class="qual-row-item">
+                            <span class="qual-row-lbl">{entry.label}</span>
+                            <span class="qual-row-val qual-note-val">{entry.value}</span>
+                          </div>
+                        {:else}
+                          <div class="qual-row-item">
+                            <span class="qual-row-lbl">{entry.label}</span>
+                            <span class="qual-row-val">{typeof entry.value === "object" ? JSON.stringify(entry.value) : String(entry.value)}</span>
+                          </div>
+                        {/if}
+                      {/each}
+                    </div>
+                  {/if}
                 </div>
               {/each}
             {/if}
@@ -1060,27 +1179,69 @@
                 </div>
               </div>
               {#each qualRows.slice(qualMatchIndexByTeam[team] ?? 0, (qualMatchIndexByTeam[team] ?? 0) + 1) as matchRow}
+                {@const entries = getQualEntries(matchRow)}
+                {@const metricEntries = entries.filter(e => e.kind === "metric")}
+                {@const otherEntries = entries.filter(e => e.kind !== "metric")}
                 <div class="qual-match-block">
                   <div class="qual-match-header">
                     Match {matchRow.Match ?? matchRow.match}
                   </div>
-                  <div class="qual-rows">
-                    {#if getQualMetricEntries(matchRow).length === 0}
-                      <div class="qual-row-item">
-                        <span class="qual-row-lbl">Notes</span>
-                        <span class="qual-row-val"
-                          >No qualitative responses recorded.</span
-                        >
+                  {#if entries.length === 0}
+                    <div class="qual-empty">No qualitative responses recorded.</div>
+                  {:else}
+                    <!-- Metric tiles row -->
+                    {#if metricEntries.length > 0}
+                      <div class="qual-metric-tiles">
+                        {#each metricEntries as entry}
+                          <div class="qual-metric-tile">
+                            <span class="qual-metric-val">{entry.value}</span>
+                            <span class="qual-metric-lbl">{entry.label}</span>
+                          </div>
+                        {/each}
                       </div>
-                    {:else}
-                      {#each getQualMetricEntries(matchRow) as [label, value]}
-                        <div class="qual-row-item">
-                          <span class="qual-row-lbl">{label}</span>
-                          <span class="qual-row-val">{value}</span>
-                        </div>
-                      {/each}
                     {/if}
-                  </div>
+                    <!-- Remaining fields -->
+                    <div class="qual-rows">
+                      {#each otherEntries as entry}
+                        {#if entry.kind === "rating"}
+                          <div class="qual-row-item">
+                            <span class="qual-row-lbl">{entry.label}</span>
+                            <div class="qual-rating-dots">
+                              {#each [1,2,3,4,5] as dot}
+                                <span class="qual-dot" class:filled={dot <= Number(entry.value)}></span>
+                              {/each}
+                              <span class="qual-rating-num">{entry.value}/5</span>
+                            </div>
+                          </div>
+                        {:else if entry.kind === "pills"}
+                          <div class="qual-row-item">
+                            <span class="qual-row-lbl">{entry.label}</span>
+                            <div class="qual-pills">
+                              {#each toStringArray(entry.value) as pill}
+                                <span class="qual-pill">{pill}</span>
+                              {/each}
+                            </div>
+                          </div>
+                        {:else if entry.kind === "event"}
+                          <div class="qual-events-row">
+                            {#each toStringArray(entry.value) as ev}
+                              <span class="qual-event-badge {getEventClass(ev)}">{ev}</span>
+                            {/each}
+                          </div>
+                        {:else if entry.kind === "note"}
+                          <div class="qual-row-item">
+                            <span class="qual-row-lbl">{entry.label}</span>
+                            <span class="qual-row-val qual-note-val">{entry.value}</span>
+                          </div>
+                        {:else}
+                          <div class="qual-row-item">
+                            <span class="qual-row-lbl">{entry.label}</span>
+                            <span class="qual-row-val">{typeof entry.value === "object" ? JSON.stringify(entry.value) : String(entry.value)}</span>
+                          </div>
+                        {/if}
+                      {/each}
+                    </div>
+                  {/if}
                 </div>
               {/each}
             {/if}
@@ -1622,5 +1783,134 @@
       font-size: 0.7rem;
       min-height: 35px;
     }
+  }
+
+  /* ── Rich qual field renderers ─────────────────────────────────────────────── */
+
+  /* Metric stat tiles */
+  .qual-metric-tiles {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 8px 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  .qual-metric-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(200, 27, 0, 0.2);
+    border-radius: 6px;
+    padding: 6px 10px 5px;
+    min-width: 58px;
+    flex: 1;
+  }
+  .qual-metric-val {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: #fff;
+    line-height: 1.1;
+  }
+  .qual-metric-lbl {
+    font-size: 0.58rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: rgba(200, 27, 0, 0.85);
+    margin-top: 2px;
+    text-align: center;
+  }
+
+  /* Dot ratings */
+  .qual-rating-dots {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 3px;
+  }
+  .qual-dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    transition: background 0.15s;
+  }
+  .qual-dot.filled {
+    background: var(--frc-190-red);
+    border-color: var(--frc-190-red);
+  }
+  .qual-rating-num {
+    font-size: 0.7rem;
+    color: #888;
+    margin-left: 4px;
+  }
+
+  /* Pill arrays */
+  .qual-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 3px;
+  }
+  .qual-pill {
+    font-size: 0.72rem;
+    color: #ddd;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 999px;
+    padding: 2px 8px;
+    line-height: 1.5;
+  }
+
+  /* Event badges */
+  .qual-events-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 6px 8px;
+  }
+  .qual-event-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    border-left-width: 3px;
+    border-left-style: solid;
+  }
+  .event-red-card {
+    background: rgba(200, 27, 0, 0.22);
+    border-left-color: #c81b00;
+    color: #ff9980;
+  }
+  .event-yellow-card {
+    background: rgba(255, 200, 0, 0.15);
+    border-left-color: #ffc800;
+    color: #ffe080;
+  }
+  .event-foul {
+    background: rgba(255, 160, 0, 0.15);
+    border-left-color: #ffa000;
+    color: #ffcc80;
+  }
+  .event-disabled {
+    background: rgba(150, 150, 150, 0.15);
+    border-left-color: #888;
+    color: #bbb;
+  }
+  .event-default {
+    background: rgba(255, 255, 255, 0.07);
+    border-left-color: rgba(255, 255, 255, 0.3);
+    color: #ccc;
+  }
+
+  /* Note text */
+  .qual-note-val {
+    font-style: italic;
+    color: #aaa !important;
   }
 </style>
