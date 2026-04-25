@@ -44,7 +44,7 @@ export function getGraceRatings() {
  * @returns {string} Event code or empty string
  */
 export function getEventCode() {
-  return sessionStorage.getItem("eventCode") ?? localStorage.getItem("eventCode");
+   return sessionStorage.getItem("eventCode") ?? localStorage.getItem("eventCode");
 }
 
 /**
