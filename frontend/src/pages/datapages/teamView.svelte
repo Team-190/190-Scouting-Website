@@ -25,22 +25,18 @@
   } from "../../utils/api.js";
   import {
       COLOR_MODES,
-      estimateTeamPoints2,
       EXCLUDED_FIELDS,
       getAnanthRatings,
       getColorblindMode,
       getEventCode,
       getGraceRatings,
       lerpColor,
-      mean,
       METADATA_KEYS,
       METRIC_DISPLAY_NAMES,
-      normalizeClimbData,
-      ZONE_TIME_FIELDS
+        mean,
   } from "../../utils/pageUtils.js";
 
   import TeamGrid from "../../components/Teamgrid.svelte";
-  import { getIndexedDBStore } from '../../utils/indexedDB';
   ModuleRegistry.registerModules([AllCommunityModule]);
 
   // ─── Constants ────────────────────────────────────────────────────────────────
@@ -56,6 +52,8 @@
   let allTeams: number[] = [];
   let selectedTeam: number | null = null;
   let teamOPR: number | null = null;
+  let teamDPR: number | null = null;
+  let teamCCWM: number | null = null;
   let teamEFS2: number | null = null;
   let teamCOPRs: Record<string, any> = {};
   let graceData: any = null;
@@ -85,6 +83,9 @@
   let autoPathCtx: any = null;
   let fieldImg: any = null;
   let selectedAutoPathMatch: number | null = null;
+  let qualRowsByMatch: Record<number, any[]> = {};
+  let qualEntryIndexByMatch: Record<number, number> = {};
+  let autoPathIndexByMatch: Record<number, number> = {};
   let teamsMap: Map<number, string> = new Map();
 
   // Auto path animation
@@ -108,6 +109,57 @@
       }
       return flat;
     });
+  }
+
+  function extractAllQuantRowsFromQualStore(qualStore: Record<string, any>): any[] {
+    const rows: any[] = [];
+
+    for (const [teamKey, teamData] of Object.entries(qualStore || {})) {
+      if (!teamData || typeof teamData !== "object") continue;
+
+      if (Array.isArray(teamData)) {
+        for (const rawRow of teamData) {
+          if (!rawRow || typeof rawRow !== "object") continue;
+          const quant = rawRow?.quant && typeof rawRow.quant === "object" ? rawRow.quant : {};
+          rows.push({
+            Team: String(rawRow?.Team ?? rawRow?.team ?? teamKey).replace(/^frc/, ""),
+            Match: Number(rawRow?.Match ?? rawRow?.match ?? 0),
+            shootingBalls: Number(quant.shootingBalls ?? rawRow?.shootingBalls ?? rawRow?.fuelScored ?? 0) || 0,
+            feedingBalls: Number(quant.feedingBalls ?? rawRow?.feedingBalls ?? (Number(rawRow?.shootFeedingBalls ?? 0) + Number(rawRow?.trenchFeedingBalls ?? 0)) ?? 0) || 0,
+            trenchCycles: Number(quant.trenchCycles ?? rawRow?.trenchCycles ?? rawRow?.trenchFeedVolume ?? 0) || 0,
+            bumpCycles: Number(quant.bumpCycles ?? rawRow?.bumpCycles ?? rawRow?.bumpFeedVolume ?? 0) || 0,
+          });
+        }
+        continue;
+      }
+
+      for (const [matchKey, matchData] of Object.entries(teamData as Record<string, any>)) {
+        const entries = Array.isArray(matchData)
+          ? matchData
+          : (matchData && typeof matchData === "object" ? [matchData] : []);
+
+        for (const rawRow of entries) {
+          if (!rawRow || typeof rawRow !== "object") continue;
+          const quant = rawRow?.quant && typeof rawRow.quant === "object" ? rawRow.quant : {};
+          rows.push({
+            Team: String(rawRow?.Team ?? rawRow?.team ?? teamKey).replace(/^frc/, ""),
+            Match: Number(rawRow?.Match ?? rawRow?.match ?? matchKey ?? 0),
+            shootingBalls: Number(quant.shootingBalls ?? rawRow?.shootingBalls ?? rawRow?.fuelScored ?? 0) || 0,
+            feedingBalls: Number(quant.feedingBalls ?? rawRow?.feedingBalls ?? (Number(rawRow?.shootFeedingBalls ?? 0) + Number(rawRow?.trenchFeedingBalls ?? 0)) ?? 0) || 0,
+            trenchCycles: Number(quant.trenchCycles ?? rawRow?.trenchCycles ?? rawRow?.trenchFeedVolume ?? 0) || 0,
+            bumpCycles: Number(quant.bumpCycles ?? rawRow?.bumpCycles ?? rawRow?.bumpFeedVolume ?? 0) || 0,
+          });
+        }
+      }
+    }
+
+    return rows.sort((a, b) => Number(a.Match || 0) - Number(b.Match || 0));
+  }
+
+  async function getAllQuantRowsFromQualStore(): Promise<any[]> {
+    const qualStore = await readQualScoutingFromIDB({});
+    if (!qualStore || typeof qualStore !== "object") return [];
+    return extractAllQuantRowsFromQualStore(qualStore as Record<string, any>);
   }
 
   function isNumeric(n: any): boolean {
@@ -250,15 +302,10 @@
   // ─── Data Loading ─────────────────────────────────────────────────────────────
 
   async function loadTeamNumbers(): Promise<number[]> {
-    const storedData = await getIndexedDBStore("scoutingData") || [];
-    if (!storedData) return [];
+    if (!teamViewData?.length) return [];
     try {
-      // Unwrap the value property if it exists (from compressed storage)
-      const parsed = (storedData || []).map(item => item.value !== undefined ? item.value : item);
-      if (!Array.isArray(parsed)) return [];
       const teams: number[] = [];
-      for (const el of parsed) {
-        if (el.RecordType === "Match_Event") continue;
+      for (const el of teamViewData) {
         const raw = el.Team || el.team;
         if (!raw) continue;
         const num = parseInt(String(raw).replace(/\D/g, ""));
@@ -276,11 +323,15 @@
   async function fetchTeamOPR(teamNumber: string) {
     if (!eventCode || !teamNumber) {
       teamOPR = null;
+      teamDPR = null;
+      teamCCWM = null;
       return;
     }
     const teamNumStr = String(teamNumber).replace(/\D/g, "");
-    const { oprs } = await fetchOPR(eventCode);
-    teamOPR = (oprs[`frc${teamNumStr}`] as number) ?? null;
+    const { oprs, dprs, ccwms } = await fetchOPR(eventCode);
+    teamOPR = (oprs?.[`frc${teamNumStr}`] as number) ?? null;
+    teamDPR = (dprs?.[`frc${teamNumStr}`] as number) ?? null;
+    teamCCWM = (ccwms?.[`frc${teamNumStr}`] as number) ?? null;
   }
 
   function findMatchAlliance(allMatches: any[], matchNumber: number) {
@@ -535,6 +586,28 @@
       .sort((a, b) => a.Match - b.Match);
   }
 
+  function getFirstRowsByMatch(rows: any[]): any[] {
+    const sorted = [...(rows ?? [])].sort((a, b) => {
+      const aMatch = Number(a?.Match ?? a?.match ?? 0);
+      const bMatch = Number(b?.Match ?? b?.match ?? 0);
+      if (aMatch !== bMatch) return aMatch - bMatch;
+      const aId = String(a?._entryId ?? a?.Id ?? "");
+      const bId = String(b?._entryId ?? b?.Id ?? "");
+      return aId.localeCompare(bId);
+    });
+
+    const firstByMatch = new Map<number, any>();
+    for (const row of sorted) {
+      const matchNumber = Number(row?.Match ?? row?.match ?? 0);
+      if (!matchNumber) continue;
+      if (!firstByMatch.has(matchNumber)) firstByMatch.set(matchNumber, row);
+    }
+
+    return Array.from(firstByMatch.values()).sort(
+      (a, b) => Number(a?.Match ?? a?.match ?? 0) - Number(b?.Match ?? b?.match ?? 0),
+    );
+  }
+
   async function loadTeamData(teamNumber: string) {
     try {
       if (!teamViewData) {
@@ -544,106 +617,23 @@
         return;
       }
       
-      let data = teamViewData.filter((el) => {
-        if (el.RecordType === "Match_Event") return false;
+      const data = teamViewData
+        .filter((el) => {
         const raw = el.Team || el.team;
         return (
           raw &&
           String(raw).replace(/\D/g, "") === String(teamNumber).replace(/\D/g, "")
         );
-      });
+        })
+        .sort((a, b) => Number(a.Match || 0) - Number(b.Match || 0));
+      const firstByMatch = getFirstRowsByMatch(data);
       
       console.log(`loadTeamData: Found ${data.length} rows for team ${teamNumber}`);
-      
-      if (data.length > 0) {
-        data = aggregateMatches(data);
-        console.log(`loadTeamData: After aggregateMatches, ${data.length} matches`);
-        
-        // Fetch match alliances once for all matches
-        if (!matchAlliancesCache) {
-          try {
-            matchAlliancesCache = await fetchMatchAlliances(eventCode);
-          } catch (e) {
-            console.error("Failed to fetch match alliances:", e);
-            matchAlliancesCache = [];
-          }
-        }
+      console.log(`loadTeamData: Reduced to ${firstByMatch.length} unique match rows for TeamGrid`);
 
-        if (!Object.keys(teamCOPRs).length && eventCode) {
-          try {
-            teamCOPRs = await fetchCOPRs(eventCode);
-          } catch (e) {
-            console.error("Failed to fetch COPRs:", e);
-            teamCOPRs = {};
-          }
-        }
-        
-        // Parallelize all API calls using Promise.all with error handling
-        const promises = data.map(async (match) => {
-          try {
-            const [estimatedPoints, estimatedPoints2, climbData] = await Promise.all([
-              estimateTeamPoints(teamNumber, match.Match, matchAlliancesCache),
-              Promise.resolve(
-                Object.keys(teamCOPRs).length
-                  ? estimateTeamPoints2(
-                      teamNumber,
-                      Number(match.Match),
-                      teamCOPRs,
-                      autoRowsAll,
-                      teleopRowsAll,
-                      matchAlliancesCache,
-                    )
-                  : null,
-              ),
-              fetchRobotClimb(eventCode, teamNumber, match.Match).catch(() => ({ EndgameClimb: "", AutoClimb: "" })),
-            ]);
-            
-            match.EstimatedPoints = estimatedPoints;
-            match.EstimatedPoints2 = estimatedPoints2;
-            
-            if (climbData && climbData.EndgameClimb) {
-              if (climbData.EndgameClimb.slice(-1) == "3") {
-                match.Climb_State = "L3";
-              } else if (climbData.EndgameClimb.slice(-1) == "2") {
-                match.Climb_State = "L2";
-              } else if (climbData.EndgameClimb.slice(-1) == "1") {
-                match.Climb_State = "L1";
-              } else {
-                match.Climb_State = climbData.EndgameClimb;
-              }
-
-              if (climbData.AutoClimb && climbData.AutoClimb.slice(-1) == "1") {
-                match.Auto_Climb = "Yes";
-              } else {
-                match.Auto_Climb = "No";
-              }
-            }
-
-            // Normalize climb time to 0 if climb state is "None"
-            normalizeClimbData(match);
-          } catch (e) {
-            console.error(`Error processing match ${match.Match}:`, e);
-            // Continue with match even if enrichment fails
-            normalizeClimbData(match);
-          }
-
-          return match;
-        });
-        
-        // Wait for all promises to resolve
-        data = await Promise.all(promises);
-        const efs2Values = data
-          .map((m) => Number(m.EstimatedPoints2))
-          .filter((v) => Number.isFinite(v) && v > 0);
-        teamEFS2 = efs2Values.length
-          ? Number(mean(efs2Values).toFixed(2))
-          : null;
-        console.log(`loadTeamData: Loaded ${data.length} matches with enrichment`);
-      } else {
-        teamEFS2 = null;
-      }
-      cache[teamNumber] = data;
-      matches = data; // ← drives TeamGrid reactively
+      teamEFS2 = null;
+      cache[teamNumber] = firstByMatch;
+      matches = firstByMatch; // drives TeamGrid reactively
       console.log(`loadTeamData: Set matches to ${matches.length} rows`);
     } catch (e) {
       console.error(`loadTeamData: Unhandled error:`, e);
@@ -695,22 +685,64 @@
 
   const QUAL_METADATA_KEYS = new Set([
     "RecordType",
+    "recordType",
     "Match",
+    "match",
     "Team",
+    "team",
     "ScouterName",
+    "scouterName",
+    "ScoutStation",
+    "scoutStation",
     "Alliance",
+    "alliance",
     "AutoPath",
+    "autoPath",
+    "qual",
+    "quant",
+    "_entryId",
   ]);
 
   const QUAL_LABEL_OVERRIDES: Record<string, string> = {
     fuelScored: "Fuel Scored",
+    shootingBalls: "Balls Shot",
+    feedingBalls: "Balls Fed",
     trenchFeedVolume: "Trench Feed Volume",
+    trenchCycles: "Trench Cycles",
+    bumpCycles: "Bump Cycles",
+    bumpFeedVolume: "Bump Feed Volume",
+    AutoStartPosition: "Auto Start Position",
+    defenseTypes: "Defense Types",
     defenseEffectiveness: "Defense Effectiveness",
+    defenseComments: "Defense Comments",
+    avoidanceTypes: "Avoidance Types",
+    avoidanceEffectiveness: "Avoidance Effectiveness",
+    avoidanceComments: "Avoidance Comments",
     defenseAvoidance: "Defense Avoidance",
     intakeEfficiency: "Intake Efficiency",
     matchEvents: "Match Events",
     otherNotes: "Notes",
   };
+
+  const QUAL_FIELD_ORDER = [
+    "AutoStartPosition",
+    "defenseTypes",
+    "defenseEffectiveness",
+    "defenseComments",
+    "avoidanceTypes",
+    "avoidanceEffectiveness",
+    "avoidanceComments",
+    "matchEvents",
+    "otherNotes",
+    "shootingBalls",
+    "feedingBalls",
+    "trenchCycles",
+    "bumpCycles",
+  ];
+
+  const QUAL_FIELD_ORDER_INDEX = new Map(
+    QUAL_FIELD_ORDER.map((field, index) => [field, index]),
+  );
 
   function humanizeKey(key: string): string {
     if (QUAL_LABEL_OVERRIDES[key]) return QUAL_LABEL_OVERRIDES[key];
@@ -740,16 +772,258 @@
   function formatQualValue(key: string, value: any): string {
     if (key === "fuelScored") return formatSliderValue(value);
     if (typeof value === "boolean") return value ? "Yes" : "No";
-    if (Array.isArray(value) || typeof value === "object") {
+    if (Array.isArray(value)) {
+      return value.map((v) => String(v)).join(", ");
+    }
+    if (typeof value === "object") {
       return JSON.stringify(value);
     }
     return String(value);
   }
 
+  function normalizeQualRowForDisplay(row: Record<string, any>): Record<string, any> {
+    const normalized: Record<string, any> = { ...row };
+
+    if (row?.qual && typeof row.qual === "object") {
+      const q = row.qual as any;
+
+      if (q.auto && typeof q.auto === "object") {
+        if (q.auto.startPosition && !normalized.AutoStartPosition) {
+          normalized.AutoStartPosition = q.auto.startPosition;
+        }
+      }
+
+      if (q.defense && typeof q.defense === "object") {
+        if (Array.isArray(q.defense.types) && !normalized.defenseTypes) {
+          normalized.defenseTypes = q.defense.types;
+        }
+        if (q.defense.effectiveness != null && normalized.defenseEffectiveness == null) {
+          normalized.defenseEffectiveness = q.defense.effectiveness;
+        }
+        if (q.defense.comments && !normalized.defenseComments) {
+          normalized.defenseComments = q.defense.comments;
+        }
+      }
+
+      if (q.avoidance && typeof q.avoidance === "object") {
+        if (Array.isArray(q.avoidance.types) && !normalized.avoidanceTypes) {
+          normalized.avoidanceTypes = q.avoidance.types;
+        }
+        if (q.avoidance.effectiveness != null && normalized.avoidanceEffectiveness == null) {
+          normalized.avoidanceEffectiveness = q.avoidance.effectiveness;
+        }
+        if (q.avoidance.comments && !normalized.avoidanceComments && !normalized.defenseAvoidance) {
+          normalized.avoidanceComments = q.avoidance.comments;
+        }
+      }
+
+      if (Array.isArray(q.matchEvents) && !normalized.matchEvents) {
+        normalized.matchEvents = q.matchEvents;
+      }
+
+      if (q.comments && !normalized.otherNotes) {
+        normalized.otherNotes = q.comments;
+      }
+    }
+
+    if (row?.quant && typeof row.quant === "object") {
+      const quant = row.quant as any;
+      if (quant.shootingBalls != null && normalized.shootingBalls == null && normalized.fuelScored == null) {
+        normalized.shootingBalls = quant.shootingBalls;
+      }
+      if (quant.feedingBalls != null && normalized.feedingBalls == null) {
+        normalized.feedingBalls = quant.feedingBalls;
+      }
+      if (quant.trenchCycles != null && normalized.trenchCycles == null && normalized.trenchFeedVolume == null) {
+        normalized.trenchCycles = quant.trenchCycles;
+      }
+      if (quant.bumpCycles != null && normalized.bumpCycles == null && normalized.bumpFeedVolume == null) {
+        normalized.bumpCycles = quant.bumpCycles;
+      }
+    }
+
+    return normalized;
+  }
+
   function getQualMetricEntries(row: Record<string, any>): Array<[string, string]> {
-    return Object.entries(row)
+    const normalized = normalizeQualRowForDisplay(row);
+    return Object.entries(normalized)
       .filter(([key, value]) => !QUAL_METADATA_KEYS.has(key) && !key.startsWith("_") && hasRenderableValue(value))
+      .sort(([aKey], [bKey]) => {
+        const aOrder = QUAL_FIELD_ORDER_INDEX.get(aKey) ?? Number.MAX_SAFE_INTEGER;
+        const bOrder = QUAL_FIELD_ORDER_INDEX.get(bKey) ?? Number.MAX_SAFE_INTEGER;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return humanizeKey(aKey).localeCompare(humanizeKey(bKey));
+      })
       .map(([key, value]) => [humanizeKey(key), formatQualValue(key, value)]);
+  }
+
+  function getMatchNumber(row: any): number {
+    return Number(row?.Match ?? row?.match ?? 0);
+  }
+
+  function getQualRowsByMatch(rows: any[]): Record<number, any[]> {
+    const grouped: Record<number, any[]> = {};
+    for (const row of rows ?? []) {
+      if (!row || typeof row !== "object") continue;
+      const matchNumber = getMatchNumber(row);
+      if (!matchNumber) continue;
+      if (!grouped[matchNumber]) grouped[matchNumber] = [];
+      grouped[matchNumber].push(row);
+    }
+    for (const rowsForMatch of Object.values(grouped)) {
+      rowsForMatch.sort((a: any, b: any) => {
+        const aId = String(a?._entryId ?? "");
+        const bId = String(b?._entryId ?? "");
+        return aId.localeCompare(bId);
+      });
+    }
+    return grouped;
+  }
+
+  function getQualMatchNumbers(): number[] {
+    return Object.keys(qualRowsByMatch)
+      .map((k) => Number(k))
+      .filter((n) => Number.isFinite(n) && n > 0)
+      .sort((a, b) => a - b);
+  }
+
+  function getSelectedQualEntry(matchNumber: number | null): any | null {
+    if (matchNumber == null) return null;
+    const entries = qualRowsByMatch[matchNumber] ?? [];
+    if (!entries.length) return null;
+    const index = Math.max(
+      0,
+      Math.min(qualEntryIndexByMatch[matchNumber] ?? 0, entries.length - 1),
+    );
+    return entries[index] ?? null;
+  }
+
+  function toAutoPathList(value: any): any[] {
+    if (!Array.isArray(value) || !value.length) return [];
+
+    const looksLikePoint = (point: any) =>
+      point
+      && typeof point === "object"
+      && isNumeric(point.x)
+      && isNumeric(point.y);
+
+    // Single path shape: [{x, y}, ...]
+    if (value.every((point) => looksLikePoint(point))) {
+      return value.length >= 2 ? [value] : [];
+    }
+
+    // Multi path shape: [[{x, y}, ...], [{x, y}, ...], ...]
+    return value.filter(
+      (path: any) =>
+        Array.isArray(path)
+        && path.length >= 2
+        && path.every((point) => looksLikePoint(point)),
+    );
+  }
+
+  function getAutoPaths(row: any): any[] {
+    const candidates = [
+      row?.qual?.auto?.path,
+      row?.qual?.autoPath,
+      row?.AutoPath,
+      row?.autoPath,
+    ];
+
+    for (const candidate of candidates) {
+      const normalized = toAutoPathList(candidate);
+      if (normalized.length) return normalized;
+    }
+
+    return [];
+  }
+
+  function getSelectedAutoPath(matchNumber: number | null): any[] | null {
+    const selectedEntry = getSelectedQualEntry(matchNumber);
+    if (!selectedEntry) return null;
+    const allPaths = getAutoPaths(selectedEntry);
+    if (!allPaths.length) return null;
+    const safeMatchNumber = Number(matchNumber);
+    const pathIndex = Math.max(
+      0,
+      Math.min(autoPathIndexByMatch[safeMatchNumber] ?? 0, allPaths.length - 1),
+    );
+    return allPaths[pathIndex] ?? null;
+  }
+
+  function changeQualEntry(matchNumber: number, delta: number) {
+    const entries = qualRowsByMatch[matchNumber] ?? [];
+    if (entries.length <= 1) return;
+    const current = qualEntryIndexByMatch[matchNumber] ?? 0;
+    const nextIndex = Math.max(0, Math.min(current + delta, entries.length - 1));
+    qualEntryIndexByMatch = {
+      ...qualEntryIndexByMatch,
+      [matchNumber]: nextIndex,
+    };
+    autoPathIndexByMatch = {
+      ...autoPathIndexByMatch,
+      [matchNumber]: 0,
+    };
+    redrawAutoPathCanvas(autoPathAnimationState.progress);
+  }
+
+  function changeAutoPath(delta: number) {
+    if (selectedAutoPathMatch == null) return;
+    const selectedEntry = getSelectedQualEntry(selectedAutoPathMatch);
+    const allPaths = getAutoPaths(selectedEntry);
+    if (allPaths.length <= 1) return;
+    const current = autoPathIndexByMatch[selectedAutoPathMatch] ?? 0;
+    const nextIndex = Math.max(0, Math.min(current + delta, allPaths.length - 1));
+    autoPathIndexByMatch = {
+      ...autoPathIndexByMatch,
+      [selectedAutoPathMatch]: nextIndex,
+    };
+    redrawAutoPathCanvas(autoPathAnimationState.progress);
+  }
+
+  function getQuantMetricRowsForSelectedTeam(): any[] {
+    return (teamQualData || [])
+      .map((row: any) => {
+        const quant = row?.quant && typeof row.quant === "object" ? row.quant : {};
+
+        const shootingBalls = Number(
+          quant.shootingBalls
+          ?? row?.shootingBalls
+          ?? row?.fuelScored
+          ?? 0,
+        );
+
+        const feedingBalls = Number(
+          quant.feedingBalls
+          ?? row?.feedingBalls
+          ?? (Number(row?.shootFeedingBalls ?? 0) + Number(row?.trenchFeedingBalls ?? 0))
+          ?? 0,
+        );
+
+        const trenchCycles = Number(
+          quant.trenchCycles
+          ?? row?.trenchCycles
+          ?? row?.trenchFeedVolume
+          ?? 0,
+        );
+
+        const bumpCycles = Number(
+          quant.bumpCycles
+          ?? row?.bumpCycles
+          ?? row?.bumpFeedVolume
+          ?? 0,
+        );
+
+        return {
+          Team: row?.Team ?? selectedTeam,
+          Match: Number(row?.Match ?? row?.match ?? 0),
+          shootingBalls: Number.isFinite(shootingBalls) ? shootingBalls : 0,
+          feedingBalls: Number.isFinite(feedingBalls) ? feedingBalls : 0,
+          trenchCycles: Number.isFinite(trenchCycles) ? trenchCycles : 0,
+          bumpCycles: Number.isFinite(bumpCycles) ? bumpCycles : 0,
+        };
+      })
+      .sort((a, b) => Number(a.Match || 0) - Number(b.Match || 0));
   }
 
   // ─── Event Handlers ───────────────────────────────────────────────────────────
@@ -800,12 +1074,7 @@
   async function onAutoOnlyChange() {
     isLoading = true;
     try {
-      const stored = await getIndexedDBStore("scoutingData") || [];
-      // Unwrap the value property if it exists (from compressed storage)
-      const parsed = (stored || []).map(item => item.value !== undefined ? item.value : item);
-      autoRowsAll = extractValues(parsed, true);
-      teleopRowsAll = extractValues(parsed, false);
-      teamViewData = extractValues(parsed, autoOnly);
+      teamViewData = await getAllQuantRowsFromQualStore();
       cache = {};
       allTeams = await loadTeamNumbers();
       if (selectedTeam) {
@@ -934,9 +1203,9 @@
   })();
 
   $: metricOptions =
-    teamViewData?.length > 0
-      ? Object.keys(teamViewData[0]).filter(
-          (k: string) => !EXCLUDED_FIELDS.has(k),
+    getQuantMetricRowsForSelectedTeam().length > 0
+      ? Object.keys(getQuantMetricRowsForSelectedTeam()[0]).filter(
+          (k: string) => !["Team", "Match"].includes(k),
         )
       : [];
 
@@ -963,8 +1232,42 @@
   }
 
   $: if (teamQualData && teamQualData.length > 0) {
-    if (selectedAutoPathMatch === null)
-      selectedAutoPathMatch = teamQualData[0].Match;
+    qualRowsByMatch = getQualRowsByMatch(teamQualData);
+    const matchNumbers = getQualMatchNumbers();
+
+    if (!matchNumbers.length) {
+      selectedAutoPathMatch = null;
+    } else {
+      if (
+        selectedAutoPathMatch === null ||
+        !matchNumbers.includes(Number(selectedAutoPathMatch))
+      ) {
+        selectedAutoPathMatch = matchNumbers[0];
+      }
+
+      const nextEntryIndexByMatch: Record<number, number> = {};
+      for (const matchNumber of matchNumbers) {
+        const entryCount = qualRowsByMatch[matchNumber]?.length ?? 0;
+        nextEntryIndexByMatch[matchNumber] = Math.max(
+          0,
+          Math.min(qualEntryIndexByMatch[matchNumber] ?? 0, Math.max(0, entryCount - 1)),
+        );
+      }
+      qualEntryIndexByMatch = nextEntryIndexByMatch;
+
+      const nextAutoPathIndexByMatch: Record<number, number> = {};
+      for (const matchNumber of matchNumbers) {
+        const selectedEntry =
+          qualRowsByMatch[matchNumber]?.[nextEntryIndexByMatch[matchNumber] ?? 0] ?? null;
+        const pathCount = getAutoPaths(selectedEntry).length;
+        nextAutoPathIndexByMatch[matchNumber] = Math.max(
+          0,
+          Math.min(autoPathIndexByMatch[matchNumber] ?? 0, Math.max(0, pathCount - 1)),
+        );
+      }
+      autoPathIndexByMatch = nextAutoPathIndexByMatch;
+    }
+
     redrawAutoPathCanvas();
   }
 
@@ -1006,7 +1309,7 @@
 
   function updateChartDataset(chart: any) {
     if (!chart.instance) return;
-    const teamData = cache[selectedTeam] || [];
+    const teamData = getQuantMetricRowsForSelectedTeam();
     const numeric = checkIsNumericMetric(chart.yAxisMetric, teamData);
     let option: any;
     if (!numeric && chart.type !== "pie" && chart.type !== "radar") {
@@ -1228,7 +1531,7 @@
     });
     const maxValues = numericMetrics.map((k) =>
       Math.max(
-        ...(teamViewData ?? []).map((d) =>
+        ...teamData.map((d) =>
           isNumeric(d[k]) ? Number(d[k]) : 0,
         ),
         1,
@@ -1317,90 +1620,73 @@
       );
     }
 
-    if (teamQualData && selectedAutoPathMatch !== null) {
-      const match = teamQualData.find((m) => m.Match === selectedAutoPathMatch);
-      if (match?.AutoPath && Array.isArray(match.AutoPath)) {
-        const allPaths = match.AutoPath.filter((path: any[]) => Array.isArray(path) && path.length >= 2);
-        if (allPaths.length > 0) {
-          // Flatten all points into single array
-          const allPoints: any[] = [];
-          allPaths.forEach((path: any[]) => {
-            allPoints.push(...path);
-          });
-          
-          // Calculate cumulative distances
-          const distances = [0];
-          for (let i = 1; i < allPoints.length; i++) {
-            const p1 = allPoints[i - 1];
-            const p2 = allPoints[i];
-            const dx = p2.x - p1.x;
-            const dy = p2.y - p1.y;
-            distances.push(distances[distances.length - 1] + Math.sqrt(dx * dx + dy * dy));
-          }
-          const totalDist = distances[distances.length - 1];
-          const targetDist = totalDist * Math.max(0, Math.min(1, progress));
-          
-          // Get colors based on colorblind mode
-          const modeColors = COLOR_MODES[colorblindMode] || COLOR_MODES.normal;
-          const [r1, g1, b1] = modeColors.below; // Start color
-          const [r2, g2, b2] = modeColors.above; // End color
-          
-          // Function to interpolate color
-          const lerpColor = (t: number) => {
-            const r = Math.round(r1 + (r2 - r1) * t);
-            const g = Math.round(g1 + (g2 - g1) * t);
-            const b = Math.round(b1 + (b2 - b1) * t);
-            return `rgb(${r},${g},${b})`;
-          };
-          
-          // Draw path segments up to current progress with interpolated colors
-          let currentPathIndex = -1;
-          for (let i = 1; i < allPoints.length; i++) {
-            if (distances[i] <= targetDist) {
-              const t = totalDist > 0 ? distances[i] / totalDist : 0;
-              autoPathCtx.beginPath();
-              autoPathCtx.moveTo(allPoints[i - 1].x, allPoints[i - 1].y);
-              autoPathCtx.lineTo(allPoints[i].x, allPoints[i].y);
-              autoPathCtx.strokeStyle = lerpColor(t);
-              autoPathCtx.lineWidth = 3;
-              autoPathCtx.lineCap = "round";
-              autoPathCtx.lineJoin = "round";
-              autoPathCtx.stroke();
-              currentPathIndex = i;
-            } else if (distances[i - 1] < targetDist && distances[i] > targetDist) {
-              // Partial segment to current progress point
-              const segmentProgress = (targetDist - distances[i - 1]) / (distances[i] - distances[i - 1]);
-              const partialX = allPoints[i - 1].x + (allPoints[i].x - allPoints[i - 1].x) * segmentProgress;
-              const partialY = allPoints[i - 1].y + (allPoints[i].y - allPoints[i - 1].y) * segmentProgress;
-              const t = totalDist > 0 ? targetDist / totalDist : 0;
-              autoPathCtx.beginPath();
-              autoPathCtx.moveTo(allPoints[i - 1].x, allPoints[i - 1].y);
-              autoPathCtx.lineTo(partialX, partialY);
-              autoPathCtx.strokeStyle = lerpColor(t);
-              autoPathCtx.lineWidth = 3;
-              autoPathCtx.lineCap = "round";
-              autoPathCtx.lineJoin = "round";
-              autoPathCtx.stroke();
-              currentPathIndex = i;
-              
-              // Draw current point as small circle
-              autoPathCtx.beginPath();
-              autoPathCtx.arc(partialX, partialY, 6, 0, Math.PI * 2);
-              autoPathCtx.fillStyle = lerpColor(t);
-              autoPathCtx.fill();
-              break;
-            }
-          }
-          
-          // Draw final point if at end
-          if (currentPathIndex >= allPoints.length - 1) {
-            const lastPoint = allPoints[allPoints.length - 1];
-            autoPathCtx.beginPath();
-            autoPathCtx.arc(lastPoint.x, lastPoint.y, 6, 0, Math.PI * 2);
-            autoPathCtx.fillStyle = lerpColor(1);
-            autoPathCtx.fill();
-          }
+    const selectedPath = getSelectedAutoPath(selectedAutoPathMatch);
+    if (selectedPath && selectedPath.length >= 2) {
+      // Calculate cumulative distances for animated draw progression.
+      const distances = [0];
+      for (let i = 1; i < selectedPath.length; i++) {
+        const p1 = selectedPath[i - 1];
+        const p2 = selectedPath[i];
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        distances.push(distances[distances.length - 1] + Math.sqrt(dx * dx + dy * dy));
+      }
+      const totalDist = distances[distances.length - 1];
+      const targetDist = totalDist * Math.max(0, Math.min(1, progress));
+
+      const modeColors = COLOR_MODES[colorblindMode] || COLOR_MODES.normal;
+      const [r1, g1, b1] = modeColors.below;
+      const [r2, g2, b2] = modeColors.above;
+
+      const lerpPathColor = (t: number) => {
+        const r = Math.round(r1 + (r2 - r1) * t);
+        const g = Math.round(g1 + (g2 - g1) * t);
+        const b = Math.round(b1 + (b2 - b1) * t);
+        return `rgb(${r},${g},${b})`;
+      };
+
+      let currentPathIndex = -1;
+      for (let i = 1; i < selectedPath.length; i++) {
+        if (distances[i] <= targetDist) {
+          const t = totalDist > 0 ? distances[i] / totalDist : 0;
+          autoPathCtx.beginPath();
+          autoPathCtx.moveTo(selectedPath[i - 1].x, selectedPath[i - 1].y);
+          autoPathCtx.lineTo(selectedPath[i].x, selectedPath[i].y);
+          autoPathCtx.strokeStyle = lerpPathColor(t);
+          autoPathCtx.lineWidth = 3;
+          autoPathCtx.lineCap = "round";
+          autoPathCtx.lineJoin = "round";
+          autoPathCtx.stroke();
+          currentPathIndex = i;
+        } else if (distances[i - 1] < targetDist && distances[i] > targetDist) {
+          const segmentProgress = (targetDist - distances[i - 1]) / (distances[i] - distances[i - 1]);
+          const partialX = selectedPath[i - 1].x + (selectedPath[i].x - selectedPath[i - 1].x) * segmentProgress;
+          const partialY = selectedPath[i - 1].y + (selectedPath[i].y - selectedPath[i - 1].y) * segmentProgress;
+          const t = totalDist > 0 ? targetDist / totalDist : 0;
+          autoPathCtx.beginPath();
+          autoPathCtx.moveTo(selectedPath[i - 1].x, selectedPath[i - 1].y);
+          autoPathCtx.lineTo(partialX, partialY);
+          autoPathCtx.strokeStyle = lerpPathColor(t);
+          autoPathCtx.lineWidth = 3;
+          autoPathCtx.lineCap = "round";
+          autoPathCtx.lineJoin = "round";
+          autoPathCtx.stroke();
+          currentPathIndex = i;
+
+          autoPathCtx.beginPath();
+          autoPathCtx.arc(partialX, partialY, 6, 0, Math.PI * 2);
+          autoPathCtx.fillStyle = lerpPathColor(t);
+          autoPathCtx.fill();
+          break;
         }
+      }
+
+      if (currentPathIndex >= selectedPath.length - 1) {
+        const lastPoint = selectedPath[selectedPath.length - 1];
+        autoPathCtx.beginPath();
+        autoPathCtx.arc(lastPoint.x, lastPoint.y, 6, 0, Math.PI * 2);
+        autoPathCtx.fillStyle = lerpPathColor(1);
+        autoPathCtx.fill();
       }
     }
   }
@@ -1410,23 +1696,7 @@
   onMount(async () => {
     isLoading = true;
     try {
-      const stored = await getIndexedDBStore("scoutingData") || [];
-      console.log(`onMount: Retrieved ${stored.length} items from IndexedDB`, stored.slice(0, 3));
-      
-      // Unwrap the value property if it exists (from compressed storage)
-      const parsed = (stored || []).map(item => item.value !== undefined ? item.value : item);
-      console.log(`onMount: After unwrapping, have ${parsed.length} items`, parsed.slice(0, 3));
-
-      autoRowsAll = extractValues(parsed, true);
-      teleopRowsAll = extractValues(parsed, false);
-      
-      // Check the structure of first item
-      if (parsed.length > 0) {
-        console.log(`onMount: First item keys:`, Object.keys(parsed[0]));
-        console.log(`onMount: First item sample values:`, { Team: parsed[0].Team, team: parsed[0].team, Match: parsed[0].Match, RecordType: parsed[0].RecordType });
-      }
-      
-      teamViewData = extractValues(parsed, autoOnly);
+      teamViewData = await getAllQuantRowsFromQualStore();
       console.log(`onMount: After extractValues, teamViewData has ${teamViewData?.length || 0} rows`);
       if (teamViewData?.length > 0) {
         console.log(`onMount: First row after extraction:`, teamViewData[0]);
@@ -1502,6 +1772,12 @@
     <div class="opr-display">
       <span class="opr-label"
         >OPR: {teamOPR !== null ? teamOPR.toFixed(2) : "N/A"}</span
+      >
+      <span class="opr-label"
+        >DPR: {teamDPR !== null ? teamDPR.toFixed(2) : "N/A"}</span
+      >
+      <span class="opr-label"
+        >CCWM: {teamCCWM !== null ? teamCCWM.toFixed(2) : "N/A"}</span
       >
     </div>
     <div>
@@ -1627,10 +1903,48 @@
       <div class="auto-path-controls">
         <label for="auto-path-match">Match:</label>
         <select id="auto-path-match" bind:value={selectedAutoPathMatch}>
-          {#each teamQualData as match}
-            <option value={match.Match}>Match {match.Match}</option>
+          {#each getQualMatchNumbers() as matchNumber}
+            <option value={matchNumber}>Match {matchNumber}</option>
           {/each}
         </select>
+        {#if selectedAutoPathMatch !== null}
+          {@const selectedEntryCount = (qualRowsByMatch[selectedAutoPathMatch] ?? []).length}
+          {@const selectedEntryIndex = qualEntryIndexByMatch[selectedAutoPathMatch] ?? 0}
+          {@const selectedPathCount = getAutoPaths(getSelectedQualEntry(selectedAutoPathMatch)).length}
+          {@const selectedPathIndex = autoPathIndexByMatch[selectedAutoPathMatch] ?? 0}
+
+          {#if selectedEntryCount > 1}
+            <div class="pager-controls">
+              <button
+                class="pager-btn"
+                on:click={() => changeQualEntry(selectedAutoPathMatch, -1)}
+                disabled={selectedEntryIndex <= 0}>Prev Entry</button
+              >
+              <span class="pager-label">Entry {selectedEntryIndex + 1}/{selectedEntryCount}</span>
+              <button
+                class="pager-btn"
+                on:click={() => changeQualEntry(selectedAutoPathMatch, 1)}
+                disabled={selectedEntryIndex >= selectedEntryCount - 1}>Next Entry</button
+              >
+            </div>
+          {/if}
+
+          {#if selectedPathCount > 1}
+            <div class="pager-controls">
+              <button
+                class="pager-btn"
+                on:click={() => changeAutoPath(-1)}
+                disabled={selectedPathIndex <= 0}>Prev Path</button
+              >
+              <span class="pager-label">Path {selectedPathIndex + 1}/{selectedPathCount}</span>
+              <button
+                class="pager-btn"
+                on:click={() => changeAutoPath(1)}
+                disabled={selectedPathIndex >= selectedPathCount - 1}>Next Path</button
+              >
+            </div>
+          {/if}
+        {/if}
       </div>
       <div class="auto-path-wrapper" style="--auto-progress: {autoPathProgress}">
         <div class="progress-bar-container">
@@ -1680,10 +1994,33 @@
     <div class="qual-section">
       <h2 class="section-title">Qualitative Scouting Notes</h2>
       <div class="qual-grid">
-        {#each teamQualData as row}
+        {#each getQualMatchNumbers() as matchNumber}
+          {@const entries = qualRowsByMatch[matchNumber] ?? []}
+          {@const entryIndex = qualEntryIndexByMatch[matchNumber] ?? 0}
+          {@const safeIndex = Math.max(0, Math.min(entryIndex, Math.max(0, entries.length - 1)))}
+          {@const row = entries[safeIndex]}
           <div class="qual-card">
-            <div class="qual-card-header">Match {row.Match}</div>
-            {#each getQualMetricEntries(row) as [label, value]}
+            <div class="qual-card-header">
+              <span>Match {matchNumber}</span>
+              {#if entries.length > 1}
+                <span class="qual-entry-indicator">Entry {safeIndex + 1}/{entries.length}</span>
+              {/if}
+            </div>
+            {#if entries.length > 1}
+              <div class="qual-entry-controls">
+                <button
+                  class="pager-btn"
+                  on:click={() => changeQualEntry(matchNumber, -1)}
+                  disabled={safeIndex <= 0}>Prev</button
+                >
+                <button
+                  class="pager-btn"
+                  on:click={() => changeQualEntry(matchNumber, 1)}
+                  disabled={safeIndex >= entries.length - 1}>Next</button
+                >
+              </div>
+            {/if}
+            {#each getQualMetricEntries(row ?? {}) as [label, value]}
               {#if value}
                 <div class="qual-row">
                   <span class="qual-label">{label}</span>
@@ -2545,6 +2882,7 @@
   .auto-path-controls {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 0.75rem;
     margin-bottom: 1rem;
     color: white;
@@ -2555,6 +2893,30 @@
     margin-left: 0;
     padding: 0.5rem 0.75rem;
     font-size: 0.85rem;
+  }
+  .pager-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .pager-btn {
+    background: #1f2937;
+    color: #fff;
+    border: 0.0625rem solid #374151;
+    border-radius: 0.375rem;
+    padding: 0.35rem 0.55rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .pager-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+  .pager-label {
+    font-size: 0.82rem;
+    color: #d1d5db;
+    min-width: 4.8rem;
+    text-align: center;
   }
   .auto-path-wrapper {
     position: relative;
@@ -2634,12 +2996,26 @@
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
   }
   .qual-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
     background: var(--frc-190-red);
     color: white;
     font-weight: 700;
     font-size: 0.9rem;
     padding: 0.5rem 0.9rem;
     letter-spacing: 0.5px;
+  }
+  .qual-entry-indicator {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: #f3f4f6;
+  }
+  .qual-entry-controls {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.6rem 0.9rem 0.1rem 0.9rem;
   }
   .qual-row {
     display: flex;
