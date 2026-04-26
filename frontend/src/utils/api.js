@@ -783,6 +783,18 @@ export async function postEventCode(eventCode) {
   return makePostRequest("/api/postEventCode", { eventCode }, true);
 }
 
+export async function syncServerEventJsons(eventCode) {
+  const response = await fetchApi("/api/syncServerEventJsons", { eventCode });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `HTTP error! status: ${response.status}, message: ${errorText}`
+    );
+  }
+
+  return response.json();
+}
+
 export async function postGracePage(event, team, rating) {
   return makePostRequest("/api/postRatings", { event, team, rating }, true);
 }

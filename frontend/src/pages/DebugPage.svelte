@@ -1,6 +1,6 @@
 <script>
   import { decompressData } from "../utils/compression.js";
-  import { flushOfflineScoutingQueues, postEventCode } from "../utils/api";
+  import { flushOfflineScoutingQueues, syncServerEventJsons } from "../utils/api";
   import {
     clearAllStores,
     getIndexedDBStore,
@@ -360,6 +360,32 @@
     );
   }
 
+  async function pullServerEventJsons() {
+    isLoading = true;
+
+    try {
+      const code = localStorage.getItem("eventCode") || eventCode;
+      if (!code) {
+        throw new Error("No event code found in localStorage");
+      }
+
+      const result = await syncServerEventJsons(code);
+      const counts = result?.counts || {};
+
+      showNotification(
+        `Synced ${code} from server: pit ${counts.pitTeams || 0}, qual ${counts.qualTeams || 0}, hp ${counts.hpTeams || 0}, driver ${counts.driverTeams || 0}.`,
+        "success",
+        5000,
+      );
+    } catch (err) {
+      const message = err?.message || "Failed to pull event JSONs from the server.";
+      console.error(message, err);
+      showNotification(message, "error", 5000);
+    } finally {
+      isLoading = false;
+    }
+  }
+
   async function refreshStores() {
     loading = true;
     error = "";
@@ -474,6 +500,9 @@
       </button>
       <button onclick={uploadAllLocalStorageData} disabled={isLoading}>
         {isLoading ? "Uploading..." : "Upload localStorage"}
+      </button>
+      <button onclick={pullServerEventJsons} disabled={isLoading}>
+        {isLoading ? "Syncing server JSONs..." : "Pull server JSONs"}
       </button>
     </div>
   </header>

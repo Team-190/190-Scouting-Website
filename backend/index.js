@@ -171,6 +171,170 @@ const SERVER = VITE_TESTING === "0"
     ? (process.env.VITE_SERVER_IP || runtimeConstants.server.host)
     : "localhost";
 const FRONTEND_DIST = process.env.FRONTEND_DIST || path.resolve(__dirname, "../frontend/dist");
+const REMOTE_SYNC_ALLOW_INSECURE_TLS = String(
+  process.env.REMOTE_SYNC_ALLOW_INSECURE_TLS ?? "1",
+) === "1";
+const REMOTE_SYNC_ORIGINS = [
+  process.env.REMOTE_SYNC_ORIGIN,
+  process.env.VITE_REMOTE_SYNC_ORIGIN,
+  "https://190scouting.com",
+].filter(Boolean).map((origin) => origin.replace(/\/+$/, ""));
+
+function buildRemoteSyncUrl(origin, routePath, query = {}) {
+  const url = new URL(routePath, origin);
+
+  for (const [key, value] of Object.entries(query)) {
+    if (value === undefined || value === null) continue;
+    url.searchParams.set(key, String(value));
+  }
+
+  return url.toString();
+}
+
+function isTlsCertificateError(error) {
+  const detail = error?.cause?.message || error?.message || "";
+  return /unable to verify the first certificate|self signed certificate|certificate/i.test(detail);
+}
+
+function fetchWithInsecureHttps(url) {
+  return new Promise((resolve, reject) => {
+    const request = https.request(
+      url,
+      {
+        method: "GET",
+        rejectUnauthorized: false,
+        timeout: 10000,
+      },
+      (response) => {
+        const chunks = [];
+        response.on("data", (chunk) => chunks.push(chunk));
+        response.on("end", () => {
+          const body = Buffer.concat(chunks).toString("utf8");
+          const headers = new Headers();
+          for (const [key, value] of Object.entries(response.headers || {})) {
+            if (Array.isArray(value)) {
+              headers.set(key, value.join(", "));
+            } else if (value != null) {
+              headers.set(key, String(value));
+            }
+          }
+          resolve(
+            new Response(body, {
+              status: response.statusCode || 500,
+              headers,
+            }),
+          );
+        });
+      },
+    );
+
+    request.on("timeout", () => {
+      request.destroy(new Error("Connect Timeout Error"));
+    });
+    request.on("error", reject);
+    request.end();
+  });
+}
+
+async function fetchRemoteSyncResponse(url) {
+  try {
+    return await fetch(url);
+  } catch (error) {
+    if (
+      REMOTE_SYNC_ALLOW_INSECURE_TLS
+      && url.startsWith("https://")
+      && isTlsCertificateError(error)
+    ) {
+      return fetchWithInsecureHttps(url);
+    }
+    throw error;
+  }
+}
+
+async function fetchFromRemoteOrigins(routePath, query = {}, parseResponse, options = {}) {
+  let lastError = null;
+
+  for (const origin of REMOTE_SYNC_ORIGINS) {
+    try {
+      const url = buildRemoteSyncUrl(origin, routePath, query);
+      const response = await fetchRemoteSyncResponse(url);
+
+      if (options.allowNotFound && response.status === 404) {
+        return null;
+      }
+
+      if (!response.ok) {
+        // If we got a real HTTP response from this origin, don't fall back to others.
+        // Fallthrough is only useful for network-level failures (DNS/connect/timeout).
+        throw new Error(`HTTP ${response.status} from ${origin}${routePath}`);
+      }
+
+      return await parseResponse(response);
+    } catch (error) {
+      const detail = error?.cause?.message || error?.message || "unknown error";
+      const isHttpResponseError = /^HTTP \d+/.test(detail);
+      lastError = new Error(`Remote fetch failed from ${origin}${routePath}: ${detail}`);
+      if (isHttpResponseError) {
+        throw lastError;
+      }
+    }
+  }
+
+  throw lastError || new Error(`Remote fetch failed for ${routePath}`);
+}
+
+async function fetchRemoteSyncJson(routePath, query = {}) {
+  return fetchFromRemoteOrigins(routePath, query, (response) => response.json());
+}
+
+async function fetchRemoteSyncText(routePath, query = {}, { allowNotFound = false } = {}) {
+  return fetchFromRemoteOrigins(
+    routePath,
+    query,
+    (response) => response.text(),
+    { allowNotFound },
+  );
+}
+
+function restoreLatestPitImage(teamData, imageData) {
+  if (!imageData) return teamData;
+
+  const entries = normalizeEntries(teamData).map((entry) => ({ ...entry }));
+  if (entries.length === 0) {
+    return teamData;
+  }
+
+  entries[entries.length - 1].robotPicturePreview = imageData;
+  return Array.isArray(teamData) ? entries : entries[0];
+}
+
+async function fetchRemotePitScoutingData(eventCode) {
+  const pitData = await fetchRemoteSyncJson("/api/getPitScouting", { eventCode });
+  const teams = Object.keys(pitData || {});
+
+  if (teams.length === 0) {
+    return pitData || {};
+  }
+
+  const imageResults = await Promise.allSettled(
+    teams.map((team) =>
+      fetchRemoteSyncText(
+        "/api/getPitScoutingImage",
+        { eventCode, teamNumber: team },
+        { allowNotFound: true },
+      ),
+    ),
+  );
+
+  return Object.fromEntries(
+    teams.map((team, index) => {
+      const imageResult = imageResults[index];
+      const imageData =
+        imageResult?.status === "fulfilled" ? imageResult.value : null;
+      return [team, restoreLatestPitImage(pitData[team], imageData)];
+    }),
+  );
+}
 
 refreshTimer = setInterval(
   () => {
@@ -568,6 +732,66 @@ app.post("/api/postEventCode", async (req, res) => {
   externalAPI.populateEventData(code);
   res.sendStatus(200);
 });
+
+async function handleSyncServerEventJsons(req, res) {
+  const eventCode =
+    req.query.eventCode
+    || req.body?.eventCode
+    || req.body?.event;
+  if (!eventCode) {
+    return res.status(400).json({ error: "Missing eventCode" });
+  }
+
+  try {
+    const [pitData, qualData, driverData, hpData] = await Promise.all([
+      fetchRemotePitScoutingData(eventCode),
+      fetchRemoteSyncJson("/api/getQualitativeScouting", { eventCode }),
+      fetchRemoteSyncJson("/api/getRatings", { eventCode }),
+      fetchRemoteSyncJson("/api/getHPRatings", { eventCode }),
+    ]);
+
+    await Promise.all([
+      mutateEventFile("pitScoutingData", (fileData) => {
+        fileData[eventCode] = pitData && typeof pitData === "object" ? pitData : {};
+        return fileData;
+      }),
+      mutateEventFile("qualitativeScoutingData", (fileData) => {
+        fileData[eventCode] = qualData && typeof qualData === "object" ? qualData : {};
+        return fileData;
+      }),
+      mutateEventFile("driverRatings", (fileData) => {
+        fileData[eventCode] = driverData && typeof driverData === "object" ? driverData : {};
+        return fileData;
+      }),
+      mutateEventFile("HPRatings", (fileData) => {
+        fileData[eventCode] = hpData && typeof hpData === "object" ? hpData : {};
+        return fileData;
+      }),
+    ]);
+
+    res.json({
+      ok: true,
+      eventCode,
+      sourcesTried: REMOTE_SYNC_ORIGINS,
+      counts: {
+        pitTeams: Object.keys(pitData || {}).length,
+        qualTeams: Object.keys(qualData || {}).length,
+        driverTeams: Object.keys(driverData || {}).length,
+        hpTeams: Object.keys(hpData || {}).length,
+      },
+    });
+  } catch (error) {
+    console.error(`Failed to sync server JSONs for ${eventCode}`, error);
+    res.status(500).json({
+      error: error?.message || "Failed to sync server JSONs",
+      eventCode,
+      sourcesTried: REMOTE_SYNC_ORIGINS,
+    });
+  }
+}
+
+app.get("/api/syncServerEventJsons", handleSyncServerEventJsons);
+app.post("/api/syncServerEventJsons", handleSyncServerEventJsons);
 
 app.post("/api/postRatings", (req, res) => {
   postRatingHelper(req, res, "driverRatings");
