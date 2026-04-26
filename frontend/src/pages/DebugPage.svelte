@@ -1,6 +1,7 @@
 <script>
   import { decompressData } from "../utils/compression.js";
   import { flushOfflineScoutingQueues, syncServerEventJsons } from "../utils/api";
+  import { pushToast } from "../stores/toasts";
   import {
     clearAllStores,
     getIndexedDBStore,
@@ -34,23 +35,15 @@
   let selectedStore = "";
   let selectedRecords = [];
   let isLoading = false;
-  let notification = null;
   let db = null;
-
-  function showNotification(message, type = "success", duration = 3000) {
-    notification = { message, type };
-    setTimeout(() => {
-      notification = null;
-    }, duration);
-  }
 
   async function withLoading(task, successMessage, errorMessage) {
     isLoading = true;
     try {
       await task();
-      showNotification(successMessage);
+      pushToast(successMessage, "success");
     } catch (e) {
-      showNotification(errorMessage, "error");
+      pushToast(errorMessage, "error");
       console.error(errorMessage, e);
     } finally {
       isLoading = false;
@@ -318,7 +311,7 @@
         location.href = baseUrl + '?nocache=' + Date.now();
     } catch (err) {
         console.error("Error during clearData:", err);
-        showNotification(`Error clearing data: ${err.message}`, "error", 5000);
+        pushToast(`Error clearing data: ${err.message}`, "error", 5000);
         isLoading = false;
     }
 }
@@ -335,7 +328,7 @@
 
         // Nothing was queued at all — not an error
         if (totalUploaded === 0 && totalRemaining === 0) {
-          showNotification("Nothing to upload — queue is empty.");
+          pushToast("Nothing to upload — queue is empty.", "success");
           return;
         }
 
@@ -346,14 +339,15 @@
         }
 
         if (totalRemaining > 0) {
-          showNotification(
+          pushToast(
             `Uploaded ${totalUploaded} item(s), ${totalRemaining} still queued (offline?)`,
             "success",
+            4000,
           );
           return;
         }
 
-        showNotification(`Uploaded ${totalUploaded} item(s) successfully!`);
+        pushToast(`Uploaded ${totalUploaded} item(s) successfully!`, "success");
       },
       "Upload complete!",
       "Failed to upload — check server connection",
@@ -372,7 +366,7 @@
       const result = await syncServerEventJsons(code);
       const counts = result?.counts || {};
 
-      showNotification(
+      pushToast(
         `Synced ${code} from server: pit ${counts.pitTeams || 0}, qual ${counts.qualTeams || 0}, hp ${counts.hpTeams || 0}, driver ${counts.driverTeams || 0}.`,
         "success",
         5000,
@@ -380,7 +374,7 @@
     } catch (err) {
       const message = err?.message || "Failed to pull event JSONs from the server.";
       console.error(message, err);
-      showNotification(message, "error", 5000);
+      pushToast(message, "error", 5000);
     } finally {
       isLoading = false;
     }
@@ -462,14 +456,6 @@
 </script>
 
 <div class="debug-page">
-  {#if notification}
-    <div
-      class="banner banner-{notification.type}"
-      onclick={() => (notification = null)}
-    >
-      {notification.message}
-    </div>
-  {/if}
   {#if isLoading}
     <div class="loading-spinner-overlay">
       <div class="loading-spinner"></div>
@@ -775,27 +761,6 @@
       transform: rotate(360deg);
     }
   }
-  .banner {
-    position: fixed;
-    top: 25rem;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 1rem 1.5rem;
-    border-radius: 0.5rem;
-    color: white;
-    font-weight: bold;
-    z-index: 10000;
-    cursor: pointer;
-    font-size: 0.95rem;
-    max-width: 90vw;
-  }
-  .banner-success {
-    background-color: #4caf50;
-  }
-  .banner-error {
-    background-color: #f44336;
-  }
-
   @media (max-width: 768px) {
     .debug-page {
       padding: 0.9rem;

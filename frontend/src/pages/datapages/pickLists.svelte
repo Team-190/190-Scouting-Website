@@ -5,6 +5,7 @@
   import { writable } from "svelte/store";
   import Team from "../../components/Team.svelte";
   import TeamHoverCard from "../../components/teamHoverCard.svelte";
+  import { pushToast } from "../../stores/toasts";
   import {
     fetchEventEpas,
     fetchOPR,
@@ -346,13 +347,8 @@
   }
 
   // ---------------------------------- SUCCESS/UNSUCCESSFUL HOVERCARD PICKLIST COPYING ----------------------------------
-  let notification = $state(null);
-
   function showNotification(message, type = "success", duration = 3000) {
-    notification = { message, type };
-    setTimeout(() => {
-      notification = null;
-    }, duration);
+    pushToast(message, type, duration);
   }
 
   // ─── EFFECTS ─────────────────────────────────────────────────────────────────
@@ -1232,16 +1228,6 @@
 </script>
 
 <div class="page-wrapper">
-  {#if notification}
-    <button
-      type="button"
-      class="banner banner-{notification.type}"
-      onclick={() => (notification = null)}
-    >
-      {notification.message}
-    </button>
-  {/if}
-
   <!-- Header -->
   <div class="header-section">
     <h1>Picklists & Alliance Selection</h1>
@@ -2245,28 +2231,6 @@
   }
   :global(::-webkit-scrollbar-thumb:hover) {
     background: #e02200;
-  }
-
-  .banner {
-    position: fixed;
-    top: 40%;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 1rem 2rem;
-    border-radius: 8px;
-    border: none;
-    color: white;
-    font-weight: bold;
-    z-index: 10000;
-    cursor: pointer;
-  }
-
-  .banner-success {
-    background-color: #4caf50;
-  }
-
-  .banner-error {
-    background-color: #f44336;
   }
 
   /* Tablet Responsive */

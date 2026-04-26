@@ -1,29 +1,20 @@
 <script>
     import { onMount, tick } from "svelte";
     import {
-        fetchAllData,
         fetchEventDetails,
         fetchEvents,
         fetchMatchAlliances,
-        fetchPitScouting,
-        fetchQualitativeScouting,
-        postEventCode,
-        refreshEventCaches,
-        readPitScoutingFromIDB,
-        writePitScoutingToIDB,
-        readQualScoutingFromIDB,
-        writeQualScoutingToIDB,
+        syncSelectedEventData,
     } from "../utils/api";
-    import { clearAllStores, getIndexedDBStore, getLastId, setIndexedDBStore } from '../utils/indexedDB';
+    import { clearAllStores } from '../utils/indexedDB';
+    import { pushToast } from "../stores/toasts";
     
 
     let eventCode = localStorage.getItem("eventCode");
     let isLoading = false;
-    let notification = null;
     let isAutoSyncing = false;
     let scheduleLoading = false;
     let autoDataRefreshEnabled = Boolean(parseStoredJson("homeAutoDataRefreshEnabled", false));
-    let autoDataRefreshTimer = null;
 
     const OUR_TEAM_KEY = "frc190";
     let matchSchedule = {
@@ -42,74 +33,6 @@
         } catch {
             return fallback;
         }
-    }
-
-    async function parseResponseJson(response, fallback = {}) {
-        const responseText = await response.text();
-        if (!responseText) return fallback;
-
-        try {
-            return JSON.parse(responseText);
-        } catch {
-            return fallback;
-        }
-    }
-
-    function normalizeEntries(value) {
-        if (Array.isArray(value)) {
-            return value.filter((entry) => entry && typeof entry === "object");
-        }
-        if (value && typeof value === "object") {
-            return [value];
-        }
-        return [];
-    }
-
-    function mergeEntries(localValue, incomingValue) {
-        const merged = [...normalizeEntries(localValue)];
-        const seenIds = new Set(
-            merged
-                .map((entry) => String(entry?._entryId || ""))
-                .filter(Boolean),
-        );
-
-        for (const entry of normalizeEntries(incomingValue)) {
-            const entryId = String(entry?._entryId || "");
-            if (entryId && seenIds.has(entryId)) continue;
-            if (entryId) seenIds.add(entryId);
-            merged.push(entry);
-        }
-
-        return merged;
-    }
-
-    function countPitEntries(teamData) {
-        return normalizeEntries(teamData).length;
-    }
-
-    function countQualEntries(teamData) {
-        if (!teamData || typeof teamData !== "object") return 0;
-
-        if (Array.isArray(teamData)) {
-            return teamData.length;
-        }
-
-        if (teamData.Match != null || teamData.match != null) {
-            return 1;
-        }
-
-        let total = 0;
-        for (const matchData of Object.values(teamData)) {
-            total += normalizeEntries(matchData).length;
-        }
-        return total;
-    }
-
-    function showNotification(message, type = "success", duration = 3000) {
-        notification = { message, type };
-        setTimeout(() => {
-            notification = null;
-        }, duration);
     }
 
     function getScheduledTimestamp(match) {
@@ -276,116 +199,39 @@
         await tick();
         try {
             await task();
-            showNotification(successMessage);
+            if (successMessage) {
+                pushToast(successMessage, "success");
+            }
+            return true;
         } catch (e) {
-            showNotification(errorMessage, "error");
+            pushToast(errorMessage, "error");
             console.error(errorMessage, e);
+            return false;
         } finally {
             isLoading = false;
         }
     }
 
-    function configureAutoDataRefresh() {
-        if (autoDataRefreshTimer) {
-            clearInterval(autoDataRefreshTimer);
-            autoDataRefreshTimer = null;
-        }
-
+    function persistAutoDataRefreshPreference() {
         localStorage.setItem("homeAutoDataRefreshEnabled", JSON.stringify(autoDataRefreshEnabled));
-
-        if (!autoDataRefreshEnabled) return;
-
-        syncEventData();
-        autoDataRefreshTimer = setInterval(() => {
-            syncEventData();
-        }, 1000 * 60);
     }
 
     function handleAutoRefreshToggle(event) {
         autoDataRefreshEnabled = Boolean(event?.target?.checked);
-        configureAutoDataRefresh();
+        persistAutoDataRefreshPreference();
+        if (autoDataRefreshEnabled) {
+            window.dispatchEvent(new CustomEvent("auto-sync-now"));
+        }
     }
 
-    async function cacheAllData({ forceFullRefresh = false } = {}) {
-        await withLoading(async () => {
-            if (!eventCode) {
-                throw new Error("No event selected");
-            }
-
-            const existingDataRaw = forceFullRefresh ? [] : await getIndexedDBStore("scoutingData");
-            // Unwrap the value property if it exists (from compressed storage)
-            const existingData = (existingDataRaw || []).map(item => item.value !== undefined ? item.value : item);
-            const lastId = await getLastId(existingData);
-
-            const dataRes = await fetchAllData(eventCode, lastId);
-            if (!dataRes.ok) {
-                throw new Error(`Failed to fetch scouting data: HTTP ${dataRes.status}`);
-            }
-            const dataJson = await parseResponseJson(dataRes, {});
-            const newData = dataJson.data || [];
-            if (newData.length > 0) {
-                await setIndexedDBStore("scoutingData", { rows: newData });
-            }
-
-            const localPit = forceFullRefresh ? {} : await readPitScoutingFromIDB({});
-            const pitCounts = {};
-            for (const [team, entries] of Object.entries(localPit)) {
-                pitCounts[team] = countPitEntries(entries);
-            }
-
-            const pitRes = await fetchPitScouting(eventCode, pitCounts);
-            if (!pitRes.ok) {
-                throw new Error(`Failed to fetch pit scouting: HTTP ${pitRes.status}`);
-            }
-            const newPitData = await parseResponseJson(pitRes, {});
-            
-            const combinedPit = { ...localPit };
-            for (const [team, incomingEntries] of Object.entries(newPitData || {})) {
-                combinedPit[team] = mergeEntries(combinedPit[team], incomingEntries);
-            }
-            await writePitScoutingToIDB(combinedPit);
-
-            const localQual = forceFullRefresh ? {} : await readQualScoutingFromIDB({});
-            const qualCounts = {};
-            for (const team in localQual) {
-                qualCounts[team] = countQualEntries(localQual[team]);
-            }
-
-            const qualRes = await fetchQualitativeScouting(eventCode, qualCounts);
-            if (!qualRes.ok) {
-                throw new Error(`Failed to fetch qualitative scouting: HTTP ${qualRes.status}`);
-            }
-            const newQualData = await parseResponseJson(qualRes, {});
-            
-            const combinedQual = { ...localQual };
-            for (const team in newQualData) {
-                const localTeamData =
-                    combinedQual[team] && typeof combinedQual[team] === "object" && !Array.isArray(combinedQual[team])
-                        ? { ...combinedQual[team] }
-                        : {};
-                const incomingTeamData =
-                    newQualData[team] && typeof newQualData[team] === "object" && !Array.isArray(newQualData[team])
-                        ? newQualData[team]
-                        : {};
-
-                for (const [matchKey, incomingMatchData] of Object.entries(incomingTeamData)) {
-                    localTeamData[matchKey] = mergeEntries(localTeamData[matchKey], incomingMatchData);
-                }
-
-                combinedQual[team] = localTeamData;
-            }
-            await writeQualScoutingToIDB(combinedQual);
-
-            await refreshEventCaches(eventCode);
-
+    async function cacheAllData({ forceFullRefresh = false, successMessage = "Data loaded successfully!" } = {}) {
+        return withLoading(async () => {
+            await syncSelectedEventData(eventCode, { forceFullRefresh });
             await refreshMatchSchedule();
-
-            localStorage.setItem("timestamp", new Date(Date.now()).toLocaleString());
-            localStorage.setItem("eventCode", eventCode);
-        }, "Data loaded successfully!", "Failed to load data.");
+        }, successMessage, "Failed to load data.");
     }
 
-    async function syncEventData() {
+    async function syncEventData({ isAutomatic = false } = {}) {
         if (!eventCode || isAutoSyncing) return;
 
         isAutoSyncing = true;
@@ -398,8 +244,13 @@
             }
 
             localStorage.setItem("eventCode", eventCode);
-            await postEventCode(eventCode);
-            await cacheAllData({ forceFullRefresh: isNewEvent });
+            const didLoad = await cacheAllData({
+                forceFullRefresh: isNewEvent,
+                successMessage: isAutomatic ? "" : "Data loaded successfully!",
+            });
+            if (isAutomatic && didLoad) {
+                pushToast("Data automatically populated.", "success", 3000);
+            }
         } finally {
             isAutoSyncing = false;
         }
@@ -436,7 +287,7 @@
             await refreshMatchSchedule();
         })();
 
-        configureAutoDataRefresh();
+        persistAutoDataRefreshPreference();
 
         const scheduleTimer = setInterval(() => {
             refreshMatchSchedule();
@@ -446,21 +297,9 @@
             // Restore normal scrolling when navigating away from home
             document.body.classList.remove("home-no-scroll");
             clearInterval(scheduleTimer);
-            if (autoDataRefreshTimer) {
-                clearInterval(autoDataRefreshTimer);
-                autoDataRefreshTimer = null;
-            }
         };
     });
 </script>
-
-{#if notification}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="banner banner-{notification.type}" onclick={() => notification = null}>
-        {notification.message}
-    </div>
-{/if}
 
 {#if isLoading}
     <div class="loading-spinner-overlay">
@@ -705,29 +544,6 @@
         }
     }
 
-    .banner {
-        position: fixed;
-        top: 25rem;
-        left: 50%;
-        transform: translateX(-50%);
-        padding: 1rem 1.5rem;
-        border-radius: 0.5rem;
-        color: white;
-        font-weight: bold;
-        z-index: 10000;
-        cursor: pointer;
-        transition: top 0.3s ease-in-out;
-        font-size: 0.95rem;
-        max-width: 90vw;
-    }
-
-    .banner-success {
-        background-color: #4CAF50;
-    }
-
-    .banner-error {
-        background-color: #f44336;
-    }
 
     .button-container {
         display: flex;
@@ -818,10 +634,5 @@
             margin-top: 0.25rem;
         }
 
-        .banner {
-            top: 5rem;
-            font-size: 0.85rem;
-            padding: 0.75rem 1rem;
-        }
     }
 </style>

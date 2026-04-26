@@ -22,7 +22,7 @@ const getAPILink = () => {
 
 const defaultAPILink = getAPILink();
 
-import { getIndexedDBStore, setIndexedDBStore } from "./indexedDB";
+import { getIndexedDBStore, getLastId, setIndexedDBStore } from "./indexedDB";
 import {
   compressData,
   getCompressionProtocol,
@@ -781,6 +781,146 @@ async function makePostRequest(endpoint, payload, expectText = false) {
 
 export async function postEventCode(eventCode) {
   return makePostRequest("/api/postEventCode", { eventCode }, true);
+}
+
+async function parseResponseJson(response, fallback = {}) {
+  const responseText = await response.text();
+  if (!responseText) return fallback;
+
+  try {
+    return JSON.parse(responseText);
+  } catch {
+    return fallback;
+  }
+}
+
+function normalizeEntries(value) {
+  if (Array.isArray(value)) {
+    return value.filter((entry) => entry && typeof entry === "object");
+  }
+  if (value && typeof value === "object") {
+    return [value];
+  }
+  return [];
+}
+
+function mergeEntries(localValue, incomingValue) {
+  const merged = [...normalizeEntries(localValue)];
+  const seenIds = new Set(
+    merged
+      .map((entry) => String(entry?._entryId || ""))
+      .filter(Boolean),
+  );
+
+  for (const entry of normalizeEntries(incomingValue)) {
+    const entryId = String(entry?._entryId || "");
+    if (entryId && seenIds.has(entryId)) continue;
+    if (entryId) seenIds.add(entryId);
+    merged.push(entry);
+  }
+
+  return merged;
+}
+
+function countPitEntries(teamData) {
+  return normalizeEntries(teamData).length;
+}
+
+function countQualEntries(teamData) {
+  if (!teamData || typeof teamData !== "object") return 0;
+
+  if (Array.isArray(teamData)) {
+    return teamData.length;
+  }
+
+  if (teamData.Match != null || teamData.match != null) {
+    return 1;
+  }
+
+  let total = 0;
+  for (const matchData of Object.values(teamData)) {
+    total += normalizeEntries(matchData).length;
+  }
+  return total;
+}
+
+export async function syncSelectedEventData(eventCode, { forceFullRefresh = false } = {}) {
+  if (!eventCode) {
+    throw new Error("No event selected");
+  }
+
+  const existingDataRaw = forceFullRefresh ? [] : await getIndexedDBStore("scoutingData");
+  const existingData = (existingDataRaw || []).map((item) =>
+    item && item.value !== undefined ? item.value : item,
+  );
+  const lastId = await getLastId(existingData);
+
+  const dataRes = await fetchAllData(eventCode, lastId);
+  if (!dataRes.ok) {
+    throw new Error(`Failed to fetch scouting data: HTTP ${dataRes.status}`);
+  }
+  const dataJson = await parseResponseJson(dataRes, {});
+  const newData = dataJson.data || [];
+  if (newData.length > 0) {
+    await setIndexedDBStore("scoutingData", { rows: newData });
+  }
+
+  const localPit = forceFullRefresh ? {} : await readPitScoutingFromIDB({});
+  const pitCounts = {};
+  for (const [team, entries] of Object.entries(localPit)) {
+    pitCounts[team] = countPitEntries(entries);
+  }
+
+  const pitRes = await fetchPitScouting(eventCode, pitCounts);
+  if (!pitRes.ok) {
+    throw new Error(`Failed to fetch pit scouting: HTTP ${pitRes.status}`);
+  }
+  const newPitData = await parseResponseJson(pitRes, {});
+  const combinedPit = { ...localPit };
+  for (const [team, incomingEntries] of Object.entries(newPitData || {})) {
+    combinedPit[team] = mergeEntries(combinedPit[team], incomingEntries);
+  }
+  await writePitScoutingToIDB(combinedPit);
+
+  const localQual = forceFullRefresh ? {} : await readQualScoutingFromIDB({});
+  const qualCounts = {};
+  for (const team in localQual) {
+    qualCounts[team] = countQualEntries(localQual[team]);
+  }
+
+  const qualRes = await fetchQualitativeScouting(eventCode, qualCounts);
+  if (!qualRes.ok) {
+    throw new Error(`Failed to fetch qualitative scouting: HTTP ${qualRes.status}`);
+  }
+  const newQualData = await parseResponseJson(qualRes, {});
+  const combinedQual = { ...localQual };
+  for (const team in newQualData) {
+    const localTeamData =
+      combinedQual[team] && typeof combinedQual[team] === "object" && !Array.isArray(combinedQual[team])
+        ? { ...combinedQual[team] }
+        : {};
+    const incomingTeamData =
+      newQualData[team] && typeof newQualData[team] === "object" && !Array.isArray(newQualData[team])
+        ? newQualData[team]
+        : {};
+
+    for (const [matchKey, incomingMatchData] of Object.entries(incomingTeamData)) {
+      localTeamData[matchKey] = mergeEntries(localTeamData[matchKey], incomingMatchData);
+    }
+    combinedQual[team] = localTeamData;
+  }
+  await writeQualScoutingToIDB(combinedQual);
+
+  await refreshEventCaches(eventCode);
+
+  localStorage.setItem("timestamp", new Date(Date.now()).toLocaleString());
+  localStorage.setItem("eventCode", eventCode);
+
+  return {
+    scoutingRowsAdded: newData.length,
+    pitTeamsUpdated: Object.keys(newPitData || {}).length,
+    qualTeamsUpdated: Object.keys(newQualData || {}).length,
+  };
 }
 
 export async function syncServerEventJsons(eventCode) {
