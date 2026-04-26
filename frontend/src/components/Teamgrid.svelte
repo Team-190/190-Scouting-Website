@@ -57,6 +57,7 @@
   let gridInstance: any = null;
   let domNode: HTMLElement;
   let gridHeight = 400;
+  let selectedDuplicateIndexByMatch: Record<number, number> = {};
 
   // Per-metric global stats computed from allTeamsData + matches.
   let globalStats: Record<string, any> = {};
@@ -235,6 +236,7 @@
 
     const matchNums     = matches.map((m) => m.Match);
     const qLabels       = matchNums.map((_, i) => `Q${i + 1}`);
+    const selectedTeamKey = String(selectedTeam ?? "").replace(/\D/g, "");
 
     // Excluded fields — same set as pageUtils EXCLUDED_FIELDS
     const EXCLUDED_FIELDS = new Set([
@@ -250,6 +252,38 @@
 
     globalStats = computeGlobalStats(displayMetrics, allRows);
 
+    const selectedTeamRows = (allTeamsData ?? [])
+      .filter((row) => {
+        const raw = row?.Team ?? row?.team;
+        return String(raw ?? "").replace(/\D/g, "") === selectedTeamKey;
+      })
+      .sort((a, b) => {
+        const aMatch = Number(a?.Match ?? a?.match ?? 0);
+        const bMatch = Number(b?.Match ?? b?.match ?? 0);
+        if (aMatch !== bMatch) return aMatch - bMatch;
+        const aId = String(a?._entryId ?? a?.Id ?? "");
+        const bId = String(b?._entryId ?? b?.Id ?? "");
+        return aId.localeCompare(bId);
+      });
+
+    const duplicateRowsByMatch = new Map<number, any[]>();
+    for (const row of selectedTeamRows) {
+      const matchNumber = Number(row?.Match ?? row?.match ?? 0);
+      if (!matchNumber) continue;
+      if (!duplicateRowsByMatch.has(matchNumber)) duplicateRowsByMatch.set(matchNumber, []);
+      duplicateRowsByMatch.get(matchNumber)?.push(row);
+    }
+
+    const formatDuplicateValue = (value: any, metricKey: string): string => {
+      if (value === undefined || value === null || value === "") return "(blank)";
+      if (BOOLEAN_METRICS.includes(metricKey) || metricKey === CLIMBSTATE_METRIC) return normalizeValue(value);
+      if (!globalStats[metricKey]?.isNumeric) return normalizeValue(value);
+      if (!isNumeric(value)) return normalizeValue(value);
+      const num = Number(value);
+      if (num === -1) return "False";
+      return num.toFixed(2);
+    };
+
     // ── Row data: one row per metric ──
     const rowData = displayMetrics.map((metric) => {
       const isBool  = BOOLEAN_METRICS.includes(metric);
@@ -259,7 +293,19 @@
       const values: number[] = [];
 
       qLabels.forEach((q, i) => {
-        const val = matches[i]?.[metric];
+        const matchNumber = Number(matches[i]?.Match ?? matches[i]?.match ?? 0);
+        const duplicateRows = duplicateRowsByMatch.get(matchNumber) ?? [];
+        const selectedIdx = duplicateRows.length > 1
+          ? Math.max(
+              0,
+              Math.min(
+                selectedDuplicateIndexByMatch[matchNumber] ?? 0,
+                duplicateRows.length - 1,
+              ),
+            )
+          : 0;
+        const sourceRow = duplicateRows[selectedIdx] ?? matches[i];
+        const val = sourceRow?.[metric];
         if (isBool || isClimb) {
           row[q] = val;
         } else if (isNumericMetric) {
@@ -269,8 +315,18 @@
         } else {
           row[q] = normalizeValue(val);
         }
-        if (metric === "MatchEventCount" && matches[i]?.MatchEventDetails)
-          row[`${q}_details`] = matches[i].MatchEventDetails;
+        if (duplicateRows.length > 1) {
+          row[`${q}_duplicateCount`] = duplicateRows.length;
+          row[`${q}_duplicateValues`] = duplicateRows.map((dupRow, idx) => {
+            const dupValue = formatDuplicateValue(dupRow?.[metric], metric);
+            const entryId = String(dupRow?._entryId ?? "").trim();
+            return entryId
+              ? `Entry ${idx + 1}: ${dupValue} (${entryId})`
+              : `Entry ${idx + 1}: ${dupValue}`;
+          });
+        }
+        if (metric === "MatchEventCount" && sourceRow?.MatchEventDetails)
+          row[`${q}_details`] = sourceRow.MatchEventDetails;
       });
 
       row.mean   = isNumericMetric && !isBool && !isClimb && values.length
@@ -343,7 +399,9 @@
       const metric  = params.data.metric;
       const isBool  = BOOLEAN_METRICS.includes(metric);
       const isClimb = metric === CLIMBSTATE_METRIC;
-      if (isBool || isClimb || !globalStats[metric]?.isNumeric) return normalizeValue(params.value);
+      if (isBool || isClimb || !globalStats[metric]?.isNumeric) {
+        return normalizeValue(params.value);
+      }
       const num = isNumeric(params.value) ? Number(params.value) : 0;
       return params.value === 0 ? "0" : num === 0 ? "" : num.toFixed(2);
     };
@@ -396,7 +454,19 @@
         valueFormatter: (params: any) => METRIC_DISPLAY_NAMES.get(params.value) || params.value,
       },
       ...qLabels.map((q, i) => ({
-        headerName: matchNums[i],
+        headerName: (() => {
+          const matchNumber = Number(matchNums[i] ?? 0);
+          const duplicateCount = duplicateRowsByMatch.get(matchNumber)?.length ?? 1;
+          if (duplicateCount <= 1) return String(matchNums[i]);
+          const selectedIdx = Math.max(
+            0,
+            Math.min(
+              selectedDuplicateIndexByMatch[matchNumber] ?? 0,
+              duplicateCount - 1,
+            ),
+          );
+          return `${matchNums[i]} x${selectedIdx + 1}`;
+        })(),
         field: q,
         minWidth: 80,
         flex: 1,
@@ -405,6 +475,10 @@
         cellStyle: qCellStyle,
         valueFormatter: qValueFormatter,
         tooltipValueGetter: (params: any) => {
+          const duplicateValues = params.data?.[`${q}_duplicateValues`];
+          if (Array.isArray(duplicateValues) && duplicateValues.length > 1) {
+            return duplicateValues.join("\n");
+          }
           if (params.data.metric !== "MatchEventCount") return null;
           const details = params.data?.[`${q}_details`];
           if (!details?.length) return null;
@@ -490,24 +564,28 @@
 
     // TBA links on match-number headers
     setTimeout(() => {
-      if (!eventCode) return;
       try {
         domNode.querySelectorAll(".ag-header-cell").forEach((cell: any) => {
           const text     = (cell.textContent || "").trim();
-          const matchNum = matchNums.find((n) => String(n) === text);
+          const parsedMatch = Number((text.match(/^(\d+)/)?.[1] ?? ""));
+          const matchNum = matchNums.find((n) => Number(n) === parsedMatch);
           if (matchNum === undefined) return;
-          cell.style.cursor = "pointer";
-          cell.style.textDecoration = "underline";
+          const duplicateCount = duplicateRowsByMatch.get(Number(matchNum))?.length ?? 1;
+          cell.style.cursor = duplicateCount > 1 ? "pointer" : "default";
+          cell.style.textDecoration = "none";
           const onClick = (e: MouseEvent) => {
             e.stopPropagation();
-            window.open(
-              `https://www.thebluealliance.com/match/${eventCode}_qm${String(matchNum)}`,
-              "_blank",
-            );
+            if (duplicateCount <= 1) return;
+            const current = selectedDuplicateIndexByMatch[Number(matchNum)] ?? 0;
+            selectedDuplicateIndexByMatch = {
+              ...selectedDuplicateIndexByMatch,
+              [Number(matchNum)]: (current + 1) % duplicateCount,
+            };
+            buildGrid();
           };
           cell.removeEventListener("click", onClick);
           cell.addEventListener("click", onClick);
-          cell.addEventListener("mouseenter", () => (cell.style.opacity = "0.8"));
+          cell.addEventListener("mouseenter", () => (cell.style.opacity = duplicateCount > 1 ? "0.8" : "1"));
           cell.addEventListener("mouseleave", () => (cell.style.opacity = "1"));
         });
       } catch (err) {

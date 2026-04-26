@@ -6,7 +6,7 @@
   } from "ag-grid-community";
   import "ag-grid-community/styles/ag-grid.css";
   import "ag-grid-community/styles/ag-theme-quartz.css";
-  import { onDestroy, createEventDispatcher } from "svelte";
+  import { onDestroy, onMount, createEventDispatcher } from "svelte";
   import {
     COLOR_MODES,
     HEADER_HEIGHT,
@@ -101,6 +101,7 @@
   let gridApi: any = null;
   let domNode: HTMLElement;
   let gridHeight = 400;
+  let duplicateIndexByCell: Record<string, number> = {};
 
   // ─── Value Helpers ────────────────────────────────────────────────────────────
 
@@ -133,30 +134,41 @@
 
   function textColorForBg(bg: string): string {
     if (!bg) return "black";
-    const darkColors = [
-      "black",
-      "#000",
-      "#000000",
-      "rgb(0,0,0)",
-      "rgb(0, 0, 0)",
-      "#0000ff",
-      "#00f",
-      "rgb(0,0,255)",
-      "rgb(0, 0, 255)",
-      "#4d4d4d",
-      "rgb(77,77,77)",
-      "rgb(77, 77, 77)",
-      "#ff0000",
-      "#f00",
-      "rgb(255,0,0)",
-      "rgb(255, 0, 0)",
-      "#808080",
-      "rgb(128,128,128)",
-      "rgb(128, 128, 128)",
-    ];
-    return darkColors.includes(String(bg).trim().toLowerCase())
-      ? "white"
-      : "black";
+    const s = String(bg).trim().toLowerCase();
+
+    if (s === "black") return "white";
+    if (s === "white") return "black";
+
+    let r: number | null = null;
+    let g: number | null = null;
+    let b: number | null = null;
+
+    if (s.startsWith("#")) {
+      const hex = s.slice(1);
+      if (hex.length === 3) {
+        r = parseInt(hex[0] + hex[0], 16);
+        g = parseInt(hex[1] + hex[1], 16);
+        b = parseInt(hex[2] + hex[2], 16);
+      } else if (hex.length === 6) {
+        r = parseInt(hex.slice(0, 2), 16);
+        g = parseInt(hex.slice(2, 4), 16);
+        b = parseInt(hex.slice(4, 6), 16);
+      }
+    } else {
+      const rgbMatch = s.match(
+        /^rgba?\(\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})(?:\s*,\s*[\d.]+\s*)?\)$/,
+      );
+      if (rgbMatch) {
+        r = Number(rgbMatch[1]);
+        g = Number(rgbMatch[2]);
+        b = Number(rgbMatch[3]);
+      }
+    }
+
+    if (r == null || g == null || b == null) return "black";
+
+    const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    return luminance < 140 ? "white" : "black";
   }
 
   function getQuintileBg(p: number): string {
@@ -293,37 +305,69 @@
       headerClass: "header-center",
       cellClass: "cell-center",
       cellStyle: (params: any) => ({
-        background: params.value === highlightedTeam ? "#FFD700" : "#C81B00",
-        color: params.value === highlightedTeam ? "black" : "white",
+        background: "#C81B00",
+        color: "white",
         fontWeight: "bold",
         fontSize: "18px",
         textAlign: "center",
         cursor: "pointer",
       }),
-      onCellClicked: (params: any) => {
-        if (!params.value) return;
-        const newHighlight =
-          highlightedTeam === params.value ? null : params.value;
-        highlightedTeam = newHighlight;
-        dispatch("teamClick", {
-          team: params.value,
-          highlightedTeam: newHighlight,
-        });
-        gridApi?.redrawRows();
+      valueFormatter: (params: any) => {
+        const teamKey = String(params.value ?? "").trim();
+        if (!teamKey) return "";
+        return teamKey;
       },
     };
   }
 
   function makeQColumn(q: string) {
+    const getCellDuplicateKey = (params: any) => {
+      const teamKey = String(params.data?.team ?? "").trim();
+      return `${teamKey}|${q}`;
+    };
+
+    const getCellDuplicateIndex = (params: any, entryCount: number) => {
+      const cellKey = getCellDuplicateKey(params);
+      const rawIndex = duplicateIndexByCell[cellKey] ?? 0;
+      if (entryCount <= 0) return 0;
+      return ((rawIndex % entryCount) + entryCount) % entryCount;
+    };
+
+    const getDisplayValue = (params: any) => {
+      const entryValues = params.data?.[`${q}_entryValues`];
+      if (Array.isArray(entryValues) && entryValues.length > 1) {
+        const idx = getCellDuplicateIndex(params, entryValues.length);
+        return entryValues[idx];
+      }
+      return params.value;
+    };
+
+    const getDuplicateMeta = (params: any) => {
+      const entryValues = params.data?.[`${q}_entryValues`];
+      const count = Array.isArray(entryValues) && entryValues.length > 1
+        ? entryValues.length
+        : Number(params.data?.[`${q}_duplicateCount`] ?? 1);
+      const idx = count > 1 ? getCellDuplicateIndex(params, count) : 0;
+      return { count, idx };
+    };
+
+    const withDuplicateSuffix = (params: any, base: string) => {
+      const { count, idx } = getDuplicateMeta(params);
+      if (count <= 1) return base;
+      const suffix = ` x${idx + 1}`;
+      return `${base}${suffix}`;
+    };
+
     return {
       headerName: q,
       field: q,
       flex: 1,
-      minWidth: 72,
+      minWidth: 90,
       headerClass: "header-center",
       cellClass: "cell-center",
       cellStyle: (params: any) => {
-        const v = params.value;
+        const { count } = getDuplicateMeta(params);
+        const v = getDisplayValue(params);
         if (v === undefined || v === null || v === "") {
           return {
             background: "#333",
@@ -332,6 +376,7 @@
             fontSize: "14px",
             textAlign: "center",
             border: "1px solid #555",
+            cursor: count > 1 ? "pointer" : "default",
           };
         }
         if (isClimbStateMetric) {
@@ -342,6 +387,7 @@
             fontWeight: 600,
             fontSize: "12px",
             textAlign: "center",
+            cursor: count > 1 ? "pointer" : "default",
           };
         }
         if (isBooleanMetric) {
@@ -352,6 +398,7 @@
             fontWeight: 600,
             fontSize: "14px",
             textAlign: "center",
+            cursor: count > 1 ? "pointer" : "default",
           };
         }
         if (!isNumericMetric) {
@@ -362,6 +409,7 @@
             fontSize: "14px",
             textAlign: "center",
             border: "1px solid #555",
+            cursor: count > 1 ? "pointer" : "default",
           };
         }
         const val = Number(v ?? 0);
@@ -372,6 +420,7 @@
             fontWeight: 600,
             fontSize: "14px",
             textAlign: "center",
+            cursor: count > 1 ? "pointer" : "default",
           };
         if (val === 0)
           return {
@@ -380,6 +429,7 @@
             fontWeight: 600,
             fontSize: "14px",
             textAlign: "center",
+            cursor: count > 1 ? "pointer" : "default",
           };
         const bg = colorFromStats(val, globalStats, inverted, dataMetric);
         return {
@@ -388,26 +438,44 @@
           fontWeight: 600,
           fontSize: "14px",
           textAlign: "center",
+          cursor: count > 1 ? "pointer" : "default",
         };
       },
       valueFormatter: (params: any) => {
-        if (!params.data?.hasData) return "";
+        const v = getDisplayValue(params);
+        const { count, idx } = getDuplicateMeta(params);
+        const duplicateOnlyLabel = count > 1 ? `x${idx + 1}` : "";
+        if (!params.data?.hasData) return duplicateOnlyLabel;
         if (isClimbStateMetric) {
-          const v = params.value;
-          if (v === null || v === undefined || v === "") return "";
+          if (v === null || v === undefined || v === "") return duplicateOnlyLabel;
           const s = String(v).toLowerCase().trim();
-          if (s === "l1") {return "L1";} else if (s === "l2") {return "L2";} else if (s === "l3") {return "L3";} else {return "No_Climb";}
-          return String(v);
+          if (s === "l1") return withDuplicateSuffix(params, "L1");
+          if (s === "l2") return withDuplicateSuffix(params, "L2");
+          if (s === "l3") return withDuplicateSuffix(params, "L3");
+          return withDuplicateSuffix(params, "No_Climb");
         }
-        if (isBooleanMetric) return normalizeValue(params.value);
-        if (params.value === undefined || params.value === null) return "";
-        if (!isNumericMetric) return normalizeValue(params.value);
-        const num = Number(params.value ?? 0);
-        return num === -1 ? "False" : num.toFixed(2);
+        if (isBooleanMetric) return withDuplicateSuffix(params, normalizeValue(v));
+        if (v === undefined || v === null || v === "") return duplicateOnlyLabel;
+        if (!isNumericMetric) return withDuplicateSuffix(params, normalizeValue(v));
+        const num = Number(v ?? 0);
+        return withDuplicateSuffix(
+          params,
+          num === -1 ? "False" : num.toFixed(2),
+        );
       },
       tooltipValueGetter: (params: any) => {
+        const duplicateValues = params.data?.[`${q}_duplicateValues`];
+        if (Array.isArray(duplicateValues) && duplicateValues.length > 1) {
+          const { idx } = getDuplicateMeta(params);
+          return [`Selected Entry: ${idx + 1}/${duplicateValues.length}`, ...duplicateValues].join("\n");
+        }
+
         if (dataMetric !== "MatchEventCount") return null;
-        const details = params.data?.[`${q}_details`];
+        const entryDetails = params.data?.[`${q}_entryDetails`];
+        const details = Array.isArray(entryDetails) && entryDetails.length > 1
+          ? entryDetails[getDuplicateMeta(params).idx]
+          : params.data?.[`${q}_details`];
+        if (!details?.length) return null;
         if (!details?.length) return null;
         return details
           .map((evt: any) => {
@@ -418,6 +486,16 @@
             return `${evt.type} @ ${mins}:${rem.toString().padStart(2, "0")} (${secs <= 20 ? "Auto" : "Teleop"})`;
           })
           .join("\n");
+      },
+      onCellClicked: (params: any) => {
+        const entryValues = params.data?.[`${q}_entryValues`];
+        if (!Array.isArray(entryValues) || entryValues.length <= 1) return;
+        const cellKey = getCellDuplicateKey(params);
+        duplicateIndexByCell = {
+          ...duplicateIndexByCell,
+          [cellKey]: (duplicateIndexByCell[cellKey] ?? 0) + 1,
+        };
+        gridApi?.refreshCells({ rowNodes: [params.node], columns: [q], force: true });
       },
     };
   }
@@ -438,8 +516,10 @@
     return {
       headerName: "Mean",
       field: "mean",
-      flex: 1,
-      minWidth: 80,
+      pinned: "right",
+      width: 72,
+      minWidth: 72,
+      maxWidth: 72,
       hide,
       headerClass: "header-center",
       cellClass: "cell-center",
@@ -462,8 +542,10 @@
     return {
       headerName: "Med.",
       field: "median",
-      flex: 1,
-      minWidth: 80,
+      pinned: "right",
+      width: 72,
+      minWidth: 72,
+      maxWidth: 72,
       hide,
       headerClass: "header-center",
       cellClass: "cell-center",
@@ -486,8 +568,10 @@
     return {
       headerName: "Per.",
       field: "alexPercentile",
-      flex: 1,
-      minWidth: 80,
+      pinned: "right",
+      width: 72,
+      minWidth: 72,
+      maxWidth: 72,
       hide,
       headerClass: "header-center",
       cellClass: "cell-center",
@@ -520,7 +604,15 @@
   function applyGrid() {
     if (!domNode || !rowData.length) return;
 
-    gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT + 6;
+    const desiredHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT + 6;
+    const top = domNode.getBoundingClientRect().top;
+    const viewportPadding = 12;
+    const minGridHeight = HEADER_HEIGHT + ROW_HEIGHT + 6;
+    const availableHeight = Math.max(
+      minGridHeight,
+      Math.floor(window.innerHeight - top - viewportPadding),
+    );
+    gridHeight = Math.min(desiredHeight, availableHeight);
     const columnDefs = buildColumnDefs();
 
     if (gridApi) {
@@ -538,11 +630,17 @@
           resizable: false,
           sortable: false,
           suppressMovable: true,
-          cellStyle: { fontSize: "12px", whiteSpace: "normal", wordWrap: "break-word" },
-          wrapText: true,
+          cellStyle: {
+            fontSize: "12px",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "clip",
+          },
+          wrapText: false,
         },
         suppressColumnVirtualisation: true,
         suppressHorizontalScroll: false,
+        alwaysShowVerticalScroll: false,
         theme: /** @type {"legacy"} */ ("legacy"),
       });
       dispatch("gridReady", { api: gridApi });
@@ -560,6 +658,15 @@
   $: if (gridApi) {
     gridApi.redrawRows();
   }
+
+  onMount(() => {
+    const onResize = () => {
+      if (!domNode || !rowData.length) return;
+      applyGrid();
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  });
 
   // ─── Cleanup ──────────────────────────────────────────────────────────────────
 
@@ -618,7 +725,7 @@
     pointer-events: none;
   }
   :global(.ag-body-viewport) {
-    overflow-y: scroll !important;
+    overflow-y: auto !important;
     overflow-x: auto !important;
   }
   :global(.ag-body-viewport::-webkit-scrollbar) {
