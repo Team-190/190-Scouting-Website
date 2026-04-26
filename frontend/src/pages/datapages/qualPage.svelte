@@ -720,7 +720,7 @@
         </div>
 
         <div class="counter-card">
-          <h3>Shoot Feeding Balls</h3>
+          <h3>Shooter Feeding Balls</h3>
           <div class="counter-value">{quantCounters.shootFeedingBalls}</div>
           <div class="counter-actions wide">
             <button class="counter-btn neg" on:click={() => adjustCounter('shootFeedingBalls', -10)}>-10</button>
@@ -731,7 +731,7 @@
         </div>
 
         <div class="counter-card">
-          <h3>Trench Feeding Balls</h3>
+          <h3>Push Feeding Balls</h3>
           <div class="counter-value">{quantCounters.trenchFeedingBalls}</div>
           <div class="counter-actions wide">
             <button class="counter-btn neg" on:click={() => adjustCounter('trenchFeedingBalls', -10)}>-10</button>
