@@ -93,6 +93,7 @@
 
   let pitData: any = null;
   let loadingPitData = false;
+  let submitting = false;
 
   let submitStatus: null | { type: "local" | "server" | "partial"; message: string } = null;
 
@@ -501,6 +502,9 @@
   }
 
   async function submitScouting() {
+    if (submitting) return; // Prevent duplicate submissions
+    submitting = true;
+
     const normalizedPaths = fieldFlipped
       ? drawnPaths.map((path) => path.map((pt) => ({ x: 1200 - pt.x, y: pt.y })))
       : drawnPaths;
@@ -565,6 +569,7 @@
     }
 
     phase = "done";
+    submitting = false;
     
     // Scroll to top of page after submission
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -920,12 +925,17 @@
       </div>
 
       <div class="teleop-actions">
-        <button class="back-btn" on:click={() => (phase = 'teleop')}>← Back to Teleop</button>
-        <button class="phase-btn submit-btn" on:click={submitScouting}>
-          <span>Submit Scouting Record</span>
-          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="20 6 9 17 4 12"></polyline>
-          </svg>
+        <button class="back-btn" on:click={() => (phase = 'teleop')} disabled={submitting}>← Back to Teleop</button>
+        <button class="phase-btn submit-btn" on:click={submitScouting} disabled={submitting}>
+          {#if submitting}
+            <span class="spinner"></span>
+            Submitting...
+          {:else}
+            <span>Submit Scouting Record</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          {/if}
         </button>
       </div>
     </div>
