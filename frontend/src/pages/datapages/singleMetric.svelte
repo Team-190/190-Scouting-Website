@@ -11,6 +11,7 @@
     fetchOPR,
     fetchCOPRs,
     fetchRobotClimb,
+    readQualScoutingFromIDB,
   } from "../../utils/api.js";
   import EventGrid from "../../components/Eventgrid.svelte";
   import {
@@ -43,8 +44,14 @@
   const HIGHLIGHTED_TEAM_KEY = "singleMetric_highlightedTeam";
   const SELECTED_METRIC_KEY = "singleMetric_selectedMetric";
   const OPR_DISPLAY = "OPR (Offensive Power Rating)";
-  const EFS_DISPLAY = "EFS (Estimated Fuel Score)";
-  const EFS2_DISPLAY = "EFS2 (More Accurate EFS)";
+  const DPR_DISPLAY = "DPR (Defensive Power Rating)";
+  const CCWM_DISPLAY = "CCWM (Calculated Contribution to Winning Margin)";
+  const QUANT_METRIC_KEYS = new Set([
+    "shootingBalls",
+    "feedingBalls",
+    "trenchCycles",
+    "bumpCycles",
+  ]);
   const BOOLEAN_METRICS = new Set(["AutoClimb", "AttemptClimb", "Auto_Climb"]);
   const CLIMBSTATE_METRIC = "Climb_State";
 
@@ -116,6 +123,8 @@
   let eventCode = getEventCode();
 
   let teamOPRs: Record<string, number> = {};
+  let teamDPRs: Record<string, number> = {};
+  let teamCCWMs: Record<string, number> = {};
   let teamCOPRs: Record<string, any> = {};
 
   // ── EventGrid props ──
@@ -417,35 +426,133 @@
     });
   }
 
-  // ─── Data Loading ─────────────────────────────────────────────────────────────
+  function normalizeQualQuantRow(rawRow: Record<string, any>, teamKey: string, matchKey: string): Record<string, any> {
+    const quant = rawRow?.quant && typeof rawRow.quant === "object" ? rawRow.quant : {};
 
-  async function fetchAllMetricData(): Promise<string | null> {
-    const stored = (await getIndexedDBStore("scoutingData")) || [];
-    if (!stored) return null;
-    // Unwrap the value property if it exists (from compressed storage)
-    const unwrapped = (stored || []).map(item => item.value !== undefined ? item.value : item);
-    return JSON.stringify(extractValues(unwrapped, autoOnly));
+    const shootingBalls = Number(
+      quant.shootingBalls
+      ?? rawRow?.shootingBalls
+      ?? rawRow?.fuelScored
+      ?? 0,
+    );
+
+    const feedingBalls = Number(
+      quant.feedingBalls
+      ?? rawRow?.feedingBalls
+      ?? ((Number(rawRow?.shootFeedingBalls ?? 0)) + (Number(rawRow?.trenchFeedingBalls ?? 0)))
+      ?? 0,
+    );
+
+    const trenchCycles = Number(
+      quant.trenchCycles
+      ?? rawRow?.trenchCycles
+      ?? rawRow?.trenchFeedVolume
+      ?? 0,
+    );
+
+    const bumpCycles = Number(
+      quant.bumpCycles
+      ?? rawRow?.bumpCycles
+      ?? rawRow?.bumpFeedVolume
+      ?? 0,
+    );
+
+    return {
+      Team: String(rawRow?.Team ?? rawRow?.team ?? teamKey).replace(/^frc/, ""),
+      Match: Number(rawRow?.Match ?? rawRow?.match ?? matchKey ?? 0),
+      shootingBalls: Number.isFinite(shootingBalls) ? shootingBalls : 0,
+      feedingBalls: Number.isFinite(feedingBalls) ? feedingBalls : 0,
+      trenchCycles: Number.isFinite(trenchCycles) ? trenchCycles : 0,
+      bumpCycles: Number.isFinite(bumpCycles) ? bumpCycles : 0,
+    };
   }
 
-  async function loadOPRFromCache(): Promise<Record<string, number>> {
+  function extractQuantRowsFromQualStore(qualStore: Record<string, any>): any[] {
+    const rows: any[] = [];
+
+    for (const [teamKey, teamData] of Object.entries(qualStore || {})) {
+      if (!teamData || typeof teamData !== "object") continue;
+
+      if (Array.isArray(teamData)) {
+        for (const rawRow of teamData) {
+          if (!rawRow || typeof rawRow !== "object") continue;
+          rows.push(normalizeQualQuantRow(rawRow, teamKey, String(rawRow?.Match ?? rawRow?.match ?? "0")));
+        }
+        continue;
+      }
+
+      for (const [matchKey, matchData] of Object.entries(teamData as Record<string, any>)) {
+        const entries = Array.isArray(matchData)
+          ? matchData
+          : (matchData && typeof matchData === "object" ? [matchData] : []);
+
+        for (const rawRow of entries) {
+          if (!rawRow || typeof rawRow !== "object") continue;
+          rows.push(normalizeQualQuantRow(rawRow, teamKey, matchKey));
+        }
+      }
+    }
+
+    return rows;
+  }
+
+  async function fetchAllMetricData(): Promise<string | null> {
+    const qualStore = await readQualScoutingFromIDB({});
+    if (!qualStore || typeof qualStore !== "object") return null;
+    const rows = extractQuantRowsFromQualStore(qualStore as Record<string, any>);
+    return JSON.stringify(rows);
+  }
+
+  async function loadPowerRatingsFromCache(): Promise<{
+    oprs: Record<string, number>;
+    dprs: Record<string, number>;
+    ccwms: Record<string, number>;
+  }> {
     try {
       const cachedOpr = await fetchOPR(eventCode);
       const rawOprs = cachedOpr?.oprs ?? {};
+      const rawDprs = cachedOpr?.dprs ?? {};
+      const rawCcwms = cachedOpr?.ccwms ?? {};
 
-      // Convert from TBA format (frc254) to display format (254)
-      const converted: Record<string, number> = {};
-      Object.entries(rawOprs).forEach(([key, value]) => {
-        const teamNum = String(key).replace("frc", "");
-        converted[teamNum] = Number(value);
-      });
-      return converted;
+      const convertTeamKeyMap = (rawMap: Record<string, any>): Record<string, number> => {
+        const converted: Record<string, number> = {};
+        Object.entries(rawMap || {}).forEach(([key, value]) => {
+          const teamNum = String(key).replace("frc", "");
+          converted[teamNum] = Number(value);
+        });
+        return converted;
+      };
+
+      return {
+        oprs: convertTeamKeyMap(rawOprs),
+        dprs: convertTeamKeyMap(rawDprs),
+        ccwms: convertTeamKeyMap(rawCcwms),
+      };
     } catch (e) {
       console.warn("Failed to load cached OPR data:", e);
-      return {};
+      return { oprs: {}, dprs: {}, ccwms: {} };
     }
   }
 
-  async function processTeamData(allRows: any[]) {
+  function getDisplayMetricMap(displayMetric: string): Record<string, number> {
+    if (displayMetric === DPR_DISPLAY) return teamDPRs;
+    if (displayMetric === CCWM_DISPLAY) return teamCCWMs;
+    return teamOPRs;
+  }
+
+  function getDisplayMetricShortLabel(displayMetric: string): string {
+    if (displayMetric === DPR_DISPLAY) return "DPR";
+    if (displayMetric === CCWM_DISPLAY) return "CCWM";
+    return "OPR";
+  }
+
+  function getDisplayMetricDataKey(displayMetric: string): string {
+    if (displayMetric === DPR_DISPLAY) return "DPR";
+    if (displayMetric === CCWM_DISPLAY) return "CCWM";
+    return "OPR";
+  }
+
+  function processTeamData(allRows: any[]) {
     availableTeams = [];
     teamData = {};
     for (const row of allRows) {
@@ -458,121 +565,84 @@
       teamData[team] = [...teamData[team], row];
     }
     availableTeams = availableTeams.sort();
+  }
 
-    // Load climb data in background (non-blocking) to keep initial page load fast
-    // Fetch match alliances once and process all climb data in batch
-    if (eventCode) {
-      try {
-        const allMatches = await fetchMatchAlliances(eventCode);
-        // Process all team/match combinations in parallel without repeated API calls
-        const batchUpdates: Promise<void>[] = [];
-        for (const team of availableTeams) {
-          const rows = teamData[team] ?? [];
-          for (const row of rows) {
-            batchUpdates.push(
-              (async () => {
-                try {
-                  const match = allMatches.find(
-                    (m) => m.match_number === parseInt(row.Match) && m.comp_level === "qm",
-                  );
-                  if (!match) {
-                    row.Climb_State = null;
-                    row.Auto_Climb = null;
-                    return;
-                  }
+  function getRowMatchNumber(row: any): number {
+    return Number(row?.Match ?? row?.match ?? 0);
+  }
 
-                  let allianceColor = null;
-                  let robotIndex = null;
-                  ["red", "blue"].forEach((color) => {
-                    const teamKeys = match.alliances[color].team_keys;
-                    const index = teamKeys.indexOf(`frc${team}`);
-                    if (index !== -1) {
-                      allianceColor = color;
-                      robotIndex = index + 1;
-                    }
-                  });
-
-                  if (!allianceColor) {
-                    row.Climb_State = null;
-                    row.Auto_Climb = null;
-                    return;
-                  }
-
-                  const scoreBreakdown = match.score_breakdown[allianceColor];
-                  const endgameClimb = scoreBreakdown[`endGameTowerRobot${robotIndex}`] || "None";
-                  const autoClimb = scoreBreakdown[`autoChargeStationRobot${robotIndex}`] || "None";
-
-                  const end = endgameClimb ?? "";
-                  const lastChar = String(end).slice(-1);
-                  row.Climb_State =
-                    lastChar === "3"
-                      ? "L3"
-                      : lastChar === "2"
-                        ? "L2"
-                        : lastChar === "1"
-                          ? "L1"
-                          : "No";
-                  const auto = autoClimb ?? "";
-                  row.Auto_Climb = String(auto).slice(-1) === "1" ? "Yes" : "No";
-
-                  // Normalize climb time to 0 if climb state is "None"
-                  normalizeClimbData(row);
-                } catch (e) {
-                  row.Climb_State = null;
-                  row.Auto_Climb = null;
-                }
-              })()
-            );
-          }
-        }
-        await Promise.all(batchUpdates);
-        console.log("[Climb] Batch fetched climb data for all teams");
-      } catch (e) {
-        console.warn("Background batch climb data fetch failed:", e);
+  function getUniqueMatchRows(rows: any[]): any[] {
+    const sorted = [...(rows ?? [])].sort(
+      (a, b) => getRowMatchNumber(a) - getRowMatchNumber(b),
+    );
+    const firstByMatch = new Map<number, any>();
+    for (const row of sorted) {
+      const matchNumber = getRowMatchNumber(row);
+      if (!matchNumber) continue;
+      if (!firstByMatch.has(matchNumber)) {
+        firstByMatch.set(matchNumber, row);
       }
     }
+    return Array.from(firstByMatch.values()).sort(
+      (a, b) => getRowMatchNumber(a) - getRowMatchNumber(b),
+    );
+  }
+
+  function getTeamRowsForGrid(team: string): any[] {
+    return getUniqueMatchRows(teamData[team] ?? []);
+  }
+
+  function getAllRowsForMatch(team: string, matchNumber: number): any[] {
+    return (teamData[team] ?? [])
+      .filter((row) => getRowMatchNumber(row) === matchNumber)
+      .sort((a, b) => String(a?._entryId ?? "").localeCompare(String(b?._entryId ?? "")));
+  }
+
+  function formatDuplicateValueForMetric(value: any, metricKey: string): string {
+    if (value === undefined || value === null || value === "") return "(blank)";
+    if (metricKey === CLIMBSTATE_METRIC) return normalizeValue(value);
+    if (BOOLEAN_METRICS.has(metricKey)) return normalizeValue(value);
+    if (!isNumericMetric) return normalizeValue(value);
+    if (!isNumeric(value)) return normalizeValue(value);
+    const num = Number(value);
+    if (num === -1) return "False";
+    return num.toFixed(2);
   }
 
   function computeMetrics(): string[] {
-    if (!availableTeams.length) return [];
-    const set = new Set<string>();
-    // Note: OPR, EFS, EFS2 are computed metrics and will be added on-demand
-    // This speeds up initial metrics computation significantly
-    
+    const availableQuantMetrics = new Set<string>();
     for (const team of availableTeams) {
       for (const row of teamData[team] ?? []) {
-        Object.keys(row).forEach((k) => {
-          if (EXCLUDED_FIELDS.has(k)) return;
-          set.add(METRIC_DISPLAY_NAMES.get(k) ?? k);
-        });
+        for (const key of QUANT_METRIC_KEYS) {
+          if (row[key] !== undefined && row[key] !== null && row[key] !== "") {
+            availableQuantMetrics.add(METRIC_DISPLAY_NAMES.get(key) ?? key);
+          }
+        }
       }
     }
-    if (eventCode) {
-      set.add("Climb State");
-      set.add("Auto Climb");
-    }
-    return Array.from(set).sort();
+    return Array.from(availableQuantMetrics).sort();
   }
 
   /**
-   * Get all available metrics including computed ones
-   * Computes OPR/EFS/EFS2 on-demand
+   * Get all available metrics including power ratings
    */
   function getAllMetrics(): string[] {
     let allMetrics = computeMetrics();
-    if (Object.keys(teamOPRs).length || eventCode) {
-      allMetrics = [OPR_DISPLAY, ...allMetrics];
-    }
-    if (eventCode) {
-      allMetrics = [...allMetrics, EFS_DISPLAY, EFS2_DISPLAY];
+    const hasPowerRatings =
+      Object.keys(teamOPRs).length > 0
+      || Object.keys(teamDPRs).length > 0
+      || Object.keys(teamCCWMs).length > 0;
+
+    if (hasPowerRatings) {
+      allMetrics = [OPR_DISPLAY, DPR_DISPLAY, CCWM_DISPLAY, ...allMetrics];
     }
     return allMetrics;
   }
 
   function resolveDataKey(displayMetric: string): string {
     if (displayMetric === OPR_DISPLAY) return "OPR";
-    if (displayMetric === EFS_DISPLAY) return "EFS";
-    if (displayMetric === EFS2_DISPLAY) return "EFS2";
+    if (displayMetric === DPR_DISPLAY) return "DPR";
+    if (displayMetric === CCWM_DISPLAY) return "CCWM";
     for (const [key, val] of METRIC_DISPLAY_NAMES) {
       if (val === displayMetric) return key;
     }
@@ -582,7 +652,8 @@
   function checkIsNumericMetric(metric: string): boolean {
     const key = resolveDataKey(metric);
     if (key === "OPR") return Object.keys(teamOPRs).length > 0;
-    if (key === "EFS" || key === "EFS2") return true;
+    if (key === "DPR") return Object.keys(teamDPRs).length > 0;
+    if (key === "CCWM") return Object.keys(teamCCWMs).length > 0;
     let hasData = false;
     for (const team of availableTeams) {
       for (const row of teamData[team] ?? []) {
@@ -595,14 +666,13 @@
     }
     return hasData;
   }
-
   // ─── Grid Building ────────────────────────────────────────────────────────────
 
   function getMaxMatchCount(): number {
     return Math.max(
       12,
       availableTeams.reduce(
-        (max, team) => Math.max(max, (teamData[team] ?? []).length),
+        (max, team) => Math.max(max, getTeamRowsForGrid(team).length),
         0,
       ),
     );
@@ -610,16 +680,12 @@
 
   function buildGrid() {
     if (!selectedMetric || !availableTeams.length) return;
-    if (selectedMetric === EFS_DISPLAY) {
-      buildEFSGrid();
-      return;
-    }
-    if (selectedMetric === OPR_DISPLAY) {
+    if (
+      selectedMetric === OPR_DISPLAY
+      || selectedMetric === DPR_DISPLAY
+      || selectedMetric === CCWM_DISPLAY
+    ) {
       buildOPRGrid();
-      return;
-    }
-    if (selectedMetric === EFS2_DISPLAY) {
-      buildEFS2Grid();
       return;
     }
 
@@ -640,7 +706,7 @@
     if (isNumericMetric) {
       const allValues: number[] = [];
       availableTeams.forEach((team) => {
-        (teamData[team] ?? []).forEach((row) => {
+        getTeamRowsForGrid(team).forEach((row) => {
           const val = Number(row[dataMetric] ?? 0);
           if (val !== -1 && isNumeric(row[dataMetric])) allValues.push(val);
         });
@@ -664,7 +730,7 @@
     rowData = availableTeams
     
       .map((team) => {
-        const rows = teamData[team] ?? [];
+        const rows = getTeamRowsForGrid(team);
         const row: any = {
           team,
           hasData: rows.some((r) => {
@@ -677,6 +743,22 @@
         rows.forEach((r, i) => {
           const v = r[dataMetric];
           const label = qLabels[i];
+          const matchNumber = getRowMatchNumber(r);
+          const duplicateRows = getAllRowsForMatch(team, matchNumber);
+          if (duplicateRows.length > 1) {
+            row[`${label}_duplicateCount`] = duplicateRows.length;
+            row[`${label}_entryValues`] = duplicateRows.map((dupRow) => dupRow?.[dataMetric]);
+            row[`${label}_duplicateValues`] = duplicateRows.map((dupRow, idx) => {
+              const dupValue = formatDuplicateValueForMetric(dupRow?.[dataMetric], dataMetric);
+              const entryId = String(dupRow?._entryId ?? "").trim();
+              return entryId
+                ? `Entry ${idx + 1}: ${dupValue} (${entryId})`
+                : `Entry ${idx + 1}: ${dupValue}`;
+            });
+            if (dataMetric === "MatchEventCount") {
+              row[`${label}_entryDetails`] = duplicateRows.map((dupRow) => dupRow?.MatchEventDetails ?? null);
+            }
+          }
           if (isBooleanMetric || isClimbStateMetric) {
             row[label] = v;
           } else if (isNumericMetric) {
@@ -901,7 +983,7 @@
 
     rowData = await Promise.all(
       availableTeams.map(async (team) => {
-        const matches = teamData[team] ?? [];
+        const matches = getTeamRowsForGrid(team);
         const row: any = { team, hasData: false };
         const efsValues: number[] = [];
         
@@ -1114,7 +1196,7 @@
 
     rowData = await Promise.all(
       availableTeams.map(async (team) => {
-        const matches = teamData[team] ?? [];
+        const matches = getTeamRowsForGrid(team);
         const row: any = { team, hasData: false };
         const efsValues: number[] = [];
         await Promise.all(
@@ -1295,53 +1377,125 @@
   }
 
   async function buildOPRGrid() {
-      if (efsGridApi) { efsGridApi.destroy?.(); efsGridApi = null; }
+    if (efsGridApi) {
+      efsGridApi.destroy?.();
+      efsGridApi = null;
+    }
 
-  await tick();
+    await tick();
 
-  if (!Object.keys(teamOPRs).length) {
-    applyEFSOPRGrid(
-      [{ headerName: "Message", field: "message", flex: 1,
-         cellStyle: { textAlign: "center", padding: "20px", color: "white" } }],
-      [{ message: "No OPR data available for this event" }],
+    const hasAnyPowerRatings =
+      Object.keys(teamOPRs).length > 0
+      || Object.keys(teamDPRs).length > 0
+      || Object.keys(teamCCWMs).length > 0;
+
+    if (!hasAnyPowerRatings) {
+      applyEFSOPRGrid(
+        [{
+          headerName: "Message",
+          field: "message",
+          flex: 1,
+          cellStyle: { textAlign: "center", padding: "20px", color: "white" },
+        }],
+        [{ message: "No power-rating data available for this event" }],
+      );
+      return;
+    }
+
+    const teamSet = new Set<string>([
+      ...availableTeams,
+      ...Object.keys(teamOPRs),
+      ...Object.keys(teamDPRs),
+      ...Object.keys(teamCCWMs),
+    ]);
+
+    const sortFieldByMetric: Record<string, "opr" | "dpr" | "ccwm"> = {
+      [OPR_DISPLAY]: "opr",
+      [DPR_DISPLAY]: "dpr",
+      [CCWM_DISPLAY]: "ccwm",
+    };
+    const defaultSortField = sortFieldByMetric[selectedMetric] ?? "opr";
+
+    rowData = Array.from(teamSet)
+      .map((team) => {
+        const opr = teamOPRs[team];
+        const dpr = teamDPRs[team];
+        const ccwm = teamCCWMs[team];
+        const selectedValue =
+          defaultSortField === "dpr"
+            ? dpr
+            : defaultSortField === "ccwm"
+              ? ccwm
+              : opr;
+        return {
+          team,
+          hasData: opr != null || dpr != null || ccwm != null,
+          opr: opr ?? null,
+          dpr: dpr ?? null,
+          ccwm: ccwm ?? null,
+          // Keep these for shared chart/update paths that expect mean/median.
+          mean: selectedValue ?? null,
+          median: selectedValue ?? null,
+        };
+      })
+      .filter((r) => r.hasData)
+      .sort((a, b) => {
+        const aVal = a[defaultSortField];
+        const bVal = b[defaultSortField];
+        if (aVal == null && bVal != null) return 1;
+        if (bVal == null && aVal != null) return -1;
+        if (aVal == null && bVal == null) return a.team.localeCompare(b.team);
+        return Number(bVal) - Number(aVal);
+      });
+
+    const oprStats = computeGlobalStats(
+      rowData.map((r) => r.opr).filter((v) => v != null),
     );
-    return;
-  }
-
-    rowData = assignAlexPercentiles(
-      Object.entries(teamOPRs)
-        .map(([teamNum, opr]) => ({
-          team: teamNum,
-          hasData: true,
-          mean: opr,
-          median: opr,
-        }))
-        .filter((r) => r.mean !== null)
-        .sort((a, b) => b.mean - a.mean),
+    const dprStats = computeGlobalStats(
+      rowData.map((r) => r.dpr).filter((v) => v != null),
+    );
+    const ccwmStats = computeGlobalStats(
+      rowData.map((r) => r.ccwm).filter((v) => v != null),
     );
 
-    globalStats = computeGlobalStats(rowData.map((r) => r.mean));
+    const makePowerColumnDef = (
+      headerName: string,
+      field: "opr" | "dpr" | "ccwm",
+      stats: typeof globalStats,
+      metricKey: string,
+    ) => ({
+      headerName,
+      field,
+      flex: 1,
+      minWidth: 92,
+      sortable: true,
+      sortingOrder: ["desc", "asc", null],
+      sort: field === defaultSortField ? "desc" : null,
+      comparator: (a: any, b: any) => {
+        if (a == null && b != null) return 1;
+        if (b == null && a != null) return -1;
+        if (a == null && b == null) return 0;
+        return Number(a) - Number(b);
+      },
+      headerClass: "header-center",
+      cellClass: "cell-center",
+      cellStyle: (params) => {
+        const v = params.value;
+        if (v === null || v === undefined) {
+          return statCellStyle("#4D4D4D", "white");
+        }
+        const bg = colorFromStats(v, stats, false, metricKey);
+        return statCellStyle(bg, textColorForBg(bg));
+      },
+      valueFormatter: (params) =>
+        params.value != null ? Number(params.value).toFixed(2) : "N/A",
+    });
 
     const columnDefs = [
       makeTeamColumnDef(),
-      {
-        headerName: "OPR",
-        field: "mean",
-        flex: 1,
-        minWidth: 90,
-        headerClass: "header-center",
-        cellClass: "cell-center",
-        cellStyle: (params) => {
-          const v = params.value;
-          if (v === null || v === undefined)
-            return statCellStyle("#4D4D4D", "white");
-          const bg = colorFromStats(v, globalStats, false, "OPR");
-          return statCellStyle(bg, textColorForBg(bg));
-        },
-        valueFormatter: (params) =>
-          params.value != null ? Number(params.value).toFixed(2) : "N/A",
-      },
-      makePercentileColumnDef(false),
+      makePowerColumnDef("OPR", "opr", oprStats, "OPR"),
+      makePowerColumnDef("DPR", "dpr", dprStats, "DPR"),
+      makePowerColumnDef("CCWM", "ccwm", ccwmStats, "CCWM"),
     ];
 
     applyEFSOPRGrid(columnDefs, rowData);
@@ -1492,9 +1646,9 @@
     chart.yAxisMetric = dataMetric;
     chart.selectedTeams ??= new Set(availableTeams);
     const isNumericData =
-      selectedMetric === OPR_DISPLAY ||
-      selectedMetric === EFS_DISPLAY ||
-      selectedMetric === EFS2_DISPLAY
+      selectedMetric === OPR_DISPLAY
+      || selectedMetric === DPR_DISPLAY
+      || selectedMetric === CCWM_DISPLAY
         ? true
         : checkIsNumericMetric(dataMetric);
     let option;
@@ -1766,8 +1920,12 @@
   }
 
   $: if (
-    selectedMetric === OPR_DISPLAY &&
-    Object.keys(teamOPRs).length &&
+    (selectedMetric === OPR_DISPLAY
+      || selectedMetric === DPR_DISPLAY
+      || selectedMetric === CCWM_DISPLAY) &&
+    (Object.keys(teamOPRs).length
+      || Object.keys(teamDPRs).length
+      || Object.keys(teamCCWMs).length) &&
     !loading
   ) {
     buildGrid();
@@ -1787,6 +1945,8 @@
         availableTeams = [...cacheData.teamData.availableTeams];
         teamData = cacheData.teamData.teamData;
         teamOPRs = { ...cacheData.teamOPRs };
+        teamDPRs = { ...(cacheData.teamDPRs || {}) };
+        teamCCWMs = { ...(cacheData.teamCCWMs || {}) };
         teamCOPRs = { ...cacheData.teamCOPRs };
         metrics = [...cacheData.metrics];
         allMetricsList = getAllMetrics();
@@ -1818,7 +1978,10 @@
         return;
       }
 
-      teamOPRs = await loadOPRFromCache();
+      const ratingData = await loadPowerRatingsFromCache();
+      teamOPRs = ratingData.oprs;
+      teamDPRs = ratingData.dprs;
+      teamCCWMs = ratingData.ccwms;
       teamCOPRs = await fetchCOPRs(eventCode);
 
       // Try to load metrics from IndexedDB cache first (24-hour TTL)
@@ -1848,6 +2011,8 @@
         { availableTeams, teamData },
         metrics,
         teamOPRs,
+        teamDPRs,
+        teamCCWMs,
         teamCOPRs
       );
       console.log("[Cache] Saved singleMetric data to cache");
@@ -1932,7 +2097,7 @@
   </div>
 
   <!-- Normal metric grid via EventGrid component -->
-  {#if !loading && !error && selectedMetric !== EFS_DISPLAY && selectedMetric !== OPR_DISPLAY && selectedMetric !== EFS2_DISPLAY}
+  {#if !loading && !error && selectedMetric !== OPR_DISPLAY && selectedMetric !== DPR_DISPLAY && selectedMetric !== CCWM_DISPLAY}
     <EventGrid
       {rowData}
       {globalStats}
@@ -1943,13 +2108,11 @@
       {isBooleanMetric}
       {isClimbStateMetric}
       {isNumericMetric}
-      bind:highlightedTeam
-      on:teamClick={(e) => broadcastHighlightedTeam(e.detail.highlightedTeam)}
     />
   {/if}
 
-  <!-- EFS / OPR use their own ag-grid instance with custom columns -->
-  {#if !loading && !error && (selectedMetric === EFS_DISPLAY || selectedMetric === OPR_DISPLAY || selectedMetric === EFS2_DISPLAY)}
+  <!-- Power ratings use their own ag-grid instance with custom columns -->
+  {#if !loading && !error && (selectedMetric === OPR_DISPLAY || selectedMetric === DPR_DISPLAY || selectedMetric === CCWM_DISPLAY)}
     <div
       class="grid-container ag-theme-quartz"
       bind:this={efsGridNode}
@@ -2048,9 +2211,9 @@
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
                 stroke-width="2"

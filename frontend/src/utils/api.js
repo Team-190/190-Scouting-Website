@@ -22,7 +22,12 @@ const getAPILink = () => {
 
 const defaultAPILink = getAPILink();
 
-import { getIndexedDBStore, setIndexedDBStore } from "./indexedDB";
+import { getIndexedDBStore, getLastId, setIndexedDBStore } from "./indexedDB";
+import {
+  compressData,
+  getCompressionProtocol,
+  isCompressedEnvelope,
+} from "./compression";
 
 function fetchApi(path, query = {}) {
   const params = new URLSearchParams();
@@ -35,6 +40,57 @@ function fetchApi(path, query = {}) {
   const queryString = params.toString();
   const route = `${defaultAPILink}${path}${queryString ? `?${queryString}` : ""}`;
   return fetch(route);
+}
+
+async function postApi(path, payload = {}) {
+  const route = `${defaultAPILink}${path}`;
+  const protocol = getCompressionProtocol();
+
+  const sendPayload = (body) => {
+    console.log(`[postApi] Sending to ${path}:`, body);
+    return fetch(route, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  };
+
+  let compressedPayload = null;
+  try {
+    compressedPayload = compressData(payload);
+    if (!isCompressedEnvelope(compressedPayload)) {
+      throw new Error("Compression did not return a valid envelope");
+    }
+    console.log(`[postApi] Compressed payload for ${path}:`, compressedPayload);
+  } catch (error) {
+    console.warn("Payload compression failed, sending plain JSON", error);
+    return sendPayload(payload);
+  }
+
+  const compressedResponse = await sendPayload(compressedPayload);
+  if (![400, 403, 415].includes(compressedResponse.status)) {
+    return compressedResponse;
+  }
+
+  console.warn(
+    `Compressed POST failed with status ${compressedResponse.status}; retrying plain JSON`,
+    { path, protocol },
+  );
+  return sendPayload(payload);
+}
+
+async function postApiExpectText(path, payload = {}) {
+  const response = await postApi(path, payload);
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(
+      `HTTP error! status: ${response.status}, message: ${errorText}`,
+    );
+  }
+
+  const result = await response.text();
+  console.log("Success:", result);
+  return result;
 }
 
 export function fetchEvents() {
@@ -60,10 +116,18 @@ export function fetchQualitativeScouting(eventCode, localCounts = {}) {
   });
 }
 
-export function fetchPitScouting(eventCode, localTeams = []) {
+export function fetchPitScouting(eventCode, localState = {}) {
+  if (Array.isArray(localState)) {
+    // Backward compatibility for older call sites still passing team arrays.
+    return fetchApi("/api/getPitScouting", {
+      eventCode,
+      localTeams: JSON.stringify(localState),
+    });
+  }
+
   return fetchApi("/api/getPitScouting", {
     eventCode,
-    localTeams: JSON.stringify(localTeams),
+    localCounts: JSON.stringify(localState || {}),
   });
 }
 
@@ -142,7 +206,26 @@ export async function fetchOPR(eventCode) {
 }
 
 export async function fetchCOPRs(eventCode) {
-  return readFromIndexedDB("COPR", eventCode, false);
+  const cached = await readFromIndexedDB("COPR", eventCode, false);
+  const hasCachedData =
+    cached && typeof cached === "object" && Object.keys(cached).length > 0;
+
+  if (hasCachedData) {
+    return cached;
+  }
+
+  // COPR may be backend-calculated and not yet persisted locally.
+  // Fall back to the backend endpoint and cache the result for subsequent reads.
+  const response = await fetchApi("/api/getCOPR", { eventCode });
+  if (!response.ok) {
+    return cached;
+  }
+
+  const json = await response.json();
+  if (json && typeof json === "object" && Object.keys(json).length > 0) {
+    await setIndexedDBStore("COPR", { key: eventCode, value: json });
+  }
+  return json;
 }
 
 export async function fetchAlliances(eventCode) {
@@ -166,11 +249,7 @@ export async function fetchElimsHaveStarted(eventCode) {
 export async function refreshEventCaches(eventCode) {
   try {
     // First, trigger the backend to populate its JSON caches
-    await fetch(`${defaultAPILink}/api/postEventCode`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ eventCode }),
-    });
+    await postApi("/api/postEventCode", { eventCode });
 
     // Now fetch all the cached data from the backend and store in IndexedDB
     const results = await Promise.allSettled([
@@ -259,6 +338,61 @@ export async function refreshEventCaches(eventCode) {
 const PIT_QUEUE_KEY = "pitScouting";
 const QUAL_QUEUE_KEY = "scoutingData";
 
+function createClientEntryId() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function normalizeTeamKey(team) {
+  const stripped = String(team ?? "").replace(/\D/g, "");
+  return stripped || String(team ?? "");
+}
+
+function ensureEntryPayload(formData, providedEntryId = null) {
+  const entryId = String(
+    providedEntryId
+      || (formData && typeof formData === "object" ? formData._entryId : "")
+      || createClientEntryId(),
+  );
+
+  if (formData && typeof formData === "object" && !Array.isArray(formData)) {
+    return {
+      entryId,
+      payload: {
+        ...formData,
+        _entryId: entryId,
+      },
+    };
+  }
+
+  return {
+    entryId,
+    payload: {
+      value: formData,
+      _entryId: entryId,
+    },
+  };
+}
+
+function appendUniqueEntry(existingValue, nextEntry) {
+  const normalizedExisting = Array.isArray(existingValue)
+    ? existingValue
+    : existingValue && typeof existingValue === "object"
+      ? [existingValue]
+      : [];
+
+  const nextEntryId = String(nextEntry?._entryId || "");
+  if (
+    nextEntryId
+    && normalizedExisting.some(
+      (entry) => String(entry?._entryId || "") === nextEntryId,
+    )
+  ) {
+    return normalizedExisting;
+  }
+
+  return [...normalizedExisting, nextEntry];
+}
+
 function canUseLocalStorage() {
   return typeof window !== "undefined" && typeof localStorage !== "undefined";
 }
@@ -278,6 +412,45 @@ function writeLocalJson(key, value) {
   if (!canUseLocalStorage()) return;
   localStorage.setItem(key, JSON.stringify(value));
 }
+
+// Version migration: Clear stale cache when IndexedDB version bumps
+function migrateStorageIfNeeded() {
+  if (!canUseLocalStorage()) return;
+  
+  const STORAGE_VERSION_KEY = "__storageVersion";
+  const CURRENT_VERSION = 5;
+  const lastVersion = readLocalJson(STORAGE_VERSION_KEY, 0);
+  
+  if (lastVersion !== CURRENT_VERSION) {
+    // Clear cache entries that may cause conflicts after schema updates
+    const keysToMigrate = [
+      "localPitCounts",
+      "localQualCounts",
+      "cachedPitData",
+      "cachedQualData",
+    ];
+    
+    for (const key of keysToMigrate) {
+      try {
+        localStorage.removeItem(key);
+      } catch {
+        // Silently ignore if removal fails
+      }
+    }
+    
+    // Update version marker
+    try {
+      localStorage.setItem(STORAGE_VERSION_KEY, JSON.stringify(CURRENT_VERSION));
+    } catch {
+      // Silently ignore if write fails
+    }
+    
+    console.log(`[Migration] Updated storage from v${lastVersion} to v${CURRENT_VERSION}`);
+  }
+}
+
+// Run migration on module load
+migrateStorageIfNeeded();
 
 /**
  * Read pit scouting data from IndexedDB
@@ -334,15 +507,26 @@ function readQueue(key) {
 
 async function updatePitMirror(team, formData) {
   const pitData = await readPitScoutingFromIDB({});
-  pitData[String(team)] = formData;
+  const teamKey = normalizeTeamKey(team);
+  const { payload } = ensureEntryPayload(formData);
+  pitData[teamKey] = appendUniqueEntry(pitData[teamKey], payload);
   await writePitScoutingToIDB(pitData);
 }
 
 async function updateQualMirror(team, match, formData) {
   const qualData = await readQualScoutingFromIDB({});
-  const teamKey = String(team).replace(/\D/g, "");
-  qualData[teamKey] ||= {};
-  qualData[teamKey][String(match)] = formData;
+  const teamKey = normalizeTeamKey(team);
+  const matchKey = String(match);
+  const { payload } = ensureEntryPayload(formData);
+
+  if (!qualData[teamKey] || typeof qualData[teamKey] !== "object" || Array.isArray(qualData[teamKey])) {
+    qualData[teamKey] = {};
+  }
+
+  qualData[teamKey][matchKey] = appendUniqueEntry(
+    qualData[teamKey][matchKey],
+    payload,
+  );
   await writeQualScoutingToIDB(qualData);
 }
 
@@ -366,10 +550,11 @@ export async function hasServerConnection(timeoutMs = 2500) {
 }
 
 export async function queuePitScoutingForSync(event, team, formData) {
+  const { entryId, payload } = ensureEntryPayload(formData);
   const queue = readQueue(PIT_QUEUE_KEY);
-  queue.push({ event, team: String(team), formData });
+  queue.push({ event, team: String(team), formData: payload, entryId });
   writeLocalJson(PIT_QUEUE_KEY, queue);
-  await updatePitMirror(team, formData);
+  await updatePitMirror(team, payload);
   return queue.length;
 }
 
@@ -379,10 +564,17 @@ export async function queueQualitativeScoutingForSync(
   match,
   formData,
 ) {
+  const { entryId, payload } = ensureEntryPayload(formData);
   const queue = readQueue(QUAL_QUEUE_KEY);
-  queue.push({ event, team: String(team), match: String(match), formData });
+  queue.push({
+    event,
+    team: String(team),
+    match: String(match),
+    formData: payload,
+    entryId,
+  });
   writeLocalJson(QUAL_QUEUE_KEY, queue);
-  await updateQualMirror(team, match, formData);
+  await updateQualMirror(team, match, payload);
   return queue.length;
 }
 
@@ -403,23 +595,30 @@ export async function flushPitScoutingQueue() {
     const item = queue[i];
     const event = item.event || localStorage.getItem("eventCode");
     const team = item.team || item.teamNumber;
-    const formData = item.formData || item;
+    const { entryId, payload } = ensureEntryPayload(item.formData || item, item.entryId);
+    const normalizedItem = {
+      ...item,
+      event,
+      team: String(team || ""),
+      formData: payload,
+      entryId,
+    };
 
-    if (!event || !team || !formData) {
-      remaining.push(item);
+    if (!event || !team || !payload) {
+      remaining.push(normalizedItem);
       continue;
     }
 
     try {
-      const response = await postPitScouting(event, team, formData);
+      const response = await postPitScouting(event, team, payload);
       if (response.ok) {
         uploaded += 1;
-        await updatePitMirror(team, formData);
+        await updatePitMirror(team, payload);
       } else {
-        remaining.push(item);
+        remaining.push(normalizedItem);
       }
     } catch {
-      remaining.push(item, ...queue.slice(i + 1));
+      remaining.push(normalizedItem, ...queue.slice(i + 1));
       break;
     }
   }
@@ -446,10 +645,18 @@ export async function flushQualitativeScoutingQueue() {
     const event = item.event || localStorage.getItem("eventCode");
     const team = item.team || item.Team;
     const match = item.match || item.Match;
-    const formData = item.formData || item;
+    const { entryId, payload } = ensureEntryPayload(item.formData || item, item.entryId);
+    const normalizedItem = {
+      ...item,
+      event,
+      team: String(team || ""),
+      match: String(match || ""),
+      formData: payload,
+      entryId,
+    };
 
-    if (!event || !team || !match || !formData) {
-      remaining.push(item);
+    if (!event || !team || !match || !payload) {
+      remaining.push(normalizedItem);
       continue;
     }
 
@@ -458,16 +665,16 @@ export async function flushQualitativeScoutingQueue() {
         event,
         team,
         match,
-        formData,
+        payload,
       );
       if (response.ok) {
         uploaded += 1;
-        await updateQualMirror(team, match, formData);
+        await updateQualMirror(team, match, payload);
       } else {
-        remaining.push(item);
+        remaining.push(normalizedItem);
       }
     } catch {
-      remaining.push(item, ...queue.slice(i + 1));
+      remaining.push(normalizedItem, ...queue.slice(i + 1));
       break;
     }
   }
@@ -566,94 +773,184 @@ export async function fetchStatboticsMatchPrediction(matchKey) {
 ////////////// POST Methods \\\\\\\\\\\\\\
 ////////////// POST Methods \\\\\\\\\\\\\\
 
+// Generic POST helper that wraps the shared postApi logic
+async function makePostRequest(endpoint, payload, expectText = false) {
+  const response = await (expectText ? postApiExpectText : postApi)(endpoint, payload);
+  return response;
+}
+
 export async function postEventCode(eventCode) {
-  const response = await fetch(`${defaultAPILink}/api/postEventCode`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ eventCode }),
-  });
+  return makePostRequest("/api/postEventCode", { eventCode }, true);
+}
+
+async function parseResponseJson(response, fallback = {}) {
+  const responseText = await response.text();
+  if (!responseText) return fallback;
+
+  try {
+    return JSON.parse(responseText);
+  } catch {
+    return fallback;
+  }
+}
+
+function normalizeEntries(value) {
+  if (Array.isArray(value)) {
+    return value.filter((entry) => entry && typeof entry === "object");
+  }
+  if (value && typeof value === "object") {
+    return [value];
+  }
+  return [];
+}
+
+function mergeEntries(localValue, incomingValue) {
+  const merged = [...normalizeEntries(localValue)];
+  const seenIds = new Set(
+    merged
+      .map((entry) => String(entry?._entryId || ""))
+      .filter(Boolean),
+  );
+
+  for (const entry of normalizeEntries(incomingValue)) {
+    const entryId = String(entry?._entryId || "");
+    if (entryId && seenIds.has(entryId)) continue;
+    if (entryId) seenIds.add(entryId);
+    merged.push(entry);
+  }
+
+  return merged;
+}
+
+function countPitEntries(teamData) {
+  return normalizeEntries(teamData).length;
+}
+
+function countQualEntries(teamData) {
+  if (!teamData || typeof teamData !== "object") return 0;
+
+  if (Array.isArray(teamData)) {
+    return teamData.length;
+  }
+
+  if (teamData.Match != null || teamData.match != null) {
+    return 1;
+  }
+
+  let total = 0;
+  for (const matchData of Object.values(teamData)) {
+    total += normalizeEntries(matchData).length;
+  }
+  return total;
+}
+
+export async function syncSelectedEventData(eventCode, { forceFullRefresh = false } = {}) {
+  if (!eventCode) {
+    throw new Error("No event selected");
+  }
+
+  const existingDataRaw = forceFullRefresh ? [] : await getIndexedDBStore("scoutingData");
+  const existingData = (existingDataRaw || []).map((item) =>
+    item && item.value !== undefined ? item.value : item,
+  );
+  const lastId = await getLastId(existingData);
+
+  const dataRes = await fetchAllData(eventCode, lastId);
+  if (!dataRes.ok) {
+    throw new Error(`Failed to fetch scouting data: HTTP ${dataRes.status}`);
+  }
+  const dataJson = await parseResponseJson(dataRes, {});
+  const newData = dataJson.data || [];
+  if (newData.length > 0) {
+    await setIndexedDBStore("scoutingData", { rows: newData });
+  }
+
+  const localPit = forceFullRefresh ? {} : await readPitScoutingFromIDB({});
+  const pitCounts = {};
+  for (const [team, entries] of Object.entries(localPit)) {
+    pitCounts[team] = countPitEntries(entries);
+  }
+
+  const pitRes = await fetchPitScouting(eventCode, pitCounts);
+  if (!pitRes.ok) {
+    throw new Error(`Failed to fetch pit scouting: HTTP ${pitRes.status}`);
+  }
+  const newPitData = await parseResponseJson(pitRes, {});
+  const combinedPit = { ...localPit };
+  for (const [team, incomingEntries] of Object.entries(newPitData || {})) {
+    combinedPit[team] = mergeEntries(combinedPit[team], incomingEntries);
+  }
+  await writePitScoutingToIDB(combinedPit);
+
+  const localQual = forceFullRefresh ? {} : await readQualScoutingFromIDB({});
+  const qualCounts = {};
+  for (const team in localQual) {
+    qualCounts[team] = countQualEntries(localQual[team]);
+  }
+
+  const qualRes = await fetchQualitativeScouting(eventCode, qualCounts);
+  if (!qualRes.ok) {
+    throw new Error(`Failed to fetch qualitative scouting: HTTP ${qualRes.status}`);
+  }
+  const newQualData = await parseResponseJson(qualRes, {});
+  const combinedQual = { ...localQual };
+  for (const team in newQualData) {
+    const localTeamData =
+      combinedQual[team] && typeof combinedQual[team] === "object" && !Array.isArray(combinedQual[team])
+        ? { ...combinedQual[team] }
+        : {};
+    const incomingTeamData =
+      newQualData[team] && typeof newQualData[team] === "object" && !Array.isArray(newQualData[team])
+        ? newQualData[team]
+        : {};
+
+    for (const [matchKey, incomingMatchData] of Object.entries(incomingTeamData)) {
+      localTeamData[matchKey] = mergeEntries(localTeamData[matchKey], incomingMatchData);
+    }
+    combinedQual[team] = localTeamData;
+  }
+  await writeQualScoutingToIDB(combinedQual);
+
+  await refreshEventCaches(eventCode);
+
+  localStorage.setItem("timestamp", new Date(Date.now()).toLocaleString());
+  localStorage.setItem("eventCode", eventCode);
+
+  return {
+    scoutingRowsAdded: newData.length,
+    pitTeamsUpdated: Object.keys(newPitData || {}).length,
+    qualTeamsUpdated: Object.keys(newQualData || {}).length,
+  };
+}
+
+export async function syncServerEventJsons(eventCode) {
+  const response = await fetchApi("/api/syncServerEventJsons", { eventCode });
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(
-      `HTTP error! status: ${response.status}, message: ${errorText}`,
+      `HTTP error! status: ${response.status}, message: ${errorText}`
     );
   }
-  const result = await response.text();
-  console.log("Success:", result);
-  return result;
+
+  return response.json();
 }
 
 export async function postGracePage(event, team, rating) {
-  const response = await fetch(`${defaultAPILink}/api/postRatings`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ event, team, rating }),
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `HTTP error! status: ${response.status}, message: ${errorText}`,
-    );
-  }
-  const result = await response.text();
-  console.log("Success:", result);
-  return result;
+  return makePostRequest("/api/postRatings", { event, team, rating }, true);
 }
 
 export async function postAnanthPage(event, team, rating) {
-  const response = await fetch(`${defaultAPILink}/api/postHPRatings`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ event, team, rating }),
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `HTTP error! status: ${response.status}, message: ${errorText}`,
-    );
-  }
-  const result = await response.text();
-  console.log("Success:", result);
-  return result;
+  return makePostRequest("/api/postHPRatings", { event, team, rating }, true);
 }
 
 export async function postPitScouting(event, team, formData) {
-  const response = await fetch(`${defaultAPILink}/api/postPitScouting`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ event, team, formData }),
-  });
-  return response;
+  return makePostRequest("/api/postPitScouting", { event, team, formData });
 }
 
 export async function postQualitativeScouting(event, team, match, formData) {
-  const response = await fetch(
-    `${defaultAPILink}/api/postQualitativeScouting`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ event, team, match, formData }),
-    },
-  );
-  return response;
+  return makePostRequest("/api/postQualitativeScouting", { event, team, match, formData });
 }
 
 export async function postGompeiMadnessBracket(bracket) {
-  const response = await fetch(
-    `${defaultAPILink}/api/postGompeiMadnessBracket`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ bracket }),
-    },
-  );
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `HTTP error! status: ${response.status}, message: ${errorText}`,
-    );
-  }
-  const result = await response.text();
-  console.log("Success:", result);
-  return result;
+  return makePostRequest("/api/postGompeiMadnessBracket", { bracket }, true);
 }

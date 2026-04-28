@@ -1,28 +1,20 @@
 <script>
     import { onMount, tick } from "svelte";
     import {
-        fetchAllData,
         fetchEventDetails,
         fetchEvents,
         fetchMatchAlliances,
-        fetchPitScouting,
-        fetchQualitativeScouting,
-        postEventCode,
-        refreshEventCaches,
-        readPitScoutingFromIDB,
-        writePitScoutingToIDB,
-        readQualScoutingFromIDB,
-        writeQualScoutingToIDB,
+        syncSelectedEventData,
     } from "../utils/api";
-    import { clearAllStores, getIndexedDBStore, getLastId, setIndexedDBStore } from '../utils/indexedDB';
+    import { clearAllStores } from '../utils/indexedDB';
+    import { pushToast } from "../stores/toasts";
+    
 
     let eventCode = localStorage.getItem("eventCode");
     let isLoading = false;
-    let notification = null;
     let isAutoSyncing = false;
     let scheduleLoading = false;
     let autoDataRefreshEnabled = Boolean(parseStoredJson("homeAutoDataRefreshEnabled", false));
-    let autoDataRefreshTimer = null;
 
     const OUR_TEAM_KEY = "frc190";
     let matchSchedule = {
@@ -43,28 +35,41 @@
         }
     }
 
-    async function parseResponseJson(response, fallback = {}) {
-        const responseText = await response.text();
-        if (!responseText) return fallback;
-
-        try {
-            return JSON.parse(responseText);
-        } catch {
-            return fallback;
-        }
-    }
-
-    function showNotification(message, type = "success", duration = 3000) {
-        notification = { message, type };
-        setTimeout(() => {
-            notification = null;
-        }, duration);
-    }
-
     function getScheduledTimestamp(match) {
         return Number(
             match?.predicted_time || match?.time || match?.actual_time || match?.post_result_time || 0,
         );
+    }
+
+    function compareQualificationOrder(a, b) {
+        const aTimestamp = getScheduledTimestamp(a);
+        const bTimestamp = getScheduledTimestamp(b);
+        const aHasTimestamp = aTimestamp > 0;
+        const bHasTimestamp = bTimestamp > 0;
+
+        if (aHasTimestamp && bHasTimestamp && aTimestamp !== bTimestamp) {
+            return aTimestamp - bTimestamp;
+        }
+
+        // Prefer entries with known schedule timestamps; replayed matches can share
+        // match numbers and should be ordered by schedule when available.
+        if (aHasTimestamp !== bHasTimestamp) {
+            return aHasTimestamp ? -1 : 1;
+        }
+
+        const aMatchNumber = Number(a?.match_number);
+        const bMatchNumber = Number(b?.match_number);
+        if (Number.isFinite(aMatchNumber) && Number.isFinite(bMatchNumber) && aMatchNumber !== bMatchNumber) {
+            return aMatchNumber - bMatchNumber;
+        }
+
+        const aSetNumber = Number(a?.set_number);
+        const bSetNumber = Number(b?.set_number);
+        if (Number.isFinite(aSetNumber) && Number.isFinite(bSetNumber) && aSetNumber !== bSetNumber) {
+            return aSetNumber - bSetNumber;
+        }
+
+        return String(a?.key || "").localeCompare(String(b?.key || ""));
     }
 
     function isMatchComplete(match) {
@@ -82,6 +87,27 @@
         const redTeams = match?.alliances?.red?.team_keys || [];
         const blueTeams = match?.alliances?.blue?.team_keys || [];
         return [...redTeams, ...blueTeams].includes(OUR_TEAM_KEY);
+    }
+
+    function getCurrentMatchIndex(qualMatches) {
+        if (!Array.isArray(qualMatches) || qualMatches.length === 0) return -1;
+
+        // Prefer moving forward from the latest completed match so stale replay
+        // placeholders do not pin the UI on an old qualification number.
+        let latestCompletedIndex = -1;
+        for (let i = 0; i < qualMatches.length; i += 1) {
+            if (isMatchComplete(qualMatches[i])) {
+                latestCompletedIndex = i;
+            }
+        }
+
+        if (latestCompletedIndex >= 0 && latestCompletedIndex < qualMatches.length - 1) {
+            return latestCompletedIndex + 1;
+        }
+
+        const firstIncomplete = qualMatches.findIndex((m) => !isMatchComplete(m));
+        if (firstIncomplete >= 0) return firstIncomplete;
+        return qualMatches.length - 1;
     }
 
     function minutesUntil(timestampSec) {
@@ -111,7 +137,7 @@
 
             const qualMatches = (Array.isArray(allMatches) ? allMatches : [])
                 .filter((match) => match?.comp_level === "qm")
-                .sort((a, b) => Number(a?.match_number) - Number(b?.match_number));
+                .sort(compareQualificationOrder);
 
             if (qualMatches.length === 0) {
                 matchSchedule = {
@@ -124,14 +150,25 @@
                 return;
             }
 
-            const currentMatch = qualMatches.find((m) => !isMatchComplete(m)) || qualMatches[qualMatches.length - 1];
-            const ourNextMatch = qualMatches.find((m) => !isMatchComplete(m) && isOurMatch(m))
-                || qualMatches.find((m) => isOurMatch(m));
+            const normalizedCurrentIndex = getCurrentMatchIndex(qualMatches);
+            const currentMatch = qualMatches[normalizedCurrentIndex];
+
+            const ourNextIndex = qualMatches.findIndex(
+                (m, index) => index >= normalizedCurrentIndex && !isMatchComplete(m) && isOurMatch(m),
+            );
+            const fallbackOurNextIndex = qualMatches.findIndex((m) => !isMatchComplete(m) && isOurMatch(m));
+            const anyOurMatchIndex = qualMatches.findIndex((m) => isOurMatch(m));
+            const normalizedOurIndex = ourNextIndex >= 0
+                ? ourNextIndex
+                : fallbackOurNextIndex >= 0
+                    ? fallbackOurNextIndex
+                    : anyOurMatchIndex;
+            const ourNextMatch = normalizedOurIndex >= 0 ? qualMatches[normalizedOurIndex] : null;
 
             const currentNumber = Number(currentMatch?.match_number);
             const ourNumber = Number(ourNextMatch?.match_number);
-            const matchesUntil = Number.isFinite(currentNumber) && Number.isFinite(ourNumber)
-                ? String(Math.max(0, ourNumber - currentNumber))
+            const matchesUntil = normalizedOurIndex >= 0
+                ? String(Math.max(0, normalizedOurIndex - normalizedCurrentIndex))
                 : "—";
 
             matchSchedule = {
@@ -162,97 +199,39 @@
         await tick();
         try {
             await task();
-            showNotification(successMessage);
+            if (successMessage) {
+                pushToast(successMessage, "success");
+            }
+            return true;
         } catch (e) {
-            showNotification(errorMessage, "error");
+            pushToast(errorMessage, "error");
             console.error(errorMessage, e);
+            return false;
         } finally {
             isLoading = false;
         }
     }
 
-    function configureAutoDataRefresh() {
-        if (autoDataRefreshTimer) {
-            clearInterval(autoDataRefreshTimer);
-            autoDataRefreshTimer = null;
-        }
-
+    function persistAutoDataRefreshPreference() {
         localStorage.setItem("homeAutoDataRefreshEnabled", JSON.stringify(autoDataRefreshEnabled));
-
-        if (!autoDataRefreshEnabled) return;
-
-        syncEventData();
-        autoDataRefreshTimer = setInterval(() => {
-            syncEventData();
-        }, 1000 * 60);
     }
 
     function handleAutoRefreshToggle(event) {
         autoDataRefreshEnabled = Boolean(event?.target?.checked);
-        configureAutoDataRefresh();
+        persistAutoDataRefreshPreference();
+        if (autoDataRefreshEnabled) {
+            window.dispatchEvent(new CustomEvent("auto-sync-now"));
+        }
     }
 
-    async function cacheAllData({ forceFullRefresh = false } = {}) {
-        await withLoading(async () => {
-            if (!eventCode) {
-                throw new Error("No event selected");
-            }
-
-            const existingDataRaw = forceFullRefresh ? [] : await getIndexedDBStore("scoutingData");
-            // Unwrap the value property if it exists (from compressed storage)
-            const existingData = (existingDataRaw || []).map(item => item.value !== undefined ? item.value : item);
-            const lastId = await getLastId(existingData);
-
-            const dataRes = await fetchAllData(eventCode, lastId);
-            if (!dataRes.ok) {
-                throw new Error(`Failed to fetch scouting data: HTTP ${dataRes.status}`);
-            }
-            const dataJson = await parseResponseJson(dataRes, {});
-            const newData = dataJson.data || [];
-            if (newData.length > 0) {
-                await setIndexedDBStore("scoutingData", { rows: newData });
-            }
-
-            const localPit = forceFullRefresh ? {} : await readPitScoutingFromIDB({});
-            const pitTeams = Object.keys(localPit);
-
-            const pitRes = await fetchPitScouting(eventCode, pitTeams);
-            if (!pitRes.ok) {
-                throw new Error(`Failed to fetch pit scouting: HTTP ${pitRes.status}`);
-            }
-            const newPitData = await parseResponseJson(pitRes, {});
-            
-            const combinedPit = { ...localPit, ...newPitData };
-            await writePitScoutingToIDB(combinedPit);
-
-            const localQual = forceFullRefresh ? {} : await readQualScoutingFromIDB({});
-            const qualCounts = {};
-            for (const team in localQual) {
-                qualCounts[team] = Object.keys(localQual[team] || {}).length;
-            }
-
-            const qualRes = await fetchQualitativeScouting(eventCode, qualCounts);
-            if (!qualRes.ok) {
-                throw new Error(`Failed to fetch qualitative scouting: HTTP ${qualRes.status}`);
-            }
-            const newQualData = await parseResponseJson(qualRes, {});
-            
-            const combinedQual = { ...localQual };
-            for (const team in newQualData) {
-                combinedQual[team] = { ...(combinedQual[team] || {}), ...newQualData[team] };
-            }
-            await writeQualScoutingToIDB(combinedQual);
-
-            await refreshEventCaches(eventCode);
-
+    async function cacheAllData({ forceFullRefresh = false, successMessage = "Data loaded successfully!" } = {}) {
+        return withLoading(async () => {
+            await syncSelectedEventData(eventCode, { forceFullRefresh });
             await refreshMatchSchedule();
-
-            localStorage.setItem("timestamp", new Date(Date.now()).toLocaleString());
-            localStorage.setItem("eventCode", eventCode);
-        }, "Data loaded successfully!", "Failed to load data.");
+        }, successMessage, "Failed to load data.");
     }
 
-    async function syncEventData() {
+    async function syncEventData({ isAutomatic = false } = {}) {
         if (!eventCode || isAutoSyncing) return;
 
         isAutoSyncing = true;
@@ -265,8 +244,13 @@
             }
 
             localStorage.setItem("eventCode", eventCode);
-            await postEventCode(eventCode);
-            await cacheAllData({ forceFullRefresh: isNewEvent });
+            const didLoad = await cacheAllData({
+                forceFullRefresh: isNewEvent,
+                successMessage: isAutomatic ? "" : "Data loaded successfully!",
+            });
+            if (isAutomatic && didLoad) {
+                pushToast("Data automatically populated.", "success", 3000);
+            }
         } finally {
             isAutoSyncing = false;
         }
@@ -295,34 +279,27 @@
     }
 
     onMount(() => {
+        // Lock scroll only while the home page is active
+        document.body.classList.add("home-no-scroll");
+
         (async () => {
             await loadDbEvents();
             await refreshMatchSchedule();
         })();
 
-        configureAutoDataRefresh();
+        persistAutoDataRefreshPreference();
 
         const scheduleTimer = setInterval(() => {
             refreshMatchSchedule();
         }, 1000 * 60);
 
         return () => {
+            // Restore normal scrolling when navigating away from home
+            document.body.classList.remove("home-no-scroll");
             clearInterval(scheduleTimer);
-            if (autoDataRefreshTimer) {
-                clearInterval(autoDataRefreshTimer);
-                autoDataRefreshTimer = null;
-            }
         };
     });
 </script>
-
-{#if notification}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="banner banner-{notification.type}" onclick={() => notification = null}>
-        {notification.message}
-    </div>
-{/if}
 
 {#if isLoading}
     <div class="loading-spinner-overlay">
@@ -390,12 +367,23 @@
         --frc-190-black: #4d4d4d;
     }
 
+    /*
+     * Only applied while the home page is mounted (added/removed via JS).
+     * Other pages are completely unaffected.
+     */
+    :global(body.home-no-scroll) {
+        overflow: hidden;
+        height: 100%;
+    }
+
     .container {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        min-height: 100vh;
+        height: 100vh;
+        max-height: 100vh;
+        overflow: hidden;
         padding: 1.25rem;
         background: var(--wpi-gray);
         font-family: sans-serif;
@@ -556,29 +544,6 @@
         }
     }
 
-    .banner {
-        position: fixed;
-        top: 25rem;
-        left: 50%;
-        transform: translateX(-50%);
-        padding: 1rem 1.5rem;
-        border-radius: 0.5rem;
-        color: white;
-        font-weight: bold;
-        z-index: 10000;
-        cursor: pointer;
-        transition: top 0.3s ease-in-out;
-        font-size: 0.95rem;
-        max-width: 90vw;
-    }
-
-    .banner-success {
-        background-color: #4CAF50;
-    }
-
-    .banner-error {
-        background-color: #f44336;
-    }
 
     .button-container {
         display: flex;
@@ -669,10 +634,5 @@
             margin-top: 0.25rem;
         }
 
-        .banner {
-            top: 5rem;
-            font-size: 0.85rem;
-            padding: 0.75rem 1rem;
-        }
     }
 </style>

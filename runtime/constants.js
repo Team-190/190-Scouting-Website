@@ -6,6 +6,10 @@ const RUNTIME_CONSTANTS = Object.freeze({
     server: Object.freeze({
         host: "localhost",
     }),
+    compression: Object.freeze({
+        envelopeFlag: "__compressed",
+        version: 2,
+    }),
 });
 
 module.exports = RUNTIME_CONSTANTS;

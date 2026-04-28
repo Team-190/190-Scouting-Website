@@ -659,16 +659,15 @@ async function writeJSONFile(filename, data) {
     fs.mkdirSync("./data", { recursive: true });
   }
 
-  return new Promise((resolve, reject) => {
-    fs.writeFile(fullPath, JSON.stringify(data, null, 4), "utf8", (err) => {
-      if (err) {
-        console.error("Error writing to file", err);
-        reject(err);
-      } else {
-        resolve(true);
-      }
-    });
-  });
+  try {
+    // Use synchronous write to ensure atomic file operations
+    // Prevents race conditions where partial writes are read by concurrent requests
+    fs.writeFileSync(fullPath, JSON.stringify(data, null, 4), "utf8");
+    return true;
+  } catch (err) {
+    console.error("Error writing to file", err);
+    throw err;
+  }
 }
 
 module.exports = {

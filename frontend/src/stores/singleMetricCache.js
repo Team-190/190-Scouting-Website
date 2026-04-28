@@ -14,6 +14,8 @@ function createCache() {
     teamData: null,
     metrics: null,
     teamOPRs: {},
+    teamDPRs: {},
+    teamCCWMs: {},
     teamCOPRs: {},
     timestamp: null,
   });
@@ -59,12 +61,14 @@ function createCache() {
     /**
      * Set cache data
      */
-    setData: (eventCode, teamData, metrics, teamOPRs, teamCOPRs) => {
+    setData: (eventCode, teamData, metrics, teamOPRs, teamDPRs, teamCCWMs, teamCOPRs) => {
       set({
         eventCode,
         teamData,
         metrics,
         teamOPRs,
+        teamDPRs,
+        teamCCWMs,
         teamCOPRs,
         timestamp: Date.now(),
       });
@@ -79,6 +83,8 @@ function createCache() {
         teamData: null,
         metrics: null,
         teamOPRs: {},
+        teamDPRs: {},
+        teamCCWMs: {},
         teamCOPRs: {},
         timestamp: null,
       });
