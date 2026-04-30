@@ -25,11 +25,31 @@ self.addEventListener('activate', event => {
 
 self.addEventListener('fetch', event => {
   if (IS_DEV) return;
+  if (event.request.method !== 'GET') return;
+
   const url = new URL(event.request.url);
 
   // Let API calls through untouched. The service worker should never cache API
   // responses because stale JSON can break newer client/server contracts.
   if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
+
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then(async response => {
+          if (response.status === 200) {
+            const cache = await caches.open(CACHE_NAME);
+            await cache.put('/index.html', response.clone());
+          }
+          return response;
+        })
+        .catch(async () => {
+          const cache = await caches.open(CACHE_NAME);
+          return (await cache.match('/index.html')) || Response.error();
+        })
+    );
+    return;
+  }
 
   event.respondWith(
     caches.open(CACHE_NAME).then(async cache => {
@@ -37,8 +57,7 @@ self.addEventListener('fetch', event => {
 
       // Always try to fetch a fresh version in the background
       const fetchPromise = fetch(event.request).then(response => {
-        // Only cache GET requests (Cache API limitation)
-        if (event.request.method === 'GET' && response.status === 200) {
+        if (response.status === 200) {
           try {
             cache.put(event.request, response.clone());
           } catch (err) {

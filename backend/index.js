@@ -443,7 +443,18 @@ app.use(
 
 // Serve static frontend files in production (catch-all is at the bottom)
 if (SHOULD_SERVE_FRONTEND) {
-    app.use(express.static(FRONTEND_DIST));
+    app.use(express.static(FRONTEND_DIST, {
+        setHeaders(res, filePath) {
+            const fileName = path.basename(filePath);
+            if (fileName === "index.html" || fileName === "service_worker.js") {
+                res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+                return;
+            }
+            if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+                res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+            }
+        },
+    }));
 }
 
 // ─── INTERNAL API ROUTES ────────────────────────────────────────────────────
@@ -900,6 +911,17 @@ app.post("/api/postGompeiMadnessBracket", async (req, res) => {
 
 if (SHOULD_SERVE_FRONTEND) {
     app.get("/{*path}", (req, res) => {
+        const requestPath = req.path || "";
+        const acceptsHtml = req.accepts("html");
+        const isAssetRequest =
+            requestPath.startsWith("/assets/")
+            || requestPath === "/service_worker.js"
+            || path.extname(requestPath) !== "";
+
+        if (isAssetRequest || !acceptsHtml) {
+            return res.sendStatus(404);
+        }
+
         const indexPath = path.join(FRONTEND_DIST, "index.html");
         if (!fs.existsSync(indexPath)) {
             return res.status(500).send(`Missing frontend build at ${indexPath}`);
