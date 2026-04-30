@@ -19,6 +19,10 @@ const runtimeConstants = require("../runtime/constants");
 const { decompressData, isCompressedEnvelope } = require("./compression.js");
 require('dotenv').config({ path: path.resolve(__dirname, '../.env'), override: true });
 
+process.on("unhandledRejection", (reason) => {
+    console.error("Unhandled promise rejection:", reason);
+});
+
 const app = express();
 
 const logDirPath = path.join(__dirname, "logs");

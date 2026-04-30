@@ -75,10 +75,18 @@
           }
         }
 
-        // If we have no record of a recent fetch, or the local fetch is older than 30 days,
-        // assume this is an old client and clear everything so it gets a fresh site/data.
+        // If we have no record yet, create a baseline. Only clients with an
+        // actually old timestamp should be wiped; otherwise new clients can
+        // get stuck in a clear/reload loop.
+        if (!localMs) {
+          localStorage.setItem('lastFetchMs', String(serverTs));
+          return;
+        }
+
+        // If the local fetch is older than 30 days, assume this is an old
+        // client and clear everything so it gets a fresh site/data.
         const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
-        if (!localMs || (serverTs - localMs) > THIRTY_DAYS) {
+        if ((serverTs - localMs) > THIRTY_DAYS) {
           console.warn('[Freshness] Stale or missing client cache detected - wiping client caches');
           try {
             await clearAllStores();
