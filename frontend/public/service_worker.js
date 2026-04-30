@@ -1,4 +1,5 @@
-const CACHE_NAME = 'app-shell-v2';
+const SW_VERSION = new URL(self.location.href).searchParams.get('v') || 'v2';
+const CACHE_NAME = `app-shell-${SW_VERSION}`;
 const IS_DEV = self.location.hostname === 'localhost';
 const APP_SHELL = ['/', '/index.html'];
 
@@ -26,8 +27,9 @@ self.addEventListener('fetch', event => {
   if (IS_DEV) return;
   const url = new URL(event.request.url);
 
-  // Let API calls through untouched
-  if (url.origin !== self.location.origin) return;
+  // Let API calls through untouched. The service worker should never cache API
+  // responses because stale JSON can break newer client/server contracts.
+  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
 
   event.respondWith(
     caches.open(CACHE_NAME).then(async cache => {

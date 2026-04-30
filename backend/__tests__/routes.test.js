@@ -81,9 +81,9 @@ describe('API Routes', () => {
 
     describe('GET /api/getTeams', () => {
         it('transforms fetched teams into API payload shape', async () => {
-            externalApi.fetchTeams.mockResolvedValueOnce([
-                { team_number: 190, nickname: 'Gompei' }
-            ]);
+            database.readJSONFile.mockResolvedValue({
+                test: [{ team_number: 190, nickname: 'Gompei' }]
+            });
 
             const res = await request(appInstance).get('/api/getTeams?eventCode=test');
             expect(res.status).toBe(200);
@@ -94,7 +94,9 @@ describe('API Routes', () => {
         });
         
         it('returns an empty payload when external API response is malformed', async () => {
-            externalApi.fetchTeams.mockResolvedValueOnce({ not: 'an array' });
+            database.readJSONFile.mockResolvedValue({
+                test: { not: 'an array' }
+            });
 
             const res = await request(appInstance).get('/api/getTeams?eventCode=test');
             expect(res.status).toBe(200);
@@ -125,6 +127,56 @@ describe('API Routes', () => {
             });
             expect(res.status).toBe(200);
             expect(database.writeJSONFile).toHaveBeenCalled();
+        });
+    });
+
+    describe('POST /api/postQualitativeScouting', () => {
+        it('fails if formData is invalid', async () => {
+            const res = await request(appInstance).post('/api/postQualitativeScouting').send({
+                event: 'test',
+                team: '190',
+                match: '1',
+                formData: 'bad'
+            });
+            expect(res.status).toBe(400);
+            expect(res.body.code).toBe('INVALID_PAYLOAD');
+        });
+
+        it('fails if formData is an array', async () => {
+            const res = await request(appInstance).post('/api/postQualitativeScouting').send({
+                event: 'test',
+                team: '190',
+                match: '1',
+                formData: []
+            });
+            expect(res.status).toBe(400);
+            expect(res.body.code).toBe('INVALID_PAYLOAD');
+        });
+
+        it('succeeds with correct fields', async () => {
+            database.readJSONFile.mockResolvedValueOnce({});
+
+            const res = await request(appInstance).post('/api/postQualitativeScouting').send({
+                event: 'test',
+                team: '190',
+                match: '1',
+                formData: { notes: 'ok' }
+            });
+            expect(res.status).toBe(200);
+            expect(database.writeJSONFile).toHaveBeenCalled();
+        });
+    });
+
+    describe('POST /api/postEventCode', () => {
+        it('accepts an event code and starts cache population', async () => {
+            externalApi.populateEventData.mockResolvedValueOnce();
+
+            const res = await request(appInstance).post('/api/postEventCode').send({
+                eventCode: '2026joh'
+            });
+
+            expect(res.status).toBe(200);
+            expect(externalApi.populateEventData).toHaveBeenCalledWith('2026joh');
         });
     });
 });

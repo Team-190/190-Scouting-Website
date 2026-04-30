@@ -4,6 +4,9 @@ import { createRequire } from 'module'
 
 const require = createRequire(import.meta.url)
 const runtimeConstants = require('../runtime/constants')
+const buildVersion = process.env.VITE_APP_VERSION
+  || process.env.APP_VERSION
+  || new Date().toISOString()
 const frontendPort = Number(runtimeConstants.ports.frontend)
 
 export default defineConfig({
@@ -11,7 +14,8 @@ export default defineConfig({
   define: {
     __RUNTIME_PORTS__: JSON.stringify(runtimeConstants.ports),
     __RUNTIME_SERVER_HOST__: JSON.stringify(runtimeConstants.server.host),
-    __RUNTIME_COMPRESSION__: JSON.stringify(runtimeConstants.compression)
+    __RUNTIME_COMPRESSION__: JSON.stringify(runtimeConstants.compression),
+    __APP_VERSION__: JSON.stringify(buildVersion)
   },
   server: {
     port: frontendPort,

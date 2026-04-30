@@ -3,7 +3,7 @@
   import { onMount } from "svelte";
   import logo from "../images/frc190_Logo.png";
   import { isSidebarOpen } from "../stores/sidebarState.js";
-  import { fetchAlliances, fetchElimsHaveStarted } from "../utils/api.js";
+  import { fetchAlliances, fetchElimsHaveStarted, getQueueCounts } from "../utils/api.js";
 
   let alliancesAvailable = false;
   let elimsStarted = false;
@@ -11,6 +11,7 @@
   let isHovering = false;
   let isPinnedOpen = false;
   let isMobile = false;
+  let queueCounts = { pit: 0, qual: 0, total: 0 };
 
   function syncViewportMode() {
     if (typeof window === "undefined") return;
@@ -69,6 +70,15 @@
     expandedMenu = expandedMenu === menuName ? null : menuName;
   }
 
+  function syncQueueCounts(detail = null) {
+    const counts = detail || getQueueCounts();
+    queueCounts = counts || { pit: 0, qual: 0, total: 0 };
+  }
+
+  function handleQueueUpdated(event) {
+    syncQueueCounts(event?.detail || null);
+  }
+
   async function checkAlliances() {
     const eventCode = localStorage.getItem("eventCode");
     if (!eventCode) {
@@ -94,16 +104,22 @@
     if (e.key === "elimsStarted") {
       elimsStarted = e.newValue === "1";
     }
+    if (e.key === "pitScouting" || e.key === "scoutingData") {
+      syncQueueCounts();
+    }
   }
 
   onMount(() => {
     syncViewportMode();
     checkAlliances();
+    syncQueueCounts();
     window.addEventListener("storage", onStorageChange);
+    window.addEventListener("queue-updated", handleQueueUpdated);
     window.addEventListener("resize", syncViewportMode);
     const interval = setInterval(checkAlliances, 30000);
     return () => {
       window.removeEventListener("storage", onStorageChange);
+      window.removeEventListener("queue-updated", handleQueueUpdated);
       window.removeEventListener("resize", syncViewportMode);
       clearInterval(interval);
     };
@@ -250,6 +266,15 @@
       </button>
 
       <div class="bottom-actions">
+        <div class="queue-indicator" aria-live="polite">
+          <span class="queue-label">Upload Queue</span>
+          <span class="queue-count" class:empty={queueCounts.total === 0}>
+            {queueCounts.total}
+          </span>
+        </div>
+        <div class="queue-breakdown">
+          Pit {queueCounts.pit} | Qual {queueCounts.qual}
+        </div>
         {#if alliancesAvailable}
           <div class="madness-wrapper">
             {#if !elimsStarted}
@@ -642,6 +667,44 @@
   .bottom-actions {
     margin-top: auto;
     padding: 0.5rem 0 1rem;
+  }
+
+  .queue-indicator {
+    margin: 0.25rem 1rem 0.1rem;
+    padding: 0.45rem 0.6rem;
+    background: #1f1f1f;
+    border: 1px solid #444;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+  }
+
+  .queue-label {
+    font-weight: 600;
+    color: #ddd;
+  }
+
+  .queue-count {
+    min-width: 24px;
+    padding: 0 6px;
+    border-radius: 10px;
+    background: #c81b00;
+    color: #fff;
+    font-weight: 700;
+    text-align: center;
+  }
+
+  .queue-count.empty {
+    background: #555;
+  }
+
+  .queue-breakdown {
+    margin: 0 1rem 0.5rem;
+    font-size: 0.72rem;
+    color: #bbb;
   }
 
   .navbar.collapsed .bottom-actions {

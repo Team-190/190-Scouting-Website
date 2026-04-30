@@ -4,6 +4,9 @@
   import { isSidebarOpen } from "./stores/sidebarState.js";
   import { pushToast } from "./stores/toasts.js";
   import { startPeriodicQueueSync, syncSelectedEventData } from "./utils/api.js";
+  import { clearAllStores } from "./utils/indexedDB.js";
+
+  const APP_VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
 
   import Navbar from "./components/Navbar.svelte";
   import ToastContainer from "./components/ToastContainer.svelte";
@@ -38,6 +41,68 @@
   ];
 
   onMount(() => {
+    // Freshness check: if client has a very old last-fetch timestamp, clear all caches
+    (async function freshnessCheck() {
+      try {
+        // Allow manual override to force clearing for debugging
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('forceClear') === '1') {
+          console.warn('[Freshness] forceClear triggered - wiping client caches');
+          await clearAllStores();
+          localStorage.clear();
+          if ('serviceWorker' in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(regs.map(r => r.unregister()));
+          }
+          pushToast('Client caches cleared; reloading to update site', 'info', 5000);
+          window.location.reload(true);
+          return;
+        }
+
+        const resp = await fetch('/api/health');
+        if (!resp.ok) return;
+        const json = await resp.json();
+        const serverTs = Number(json?.timestamp) || Date.now();
+
+        let localMs = null;
+        const lastFetchMs = localStorage.getItem('lastFetchMs');
+        if (lastFetchMs) localMs = Number(lastFetchMs);
+        else {
+          const localTs = localStorage.getItem('timestamp');
+          if (localTs) {
+            const parsed = Date.parse(localTs);
+            if (!Number.isNaN(parsed)) localMs = parsed;
+          }
+        }
+
+        // If we have no record of a recent fetch, or the local fetch is older than 30 days,
+        // assume this is an old client and clear everything so it gets a fresh site/data.
+        const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+        if (!localMs || (serverTs - localMs) > THIRTY_DAYS) {
+          console.warn('[Freshness] Stale or missing client cache detected - wiping client caches');
+          try {
+            await clearAllStores();
+          } catch (e) {
+            console.warn('[Freshness] clearAllStores failed', e);
+          }
+          localStorage.clear();
+          if ('serviceWorker' in navigator) {
+            try {
+              const regs = await navigator.serviceWorker.getRegistrations();
+              await Promise.all(regs.map(r => r.unregister()));
+            } catch (e) {
+              console.warn('[Freshness] service worker unregister failed', e);
+            }
+          }
+          pushToast('Stale client detected: cleared caches and reloading to update site', 'info', 6000);
+          // Reload to pick up fresh frontend assets
+          window.location.reload();
+        }
+      } catch (e) {
+        console.warn('[Freshness] check failed', e);
+      }
+    })();
+
     let autoSyncInFlight = false;
     let lastAutoSyncedEventCode = null;
     let lastAutoSyncErrorAt = 0;
@@ -78,11 +143,20 @@
     const stopQueueSync = startPeriodicQueueSync(15000);
     const autoSyncTimer = setInterval(runGlobalAutoSync, 60 * 1000);
     const autoSyncNowHandler = () => runGlobalAutoSync();
+    const clientRefreshHandler = (event) => {
+      const reason = event?.detail?.reason || "Server rejected a queued upload.";
+      pushToast(`${reason} Reloading to update the client.`, "error", 6000);
+      setTimeout(() => {
+        window.location.reload();
+      }, 1200);
+    };
     window.addEventListener("auto-sync-now", autoSyncNowHandler);
+    window.addEventListener("client-refresh-required", clientRefreshHandler);
     runGlobalAutoSync();
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/service_worker.js')
+      const swUrl = `/service_worker.js?v=${encodeURIComponent(APP_VERSION)}`;
+      navigator.serviceWorker.register(swUrl)
         .then(reg => console.log('SW registered', reg))
         .catch(err => console.error('SW failed', err));
     }
@@ -91,6 +165,7 @@
       stopQueueSync();
       clearInterval(autoSyncTimer);
       window.removeEventListener("auto-sync-now", autoSyncNowHandler);
+      window.removeEventListener("client-refresh-required", clientRefreshHandler);
     };
   });
 </script>
@@ -101,6 +176,17 @@
   <Router {routes} />
 </main>
 <ToastContainer />
+
+<!-- Site status footer: shows client data timestamp and small version info -->
+<footer class="site-status">
+  <div class="site-status-inner">
+    <span>Client data: {localStorage.getItem('timestamp') || 'Unknown'}</span>
+    <span class="sep">|</span>
+    <span>Last fetch ms: {localStorage.getItem('lastFetchMs') || 'None'}</span>
+    <span class="sep">|</span>
+    <span>App v{APP_VERSION}</span>
+  </div>
+</footer>
 
 <style>
   /* Adjust for sidebar navbar */
@@ -129,4 +215,18 @@
       padding-top: 3.75rem;
     }
   }
+
+.site-status {
+  position: fixed;
+  right: 12px;
+  bottom: 8px;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  z-index: 1200;
+}
+.site-status .site-status-inner { display:flex; gap:8px; align-items:center }
+.site-status .sep { opacity:0.6 }
 </style>

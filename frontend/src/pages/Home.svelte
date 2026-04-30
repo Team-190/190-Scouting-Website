@@ -5,6 +5,7 @@
         fetchEvents,
         fetchMatchAlliances,
         syncSelectedEventData,
+        flushOfflineScoutingQueues,
     } from "../utils/api";
     import { clearAllStores } from '../utils/indexedDB';
     import { pushToast } from "../stores/toasts";
@@ -235,6 +236,13 @@
         if (!eventCode || isAutoSyncing) return;
 
         isAutoSyncing = true;
+        // Attempt to upload any queued offline scouting only when user explicitly presses Get Data
+        try {
+            await flushOfflineScoutingQueues();
+        } catch (e) {
+            // Swallow errors - user will be informed by Upload localStorage flow if needed
+            console.warn('Flush offline scouting queues failed during Get Data', e);
+        }
         try {
             const previousEventCode = localStorage.getItem("eventCode");
             const isNewEvent = previousEventCode !== eventCode;

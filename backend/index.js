@@ -21,7 +21,8 @@ require('dotenv').config({ path: path.resolve(__dirname, '../.env'), override: t
 
 const app = express();
 
-const logFilePath = "./logs/testing.csv";
+const logDirPath = path.join(__dirname, "logs");
+const logFilePath = path.join(logDirPath, "testing.csv");
 
 app.use((req, res, next) => {
     let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
@@ -35,8 +36,14 @@ app.use((req, res, next) => {
     const timestamp = new Date().toISOString();
     const logEntry = `"${ip}","${timestamp}","${req.method}","${req.url}"\n`;
 
-    fs.appendFile(logFilePath, logEntry, (err) => {
-        if (err) console.error("Log write failed", err);
+    fs.mkdir(logDirPath, { recursive: true }, (mkdirErr) => {
+        if (mkdirErr) {
+            console.error("Log directory creation failed", mkdirErr);
+            return;
+        }
+        fs.appendFile(logFilePath, logEntry, (err) => {
+            if (err) console.error("Log write failed", err);
+        });
     });
 
     next();
@@ -50,7 +57,7 @@ const fileMutationLocks = new Map();
 // ─── HELPER FUNCTIONS ───────────────────────────────────────────────────────
 
 const validateEventCode = (req, res, next) => {
-  const code = req.query.eventCode || req.body.event;
+  const code = req.query.eventCode || req.body?.event;
   if (!code) return res.sendStatus(403);
   req.eventCode = code;
   next();
@@ -58,11 +65,13 @@ const validateEventCode = (req, res, next) => {
 
 async function getEventData(filename, eventCode) {
   let data = await database.readJSONFile(filename);
+  if (!data || typeof data !== "object") data = {};
   return data[eventCode] || {};
 }
 
 async function ensureEventCodeExists(filename, eventCode) {
   let data = await database.readJSONFile(filename);
+  if (!data || typeof data !== "object") data = {};
   if (!data[eventCode]) {
     data[eventCode] = {};
     await database.writeJSONFile(filename, data);
@@ -79,6 +88,23 @@ function normalizeEntries(value) {
     return [value];
   }
   return [];
+}
+
+function isNonEmptyValue(value) {
+  return value !== undefined && value !== null && String(value).trim() !== "";
+}
+
+function isValidFormData(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function sendInvalidPayload(res, details) {
+  return res.status(400).json({
+    error: "Invalid payload",
+    code: "INVALID_PAYLOAD",
+    refresh: true,
+    details,
+  });
 }
 
 function appendUniqueEntry(existingValue, nextEntry) {
@@ -115,6 +141,12 @@ function countQualEntries(teamData) {
     total += normalizeEntries(matchData).length;
   }
   return total;
+}
+
+function queueEventDataPopulation(eventCode) {
+  Promise.resolve(externalAPI.populateEventData(eventCode)).catch((error) => {
+    console.error(`Failed to populate event data for ${eventCode}`, error);
+  });
 }
 
 async function mutateEventFile(filename, mutator) {
@@ -340,7 +372,7 @@ refreshTimer = setInterval(
   () => {
     for (const code of eventCodes) {
       console.log(`[RefreshTimer] Refreshing data for event: ${code}`);
-      externalAPI.populateEventData(code);
+      queueEventDataPopulation(code);
     }
   },
   1000 * 60 * 1,
@@ -729,7 +761,7 @@ app.post("/api/postEventCode", async (req, res) => {
   }
   console.log(`Event code received: ${code}`);
   eventCodes.add(code);
-  externalAPI.populateEventData(code);
+  queueEventDataPopulation(code);
   res.sendStatus(200);
 });
 
@@ -804,10 +836,9 @@ app.post("/api/postHPRatings", (req, res) => {
 app.post("/api/postPitScouting", validateEventCode, async (req, res) => {
   const { event, team, formData } = req.body;
 
-  if (!formData || !team) {
-    console.log("One or more fields could not be retrieved");
-    console.log(`${formData} ${team} ${event}`);
-    return res.sendStatus(400);
+  if (!isNonEmptyValue(event) || !isNonEmptyValue(team) || !isValidFormData(formData)) {
+    console.log("Invalid pit scouting payload", { event, team, hasFormData: !!formData });
+    return sendInvalidPayload(res, { route: "postPitScouting" });
   }
 
   console.log("Pit scouting data:", formData);
@@ -823,10 +854,19 @@ app.post("/api/postPitScouting", validateEventCode, async (req, res) => {
 app.post("/api/postQualitativeScouting", validateEventCode, async (req, res) => {
   const { event, match, team, formData } = req.body;
 
-  if (formData == null || team == null || match == null) {
-    console.log("One or more fields could not be retrieved");
-    console.log(`${formData} ${team} ${event} ${match}`);
-    return res.sendStatus(400);
+  if (
+    !isNonEmptyValue(event)
+    || !isNonEmptyValue(team)
+    || !isNonEmptyValue(match)
+    || !isValidFormData(formData)
+  ) {
+    console.log("Invalid qualitative scouting payload", {
+      event,
+      team,
+      match,
+      hasFormData: !!formData,
+    });
+    return sendInvalidPayload(res, { route: "postQualitativeScouting" });
   }
 
   console.log("Qual scouting data:", formData);

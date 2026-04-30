@@ -505,6 +505,18 @@ function readQueue(key) {
   return Array.isArray(queue) ? queue : [];
 }
 
+export function getQueueCounts() {
+  const pit = readQueue(PIT_QUEUE_KEY).length;
+  const qual = readQueue(QUAL_QUEUE_KEY).length;
+  return { pit, qual, total: pit + qual };
+}
+
+function emitQueueUpdate() {
+  if (typeof window === "undefined") return;
+  const detail = getQueueCounts();
+  window.dispatchEvent(new CustomEvent("queue-updated", { detail }));
+}
+
 async function updatePitMirror(team, formData) {
   const pitData = await readPitScoutingFromIDB({});
   const teamKey = normalizeTeamKey(team);
@@ -549,11 +561,45 @@ export async function hasServerConnection(timeoutMs = 2500) {
   }
 }
 
+let refreshRequested = false;
+
+function requestClientRefresh(reason, details) {
+  if (typeof window === "undefined" || refreshRequested) return;
+  refreshRequested = true;
+  window.dispatchEvent(
+    new CustomEvent("client-refresh-required", {
+      detail: {
+        reason: String(reason || "Server rejected a queued upload."),
+        details: details || null,
+      },
+    }),
+  );
+}
+
+async function parseErrorPayload(response) {
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { message: text };
+  }
+}
+
+async function handleInvalidPayloadResponse(response, context) {
+  if (![400, 415].includes(response.status)) return false;
+  const payload = await parseErrorPayload(response);
+  if (payload?.code !== "INVALID_PAYLOAD") return false;
+  requestClientRefresh(payload?.error, { ...payload, context });
+  return true;
+}
+
 export async function queuePitScoutingForSync(event, team, formData) {
   const { entryId, payload } = ensureEntryPayload(formData);
   const queue = readQueue(PIT_QUEUE_KEY);
   queue.push({ event, team: String(team), formData: payload, entryId });
   writeLocalJson(PIT_QUEUE_KEY, queue);
+  emitQueueUpdate();
   await updatePitMirror(team, payload);
   return queue.length;
 }
@@ -574,6 +620,7 @@ export async function queueQualitativeScoutingForSync(
     entryId,
   });
   writeLocalJson(QUAL_QUEUE_KEY, queue);
+  emitQueueUpdate();
   await updateQualMirror(team, match, payload);
   return queue.length;
 }
@@ -615,7 +662,13 @@ export async function flushPitScoutingQueue() {
         uploaded += 1;
         await updatePitMirror(team, payload);
       } else {
-        remaining.push(normalizedItem);
+        const shouldDrop = await handleInvalidPayloadResponse(response, {
+          type: "pit",
+          event,
+          team,
+          entryId,
+        });
+        if (!shouldDrop) remaining.push(normalizedItem);
       }
     } catch {
       remaining.push(normalizedItem, ...queue.slice(i + 1));
@@ -624,6 +677,7 @@ export async function flushPitScoutingQueue() {
   }
 
   writeLocalJson(PIT_QUEUE_KEY, remaining);
+  emitQueueUpdate();
   return { uploaded, remaining: remaining.length };
 }
 
@@ -671,7 +725,14 @@ export async function flushQualitativeScoutingQueue() {
         uploaded += 1;
         await updateQualMirror(team, match, payload);
       } else {
-        remaining.push(normalizedItem);
+        const shouldDrop = await handleInvalidPayloadResponse(response, {
+          type: "qual",
+          event,
+          team,
+          match,
+          entryId,
+        });
+        if (!shouldDrop) remaining.push(normalizedItem);
       }
     } catch {
       remaining.push(normalizedItem, ...queue.slice(i + 1));
@@ -680,6 +741,7 @@ export async function flushQualitativeScoutingQueue() {
   }
 
   writeLocalJson(QUAL_QUEUE_KEY, remaining);
+  emitQueueUpdate();
   return { uploaded, remaining: remaining.length };
 }
 
@@ -700,20 +762,10 @@ export function startPeriodicQueueSync(intervalMs = 15000) {
     return () => {};
   }
 
-  const runSync = () => {
-    flushOfflineScoutingQueues().catch((error) => {
-      console.warn("Periodic scouting queue sync failed", error);
-    });
-  };
-
-  const intervalId = window.setInterval(runSync, intervalMs);
-  window.addEventListener("online", runSync);
-  runSync();
-
-  return () => {
-    window.clearInterval(intervalId);
-    window.removeEventListener("online", runSync);
-  };
+  // Disable automatic periodic/online-triggered queue flushing.
+  // Queue flushes will only occur when the user explicitly requests them
+  // (Submit Scouting Record, Upload localStorage, or Get Data).
+  return () => {};
 }
 
 export async function fetchRobotClimb(eventCode, teamNumber, matchNumber) {
@@ -914,6 +966,7 @@ export async function syncSelectedEventData(eventCode, { forceFullRefresh = fals
   await refreshEventCaches(eventCode);
 
   localStorage.setItem("timestamp", new Date(Date.now()).toLocaleString());
+  localStorage.setItem("lastFetchMs", String(Date.now()));
   localStorage.setItem("eventCode", eventCode);
 
   return {
