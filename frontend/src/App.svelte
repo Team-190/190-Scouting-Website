@@ -40,7 +40,41 @@
     { path: "/qualDataView", component: QualDataView },
   ];
 
+  let statusEventName = "No event selected";
+  let statusLastSync = "Not synced yet";
+  let statusVersion = APP_VERSION === "dev" ? "dev" : String(APP_VERSION).slice(0, 19);
+
+  function formatSyncTime(value) {
+    const ms = Number(value);
+    if (!Number.isFinite(ms) || ms <= 0) return "Not synced yet";
+
+    const date = new Date(ms);
+    if (Number.isNaN(date.getTime())) return "Not synced yet";
+    return date.toLocaleString([], {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+
+  function updateClientStatus() {
+    const eventCode = localStorage.getItem("eventCode") || "";
+    const eventMapRaw = localStorage.getItem("eventCodeToName") || "{}";
+    let eventMap = {};
+    try {
+      eventMap = JSON.parse(eventMapRaw) || {};
+    } catch {
+      eventMap = {};
+    }
+
+    statusEventName = eventCode ? (eventMap[eventCode] || eventCode) : "No event selected";
+    statusLastSync = formatSyncTime(localStorage.getItem("lastFetchMs"));
+  }
+
   onMount(() => {
+    updateClientStatus();
+
     // Freshness check: if client has a very old last-fetch timestamp, clear all caches
     (async function freshnessCheck() {
       try {
@@ -80,6 +114,7 @@
         // get stuck in a clear/reload loop.
         if (!localMs) {
           localStorage.setItem('lastFetchMs', String(serverTs));
+          updateClientStatus();
           return;
         }
 
@@ -151,6 +186,12 @@
     const stopQueueSync = startPeriodicQueueSync(15000);
     const autoSyncTimer = setInterval(runGlobalAutoSync, 60 * 1000);
     const autoSyncNowHandler = () => runGlobalAutoSync();
+    const statusUpdatedHandler = () => updateClientStatus();
+    const storageHandler = (event) => {
+      if (["eventCode", "eventCodeToName", "lastFetchMs", "timestamp"].includes(event.key)) {
+        updateClientStatus();
+      }
+    };
     const clientRefreshHandler = (event) => {
       const reason = event?.detail?.reason || "Server rejected a queued upload.";
       pushToast(`${reason} Reloading to update the client.`, "error", 6000);
@@ -159,6 +200,8 @@
       }, 1200);
     };
     window.addEventListener("auto-sync-now", autoSyncNowHandler);
+    window.addEventListener("client-status-updated", statusUpdatedHandler);
+    window.addEventListener("storage", storageHandler);
     window.addEventListener("client-refresh-required", clientRefreshHandler);
     runGlobalAutoSync();
 
@@ -173,6 +216,8 @@
       stopQueueSync();
       clearInterval(autoSyncTimer);
       window.removeEventListener("auto-sync-now", autoSyncNowHandler);
+      window.removeEventListener("client-status-updated", statusUpdatedHandler);
+      window.removeEventListener("storage", storageHandler);
       window.removeEventListener("client-refresh-required", clientRefreshHandler);
     };
   });
@@ -185,14 +230,13 @@
 </main>
 <ToastContainer />
 
-<!-- Site status footer: shows client data timestamp and small version info -->
 <footer class="site-status">
   <div class="site-status-inner">
-    <span>Client data: {localStorage.getItem('timestamp') || 'Unknown'}</span>
+    <span>{statusEventName}</span>
     <span class="sep">|</span>
-    <span>Last fetch ms: {localStorage.getItem('lastFetchMs') || 'None'}</span>
+    <span>Synced {statusLastSync}</span>
     <span class="sep">|</span>
-    <span>App v{APP_VERSION}</span>
+    <span>Build {statusVersion}</span>
   </div>
 </footer>
 

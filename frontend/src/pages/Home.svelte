@@ -17,6 +17,11 @@
     let scheduleLoading = false;
     let autoDataRefreshEnabled = Boolean(parseStoredJson("homeAutoDataRefreshEnabled", false));
 
+    const TEST_EVENT = {
+        eventCode: "2026joh-test",
+        name: "Johnson Test Event",
+    };
+
     const OUR_TEAM_KEY = "frc190";
     let matchSchedule = {
         currentMatch: "—",
@@ -279,7 +284,12 @@
                 });
                 localStorage.setItem("eventCodeToName", JSON.stringify(eventMapping));
                 
-                dbEvents = eventsFromDb;
+                dbEvents = [
+                    ...eventsFromDb.filter((event) => event.eventCode !== TEST_EVENT.eventCode),
+                    TEST_EVENT,
+                ];
+                eventMapping[TEST_EVENT.eventCode] = TEST_EVENT.name;
+                localStorage.setItem("eventCodeToName", JSON.stringify(eventMapping));
             } else {
                 throw new Error("Failed to fetch events");
             }

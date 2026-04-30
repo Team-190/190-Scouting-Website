@@ -57,6 +57,9 @@ const eventCodes = new Set();
 let bracket;
 let refreshTimer;
 const fileMutationLocks = new Map();
+const EVENT_ALIASES = {
+  "2026joh-test": "2026joh",
+};
 
 // ─── HELPER FUNCTIONS ───────────────────────────────────────────────────────
 
@@ -64,8 +67,13 @@ const validateEventCode = (req, res, next) => {
   const code = req.query.eventCode || req.body?.event;
   if (!code) return res.sendStatus(403);
   req.eventCode = code;
+  req.sourceEventCode = EVENT_ALIASES[code] || code;
   next();
 };
+
+function getSourceEventCode(eventCode) {
+  return EVENT_ALIASES[eventCode] || eventCode;
+}
 
 async function getEventData(filename, eventCode) {
   let data = await database.readJSONFile(filename);
@@ -475,8 +483,7 @@ app.get("/api/getEvents", async (req, res) => {
 });
 
 app.get("/api/getAvailableTeams", validateEventCode, async (req, res) => {
-  const { eventCode } = req;
-  let result = await database.getAvailableTeams(eventCode);
+  let result = await database.getAvailableTeams(req.sourceEventCode);
   res.send(result);
 });
 
@@ -567,14 +574,12 @@ app.get("/api/getPitScoutingImage", validateEventCode, async (req, res) => {
 });
 
 app.get("/api/getAllData", validateEventCode, async (req, res) => {
-  const { eventCode } = req;
   const lastId = parseInt(req.query.lastId || "0");
-  let result = await database.getAllData(eventCode, lastId);
+  let result = await database.getAllData(req.sourceEventCode, lastId);
   res.send(result);
 });
 
 app.get("/api/getTransactionTimers", validateEventCode, async (req, res) => {
-  const { eventCode } = req;
   const matchNumber = req.query.matchNumber
     ? parseInt(req.query.matchNumber)
     : null;
@@ -584,7 +589,7 @@ app.get("/api/getTransactionTimers", validateEventCode, async (req, res) => {
   if (!matchNumber) return res.sendStatus(400);
 
   let result = await database.getTransactionTimers(
-    eventCode,
+    req.sourceEventCode,
     matchNumber,
     team,
     scouter,
@@ -593,10 +598,10 @@ app.get("/api/getTransactionTimers", validateEventCode, async (req, res) => {
 });
 
 app.get("/api/getSingleMetric", validateEventCode, async (req, res) => {
-  const { eventCode } = req;
+  const { eventCode, sourceEventCode } = req;
   console.log("single metric data requested, eventCode: " + eventCode);
 
-  let result = await database.getAllData(eventCode);
+  let result = await database.getAllData(sourceEventCode);
   result = result.data;
   let teams = {};
 
@@ -630,18 +635,18 @@ app.get("/api/getHPRatings", validateEventCode, async (req, res) => {
 // ─── EXTERNAL API GET ROUTES ────────────────────────────────────────────────
 
 app.get("/api/getMatchAlliances", validateEventCode, async (req, res) => {
-  const { eventCode } = req;
+  const { eventCode, sourceEventCode } = req;
   console.log("matches requested, eventCode: " + eventCode);
-  await ensureEventCodeExists("matches", eventCode);
-  const raw = await getEventData("matches", eventCode);
+  await ensureEventCodeExists("matches", sourceEventCode);
+  const raw = await getEventData("matches", sourceEventCode);
   res.send(raw);
 });
 
 app.get("/api/getTeams", validateEventCode, async (req, res) => {
-  const { eventCode } = req;
+  const { eventCode, sourceEventCode } = req;
   console.log("teams requested, eventCode: " + eventCode);
-  await ensureEventCodeExists("teams", eventCode);
-  const raw = await getEventData("teams", eventCode);
+  await ensureEventCodeExists("teams", sourceEventCode);
+  const raw = await getEventData("teams", sourceEventCode);
   const teamList = Array.isArray(raw) ? raw : [];
 
   const result = {
@@ -655,10 +660,10 @@ app.get("/api/getTeams", validateEventCode, async (req, res) => {
 });
 
 app.get("/api/getEventDetails", validateEventCode, async (req, res) => {
-  const { eventCode } = req;
+  const { eventCode, sourceEventCode } = req;
   console.log("event details requested, eventCode: " + eventCode);
-  await ensureEventCodeExists("eventDetails", eventCode);
-  const raw = await getEventData("eventDetails", eventCode);
+  await ensureEventCodeExists("eventDetails", sourceEventCode);
+  const raw = await getEventData("eventDetails", sourceEventCode);
 
   const result = {
     name: raw?.name || "",
@@ -670,10 +675,10 @@ app.get("/api/getEventDetails", validateEventCode, async (req, res) => {
 });
 
 app.get("/api/getTeamStatuses", validateEventCode, async (req, res) => {
-  const { eventCode } = req;
+  const { eventCode, sourceEventCode } = req;
   console.log("team statuses requested, eventCode: " + eventCode);
-  await ensureEventCodeExists("teamStatuses", eventCode);
-  const raw = await getEventData("teamStatuses", eventCode);
+  await ensureEventCodeExists("teamStatuses", sourceEventCode);
+  const raw = await getEventData("teamStatuses", sourceEventCode);
 
   const result = Object.fromEntries(
     Object.entries(raw).map(([teamKey, status]) => [
@@ -686,10 +691,10 @@ app.get("/api/getTeamStatuses", validateEventCode, async (req, res) => {
 });
 
 app.get("/api/getOPR", validateEventCode, async (req, res) => {
-  const { eventCode } = req;
+  const { eventCode, sourceEventCode } = req;
   console.log("OPR requested, eventCode: " + eventCode);
-  await ensureEventCodeExists("oprs", eventCode);
-  const raw = await getEventData("oprs", eventCode);
+  await ensureEventCodeExists("oprs", sourceEventCode);
+  const raw = await getEventData("oprs", sourceEventCode);
 
   const result = {
     oprs: raw.oprs ?? {},
@@ -701,18 +706,18 @@ app.get("/api/getOPR", validateEventCode, async (req, res) => {
 });
 
 app.get("/api/getCOPR", validateEventCode, async (req, res) => {
-  const { eventCode } = req;
+  const { eventCode, sourceEventCode } = req;
   console.log("COPR requested, eventCode: " + eventCode);
-  await ensureEventCodeExists("coprs", eventCode);
-  const raw = await getEventData("coprs", eventCode);
+  await ensureEventCodeExists("coprs", sourceEventCode);
+  const raw = await getEventData("coprs", sourceEventCode);
   res.send(raw);
 });
 
 app.get("/api/getAlliances", validateEventCode, async (req, res) => {
-  const { eventCode } = req;
+  const { eventCode, sourceEventCode } = req;
   console.log("alliances requested, eventCode: " + eventCode);
-  await ensureEventCodeExists("alliances", eventCode);
-  const raw = await getEventData("alliances", eventCode);
+  await ensureEventCodeExists("alliances", sourceEventCode);
+  const raw = await getEventData("alliances", sourceEventCode);
 
   const available =
     Array.isArray(raw) && raw.length > 0 && raw[0]?.picks?.length > 0;
@@ -721,18 +726,18 @@ app.get("/api/getAlliances", validateEventCode, async (req, res) => {
 });
 
 app.get("/api/getEventEpas", validateEventCode, async (req, res) => {
-  const { eventCode } = req;
+  const { eventCode, sourceEventCode } = req;
   console.log("EPAs requested, eventCode: " + eventCode);
-  await ensureEventCodeExists("epas", eventCode);
-  const raw = await getEventData("epas", eventCode);
+  await ensureEventCodeExists("epas", sourceEventCode);
+  const raw = await getEventData("epas", sourceEventCode);
   res.send(raw);
 });
 
 app.get("/api/getElimsHaveStarted", validateEventCode, async (req, res) => {
-  const { eventCode } = req;
+  const { eventCode, sourceEventCode } = req;
   console.log("elims check requested, eventCode: " + eventCode);
-  await ensureEventCodeExists("matches", eventCode);
-  const raw = await getEventData("matches", eventCode);
+  await ensureEventCodeExists("matches", sourceEventCode);
+  const raw = await getEventData("matches", sourceEventCode);
 
   const matchesArray = Array.isArray(raw) ? raw : [];
   const result = matchesArray.some(
@@ -750,11 +755,12 @@ app.get("/api/getMatchScores", async (req, res) => {
   if (!eventCode || !matchNumber || !driveStation) return res.sendStatus(403);
   console.log("match scores requested, eventCode: " + eventCode);
 
-  await ensureEventCodeExists("matches", eventCode);
-  const raw = await getEventData("matches", eventCode);
+  const sourceEventCode = getSourceEventCode(eventCode);
+  await ensureEventCodeExists("matches", sourceEventCode);
+  const raw = await getEventData("matches", sourceEventCode);
 
   const matchesArray = Array.isArray(raw) ? raw : [];
-  const matchKey = `${eventCode}_qm${matchNumber}`;
+  const matchKey = `${sourceEventCode}_qm${matchNumber}`;
   const alliance = driveStation.startsWith("red") ? "red" : "blue";
   const tbaMatch = matchesArray.find((m) => m.key === matchKey);
 
@@ -776,7 +782,7 @@ app.post("/api/postEventCode", async (req, res) => {
   }
   console.log(`Event code received: ${code}`);
   eventCodes.add(code);
-  queueEventDataPopulation(code);
+  queueEventDataPopulation(getSourceEventCode(code));
   res.sendStatus(200);
 });
 

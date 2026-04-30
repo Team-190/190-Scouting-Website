@@ -77,6 +77,13 @@ describe('API Routes', () => {
             expect(res.status).toBe(200);
             expect(res.body).toEqual({ data: ['190', '123'], error: null });
         });
+
+        it('maps the Johnson test event to Johnson source data', async () => {
+            database.getAvailableTeams.mockResolvedValueOnce({ data: ['190'], error: null });
+            const res = await request(appInstance).get('/api/getAvailableTeams?eventCode=2026joh-test');
+            expect(res.status).toBe(200);
+            expect(database.getAvailableTeams).toHaveBeenCalledWith('2026joh');
+        });
     });
 
     describe('GET /api/getTeams', () => {
@@ -173,6 +180,17 @@ describe('API Routes', () => {
 
             const res = await request(appInstance).post('/api/postEventCode').send({
                 eventCode: '2026joh'
+            });
+
+            expect(res.status).toBe(200);
+            expect(externalApi.populateEventData).toHaveBeenCalledWith('2026joh');
+        });
+
+        it('populates Johnson source data for the Johnson test event', async () => {
+            externalApi.populateEventData.mockResolvedValueOnce();
+
+            const res = await request(appInstance).post('/api/postEventCode').send({
+                eventCode: '2026joh-test'
             });
 
             expect(res.status).toBe(200);

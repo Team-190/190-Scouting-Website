@@ -968,6 +968,9 @@ export async function syncSelectedEventData(eventCode, { forceFullRefresh = fals
   localStorage.setItem("timestamp", new Date(Date.now()).toLocaleString());
   localStorage.setItem("lastFetchMs", String(Date.now()));
   localStorage.setItem("eventCode", eventCode);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("client-status-updated"));
+  }
 
   return {
     scoutingRowsAdded: newData.length,
