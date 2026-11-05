@@ -1,0 +1,86 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 5,
+    "Team": "9597",
+    "ScouterName": "SV",
+    "ScoutStation": "R2",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": [
+          [
+            {
+              "x": 268.9753914988814,
+              "y": 314.34451901565984
+            },
+            {
+              "x": 240.34004474272928,
+              "y": 314.34451901565984
+            },
+            {
+              "x": 219.72259507829975,
+              "y": 314.34451901565984
+            },
+            {
+              "x": 200.2505592841163,
+              "y": 314.34451901565984
+            },
+            {
+              "x": 184.21476510067114,
+              "y": 314.34451901565984
+            },
+            {
+              "x": 169.324384787472,
+              "y": 314.34451901565984
+            },
+            {
+              "x": 156.7248322147651,
+              "y": 314.34451901565984
+            },
+            {
+              "x": 146.41610738255034,
+              "y": 314.34451901565984
+            },
+            {
+              "x": 139.54362416107384,
+              "y": 314.34451901565984
+            },
+            {
+              "x": 136.10738255033556,
+              "y": 314.34451901565984
+            },
+            {
+              "x": 134.96196868008946,
+              "y": 314.34451901565984
+            },
+            {
+              "x": 136.10738255033556,
+              "y": 314.34451901565984
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": 2,
+        "comments": "got defended and is not great and getting out of it. Lane defense paused it for 5 sec and blocking and pushing caused it to lose lots of balls for shooting. "
+      },
+      "matchEvents": [],
+      "comments": "Tall robot not great at avoiding defense"
+    },
+    "quant": {
+      "shootingBalls": 150,
+      "feedingBalls": 30,
+      "trenchCycles": 0,
+      "bumpCycles": 7
+    },
+    "_entryId": "1777591337254-jwke1i1u"
+  }
+]

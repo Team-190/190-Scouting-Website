@@ -1,0 +1,58 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 9,
+    "Team": "2040",
+    "ScouterName": "CC",
+    "ScoutStation": "R3",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "",
+        "path": [
+          [
+            {
+              "x": 1054.1925811401195,
+              "y": 138.00191472743478
+            },
+            {
+              "x": 1038.687357559012,
+              "y": 37.7348022362733
+            },
+            {
+              "x": 1036.6199944148648,
+              "y": -102.48291941068814
+            },
+            {
+              "x": 1054.1925811401195,
+              "y": -240.63327791350196
+            },
+            {
+              "x": 1114.146112320402,
+              "y": -357.68390722757215
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Stopped near far trench and did not do anything during auto. Beached itself but got itself off. Can go over bump. Score about 20-25 balls. Not the fastest shooters. Hoper is really small for them being a just shooting robot. "
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 0,
+      "trenchCycles": 0,
+      "bumpCycles": 0
+    },
+    "_entryId": "1777602550670-jophj0c4"
+  }
+]

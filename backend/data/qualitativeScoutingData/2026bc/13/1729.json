@@ -1,0 +1,75 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 13,
+    "Team": "1729",
+    "ScouterName": "RG",
+    "ScoutStation": "R3",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": []
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [
+          "Pushing (hitting a robot to disrupt their aim)",
+          "Pinning (Stopping robots from moving so they couldn't aim)"
+        ],
+        "effectiveness": 2,
+        "comments": ""
+      },
+      "matchEvents": [
+        "Stopped moving (5+ seconds)"
+      ],
+      "comments": ""
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 0,
+      "trenchCycles": 0,
+      "bumpCycles": 0
+    },
+    "_entryId": "1780156732349-vhlhnl8v"
+  },
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 13,
+    "Team": "1729",
+    "ScouterName": "JP",
+    "ScoutStation": "R3",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": []
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [
+        "Stopped moving (5+ seconds)"
+      ],
+      "comments": ""
+    },
+    "quant": {
+      "shootingBalls": 140,
+      "feedingBalls": 0,
+      "trenchCycles": 0,
+      "bumpCycles": 5
+    },
+    "_entryId": "1780156763234-i896nh1t"
+  }
+]

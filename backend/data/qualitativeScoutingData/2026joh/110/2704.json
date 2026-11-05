@@ -1,0 +1,85 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 110,
+    "Team": "2704",
+    "ScouterName": "RG",
+    "ScoutStation": "B1",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "",
+        "path": [
+          [
+            {
+              "x": 970.1584073773244,
+              "y": 286.89007034523513
+            },
+            {
+              "x": 983.7338025063194,
+              "y": 310.90807711191854
+            },
+            {
+              "x": 998.353458799083,
+              "y": 318.2179052583004
+            },
+            {
+              "x": 1006.7075481092338,
+              "y": 320.30642758583815
+            },
+            {
+              "x": 1014.0173762556157,
+              "y": 320.30642758583815
+            },
+            {
+              "x": 1019.2386820744599,
+              "y": 320.30642758583815
+            },
+            {
+              "x": 1024.459987893304,
+              "y": 320.30642758583815
+            },
+            {
+              "x": 1029.681293712148,
+              "y": 319.26216642206936
+            },
+            {
+              "x": 1035.9468606947612,
+              "y": 317.1736440945316
+            },
+            {
+              "x": 1042.2124276773743,
+              "y": 312.9965994394563
+            },
+            {
+              "x": 1050.5665169875251,
+              "y": 307.77529362061205
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [
+          "Blocking (Getting in their way preventing motion across zones)",
+          "Pinning (Stopping robots from moving so they couldn't aim)"
+        ],
+        "effectiveness": 3,
+        "comments": "Good lane defense at times but to get past just spin. Not bad but not crazy good"
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Just played mid defense the entire time. Indecisive driver that didn’t shoot at all. Little bit of feeding and strategy b it  that’s it"
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 10,
+      "trenchCycles": 0,
+      "bumpCycles": 0
+    },
+    "_entryId": "1777670133647-ponarqu1"
+  }
+]

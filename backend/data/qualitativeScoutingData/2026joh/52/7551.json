@@ -1,0 +1,72 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 52,
+    "Team": "7551",
+    "ScouterName": "AM",
+    "ScoutStation": "B2",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": []
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [
+          "Blocking (Getting in their way preventing motion across zones)"
+        ],
+        "effectiveness": 3,
+        "comments": "The robot was stuck in the neutral zone for like 5 seconds but then they escaped"
+      },
+      "matchEvents": [],
+      "comments": "The robot cannot go under trench, is very tall, didn’t shoot for some reason, can intake, feed balls by pushing "
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 40,
+      "trenchCycles": 0,
+      "bumpCycles": 2
+    },
+    "_entryId": "1777585361440-nk3fwl2s"
+  },
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 52,
+    "Team": "7551",
+    "ScouterName": "AM",
+    "ScoutStation": "B2",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": []
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [
+        "Stopped moving (5+ seconds)"
+      ],
+      "comments": "Auto did not work. In teleop they instantly got beached. Their teammates tried to unbeach them but failed like 5 times. After that it was just trench feeding the whole match"
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 50,
+      "trenchCycles": 0,
+      "bumpCycles": 5
+    },
+    "_entryId": "1777595494031-fw1phgxs"
+  }
+]

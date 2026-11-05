@@ -1,0 +1,92 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 15,
+    "Team": "126",
+    "ScouterName": "AG",
+    "ScoutStation": "B2",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": [
+          [
+            {
+              "x": 958.9403959864205,
+              "y": 322.64074314597894
+            },
+            {
+              "x": 960.2649169900711,
+              "y": 323.96537783266143
+            },
+            {
+              "x": 961.5894379937218,
+              "y": 325.28978515328026
+            },
+            {
+              "x": 962.9139589973724,
+              "y": 325.28978515328026
+            },
+            {
+              "x": 964.2384800010232,
+              "y": 325.28978515328026
+            },
+            {
+              "x": 972.1854923398952,
+              "y": 323.96537783266143
+            },
+            {
+              "x": 992.0529663455594,
+              "y": 319.9917011386777
+            },
+            {
+              "x": 1014.5695960415568,
+              "y": 316.01825181075753
+            },
+            {
+              "x": 1051.6556157286159,
+              "y": 309.39587415856795
+            },
+            {
+              "x": 1060.9271490711385,
+              "y": 306.74660478520303
+            },
+            {
+              "x": 1076.8211737488828,
+              "y": 298.79970612936273
+            },
+            {
+              "x": 1086.0927070914054,
+              "y": 294.826029435379
+            },
+            {
+              "x": 1092.7153121096587,
+              "y": 290.8525801074589
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [
+          "Pushing (hitting a robot to disrupt their aim)"
+        ],
+        "effectiveness": 4,
+        "comments": "Pushed by opponent but kept shooting and wasn't affected "
+      },
+      "matchEvents": [],
+      "comments": "Decent single shooter, shoots a bit slow, collects from neutral and depot not bad but not great"
+    },
+    "quant": {
+      "shootingBalls": 50,
+      "feedingBalls": 0,
+      "trenchCycles": 4,
+      "bumpCycles": 0
+    },
+    "_entryId": "1780157853299-1klpwuhm"
+  }
+]

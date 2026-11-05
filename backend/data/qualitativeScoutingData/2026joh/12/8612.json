@@ -1,0 +1,94 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 12,
+    "Team": "8612",
+    "ScouterName": "CC",
+    "ScoutStation": "R3",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "",
+        "path": [
+          [
+            {
+              "x": 480.3888388528156,
+              "y": -587.3348116064785
+            },
+            {
+              "x": 480.3888388528156,
+              "y": -587.3348116064785
+            },
+            {
+              "x": 480.3888388528156,
+              "y": -587.3348116064785
+            },
+            {
+              "x": 480.3888388528156,
+              "y": -587.3348116064785
+            },
+            {
+              "x": 474.7943332451793,
+              "y": -540.8191408631562
+            },
+            {
+              "x": 474.7943332451793,
+              "y": -523.2465541379011
+            },
+            {
+              "x": 480.9964226776223,
+              "y": -509.80869370094126
+            },
+            {
+              "x": 487.19851211006534,
+              "y": -502.5729226964245
+            },
+            {
+              "x": 495.467964686656,
+              "y": -500.5055595522768
+            },
+            {
+              "x": 509.93950669568966,
+              "y": -500.5055595522768
+            },
+            {
+              "x": 525.4447302767971,
+              "y": -500.5055595522768
+            },
+            {
+              "x": 538.8825907137568,
+              "y": -504.6402858405721
+            },
+            {
+              "x": 541.9836354299782,
+              "y": -508.77501212886744
+            },
+            {
+              "x": 618.4760717634417,
+              "y": 336.7765138275251
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Did not pick up anything when it went to the depot. V1 climb in auto.  Very large hopper. Can score a lot but don’t face defense well. When it switched they immediately stole a ton of balls from the blue zone. Scored a large factor of balls for their team. Look like they were gonna go climb before match end. "
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 0,
+      "trenchCycles": 0,
+      "bumpCycles": 0
+    },
+    "_entryId": "1777602633894-ml7cdhw1"
+  }
+]

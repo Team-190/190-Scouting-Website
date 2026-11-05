@@ -1,0 +1,39 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 78,
+    "Team": "245",
+    "ScouterName": "AM",
+    "ScoutStation": "R3",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": []
+      },
+      "defense": {
+        "types": [
+          "Pushing (hitting a robot to disrupt their aim)"
+        ],
+        "effectiveness": 1,
+        "comments": "Defense did not do much"
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [
+        "Lost mechanism"
+      ],
+      "comments": "Intake did not work so they were just “defending” and trench feeding and feeding to HP"
+    },
+    "quant": {
+      "shootingBalls": 5,
+      "feedingBalls": 30,
+      "trenchCycles": 4,
+      "bumpCycles": 0
+    },
+    "_entryId": "1777649673848-iyntgikm"
+  }
+]

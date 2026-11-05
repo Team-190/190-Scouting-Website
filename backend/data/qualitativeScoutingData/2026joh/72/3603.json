@@ -1,0 +1,78 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 72,
+    "Team": "3603",
+    "ScouterName": "AB",
+    "ScoutStation": "B3",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": [
+          [
+            {
+              "x": 939.9021925895465,
+              "y": 294.5641989631828
+            },
+            {
+              "x": 959.0458931167668,
+              "y": 304.6398308196143
+            },
+            {
+              "x": 964.0837090449826,
+              "y": 303.6322676339714
+            },
+            {
+              "x": 974.1593409014143,
+              "y": 304.6398308196143
+            },
+            {
+              "x": 976.1744672727006,
+              "y": 304.6398308196143
+            },
+            {
+              "x": 984.234972757846,
+              "y": 305.64739400525764
+            },
+            {
+              "x": 992.2954782429913,
+              "y": 305.64739400525764
+            },
+            {
+              "x": 999.3484205424933,
+              "y": 305.64739400525764
+            },
+            {
+              "x": 1004.3862364707093,
+              "y": 305.64739400525764
+            },
+            {
+              "x": 1005.3937996563524,
+              "y": 305.64739400525764
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Good dumper, they push fed a lot tho"
+    },
+    "quant": {
+      "shootingBalls": 55,
+      "feedingBalls": 25,
+      "trenchCycles": 7,
+      "bumpCycles": 2
+    },
+    "_entryId": "1777646455653-pgc0yqwn"
+  }
+]

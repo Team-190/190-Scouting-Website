@@ -1,0 +1,79 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 24,
+    "Team": "8612",
+    "ScouterName": "AM",
+    "ScoutStation": "R3",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": [
+          [
+            {
+              "x": 248.5837736405034,
+              "y": 294.6796345373429
+            },
+            {
+              "x": 227.91014219902686,
+              "y": 293.6459529652691
+            },
+            {
+              "x": 214.472281762067,
+              "y": 294.6796345373429
+            },
+            {
+              "x": 197.9333766088858,
+              "y": 303.9827686860074
+            },
+            {
+              "x": 182.4281530277783,
+              "y": 317.4206291229672
+            },
+            {
+              "x": 164.8555663025232,
+              "y": 332.9258527040747
+            },
+            {
+              "x": 148.31666114934194,
+              "y": 347.39739471310816
+            },
+            {
+              "x": 137.97984542860365,
+              "y": 357.7342104338466
+            },
+            {
+              "x": 135.912482284456,
+              "y": 361.8689367221418
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [
+          "Pushing (hitting a robot to disrupt their aim)",
+          "Blocking (Getting in their way preventing motion across zones)"
+        ],
+        "effectiveness": 3,
+        "comments": "Defended moto moto and overcharge "
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [
+        "Lost mechanism"
+      ],
+      "comments": "Intake didn’t work so they just defended the entire match"
+    },
+    "quant": {
+      "shootingBalls": 15,
+      "feedingBalls": 0,
+      "trenchCycles": 1,
+      "bumpCycles": 4
+    },
+    "_entryId": "1777567646201-pmyjayyy"
+  }
+]

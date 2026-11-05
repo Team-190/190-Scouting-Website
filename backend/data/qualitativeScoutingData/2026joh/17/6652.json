@@ -1,0 +1,38 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 17,
+    "Team": "6652",
+    "ScouterName": "KR",
+    "ScoutStation": "B3",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": []
+      },
+      "defense": {
+        "types": [
+          "Blocking (Getting in their way preventing motion across zones)",
+          "Pinning (Stopping robots from moving so they couldn't aim)"
+        ],
+        "effectiveness": 3,
+        "comments": "Kept 3536 out via zone defense but gave up after like 10 seconds, not sure why. Caused a tower penalty on 1073 at 10 seconds. "
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": ""
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 25,
+      "trenchCycles": 4,
+      "bumpCycles": 4
+    },
+    "_entryId": "1777587596856-cc8h898r"
+  }
+]

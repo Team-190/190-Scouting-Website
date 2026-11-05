@@ -1,0 +1,38 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 105,
+    "Team": "7551",
+    "ScouterName": "AM",
+    "ScoutStation": "B2",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": []
+      },
+      "defense": {
+        "types": [
+          "Blocking (Getting in their way preventing motion across zones)",
+          "Pushing (hitting a robot to disrupt their aim)"
+        ],
+        "effectiveness": 3,
+        "comments": "It blocked the red robots but it wasn't too effective since the robots were still able to shoot into the hub"
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Good blocking defense"
+    },
+    "quant": {
+      "shootingBalls": 5,
+      "feedingBalls": 0,
+      "trenchCycles": 0,
+      "bumpCycles": 3
+    },
+    "_entryId": "1777667643563-h8so9ual"
+  }
+]

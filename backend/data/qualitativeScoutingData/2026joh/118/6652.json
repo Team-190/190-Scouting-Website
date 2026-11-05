@@ -1,0 +1,38 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 118,
+    "Team": "6652",
+    "ScouterName": "LB",
+    "ScoutStation": "B2",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": []
+      },
+      "defense": {
+        "types": [
+          "Pushing (hitting a robot to disrupt their aim)",
+          "Pinning (Stopping robots from moving so they couldn't aim)"
+        ],
+        "effectiveness": 2,
+        "comments": "Didn't move the opponents really"
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": ""
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 0,
+      "trenchCycles": 2,
+      "bumpCycles": 6
+    },
+    "_entryId": "1777674166315-xbyfrjfr"
+  }
+]

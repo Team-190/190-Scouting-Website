@@ -1,0 +1,35 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 42,
+    "Team": "2704",
+    "ScouterName": "AB",
+    "ScoutStation": "B3",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Far Trench",
+        "path": []
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Slow shooter, hopper can store about 20"
+    },
+    "quant": {
+      "shootingBalls": 55,
+      "feedingBalls": 20,
+      "trenchCycles": 6,
+      "bumpCycles": 0
+    },
+    "_entryId": "1777594957870-4wmwnczs"
+  }
+]

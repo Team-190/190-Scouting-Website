@@ -1,0 +1,37 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 6,
+    "Team": "10910",
+    "ScouterName": "",
+    "ScoutStation": "R2",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": []
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [
+        "Stopped moving (5+ seconds)"
+      ],
+      "comments": "They did not have an auto, they went to a spot and stayed there for the entire match, where you climb. Lowkey their robot might have had some issues since it was just not moving, not much else to say. "
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 0,
+      "trenchCycles": 0,
+      "bumpCycles": 0
+    },
+    "_entryId": "1780152814148-wl9101ug"
+  }
+]

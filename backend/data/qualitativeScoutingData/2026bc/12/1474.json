@@ -1,0 +1,92 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 12,
+    "Team": "1474",
+    "ScouterName": "AG",
+    "ScoutStation": "B3",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": [
+          [
+            {
+              "x": 947.0199343196283,
+              "y": 317.3427728144082
+            },
+            {
+              "x": 948.3443416402472,
+              "y": 317.3427728144082
+            },
+            {
+              "x": 950.9933836475485,
+              "y": 317.3427728144082
+            },
+            {
+              "x": 952.3179046511991,
+              "y": 317.3427728144082
+            },
+            {
+              "x": 953.6424256548497,
+              "y": 317.3427728144082
+            },
+            {
+              "x": 972.1854923398952,
+              "y": 317.3427728144082
+            },
+            {
+              "x": 1005.2981763820659,
+              "y": 317.3427728144082
+            },
+            {
+              "x": 1030.4637344023326,
+              "y": 316.0181381277257
+            },
+            {
+              "x": 1058.278220746869,
+              "y": 310.7200541131231
+            },
+            {
+              "x": 1076.8211737488828,
+              "y": 302.7731554572829
+            },
+            {
+              "x": 1091.390791106008,
+              "y": 297.4750714426803
+            },
+            {
+              "x": 1095.364240433928,
+              "y": 294.826029435379
+            },
+            {
+              "x": 1104.6357737764508,
+              "y": 290.8528074735225
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [
+          "Pushing (hitting a robot to disrupt their aim)"
+        ],
+        "effectiveness": 2,
+        "comments": "Tried to push a robot out of the way to get to the dot in endgame. Pushed the other robot away, but didn't get to the dot itself"
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Pushed fuel to human players, didn't shoot and didn't intake much. Mostly pushed fuel over the bump but couldn't go over the bump itself"
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 50,
+      "trenchCycles": 4,
+      "bumpCycles": 0
+    },
+    "_entryId": "1780156262147-sgbyw8kx"
+  }
+]

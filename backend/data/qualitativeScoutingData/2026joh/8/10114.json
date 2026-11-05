@@ -1,0 +1,35 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 8,
+    "Team": "10114",
+    "ScouterName": "CC",
+    "ScoutStation": "R3",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "",
+        "path": []
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Goes straight too the human players and had them dump it from station a shoot that. Pause after that in front of Howe. Go over bump something seems to be dangling. Intake broken. Playing defense and trying to stop scoring. Tipped 6324 up a little bit. Staying mostly in opposing teams side playing defense. I think they broke 6324 intake. Was pretty effective. Couldn’t score much so I don’t know how well that works. "
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 0,
+      "trenchCycles": 0,
+      "bumpCycles": 0
+    },
+    "_entryId": "1777602526625-l34azmvw"
+  }
+]

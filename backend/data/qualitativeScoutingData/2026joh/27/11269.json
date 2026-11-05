@@ -1,0 +1,68 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 27,
+    "Team": "11269",
+    "ScouterName": "RG",
+    "ScoutStation": "B1",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": []
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Just slow the whole time and just drives around the neutral zone disrupting teammates more then opponents."
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 0,
+      "trenchCycles": 0,
+      "bumpCycles": 1
+    },
+    "_entryId": "1777568977283-b468zgby"
+  },
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 27,
+    "Team": "11269",
+    "ScouterName": "RK",
+    "ScoutStation": "B1",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": []
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Literally did nothing the entire game, just tried to slowly shuffle around the neutral zone. Might've been an attempt at defense, but they simply couldn't drive"
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 0,
+      "trenchCycles": 0,
+      "bumpCycles": 1
+    },
+    "_entryId": "1777609223947-nt69kzmm"
+  }
+]

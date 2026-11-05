@@ -1,0 +1,38 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 95,
+    "Team": "11269",
+    "ScouterName": "LB",
+    "ScoutStation": "B2",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Far Bump",
+        "path": []
+      },
+      "defense": {
+        "types": [
+          "Blocking (Getting in their way preventing motion across zones)",
+          "Pinning (Stopping robots from moving so they couldn't aim)"
+        ],
+        "effectiveness": 1,
+        "comments": "Tried defense, bad driving"
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Tank drive"
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 5,
+      "trenchCycles": 2,
+      "bumpCycles": 2
+    },
+    "_entryId": "1777662298465-9gusl4x2"
+  }
+]

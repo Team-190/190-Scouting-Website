@@ -1,0 +1,40 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 35,
+    "Team": "7551",
+    "ScouterName": "AM",
+    "ScoutStation": "R3",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": []
+      },
+      "defense": {
+        "types": [
+          "Pushing (hitting a robot to disrupt their aim)"
+        ],
+        "effectiveness": 1,
+        "comments": "Their robot was so light that their defense did absolutely nothing"
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [
+        "Lost mechanism",
+        "Stopped moving (5+ seconds)"
+      ],
+      "comments": "Stayed in the blue alliance zone trying to defend, but instead doing absolutely nothing. The one time they decided to leave was during endgame, in which they went over the bump and got beached instantly "
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 0,
+      "trenchCycles": 0,
+      "bumpCycles": 3
+    },
+    "_entryId": "1777576412618-r9s33rko"
+  }
+]

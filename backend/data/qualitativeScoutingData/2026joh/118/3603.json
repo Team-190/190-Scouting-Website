@@ -1,0 +1,35 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 118,
+    "Team": "3603",
+    "ScouterName": "SS",
+    "ScoutStation": "B1",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Far Trench",
+        "path": []
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": ""
+    },
+    "quant": {
+      "shootingBalls": 70,
+      "feedingBalls": 20,
+      "trenchCycles": 5,
+      "bumpCycles": 2
+    },
+    "_entryId": "1777674173141-jvb2b6tl"
+  }
+]

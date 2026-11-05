@@ -1,0 +1,35 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 57,
+    "Team": "6153",
+    "ScouterName": "SV",
+    "ScoutStation": "B1",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": []
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": ""
+    },
+    "quant": {
+      "shootingBalls": 10,
+      "feedingBalls": 10,
+      "trenchCycles": 4,
+      "bumpCycles": 3
+    },
+    "_entryId": "1780233988710-651vi1yj"
+  }
+]

@@ -1,0 +1,86 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 18,
+    "Team": "10114",
+    "ScouterName": "AM",
+    "ScoutStation": "R3",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": [
+          [
+            {
+              "x": 249.04932488288784,
+              "y": 302.67291264811246
+            },
+            {
+              "x": 245.5221824193993,
+              "y": 305.0243409571047
+            },
+            {
+              "x": 236.11646918342976,
+              "y": 305.0243409571047
+            },
+            {
+              "x": 224.3593276384679,
+              "y": 305.0243409571047
+            },
+            {
+              "x": 213.7779002480022,
+              "y": 305.0243409571047
+            },
+            {
+              "x": 203.19647285753652,
+              "y": 305.0243409571047
+            },
+            {
+              "x": 193.790759621567,
+              "y": 305.0243409571047
+            },
+            {
+              "x": 186.73647469458987,
+              "y": 305.0243409571047
+            },
+            {
+              "x": 180.8579039221089,
+              "y": 305.0243409571047
+            },
+            {
+              "x": 176.15504730412417,
+              "y": 305.0243409571047
+            },
+            {
+              "x": 173.80361899513179,
+              "y": 305.0243409571047
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [
+          "Pushing (hitting a robot to disrupt their aim)"
+        ],
+        "effectiveness": 2,
+        "comments": "Defended against us while we were shooting. Not very effective"
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [
+        "Lost mechanism"
+      ],
+      "comments": "Intake didn’t work so it was defending the entire match. Didn’t defend that well tho"
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 0,
+      "trenchCycles": 0,
+      "bumpCycles": 4
+    },
+    "_entryId": "1777592331078-h3atzpcv"
+  }
+]

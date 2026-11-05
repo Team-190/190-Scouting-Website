@@ -1,0 +1,58 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 5,
+    "Team": "3536",
+    "ScouterName": "CC",
+    "ScoutStation": "R3",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "",
+        "path": [
+          [
+            {
+              "x": 1058.3904330206028,
+              "y": 110.26610765995763
+            },
+            {
+              "x": 1056.3230698764548,
+              "y": 65.81780006078282
+            },
+            {
+              "x": 1064.5925224530458,
+              "y": -5.506228412311309
+            },
+            {
+              "x": 1086.299835466596,
+              "y": -94.40284361066072
+            },
+            {
+              "x": 1167.9606796604287,
+              "y": -296.39684791232463
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Went to get balls from depot an score  about fifty balls, picked up stuff from outside hub then scored those. \nTeam 3536 shot the wrong way earlier\nNot the most accurate. \nDid not take defense really well. They kept getting pushed around. "
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 0,
+      "trenchCycles": 0,
+      "bumpCycles": 0
+    },
+    "_entryId": "1777602423945-30d56j5n"
+  }
+]

@@ -1,0 +1,35 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 58,
+    "Team": "2265",
+    "ScouterName": "SV",
+    "ScoutStation": "B1",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": []
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Only shoots while hugging the hub"
+    },
+    "quant": {
+      "shootingBalls": 60,
+      "feedingBalls": 0,
+      "trenchCycles": 6,
+      "bumpCycles": 0
+    },
+    "_entryId": "1780234387963-qy7r0y96"
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 79,
+    "Team": "11269",
+    "ScouterName": "AM",
+    "ScoutStation": "R3",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": [
+          [
+            {
+              "x": 266.5272566575218,
+              "y": 314.2014166279103
+            },
+            {
+              "x": 249.98834949305262,
+              "y": 329.7066420946001
+            },
+            {
+              "x": 248.9546677952733,
+              "y": 336.9424139790551
+            },
+            {
+              "x": 244.81994100415605,
+              "y": 343.14450416573106
+            },
+            {
+              "x": 242.75257760859742,
+              "y": 347.2792309568485
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [
+          "Pushing (hitting a robot to disrupt their aim)"
+        ],
+        "effectiveness": 1,
+        "comments": "Very slow driving so defense did nothing"
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [
+        "Stopped moving (5+ seconds)"
+      ],
+      "comments": "Tank drive that is slow and so wobbly that it is probably the most beachable bot here. I mean instead of beached it can get tropical vacationed it is actually crazy. What’s even crazier is that they tried to defend with it"
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 0,
+      "trenchCycles": 0,
+      "bumpCycles": 2
+    },
+    "_entryId": "1777650299478-z5d6uebe"
+  }
+]

@@ -1,0 +1,80 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 8,
+    "Team": "1073",
+    "ScouterName": "RG",
+    "ScoutStation": "B1",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Near Trench",
+        "path": [
+          [
+            {
+              "x": 916.7282393197538,
+              "y": 533.8303790404301
+            },
+            {
+              "x": 883.4786541935296,
+              "y": 537.8606317830025
+            },
+            {
+              "x": 877.4332750796705,
+              "y": 537.8606317830025
+            },
+            {
+              "x": 870.3803327801683,
+              "y": 537.8606317830025
+            },
+            {
+              "x": 864.3349536663094,
+              "y": 537.8606317830025
+            },
+            {
+              "x": 856.274448181164,
+              "y": 537.8606317830025
+            },
+            {
+              "x": 850.2290690673051,
+              "y": 537.8606317830025
+            },
+            {
+              "x": 846.1988163247322,
+              "y": 537.8606317830025
+            },
+            {
+              "x": 844.183689953446,
+              "y": 536.8530685973597
+            },
+            {
+              "x": 844.183689953446,
+              "y": 533.8303790404301
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [
+          "Pinning (Stopping robots from moving so they couldn't aim)"
+        ],
+        "effectiveness": 4,
+        "comments": "Turret so they could keep shooting even though they were being pinned. "
+      },
+      "matchEvents": [],
+      "comments": ""
+    },
+    "quant": {
+      "shootingBalls": 95,
+      "feedingBalls": 40,
+      "trenchCycles": 4,
+      "bumpCycles": 9
+    },
+    "_entryId": "1777590546057-sni8l780"
+  }
+]

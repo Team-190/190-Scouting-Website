@@ -1,0 +1,110 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 81,
+    "Team": "10114",
+    "ScouterName": "KR",
+    "ScoutStation": "B1",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": [
+          [
+            {
+              "x": 962.0685826736964,
+              "y": 310.2039857254049
+            },
+            {
+              "x": 972.1442145301279,
+              "y": 307.18129616847534
+            },
+            {
+              "x": 995.3181677999208,
+              "y": 302.1434802402595
+            },
+            {
+              "x": 1003.3786732850659,
+              "y": 302.1434802402595
+            },
+            {
+              "x": 1009.4240523989249,
+              "y": 300.1283538689733
+            },
+            {
+              "x": 1017.4845578840702,
+              "y": 298.11322749768686
+            },
+            {
+              "x": 1025.5450633692158,
+              "y": 296.0981011264006
+            },
+            {
+              "x": 1031.5904424830746,
+              "y": 295.0905379407573
+            },
+            {
+              "x": 1039.6509479682197,
+              "y": 293.07541156947104
+            },
+            {
+              "x": 1046.7038902677223,
+              "y": 291.06028519818483
+            },
+            {
+              "x": 1053.7568325672244,
+              "y": 289.0451588268984
+            },
+            {
+              "x": 1059.8022116810832,
+              "y": 287.0300324556122
+            },
+            {
+              "x": 1066.8551539805853,
+              "y": 285.0149060843259
+            },
+            {
+              "x": 1072.9005330944442,
+              "y": 281.99221652739635
+            },
+            {
+              "x": 1078.9459122083033,
+              "y": 280.9846533417531
+            },
+            {
+              "x": 1087.0064176934488,
+              "y": 276.95440059918036
+            },
+            {
+              "x": 1090.029107250378,
+              "y": 275.9468374135375
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [
+          "Blocking (Getting in their way preventing motion across zones)",
+          "Pinning (Stopping robots from moving so they couldn't aim)",
+          "Pushing (hitting a robot to disrupt their aim)"
+        ],
+        "effectiveness": 2,
+        "comments": "Shoving around turrets. Good job pushing but caused lots of pinning penalties. "
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Just defense. "
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 0,
+      "trenchCycles": 0,
+      "bumpCycles": 8
+    },
+    "_entryId": "1777651286317-8o4tz140"
+  }
+]

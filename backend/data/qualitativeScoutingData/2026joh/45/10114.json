@@ -1,0 +1,68 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 45,
+    "Team": "10114",
+    "ScouterName": "AM",
+    "ScoutStation": "B2",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": [
+          [
+            {
+              "x": 966.2349591255626,
+              "y": 286.2129144851655
+            },
+            {
+              "x": 989.7492422154863,
+              "y": 272.1043446312113
+            },
+            {
+              "x": 1013.26352530541,
+              "y": 254.46863231376847
+            },
+            {
+              "x": 1032.074951777349,
+              "y": 236.83291999632584
+            },
+            {
+              "x": 1042.6563791678147,
+              "y": 226.25149260586014
+            },
+            {
+              "x": 1048.5349499402957,
+              "y": 219.19720767888302
+            },
+            {
+              "x": 1049.710664094792,
+              "y": 208.6157802884173
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [
+        "Lost mechanism"
+      ],
+      "comments": "Intake did not work, so they were locked in on trench feeding. Did not score "
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 85,
+      "trenchCycles": 0,
+      "bumpCycles": 1
+    },
+    "_entryId": "1777593923599-9v103s0u"
+  }
+]

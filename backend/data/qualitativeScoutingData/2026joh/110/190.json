@@ -1,0 +1,38 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 110,
+    "Team": "190",
+    "ScouterName": "SV",
+    "ScoutStation": "R2",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "Near Trench",
+        "path": []
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [
+          "Blocking (Getting in their way preventing motion across zones)",
+          "Pinning (Stopping robots from moving so they couldn't aim)"
+        ],
+        "effectiveness": 3,
+        "comments": "Hard to shake off 2704 when blocking in neutral"
+      },
+      "matchEvents": [],
+      "comments": "Good at shooting on move which helps against pushing robots. No auto and bump traversal isn’t the smoothest. "
+    },
+    "quant": {
+      "shootingBalls": 170,
+      "feedingBalls": 30,
+      "trenchCycles": 1,
+      "bumpCycles": 5
+    },
+    "_entryId": "1777670037252-p6qirqvr"
+  }
+]

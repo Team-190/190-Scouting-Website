@@ -1,0 +1,37 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 78,
+    "Team": "6652",
+    "ScouterName": "SS",
+    "ScoutStation": "B1",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": []
+      },
+      "defense": {
+        "types": [
+          "Pushing (hitting a robot to disrupt their aim)"
+        ],
+        "effectiveness": 1,
+        "comments": "The pushing did not affect any robot too much"
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": ""
+    },
+    "quant": {
+      "shootingBalls": 10,
+      "feedingBalls": 25,
+      "trenchCycles": 5,
+      "bumpCycles": 0
+    },
+    "_entryId": "1777649651851-o57lm021"
+  }
+]

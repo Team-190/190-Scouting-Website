@@ -1,0 +1,62 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 54,
+    "Team": "8544",
+    "ScouterName": "AG",
+    "ScoutStation": "B2",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": [
+          [
+            {
+              "x": 960.2649169900711,
+              "y": 293.50162211476015
+            },
+            {
+              "x": 961.5894379937218,
+              "y": 293.50162211476015
+            },
+            {
+              "x": 962.9139589973724,
+              "y": 292.1772147941413
+            },
+            {
+              "x": 969.5364503325939,
+              "y": 286.87913077953874
+            },
+            {
+              "x": 1067.5497540893919,
+              "y": 162.37574799882339
+            },
+            {
+              "x": 1076.8211737488828,
+              "y": 146.48172332107924
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Okay robot, doesn't shoot a lot, tried to help teammate that was stuck (the one that got 320 penalty for blocking the bump). Got on the dot in endgame"
+    },
+    "quant": {
+      "shootingBalls": 30,
+      "feedingBalls": 0,
+      "trenchCycles": 1,
+      "bumpCycles": 4
+    },
+    "_entryId": "1780232594217-x1wpqnxh"
+  }
+]

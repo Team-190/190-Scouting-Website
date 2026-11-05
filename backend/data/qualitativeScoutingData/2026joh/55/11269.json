@@ -1,0 +1,37 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 55,
+    "Team": "11269",
+    "ScouterName": "CC",
+    "ScoutStation": "R3",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": []
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [
+        "Stopped moving (5+ seconds)"
+      ],
+      "comments": "They got stuck under blue trench for over an hour and when unstuck immediately started browning out. "
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 0,
+      "trenchCycles": 0,
+      "bumpCycles": 1
+    },
+    "_entryId": "1777586858205-73a6vjej"
+  }
+]

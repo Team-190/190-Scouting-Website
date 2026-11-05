@@ -1,0 +1,82 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 9,
+    "Team": "6933",
+    "ScouterName": "",
+    "ScoutStation": "R1",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": [
+          [
+            {
+              "x": 291.42573109104467,
+              "y": 294.78916411233524
+            },
+            {
+              "x": 272.3386629111093,
+              "y": 296.90994946566127
+            },
+            {
+              "x": 255.3723800845,
+              "y": 296.90994946566127
+            },
+            {
+              "x": 233.10413387457538,
+              "y": 296.90994946566127
+            },
+            {
+              "x": 209.7754949879877,
+              "y": 297.97034214232445
+            },
+            {
+              "x": 190.68842680805233,
+              "y": 300.0911274956505
+            },
+            {
+              "x": 174.78253665810618,
+              "y": 303.2723055256397
+            },
+            {
+              "x": 163.11821721481232,
+              "y": 306.45348355562896
+            },
+            {
+              "x": 155.6954684781708,
+              "y": 309.6346615856182
+            },
+            {
+              "x": 151.4538977715185,
+              "y": 311.75544693894454
+            },
+            {
+              "x": 150.3935050948554,
+              "y": 311.75544693894454
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "They can feed really well, they’d hoot in bursts of like 7. They choose the trench most if not all of the time. They don’t shoot that much. They can not shoot from the corner. They covered the dot."
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 0,
+      "trenchCycles": 0,
+      "bumpCycles": 0
+    },
+    "_entryId": "1780154400283-hoa2wxey"
+  }
+]

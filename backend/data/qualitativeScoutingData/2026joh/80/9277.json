@@ -1,0 +1,61 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 80,
+    "Team": "9277",
+    "ScouterName": "AM",
+    "ScoutStation": "R3",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "Far Trench",
+        "path": [
+          [
+            {
+              "x": 238.46789749242217,
+              "y": 58.124368512905164
+            },
+            {
+              "x": 265.50932304583444,
+              "y": 52.24579774042436
+            },
+            {
+              "x": 274.91503628180396,
+              "y": 52.24579774042436
+            },
+            {
+              "x": 284.3207495177735,
+              "y": 52.24579774042436
+            },
+            {
+              "x": 293.72646275374296,
+              "y": 53.421511894920485
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [
+          "Pushing (hitting a robot to disrupt their aim)",
+          "Blocking (Getting in their way preventing motion across zones)"
+        ],
+        "effectiveness": 2,
+        "comments": "Went to blue zone to feed but defended bc why not"
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Just feeded the entire match. Can feed long range"
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 70,
+      "trenchCycles": 1,
+      "bumpCycles": 2
+    },
+    "_entryId": "1777650897021-f3sz07a1"
+  }
+]

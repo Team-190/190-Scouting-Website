@@ -1,0 +1,65 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 44,
+    "Team": "7551",
+    "ScouterName": "AB",
+    "ScoutStation": "B2",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": [
+          [
+            {
+              "x": 960.3542214324527,
+              "y": 283.97726638567843
+            },
+            {
+              "x": 976.4752324027434,
+              "y": 284.9848295713217
+            },
+            {
+              "x": 983.5281747022455,
+              "y": 284.9848295713217
+            },
+            {
+              "x": 990.5811170017477,
+              "y": 288.0075191282511
+            },
+            {
+              "x": 992.596243373034,
+              "y": 288.0075191282511
+            },
+            {
+              "x": 995.6189329299634,
+              "y": 289.015082313894
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [
+          "Pushing (hitting a robot to disrupt their aim)",
+          "Blocking (Getting in their way preventing motion across zones)"
+        ],
+        "effectiveness": 1,
+        "comments": "This is just as bad as the last match"
+      },
+      "matchEvents": [],
+      "comments": "Can’t shoot, delivers all fuel. Got beached"
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 0,
+      "trenchCycles": 0,
+      "bumpCycles": 1
+    },
+    "_entryId": "1777595508402-e2q7sgsc"
+  }
+]

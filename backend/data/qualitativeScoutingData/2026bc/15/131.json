@@ -1,0 +1,72 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 15,
+    "Team": "131",
+    "ScouterName": "SW",
+    "ScoutStation": "B1",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Near Trench",
+        "path": [
+          [
+            {
+              "x": 909.6404039076292,
+              "y": 569.0893794702824
+            },
+            {
+              "x": 895.8755080467191,
+              "y": 570.6188123437171
+            },
+            {
+              "x": 890.9048512080569,
+              "y": 570.2364541253586
+            },
+            {
+              "x": 881.7282539674502,
+              "y": 570.2364541253586
+            },
+            {
+              "x": 872.169298508485,
+              "y": 569.0893794702824
+            },
+            {
+              "x": 866.051567014747,
+              "y": 568.3246630335656
+            },
+            {
+              "x": 862.9927012678783,
+              "y": 568.3246630335656
+            },
+            {
+              "x": 861.8456266128021,
+              "y": 568.3246630335656
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [
+          "Pinning (Stopping robots from moving so they couldn't aim)"
+        ],
+        "effectiveness": 3,
+        "comments": "Was getting defended when trying to get back to alliance side during endgame"
+      },
+      "matchEvents": [],
+      "comments": "Pretty good. constantly got stuck on the trench because of overfilling balls in their hopper."
+    },
+    "quant": {
+      "shootingBalls": 120,
+      "feedingBalls": 20,
+      "trenchCycles": 7,
+      "bumpCycles": 0
+    },
+    "_entryId": "1780157844899-on884ll9"
+  }
+]

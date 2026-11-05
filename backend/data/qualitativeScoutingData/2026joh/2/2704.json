@@ -1,0 +1,64 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 2,
+    "Team": "2704",
+    "ScouterName": "AB",
+    "ScoutStation": "R2",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "Far Trench",
+        "path": [
+          [
+            {
+              "x": 228.6697700846354,
+              "y": 510.53571229623043
+            },
+            {
+              "x": 202.24547737267176,
+              "y": 503.5818773406277
+            },
+            {
+              "x": 209.19924866479107,
+              "y": 503.5818773406277
+            },
+            {
+              "x": 224.4975200420604,
+              "y": 504.9726697971416
+            },
+            {
+              "x": 239.79572775584631,
+              "y": 509.1449198397165
+            },
+            {
+              "x": 245.35877025493517,
+              "y": 510.53571229623043
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [
+          "Blocking (Getting in their way preventing motion across zones)"
+        ],
+        "effectiveness": 1,
+        "comments": "It was played on their own alliance"
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Not very good. Got in the way a lot."
+    },
+    "quant": {
+      "shootingBalls": 100,
+      "feedingBalls": 0,
+      "trenchCycles": 3,
+      "bumpCycles": 1
+    },
+    "_entryId": "1777639846899-xqvb91ql"
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 117,
+    "Team": "7551",
+    "ScouterName": "AP",
+    "ScoutStation": "R2",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": [
+          [
+            {
+              "x": 248.68334893220091,
+              "y": 312.8449790746152
+            },
+            {
+              "x": 248.68334893220091,
+              "y": 312.8449790746152
+            },
+            {
+              "x": 248.68334893220091,
+              "y": 312.8449790746152
+            },
+            {
+              "x": 248.68334893220091,
+              "y": 312.8449790746152
+            },
+            {
+              "x": 248.68334893220091,
+              "y": 312.8449790746152
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [
+          "Pushing (hitting a robot to disrupt their aim)"
+        ],
+        "effectiveness": 2,
+        "comments": "Didn't do jack shit"
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [
+        "Stopped moving (5+ seconds)"
+      ],
+      "comments": "Tall liability that can't shoot and can't feed. They pushed some balls and out took some balls"
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 45,
+      "trenchCycles": 0,
+      "bumpCycles": 8
+    },
+    "_entryId": "1777673633269-ko8bnjue"
+  }
+]

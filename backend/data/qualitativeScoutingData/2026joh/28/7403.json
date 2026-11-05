@@ -1,0 +1,92 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 28,
+    "Team": "7403",
+    "ScouterName": "AG",
+    "ScoutStation": "B3",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": [
+          [
+            {
+              "x": 965.5628873216419,
+              "y": 317.34265913137637
+            },
+            {
+              "x": 966.8874083252927,
+              "y": 317.34265913137637
+            },
+            {
+              "x": 966.8874083252927,
+              "y": 318.66729381805885
+            },
+            {
+              "x": 968.2119293289433,
+              "y": 318.66729381805885
+            },
+            {
+              "x": 970.8610850192764,
+              "y": 318.66729381805885
+            },
+            {
+              "x": 972.1854923398952,
+              "y": 318.66729381805885
+            },
+            {
+              "x": 974.8344206641647,
+              "y": 318.66729381805885
+            },
+            {
+              "x": 982.7814330030367,
+              "y": 317.34265913137637
+            },
+            {
+              "x": 996.0265293565113,
+              "y": 314.69361712407505
+            },
+            {
+              "x": 1042.384082386093,
+              "y": 306.74694583429846
+            },
+            {
+              "x": 1058.278220746869,
+              "y": 301.4486344536322
+            },
+            {
+              "x": 1072.8477244209625,
+              "y": 296.15055043902964
+            },
+            {
+              "x": 1084.7681860877547,
+              "y": 296.15055043902964
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [
+        "Lost mechanism"
+      ],
+      "comments": "Their hopper fell off when it extended, and was barely hanging on. Moved around but couldn't do anything since the hopper was now blocking intake. Tried to push some fuel"
+    },
+    "quant": {
+      "shootingBalls": 20,
+      "feedingBalls": 10,
+      "trenchCycles": 4,
+      "bumpCycles": 0
+    },
+    "_entryId": "1777569788050-5p2bgjmg"
+  }
+]

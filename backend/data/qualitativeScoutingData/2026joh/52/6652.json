@@ -1,0 +1,81 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 52,
+    "Team": "6652",
+    "ScouterName": "SV",
+    "ScoutStation": "R2",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": [
+          [
+            {
+              "x": 265.53914988814313,
+              "y": 301.744966442953
+            },
+            {
+              "x": 232.3221476510067,
+              "y": 288
+            },
+            {
+              "x": 224.30425055928407,
+              "y": 288
+            },
+            {
+              "x": 215.14093959731542,
+              "y": 288
+            },
+            {
+              "x": 207.1230425055928,
+              "y": 288
+            },
+            {
+              "x": 196.81431767337804,
+              "y": 288
+            },
+            {
+              "x": 189.94183445190154,
+              "y": 288
+            },
+            {
+              "x": 184.21476510067114,
+              "y": 286.8545861297538
+            },
+            {
+              "x": 180.7785234899329,
+              "y": 285.70917225950757
+            },
+            {
+              "x": 179.63310961968676,
+              "y": 285.70917225950757
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [
+          "Pinning (Stopping robots from moving so they couldn't aim)",
+          "Blocking (Getting in their way preventing motion across zones)"
+        ],
+        "effectiveness": 3,
+        "comments": "Did lane defense that was successful in hindering robots for a couple of sec. Not smooth enough driving and maneuverability to be very effective "
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Got stuck under tower, wandered around in red zone, defense was mid "
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 0,
+      "trenchCycles": 4,
+      "bumpCycles": 1
+    },
+    "_entryId": "1777585322431-zjnx9rsy"
+  }
+]

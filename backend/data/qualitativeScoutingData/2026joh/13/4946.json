@@ -1,0 +1,62 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 13,
+    "Team": "4946",
+    "ScouterName": "CC",
+    "ScoutStation": "R3",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "",
+        "path": [
+          [
+            {
+              "x": 216.9105077603175,
+              "y": 28.116040126670157
+            },
+            {
+              "x": 214.8431446161699,
+              "y": -8.062814895913808
+            },
+            {
+              "x": 210.7084183278745,
+              "y": -55.61216721131003
+            },
+            {
+              "x": 195.20319474676708,
+              "y": -105.22888267085386
+            },
+            {
+              "x": 144.55279771514947,
+              "y": -222.46099806246374
+            },
+            {
+              "x": 97.00344539975329,
+              "y": -329.96388155814185
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Good at shooting lot of balls. The balls don’t move very well from the front of robot to other sides. They are a dumper robot and it is very hard to play defense on them. Have a very fast shooter. Play defense but mostly because they are so large thy get in way. Really like their way of storage. "
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 0,
+      "trenchCycles": 0,
+      "bumpCycles": 0
+    },
+    "_entryId": "1777602704364-d17e7yh6"
+  }
+]

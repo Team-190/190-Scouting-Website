@@ -1,0 +1,39 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 3,
+    "Team": "271",
+    "ScouterName": "LB",
+    "ScoutStation": "R3",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": []
+      },
+      "defense": {
+        "types": [
+          "Blocking (Getting in their way preventing motion across zones)"
+        ],
+        "effectiveness": 2,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [
+        "Stopped moving (5+ seconds)"
+      ],
+      "comments": "Got stuck on fuel multiple times, looks like intake jammed for the full match"
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 0,
+      "trenchCycles": 0,
+      "bumpCycles": 5
+    },
+    "_entryId": "1780151165496-n68etxor"
+  }
+]

@@ -1,0 +1,100 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 18,
+    "Team": "10014",
+    "ScouterName": "KR",
+    "ScoutStation": "B3",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": [
+          [
+            {
+              "x": 998.3408573568502,
+              "y": 286.76686296682476
+            },
+            {
+              "x": 980.2047200152733,
+              "y": 288.78198933811103
+            },
+            {
+              "x": 978.1895936439869,
+              "y": 288.78198933811103
+            },
+            {
+              "x": 974.1593409014143,
+              "y": 288.78198933811103
+            },
+            {
+              "x": 971.1366513444848,
+              "y": 288.78198933811103
+            },
+            {
+              "x": 967.1063986019119,
+              "y": 288.78198933811103
+            },
+            {
+              "x": 964.0837090449826,
+              "y": 288.78198933811103
+            },
+            {
+              "x": 961.061019488053,
+              "y": 288.78198933811103
+            },
+            {
+              "x": 958.0383299311235,
+              "y": 288.78198933811103
+            },
+            {
+              "x": 955.0156403741942,
+              "y": 288.78198933811103
+            },
+            {
+              "x": 953.0005140029078,
+              "y": 288.78198933811103
+            },
+            {
+              "x": 949.9778244459783,
+              "y": 288.78198933811103
+            },
+            {
+              "x": 947.962698074692,
+              "y": 288.78198933811103
+            },
+            {
+              "x": 946.9551348890487,
+              "y": 288.78198933811103
+            },
+            {
+              "x": 945.9475717034056,
+              "y": 288.78198933811103
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [
+        "Stopped moving (full match)"
+      ],
+      "comments": "Stopped moving at like 1:45 but were still enabled, eventually RSL went solid. Unclear why. Did some good stealing and feeding while they were active. "
+    },
+    "quant": {
+      "shootingBalls": 5,
+      "feedingBalls": 25,
+      "trenchCycles": 2,
+      "bumpCycles": 0
+    },
+    "_entryId": "1777587707623-c68yhl4p"
+  }
+]

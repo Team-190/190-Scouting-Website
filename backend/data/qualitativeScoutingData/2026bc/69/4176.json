@@ -1,0 +1,60 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 69,
+    "Team": "4176",
+    "ScouterName": "JP",
+    "ScoutStation": "B1",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": [
+          [
+            {
+              "x": 1040.0704290612546,
+              "y": 576.9993513112777
+            },
+            {
+              "x": 1054.3045130201092,
+              "y": 523.621536465573
+            },
+            {
+              "x": 1078.027986284867,
+              "y": 516.5044944861456
+            },
+            {
+              "x": 1112.4270225187656,
+              "y": 510.5736261699563
+            },
+            {
+              "x": 1134.9643221202853,
+              "y": 543.7864887406172
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [
+          "Pushing (hitting a robot to disrupt their aim)"
+        ],
+        "effectiveness": 2,
+        "comments": "The other robot was able to stop them from shooting"
+      },
+      "matchEvents": [],
+      "comments": "Hopper wall broke towards the end of match. Did not really intake much and shooting was from against the hub and in accurate."
+    },
+    "quant": {
+      "shootingBalls": 10,
+      "feedingBalls": 0,
+      "trenchCycles": 2,
+      "bumpCycles": 2
+    },
+    "_entryId": "1780240306604-qaxpdv9s"
+  }
+]

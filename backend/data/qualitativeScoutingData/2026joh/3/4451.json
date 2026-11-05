@@ -1,0 +1,35 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 3,
+    "Team": "4451",
+    "ScouterName": "ASR",
+    "ScoutStation": "R1",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "Far Trench",
+        "path": []
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": "No defense played"
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": "No avoidance"
+      },
+      "matchEvents": [],
+      "comments": "NA"
+    },
+    "quant": {
+      "shootingBalls": 150,
+      "feedingBalls": 0,
+      "trenchCycles": 2,
+      "bumpCycles": 0
+    },
+    "_entryId": "1777555724469-ghkesykt"
+  }
+]

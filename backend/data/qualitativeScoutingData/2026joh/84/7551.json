@@ -1,0 +1,69 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 84,
+    "Team": "7551",
+    "ScouterName": "RG",
+    "ScoutStation": "B1",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Near Bump",
+        "path": [
+          [
+            {
+              "x": 968.1020865770387,
+              "y": 382.3517340447366
+            },
+            {
+              "x": 984.8102663933012,
+              "y": 389.6615627143512
+            },
+            {
+              "x": 990.0315725858835,
+              "y": 389.6615627143512
+            },
+            {
+              "x": 994.208617539949,
+              "y": 389.6615627143512
+            },
+            {
+              "x": 998.3856624940146,
+              "y": 389.6615627143512
+            },
+            {
+              "x": 1002.5627074480805,
+              "y": 389.6615627143512
+            },
+            {
+              "x": 1004.6512299251131,
+              "y": 389.6615627143512
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [
+          "Blocking (Getting in their way preventing motion across zones)",
+          "Pushing (hitting a robot to disrupt their aim)"
+        ],
+        "effectiveness": 2,
+        "comments": "Played defense for almost the entire game. Didn’t do anything except intake balls and block once or twice."
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Just hogs balls. Spent most of match in opp zone intaking and that’s it. Struggled to get over bump every time without a run up. Rly doesn’t do anything."
+    },
+    "quant": {
+      "shootingBalls": 5,
+      "feedingBalls": 0,
+      "trenchCycles": 0,
+      "bumpCycles": 4
+    },
+    "_entryId": "1777653331959-2j3y2pfg"
+  }
+]

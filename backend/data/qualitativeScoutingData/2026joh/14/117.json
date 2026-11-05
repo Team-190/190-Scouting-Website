@@ -1,0 +1,62 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 14,
+    "Team": "117",
+    "ScouterName": "CC",
+    "ScoutStation": "R3",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "",
+        "path": [
+          [
+            {
+              "x": 315.11025710733134,
+              "y": 192.22679841668167
+            },
+            {
+              "x": 362.65960942272756,
+              "y": 182.92366426801723
+            },
+            {
+              "x": 385.4006040083519,
+              "y": 175.6878932635004
+            },
+            {
+              "x": 397.80478287323774,
+              "y": 170.51948540313137
+            },
+            {
+              "x": 404.00687230568076,
+              "y": 166.38475911483596
+            },
+            {
+              "x": 405.0405538777546,
+              "y": 165.35107754276234
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Goes over bump to grab balls snd they score twice. Filled up and was ready to shoot when their shift. Tried to score for entirety of their alliance. 117 mostly works of feeding during other shift. 117 making weird noises and don’t seem to be moving that well. Seem kind of stuck where they are but can still move just moving regularly. Completely just feeding stuff that comes near them. "
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 0,
+      "trenchCycles": 0,
+      "bumpCycles": 0
+    },
+    "_entryId": "1777602730371-0pl7gj4x"
+  }
+]

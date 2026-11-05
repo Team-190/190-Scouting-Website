@@ -1,0 +1,117 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 71,
+    "Team": "2096",
+    "ScouterName": "KR",
+    "ScoutStation": "B1",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Near Bump",
+        "path": [
+          [
+            {
+              "x": 960.0534563024099,
+              "y": 433.1868473998796
+            },
+            {
+              "x": 969.1215249731986,
+              "y": 433.1868473998796
+            },
+            {
+              "x": 984.234972757846,
+              "y": 433.1868473998796
+            },
+            {
+              "x": 999.3484205424933,
+              "y": 433.1868473998796
+            },
+            {
+              "x": 1013.4543051414978,
+              "y": 433.1868473998796
+            },
+            {
+              "x": 1028.5677529261452,
+              "y": 433.1868473998796
+            },
+            {
+              "x": 1042.6736375251492,
+              "y": 433.1868473998796
+            },
+            {
+              "x": 1054.7643957528674,
+              "y": 433.1868473998796
+            },
+            {
+              "x": 1067.8627171662285,
+              "y": 433.1868473998796
+            },
+            {
+              "x": 1078.9459122083033,
+              "y": 433.1868473998796
+            },
+            {
+              "x": 1089.021544064735,
+              "y": 433.1868473998796
+            },
+            {
+              "x": 1099.0971759211666,
+              "y": 433.1868473998796
+            },
+            {
+              "x": 1105.1425550350257,
+              "y": 433.1868473998796
+            },
+            {
+              "x": 1110.1803709632416,
+              "y": 433.1868473998796
+            },
+            {
+              "x": 1113.203060520171,
+              "y": 433.1868473998796
+            },
+            {
+              "x": 1116.2257500771007,
+              "y": 433.1868473998796
+            },
+            {
+              "x": 1118.2408764483869,
+              "y": 433.1868473998796
+            },
+            {
+              "x": 1120.256002819673,
+              "y": 433.1868473998796
+            },
+            {
+              "x": 1122.2711291909593,
+              "y": 433.1868473998796
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [
+          "Pushing (hitting a robot to disrupt their aim)",
+          "Pinning (Stopping robots from moving so they couldn't aim)"
+        ],
+        "effectiveness": 3,
+        "comments": "Pinning defense was decent but got a couple penalties. Mostly just shoved shooting robots and pinned them to the corner/wall. "
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Intake? Or shooter? Wasn’t working. It’s not clear why but they stopped shooting after like 30 seconds and went to play defense. They also got beached on the bump once. "
+    },
+    "quant": {
+      "shootingBalls": 10,
+      "feedingBalls": 5,
+      "trenchCycles": 3,
+      "bumpCycles": 4
+    },
+    "_entryId": "1777645913581-6nh6ygzw"
+  }
+]

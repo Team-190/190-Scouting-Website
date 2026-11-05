@@ -1,0 +1,87 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 46,
+    "Team": "321",
+    "ScouterName": "AM",
+    "ScoutStation": "R3",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "",
+        "path": [
+          [
+            {
+              "x": 289.02360613575826,
+              "y": 299.14577018462387
+            },
+            {
+              "x": 273.7393221273078,
+              "y": 282.68577202167717
+            },
+            {
+              "x": 263.15789473684214,
+              "y": 272.10434463121146
+            },
+            {
+              "x": 247.87361072839164,
+              "y": 259.17148893175334
+            },
+            {
+              "x": 232.5893267199412,
+              "y": 246.2386332322954
+            },
+            {
+              "x": 219.6564710204831,
+              "y": 233.30577753283725
+            },
+            {
+              "x": 206.72361532102508,
+              "y": 225.07577845136402
+            },
+            {
+              "x": 194.96647377606317,
+              "y": 218.0214935243869
+            },
+            {
+              "x": 187.91218884908605,
+              "y": 214.4943510608983
+            },
+            {
+              "x": 183.2093322311013,
+              "y": 213.318636906402
+            },
+            {
+              "x": 182.03361807660514,
+              "y": 213.318636906402
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [
+          "Blocking (Getting in their way preventing motion across zones)",
+          "Pushing (hitting a robot to disrupt their aim)"
+        ],
+        "effectiveness": 4,
+        "comments": "Were able to block Overcharge on the bump a lot, and almost got them beached in endgame"
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [
+        "Lost mechanism"
+      ],
+      "comments": "Missed all balls in auto. Cannot intake so they only defended. "
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 0,
+      "trenchCycles": 0,
+      "bumpCycles": 3
+    },
+    "_entryId": "1777582526535-qi36eepy"
+  }
+]

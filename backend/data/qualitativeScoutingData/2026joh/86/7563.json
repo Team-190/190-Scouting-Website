@@ -1,0 +1,90 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 86,
+    "Team": "7563",
+    "ScouterName": "AG",
+    "ScoutStation": "B3",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": [
+          [
+            {
+              "x": 957.3975190996467,
+              "y": 298.5459623757496
+            },
+            {
+              "x": 979.479175223856,
+              "y": 298.5459623757496
+            },
+            {
+              "x": 992.0972644376899,
+              "y": 298.5459623757496
+            },
+            {
+              "x": 1006.2926148032531,
+              "y": 300.12322352747884
+            },
+            {
+              "x": 1020.4879651688162,
+              "y": 301.70048467920805
+            },
+            {
+              "x": 1036.2605766861086,
+              "y": 301.70048467920805
+            },
+            {
+              "x": 1050.4559270516718,
+              "y": 301.70048467920805
+            },
+            {
+              "x": 1061.4967551137763,
+              "y": 300.12322352747884
+            },
+            {
+              "x": 1070.9603220241518,
+              "y": 295.3914400722911
+            },
+            {
+              "x": 1080.4238889345272,
+              "y": 287.50513431364493
+            },
+            {
+              "x": 1086.732933541444,
+              "y": 278.04156740326954
+            },
+            {
+              "x": 1093.041978148361,
+              "y": 267.0007393411649
+            },
+            {
+              "x": 1093.041978148361,
+              "y": 263.84621703770637
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Doesn’t shoot much at all, but feeds using shooter to its alliance partners. Feeds a lot of balls and is efficient. Can feed far across neutral but not from opponent zone"
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 160,
+      "trenchCycles": 4,
+      "bumpCycles": 4
+    },
+    "_entryId": "1777654547539-9n4gukac"
+  }
+]

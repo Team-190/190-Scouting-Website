@@ -1,0 +1,73 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 16,
+    "Team": "10910",
+    "ScouterName": "",
+    "ScoutStation": "R2",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "",
+        "path": [
+          [
+            {
+              "x": 256.4327727611631,
+              "y": 307.51387623229215
+            },
+            {
+              "x": 259.6139507911523,
+              "y": 315.99701764559666
+            },
+            {
+              "x": 259.6139507911523,
+              "y": 311.75544693894454
+            },
+            {
+              "x": 260.6743434678154,
+              "y": 308.57426890895533
+            },
+            {
+              "x": 261.73473614447846,
+              "y": 305.3930908789661
+            },
+            {
+              "x": 262.7951288211416,
+              "y": 303.2723055256397
+            },
+            {
+              "x": 262.7951288211416,
+              "y": 302.21191284897685
+            },
+            {
+              "x": 262.7951288211416,
+              "y": 301.15152017231367
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [
+          "Pinning (Stopping robots from moving so they couldn't aim)",
+          "Pushing (hitting a robot to disrupt their aim)"
+        ],
+        "effectiveness": 3,
+        "comments": "They are too light to do anything"
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "They did not have an auto, they were able to feed via push, prefer to use trench. Very start and stop driving, looked like a new driver. They tried to play defense, not really very successful."
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 0,
+      "trenchCycles": 0,
+      "bumpCycles": 0
+    },
+    "_entryId": "1780158385186-5lk560hq"
+  }
+]

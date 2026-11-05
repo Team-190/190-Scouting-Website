@@ -1,0 +1,37 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 59,
+    "Team": "10396",
+    "ScouterName": "RG",
+    "ScoutStation": "B1",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Far Bump",
+        "path": []
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [
+        "Stopped moving (5+ seconds)"
+      ],
+      "comments": "Got beached in auto on the trench and struggled to do anything after that. Turret is slow but works. Intake sucks and cannot traverse over obstacles like trench and bump without smthn happening."
+    },
+    "quant": {
+      "shootingBalls": 25,
+      "feedingBalls": 20,
+      "trenchCycles": 2,
+      "bumpCycles": 1
+    },
+    "_entryId": "1777589434845-zp1s6nxf"
+  }
+]

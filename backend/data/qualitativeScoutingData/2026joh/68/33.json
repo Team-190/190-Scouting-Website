@@ -1,0 +1,35 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 68,
+    "Team": "33",
+    "ScouterName": "AM",
+    "ScoutStation": "B2",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Far Bump",
+        "path": []
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "The robot just intaked and scored the whole match. Didn't do any defense or get defended but they got the supercharge point and the shooter is very good. Robot cannot go under trench though"
+    },
+    "quant": {
+      "shootingBalls": 300,
+      "feedingBalls": 20,
+      "trenchCycles": 0,
+      "bumpCycles": 9
+    },
+    "_entryId": "1777643983331-u9t09mub"
+  }
+]

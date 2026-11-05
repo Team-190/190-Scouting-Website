@@ -1,0 +1,35 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 2,
+    "Team": "11269",
+    "ScouterName": "RG",
+    "ScoutStation": "B1",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Far Bump",
+        "path": []
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Was working the entire time but I think it just sucked. Could barely move fast but had a strong turret as a positive."
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 5,
+      "trenchCycles": 0,
+      "bumpCycles": 1
+    },
+    "_entryId": "1777555237921-rvx45i7q"
+  }
+]

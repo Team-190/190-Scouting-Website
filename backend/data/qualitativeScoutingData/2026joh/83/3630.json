@@ -1,0 +1,38 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 83,
+    "Team": "3630",
+    "ScouterName": "RG",
+    "ScoutStation": "B1",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Far Trench",
+        "path": []
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": 1,
+        "comments": "Didn’t rly do anything "
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [
+        "Stopped moving (5+ seconds)",
+        "Lost mechanism"
+      ],
+      "comments": "Belt came off in the start of the match so they couldn’t shoot. Then the shooter jammed. Then they started wandering around and couldn’t get over a bump. And then they broke down on bump. DNP"
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 0,
+      "trenchCycles": 2,
+      "bumpCycles": 1
+    },
+    "_entryId": "1777652807195-0ozwgwia"
+  }
+]

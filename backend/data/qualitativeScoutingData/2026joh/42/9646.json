@@ -1,0 +1,73 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 42,
+    "Team": "9646",
+    "ScouterName": "AM",
+    "ScoutStation": "R3",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": [
+          [
+            {
+              "x": 271.38789381831543,
+              "y": 310.9029117295857
+            },
+            {
+              "x": 243.1707541104069,
+              "y": 299.14577018462387
+            },
+            {
+              "x": 231.41361256544502,
+              "y": 299.14577018462387
+            },
+            {
+              "x": 219.6564710204831,
+              "y": 299.14577018462387
+            },
+            {
+              "x": 210.25075778451364,
+              "y": 299.14577018462387
+            },
+            {
+              "x": 202.0207587030403,
+              "y": 299.14577018462387
+            },
+            {
+              "x": 198.49361623955173,
+              "y": 299.14577018462387
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [
+          "Pushing (hitting a robot to disrupt their aim)",
+          "Blocking (Getting in their way preventing motion across zones)",
+          "Pinning (Stopping robots from moving so they couldn't aim)"
+        ],
+        "effectiveness": 2,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [
+        "Lost mechanism",
+        "Stopped moving (5+ seconds)"
+      ],
+      "comments": "Could not intake so they defended the entire match. Defense was not very effective. They got beached in the blue zone at the start of the match "
+    },
+    "quant": {
+      "shootingBalls": 10,
+      "feedingBalls": 30,
+      "trenchCycles": 0,
+      "bumpCycles": 4
+    },
+    "_entryId": "1777580451017-thhs9zrh"
+  }
+]

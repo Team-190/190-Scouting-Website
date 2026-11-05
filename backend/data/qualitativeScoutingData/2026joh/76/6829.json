@@ -1,0 +1,61 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 76,
+    "Team": "6829",
+    "ScouterName": "AB",
+    "ScoutStation": "B3",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": [
+          [
+            {
+              "x": 1016.9306487695749,
+              "y": 312.05369127516775
+            },
+            {
+              "x": 980.2774049217,
+              "y": 309.7628635346754
+            },
+            {
+              "x": 973.4049217002236,
+              "y": 309.7628635346754
+            },
+            {
+              "x": 967.6778523489933,
+              "y": 309.7628635346754
+            },
+            {
+              "x": 964.241610738255,
+              "y": 309.7628635346754
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [
+          "Pinning (Stopping robots from moving so they couldn't aim)",
+          "Pushing (hitting a robot to disrupt their aim)"
+        ],
+        "effectiveness": 2,
+        "comments": "The robots were able to shoot and the ref gave one penalty, this defense was aggressive/annoying but somehow the refs didn’t call a bunch of penalties."
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Good shooter and feeder"
+    },
+    "quant": {
+      "shootingBalls": 30,
+      "feedingBalls": 10,
+      "trenchCycles": 6,
+      "bumpCycles": 0
+    },
+    "_entryId": "1777648685079-cjjkauyl"
+  }
+]

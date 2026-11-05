@@ -1,0 +1,39 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 94,
+    "Team": "7551",
+    "ScouterName": "SS",
+    "ScoutStation": "B1",
+    "Alliance": "Blue",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": []
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [
+          "Pinning (Stopping robots from moving so they couldn't aim)",
+          "Blocking (Getting in their way preventing motion across zones)",
+          "Pushing (hitting a robot to disrupt their aim)"
+        ],
+        "effectiveness": 1,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "They tried defending but it didn’t do much"
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 0,
+      "trenchCycles": 0,
+      "bumpCycles": 4
+    },
+    "_entryId": "1777661871677-08iwgza5"
+  }
+]

@@ -1,3 +1,4 @@
+const qualitativeStorage = require("./qualitativeStorage").createStore();
 const fs = require("fs");
 const path = require("path");
 // const storage = require("./storage");
@@ -601,6 +602,7 @@ async function getTransactionTimers(
 }
 
 async function readJSONFile(filename) {
+  if (filename === "qualitativeScoutingData") return qualitativeStorage.read();
   try {
     const fullPath = `./data/${filename}.json`;
     if (!fs.existsSync(fullPath)) {
@@ -653,6 +655,7 @@ async function readJSONFile(filename) {
 }
 
 async function writeJSONFile(filename, data) {
+  if (filename === "qualitativeScoutingData") return qualitativeStorage.write(data);
   const fullPath = `./data/${filename}.json`;
   // Create directory if it doesn't exist
   if (!fs.existsSync("./data")) {

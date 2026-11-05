@@ -1,0 +1,37 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 96,
+    "Team": "6829",
+    "ScouterName": "AM",
+    "ScoutStation": "R3",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "Near Bump",
+        "path": []
+      },
+      "defense": {
+        "types": [
+          "Pushing (hitting a robot to disrupt their aim)"
+        ],
+        "effectiveness": 2,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Shot kinda slow. They sold our game bruh"
+    },
+    "quant": {
+      "shootingBalls": 65,
+      "feedingBalls": 10,
+      "trenchCycles": 0,
+      "bumpCycles": 6
+    },
+    "_entryId": "1777662842919-ch6dkeoh"
+  }
+]

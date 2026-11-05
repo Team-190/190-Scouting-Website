@@ -1,0 +1,82 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 64,
+    "Team": "6652",
+    "ScouterName": "SV",
+    "ScoutStation": "R2",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "Near Trench",
+        "path": [
+          [
+            {
+              "x": 268.9753914988814,
+              "y": 530.8277404921699
+            },
+            {
+              "x": 273.5570469798658,
+              "y": 527.3914988814316
+            },
+            {
+              "x": 274.70246085011183,
+              "y": 527.3914988814316
+            },
+            {
+              "x": 275.8478747203579,
+              "y": 527.3914988814316
+            },
+            {
+              "x": 276.99328859060404,
+              "y": 527.3914988814316
+            },
+            {
+              "x": 278.1387024608501,
+              "y": 527.3914988814316
+            },
+            {
+              "x": 279.2841163310962,
+              "y": 527.3914988814316
+            },
+            {
+              "x": 280.4295302013423,
+              "y": 527.3914988814316
+            },
+            {
+              "x": 281.57494407158833,
+              "y": 527.3914988814316
+            },
+            {
+              "x": 282.72035794183444,
+              "y": 527.3914988814316
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [
+          "Pushing (hitting a robot to disrupt their aim)",
+          "Pinning (Stopping robots from moving so they couldn't aim)",
+          "Blocking (Getting in their way preventing motion across zones)"
+        ],
+        "effectiveness": 1,
+        "comments": "Bad lane defense and every time it tried to disrupt a robots shooting it pinned it uselessly or couldn’t move it "
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "It’s a bad defense bot that doesn’t even have an auto. "
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 20,
+      "trenchCycles": 9,
+      "bumpCycles": 1
+    },
+    "_entryId": "1777641482945-c6hd11pq"
+  }
+]

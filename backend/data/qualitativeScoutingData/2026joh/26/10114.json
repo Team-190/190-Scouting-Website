@@ -1,0 +1,83 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 26,
+    "Team": "10114",
+    "ScouterName": "CC",
+    "ScoutStation": "R2",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": [
+          [
+            {
+              "x": 251.4007531918802,
+              "y": 342.64719390098276
+            },
+            {
+              "x": 224.3593276384679,
+              "y": 354.4043354459446
+            },
+            {
+              "x": 204.3721870120327,
+              "y": 354.4043354459446
+            },
+            {
+              "x": 184.38504638559746,
+              "y": 354.4043354459446
+            },
+            {
+              "x": 164.3979057591623,
+              "y": 354.4043354459446
+            },
+            {
+              "x": 143.23505097823093,
+              "y": 354.4043354459446
+            },
+            {
+              "x": 127.95076696978046,
+              "y": 354.4043354459446
+            },
+            {
+              "x": 115.0179112703224,
+              "y": 354.4043354459446
+            },
+            {
+              "x": 106.78791218884908,
+              "y": 354.4043354459446
+            },
+            {
+              "x": 93.85505648939102,
+              "y": 354.4043354459446
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [
+          "Pushing (hitting a robot to disrupt their aim)",
+          "Pinning (Stopping robots from moving so they couldn't aim)"
+        ],
+        "effectiveness": 3,
+        "comments": "They did a pretty good job pushing the other robots but when they went to pin the robot could move around them easily. "
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [
+        "Lost mechanism"
+      ],
+      "comments": "Pretty sure they were broken in this match only played defense. Definitely not defense oriented though because they made bad decisions and spent a lot of time running around. Pretty sure intake or shooter was broken"
+    },
+    "quant": {
+      "shootingBalls": 0,
+      "feedingBalls": 0,
+      "trenchCycles": 0,
+      "bumpCycles": 5
+    },
+    "_entryId": "1777638571662-z8k4gqis"
+  }
+]

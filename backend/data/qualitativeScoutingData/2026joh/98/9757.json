@@ -1,0 +1,62 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 98,
+    "Team": "9757",
+    "ScouterName": "AM",
+    "ScoutStation": "R3",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": [
+          [
+            {
+              "x": 269.7387377224114,
+              "y": 313.14387025224926
+            },
+            {
+              "x": 236.6609274160488,
+              "y": 301.77337295943744
+            },
+            {
+              "x": 220.12202226286755,
+              "y": 301.77337295943744
+            },
+            {
+              "x": 197.38102767724325,
+              "y": 301.77337295943744
+            },
+            {
+              "x": 179.80844095198816,
+              "y": 301.77337295943744
+            },
+            {
+              "x": 174.640033091619,
+              "y": 301.77337295943744
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Shooter is slow"
+    },
+    "quant": {
+      "shootingBalls": 45,
+      "feedingBalls": 0,
+      "trenchCycles": 7,
+      "bumpCycles": 0
+    },
+    "_entryId": "1777663666253-2ieqf0yf"
+  }
+]

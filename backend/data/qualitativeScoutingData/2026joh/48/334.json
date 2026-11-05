@@ -1,0 +1,85 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 48,
+    "Team": "334",
+    "ScouterName": "CC",
+    "ScoutStation": "R3",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "Hub",
+        "path": [
+          [
+            {
+              "x": 231.38204976935117,
+              "y": 309.8771208565352
+            },
+            {
+              "x": 205.5400104675054,
+              "y": 303.67503142409214
+            },
+            {
+              "x": 186.93374217017652,
+              "y": 303.67503142409214
+            },
+            {
+              "x": 168.32747387284752,
+              "y": 303.67503142409214
+            },
+            {
+              "x": 150.75488714759243,
+              "y": 303.67503142409214
+            },
+            {
+              "x": 139.3843898547803,
+              "y": 303.67503142409214
+            },
+            {
+              "x": 131.11493727818967,
+              "y": 303.67503142409214
+            },
+            {
+              "x": 125.9465294178205,
+              "y": 303.67503142409214
+            },
+            {
+              "x": 123.87916627367287,
+              "y": 303.67503142409214
+            },
+            {
+              "x": 122.845484701599,
+              "y": 303.67503142409214
+            },
+            {
+              "x": 112.50866898086073,
+              "y": 303.67503142409214
+            }
+          ]
+        ]
+      },
+      "defense": {
+        "types": [
+          "Pinning (Stopping robots from moving so they couldn't aim)",
+          "Pushing (hitting a robot to disrupt their aim)"
+        ],
+        "effectiveness": 5,
+        "comments": "Doing very good and only reason robot was scoring was for fear of penalty. Did not collect any penalities while doing it. "
+      },
+      "avoidance": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "matchEvents": [],
+      "comments": "Bumper is slightly messed up"
+    },
+    "quant": {
+      "shootingBalls": 10,
+      "feedingBalls": 40,
+      "trenchCycles": 6,
+      "bumpCycles": 1
+    },
+    "_entryId": "1777583427333-0lqzrxnx"
+  }
+]

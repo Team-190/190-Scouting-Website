@@ -1,0 +1,40 @@
+[
+  {
+    "RecordType": "Match_Scouting",
+    "Match": 3,
+    "Team": "6766",
+    "ScouterName": "RG",
+    "ScoutStation": "R3",
+    "Alliance": "Red",
+    "qual": {
+      "auto": {
+        "startPosition": "",
+        "path": []
+      },
+      "defense": {
+        "types": [],
+        "effectiveness": null,
+        "comments": ""
+      },
+      "avoidance": {
+        "types": [
+          "Pushing (hitting a robot to disrupt their aim)",
+          "Blocking (Getting in their way preventing motion across zones)"
+        ],
+        "effectiveness": 2,
+        "comments": "They were pushing against a turret which rly doesn’t work. Lane was also ineffective as they got beat."
+      },
+      "matchEvents": [
+        "Lost mechanism"
+      ],
+      "comments": "Would have scored much more but intake broke down. Dumper but it is inaccurate. Good structural design which works well and can move consistently. Good robot but driver kinda doesn’t do anything in inactive."
+    },
+    "quant": {
+      "shootingBalls": 70,
+      "feedingBalls": 0,
+      "trenchCycles": 5,
+      "bumpCycles": 2
+    },
+    "_entryId": "1777638818090-0831vn6c"
+  }
+]
