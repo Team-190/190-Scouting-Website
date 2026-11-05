@@ -1,3 +1,12 @@
+import { foreground, queueBackground } from "./background";
+import { flattenScouting, scoutingRevisions, applyScoutingDelta } from "./scoutingSync";
+import { getIndexedDBStore, getLastId, setIndexedDBStore } from "./indexedDB";
+import {
+  compressData,
+  getCompressionProtocol,
+  isCompressedEnvelope,
+} from "./compression";
+
 const VITE_BACKEND_PORT = 8000;
 const VITE_FRONTEND_PORT = 5173;
 const VITE_TESTING = String(import.meta.env.VITE_TESTING ?? "1");
@@ -10,24 +19,24 @@ const SERVER = VITE_TESTING === "0"
 // Local dev (http://localhost:5173): Call backend directly on http://localhost:8000
 // Nginx proxy (https://190scouting.com): Use empty string (routes already have /api prefix)
 const getAPILink = () => {
-  if (typeof window === 'undefined') return '';
-
-    const isFrontendRuntime = window.location.port === String(VITE_FRONTEND_PORT);
-    if (!isFrontendRuntime) {
-        return '';
-    }
-
-    return `http://${SERVER}:${VITE_BACKEND_PORT}`;
+  if (typeof window === "undefined") return "";
+  const isFrontendRuntime = window.location.port === String(VITE_FRONTEND_PORT);
+  return isFrontendRuntime ? `http://${SERVER}:${VITE_BACKEND_PORT}` : "";
 };
 
 const defaultAPILink = getAPILink();
 
-import { getIndexedDBStore, getLastId, setIndexedDBStore } from "./indexedDB";
-import {
-  compressData,
-  getCompressionProtocol,
-  isCompressedEnvelope,
-} from "./compression";
+async function networkFetch(url, options = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60000);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    // Keep the timeout active through the body download, not just response headers.
+    await response.clone().arrayBuffer();
+    return response;
+  }
+  finally { clearTimeout(timer); }
+}
 
 function fetchApi(path, query = {}) {
   const params = new URLSearchParams();
@@ -39,7 +48,7 @@ function fetchApi(path, query = {}) {
 
   const queryString = params.toString();
   const route = `${defaultAPILink}${path}${queryString ? `?${queryString}` : ""}`;
-  return fetch(route);
+  return foreground(() => networkFetch(route));
 }
 
 async function postApi(path, payload = {}) {
@@ -47,12 +56,11 @@ async function postApi(path, payload = {}) {
   const protocol = getCompressionProtocol();
 
   const sendPayload = (body) => {
-    console.log(`[postApi] Sending to ${path}:`, body);
-    return fetch(route, {
+    return foreground(() => networkFetch(route, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-    });
+    }));
   };
 
   let compressedPayload = null;
@@ -61,12 +69,14 @@ async function postApi(path, payload = {}) {
     if (!isCompressedEnvelope(compressedPayload)) {
       throw new Error("Compression did not return a valid envelope");
     }
-    console.log(`[postApi] Compressed payload for ${path}:`, compressedPayload);
   } catch (error) {
     console.warn("Payload compression failed, sending plain JSON", error);
     return sendPayload(payload);
   }
 
+  if (JSON.stringify(compressedPayload).length >= JSON.stringify(payload).length) {
+    return sendPayload(payload);
+  }
   const compressedResponse = await sendPayload(compressedPayload);
   if (![400, 403, 415].includes(compressedResponse.status)) {
     return compressedResponse;
@@ -89,7 +99,6 @@ async function postApiExpectText(path, payload = {}) {
   }
 
   const result = await response.text();
-  console.log("Success:", result);
   return result;
 }
 
@@ -131,8 +140,81 @@ export function fetchPitScouting(eventCode, localState = {}) {
   });
 }
 
-export function fetchPitScoutingImage(eventCode, team) {
-  return fetchApi("/api/getPitScoutingImage", { eventCode, teamNumber: team });
+const pitRequests = new Map();
+const pitRefreshedAt = new Map();
+export async function readPitTeam(eventCode, team) {
+  const key = `team:${eventCode}:${team}`;
+  const cached = await getIndexedDBStore("retrievePit", key);
+  if (cached !== null) return cached;
+  const mirror = await readPitScoutingFromIDB({}, eventCode);
+  if (!Object.hasOwn(mirror, String(team))) return null;
+  const entries = normalizeEntries(mirror[team]).map(({ robotPicturePreview, ...rest }) => rest);
+  await setIndexedDBStore("retrievePit", { key, value: entries });
+  return entries;
+}
+
+export function fetchPitTeam(eventCode, team, { background = false } = {}) {
+  const key = `${eventCode}:${team}`;
+  if (pitRequests.has(key)) return pitRequests.get(key);
+  const task = async () => {
+    const params = new URLSearchParams({ eventCode, team: String(team) });
+    const response = await networkFetch(`${defaultAPILink}/api/getPitScoutingTeam?${params}`, { priority: background ? "low" : "high" });
+    if (!response.ok) throw new Error(`Pit data request failed: ${response.status}`);
+    const entries = await response.json();
+    pitRefreshedAt.set(key, Date.now());
+    await setIndexedDBStore("retrievePit", { key: `team:${key}`, value: entries });
+    return entries;
+  };
+  const promise = (background ? task() : foreground(task)).finally(() => pitRequests.delete(key));
+  pitRequests.set(key, promise);
+  return promise;
+}
+
+export function warmPitTeams(eventCode, teams) {
+  for (const team of [...new Set(teams.map(String))]) {
+    queueBackground(`pit:${eventCode}:${team}`, async () => {
+      const cached = await readPitTeam(eventCode, team);
+      const stale = Date.now() - (pitRefreshedAt.get(`${eventCode}:${team}`) || 0) > 5 * 60 * 1000;
+      if (cached === null || stale) await fetchPitTeam(eventCode, team, { background: true });
+    }, 1);
+  }
+}
+
+const photoRequests = new Map();
+function refreshRobotPhoto(eventCode, team) {
+  const key = `image:${eventCode}:${team}`;
+  if (!photoRequests.has(key)) {
+    photoRequests.set(key, (async () => {
+      const response = await fetchApi("/api/getPitScoutingImage", { eventCode, teamNumber: team });
+      if (response.status === 404) {
+        await setIndexedDBStore("retrievePit", { key, value: "" });
+        return response;
+      }
+      if (!response.ok) return response;
+      const text = await response.text();
+      await setIndexedDBStore("retrievePit", { key, value: text });
+      return new Response(text);
+    })().finally(() => photoRequests.delete(key)));
+  }
+  return photoRequests.get(key).then(response => response.clone());
+}
+
+export async function fetchPitScoutingImage(eventCode, team) {
+  const cached = await getIndexedDBStore("retrievePit", `image:${eventCode}:${team}`);
+  if (cached) {
+    queueBackground(`photo:${eventCode}:${team}`, () => refreshRobotPhoto(eventCode, team));
+    return new Response(cached);
+  }
+  return foreground(() => refreshRobotPhoto(eventCode, team));
+}
+
+export async function downloadEventPhotos(eventCode, onProgress = () => {}) {
+  const teams = Object.keys(await readPitScoutingFromIDB({}, eventCode));
+  for (let i = 0; i < teams.length; i++) {
+    const response = await foreground(() => refreshRobotPhoto(eventCode, teams[i]));
+    if (!response.ok && response.status !== 404) throw new Error(`Robot photo download failed: ${response.status}`);
+    onProgress(i + 1, teams.length);
+  }
 }
 
 export function fetchGracePage(eventCode) {
@@ -163,9 +245,7 @@ export async function fetchTransactionTimers(
   return response.json();
 }
 
-////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
-////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
-////////////// EXTERNAL API GET Methods \\\\\\\\\\\\\\
+// External API GET methods
 
 /**
  * Read data directly from IndexedDB without hitting the backend.
@@ -252,86 +332,83 @@ export async function refreshEventCaches(eventCode) {
     await postApi("/api/postEventCode", { eventCode });
 
     // Now fetch all the cached data from the backend and store in IndexedDB
-    const results = await Promise.allSettled([
-      (async () => {
+    const tasks = [
+      async () => {
         const data = await fetchApi("/api/getTeams", { eventCode });
-        if (data.ok) {
-          const json = await data.json();
-          await setIndexedDBStore("teams", { key: eventCode, value: json });
-        }
-      })(),
-      (async () => {
+        if (!data.ok) throw new Error(`Event cache request failed: ${data.status}`);
+        const json = await data.json();
+        await setIndexedDBStore("teams", { key: eventCode, value: json });
+      },
+      async () => {
         const data = await fetchApi("/api/getMatchAlliances", { eventCode });
-        if (data.ok) {
-          const json = await data.json();
-          await setIndexedDBStore("matchAlliances", { rows: json });
-        }
-      })(),
-      (async () => {
+        if (!data.ok) throw new Error(`Event cache request failed: ${data.status}`);
+        const json = await data.json();
+        await setIndexedDBStore("matchAlliances", { rows: json });
+      },
+      async () => {
         const data = await fetchApi("/api/getEventDetails", { eventCode });
-        if (data.ok) {
-          const json = await data.json();
-          await setIndexedDBStore("eventDetails", {
-            key: eventCode,
-            value: json,
-          });
-        }
-      })(),
-      (async () => {
+        if (!data.ok) throw new Error(`Event cache request failed: ${data.status}`);
+        const json = await data.json();
+        await setIndexedDBStore("eventDetails", {
+          key: eventCode,
+          value: json,
+        });
+      },
+      async () => {
         const data = await fetchApi("/api/getTeamStatuses", { eventCode });
-        if (data.ok) {
-          const json = await data.json();
-          await setIndexedDBStore("teamStatuses", {
-            key: eventCode,
-            value: json,
-          });
-        }
-      })(),
-      (async () => {
+        if (!data.ok) throw new Error(`Event cache request failed: ${data.status}`);
+        const json = await data.json();
+        await setIndexedDBStore("teamStatuses", {
+          key: eventCode,
+          value: json,
+        });
+      },
+      async () => {
         const data = await fetchApi("/api/getOPR", { eventCode });
-        if (data.ok) {
-          const json = await data.json();
-          await setIndexedDBStore("OPR", { key: eventCode, value: json });
-        }
-      })(),
-      (async () => {
+        if (!data.ok) throw new Error(`Event cache request failed: ${data.status}`);
+        const json = await data.json();
+        await setIndexedDBStore("OPR", { key: eventCode, value: json });
+      },
+      async () => {
         const data = await fetchApi("/api/getCOPR", { eventCode });
-        if (data.ok) {
-          const json = await data.json();
-          await setIndexedDBStore("COPR", { key: eventCode, value: json });
-        }
-      })(),
-      (async () => {
+        if (!data.ok) throw new Error(`Event cache request failed: ${data.status}`);
+        const json = await data.json();
+        await setIndexedDBStore("COPR", { key: eventCode, value: json });
+      },
+      async () => {
         const data = await fetchApi("/api/getAlliances", { eventCode });
-        if (data.ok) {
-          const json = await data.json();
-          await setIndexedDBStore("alliances", { key: eventCode, value: json });
-        }
-      })(),
-      (async () => {
+        if (!data.ok) throw new Error(`Event cache request failed: ${data.status}`);
+        const json = await data.json();
+        await setIndexedDBStore("alliances", { key: eventCode, value: json });
+      },
+      async () => {
         const data = await fetchApi("/api/getEventEpas", { eventCode });
-        if (data.ok) {
-          const json = await data.json();
-          await setIndexedDBStore("EPA", { key: eventCode, value: json });
-        }
-      })(),
-      (async () => {
+        if (!data.ok) throw new Error(`Event cache request failed: ${data.status}`);
+        const json = await data.json();
+        await setIndexedDBStore("EPA", { key: eventCode, value: json });
+      },
+      async () => {
         const data = await fetchApi("/api/getElimsHaveStarted", { eventCode });
-        if (data.ok) {
-          const json = await data.json();
-          await setIndexedDBStore("elimsStarted", {
-            key: eventCode,
-            value: json,
-          });
-        }
-      })(),
-    ]);
+        if (!data.ok) throw new Error(`Event cache request failed: ${data.status}`);
+        const json = await data.json();
+        await setIndexedDBStore("elimsStarted", {
+          key: eventCode,
+          value: json,
+        });
+      },
+    ];
+    const results = [];
+    for (let i = 0; i < tasks.length; i += 2) {
+      results.push(...await Promise.allSettled(tasks.slice(i, i + 2).map(task => task())));
+    }
+    const failure = results.find(result => result.status === "rejected");
+    if (failure) throw failure.reason;
 
     console.log(`Cache refresh completed for event: ${eventCode}`);
     return {};
   } catch (error) {
     console.warn(`Failed to refresh caches: ${error.message}`);
-    return {};
+    throw error;
   }
 }
 
@@ -455,9 +532,16 @@ migrateStorageIfNeeded();
 /**
  * Read pit scouting data from IndexedDB
  */
-export async function readPitScoutingFromIDB(fallback = {}) {
+export async function readPitScoutingFromIDB(fallback = {}, eventCode = localStorage.getItem("eventCode")) {
   try {
-    const data = await getIndexedDBStore("retrievePit", "data");
+    let data = await getIndexedDBStore("retrievePit", `event:${eventCode}`);
+    if (data === null && eventCode === localStorage.getItem("eventCode")) {
+      data = await getIndexedDBStore("retrievePit", "data");
+      if (data !== null) {
+        await setIndexedDBStore("retrievePit", { key: `event:${eventCode}`, value: data });
+        await setIndexedDBStore("retrievePit", { key: "data", value: null });
+      }
+    }
     return data || fallback;
   } catch (error) {
     console.warn("Failed to read pit scouting from IndexedDB:", error);
@@ -468,9 +552,9 @@ export async function readPitScoutingFromIDB(fallback = {}) {
 /**
  * Write pit scouting data to IndexedDB
  */
-export async function writePitScoutingToIDB(data) {
+export async function writePitScoutingToIDB(data, eventCode = localStorage.getItem("eventCode")) {
   try {
-    await setIndexedDBStore("retrievePit", { key: "data", value: data });
+    await setIndexedDBStore("retrievePit", { key: `event:${eventCode}`, value: data });
   } catch (error) {
     console.warn("Failed to write pit scouting to IndexedDB:", error);
   }
@@ -479,9 +563,16 @@ export async function writePitScoutingToIDB(data) {
 /**
  * Read qualitative scouting data from IndexedDB
  */
-export async function readQualScoutingFromIDB(fallback = {}) {
+export async function readQualScoutingFromIDB(fallback = {}, eventCode = localStorage.getItem("eventCode")) {
   try {
-    const data = await getIndexedDBStore("retrieveQual", "data");
+    let data = await getIndexedDBStore("retrieveQual", `event:${eventCode}`);
+    if (data === null && eventCode === localStorage.getItem("eventCode")) {
+      data = await getIndexedDBStore("retrieveQual", "data");
+      if (data !== null) {
+        await setIndexedDBStore("retrieveQual", { key: `event:${eventCode}`, value: data });
+        await setIndexedDBStore("retrieveQual", { key: "data", value: null });
+      }
+    }
     return data || fallback;
   } catch (error) {
     console.warn("Failed to read qualitative scouting from IndexedDB:", error);
@@ -492,9 +583,9 @@ export async function readQualScoutingFromIDB(fallback = {}) {
 /**
  * Write qualitative scouting data to IndexedDB
  */
-export async function writeQualScoutingToIDB(data) {
+export async function writeQualScoutingToIDB(data, eventCode = localStorage.getItem("eventCode")) {
   try {
-    await setIndexedDBStore("retrieveQual", { key: "data", value: data });
+    await setIndexedDBStore("retrieveQual", { key: `event:${eventCode}`, value: data });
   } catch (error) {
     console.warn("Failed to write qualitative scouting to IndexedDB:", error);
   }
@@ -505,16 +596,21 @@ function readQueue(key) {
   return Array.isArray(queue) ? queue : [];
 }
 
-async function updatePitMirror(team, formData) {
-  const pitData = await readPitScoutingFromIDB({});
+async function updatePitMirror(team, formData, eventCode = localStorage.getItem("eventCode")) {
+  const pitData = await readPitScoutingFromIDB({}, eventCode);
   const teamKey = normalizeTeamKey(team);
   const { payload } = ensureEntryPayload(formData);
   pitData[teamKey] = appendUniqueEntry(pitData[teamKey], payload);
-  await writePitScoutingToIDB(pitData);
+  await writePitScoutingToIDB(pitData, eventCode);
+  if (payload.robotPicturePreview) {
+    await setIndexedDBStore("retrievePit", { key: `image:${eventCode}:${teamKey}`, value: payload.robotPicturePreview });
+  }
+  const entries = normalizeEntries(pitData[teamKey]).map(({ robotPicturePreview, ...rest }) => rest);
+  await setIndexedDBStore("retrievePit", { key: `team:${eventCode}:${teamKey}`, value: entries });
 }
 
-async function updateQualMirror(team, match, formData) {
-  const qualData = await readQualScoutingFromIDB({});
+async function updateQualMirror(team, match, formData, eventCode = localStorage.getItem("eventCode")) {
+  const qualData = await readQualScoutingFromIDB({}, eventCode);
   const teamKey = normalizeTeamKey(team);
   const matchKey = String(match);
   const { payload } = ensureEntryPayload(formData);
@@ -527,26 +623,18 @@ async function updateQualMirror(team, match, formData) {
     qualData[teamKey][matchKey],
     payload,
   );
-  await writeQualScoutingToIDB(qualData);
+  await writeQualScoutingToIDB(qualData, eventCode);
 }
 
-export async function hasServerConnection(timeoutMs = 2500) {
-  if (typeof navigator !== "undefined" && !navigator.onLine) {
-    return false;
-  }
-
+export async function hasServerConnection(timeoutMs = 10000) {
+  if (typeof navigator !== "undefined" && !navigator.onLine) return false;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const timeout = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Request timed out")), timeoutMs),
-    );
-    const response = await Promise.race([
-      fetch(`${defaultAPILink}/api/health`),
-      timeout,
-    ]);
-    return response?.ok === true;
-  } catch {
-    return false;
-  }
+    const response = await fetch(`${defaultAPILink}/api/health`, { signal: controller.signal, cache: "no-store" });
+    return response.ok;
+  } catch { return false; }
+  finally { clearTimeout(timer); }
 }
 
 export async function queuePitScoutingForSync(event, team, formData) {
@@ -554,7 +642,7 @@ export async function queuePitScoutingForSync(event, team, formData) {
   const queue = readQueue(PIT_QUEUE_KEY);
   queue.push({ event, team: String(team), formData: payload, entryId });
   writeLocalJson(PIT_QUEUE_KEY, queue);
-  await updatePitMirror(team, payload);
+  await updatePitMirror(team, payload, event);
   return queue.length;
 }
 
@@ -574,17 +662,17 @@ export async function queueQualitativeScoutingForSync(
     entryId,
   });
   writeLocalJson(QUAL_QUEUE_KEY, queue);
-  await updateQualMirror(team, match, payload);
+  await updateQualMirror(team, match, payload, event);
   return queue.length;
 }
 
-export async function flushPitScoutingQueue() {
+async function performPitQueueFlush() {
   const queue = readQueue(PIT_QUEUE_KEY);
   if (queue.length === 0) {
     return { uploaded: 0, remaining: 0 };
   }
 
-  if (!(await hasServerConnection())) {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
     return { uploaded: 0, remaining: queue.length };
   }
 
@@ -613,9 +701,13 @@ export async function flushPitScoutingQueue() {
       const response = await postPitScouting(event, team, payload);
       if (response.ok) {
         uploaded += 1;
-        await updatePitMirror(team, payload);
+        await updatePitMirror(team, payload, event);
       } else {
         remaining.push(normalizedItem);
+        if (response.status === 429 || response.status >= 500) {
+          remaining.push(...queue.slice(i + 1));
+          break;
+        }
       }
     } catch {
       remaining.push(normalizedItem, ...queue.slice(i + 1));
@@ -623,17 +715,18 @@ export async function flushPitScoutingQueue() {
     }
   }
 
-  writeLocalJson(PIT_QUEUE_KEY, remaining);
-  return { uploaded, remaining: remaining.length };
+  const finalQueue = [...remaining, ...readQueue(PIT_QUEUE_KEY).slice(queue.length)];
+  writeLocalJson(PIT_QUEUE_KEY, finalQueue);
+  return { uploaded, remaining: finalQueue.length };
 }
 
-export async function flushQualitativeScoutingQueue() {
+async function performQualQueueFlush() {
   const queue = readQueue(QUAL_QUEUE_KEY);
   if (queue.length === 0) {
     return { uploaded: 0, remaining: 0 };
   }
 
-  if (!(await hasServerConnection())) {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
     return { uploaded: 0, remaining: queue.length };
   }
 
@@ -669,9 +762,13 @@ export async function flushQualitativeScoutingQueue() {
       );
       if (response.ok) {
         uploaded += 1;
-        await updateQualMirror(team, match, payload);
+        await updateQualMirror(team, match, payload, event);
       } else {
         remaining.push(normalizedItem);
+        if (response.status === 429 || response.status >= 500) {
+          remaining.push(...queue.slice(i + 1));
+          break;
+        }
       }
     } catch {
       remaining.push(normalizedItem, ...queue.slice(i + 1));
@@ -679,15 +776,24 @@ export async function flushQualitativeScoutingQueue() {
     }
   }
 
-  writeLocalJson(QUAL_QUEUE_KEY, remaining);
-  return { uploaded, remaining: remaining.length };
+  const finalQueue = [...remaining, ...readQueue(QUAL_QUEUE_KEY).slice(queue.length)];
+  writeLocalJson(QUAL_QUEUE_KEY, finalQueue);
+  return { uploaded, remaining: finalQueue.length };
 }
 
+const queueFlights = new Map();
+function flushOnce(key, task) {
+  if (!queueFlights.has(key)) {
+    queueFlights.set(key, foreground(task).finally(() => queueFlights.delete(key)));
+  }
+  return queueFlights.get(key);
+}
+export function flushPitScoutingQueue() { return flushOnce(PIT_QUEUE_KEY, performPitQueueFlush); }
+export function flushQualitativeScoutingQueue() { return flushOnce(QUAL_QUEUE_KEY, performQualQueueFlush); }
+
 export async function flushOfflineScoutingQueues() {
-  const [pitResult, qualResult] = await Promise.all([
-    flushPitScoutingQueue(),
-    flushQualitativeScoutingQueue(),
-  ]);
+  const qualResult = await flushQualitativeScoutingQueue();
+  const pitResult = await flushPitScoutingQueue();
 
   return {
     pit: pitResult,
@@ -696,24 +802,26 @@ export async function flushOfflineScoutingQueues() {
 }
 
 export function startPeriodicQueueSync(intervalMs = 15000) {
-  if (typeof window === "undefined") {
-    return () => {};
-  }
-
-  const runSync = () => {
-    flushOfflineScoutingQueues().catch((error) => {
-      console.warn("Periodic scouting queue sync failed", error);
-    });
+  if (typeof window === "undefined") return () => {};
+  let timer, stopped = false, running = false, delay = intervalMs;
+  const schedule = () => { if (!stopped) timer = window.setTimeout(runSync, delay); };
+  const runSync = async () => {
+    if (stopped || running) return;
+    window.clearTimeout(timer);
+    running = true;
+    try {
+      const result = await flushOfflineScoutingQueues();
+      const pending = result.pit.remaining + result.qual.remaining;
+      delay = pending ? Math.min(delay * 2, 5 * 60 * 1000) : intervalMs;
+    } catch (error) {
+      delay = Math.min(delay * 2, 5 * 60 * 1000);
+      console.warn("Scouting queue sync failed", error);
+    } finally { running = false; schedule(); }
   };
-
-  const intervalId = window.setInterval(runSync, intervalMs);
-  window.addEventListener("online", runSync);
-  runSync();
-
-  return () => {
-    window.clearInterval(intervalId);
-    window.removeEventListener("online", runSync);
-  };
+  const online = () => { delay = intervalMs; void runSync(); };
+  window.addEventListener("online", online);
+  void runSync();
+  return () => { stopped = true; window.clearTimeout(timer); window.removeEventListener("online", online); };
 }
 
 export async function fetchRobotClimb(eventCode, teamNumber, matchNumber) {
@@ -769,9 +877,7 @@ export async function fetchStatboticsMatchPrediction(matchKey) {
   }
 }
 
-////////////// POST Methods \\\\\\\\\\\\\\
-////////////// POST Methods \\\\\\\\\\\\\\
-////////////// POST Methods \\\\\\\\\\\\\\
+// POST methods
 
 // Generic POST helper that wraps the shared postApi logic
 async function makePostRequest(endpoint, payload, expectText = false) {
@@ -804,47 +910,67 @@ function normalizeEntries(value) {
   return [];
 }
 
-function mergeEntries(localValue, incomingValue) {
-  const merged = [...normalizeEntries(localValue)];
-  const seenIds = new Set(
-    merged
-      .map((entry) => String(entry?._entryId || ""))
-      .filter(Boolean),
-  );
-
-  for (const entry of normalizeEntries(incomingValue)) {
-    const entryId = String(entry?._entryId || "");
-    if (entryId && seenIds.has(entryId)) continue;
-    if (entryId) seenIds.add(entryId);
-    merged.push(entry);
+const kindSyncFlights = new Map();
+function syncScoutingKind(eventCode, kind, forceFullRefresh = false) {
+  const key = `${eventCode}:${kind}`;
+  if (!kindSyncFlights.has(key)) {
+    kindSyncFlights.set(key, performScoutingKindSync(eventCode, kind, forceFullRefresh)
+      .finally(() => kindSyncFlights.delete(key)));
   }
-
-  return merged;
+  return kindSyncFlights.get(key);
 }
 
-function countPitEntries(teamData) {
-  return normalizeEntries(teamData).length;
+export function refreshScoutingData(eventCode) {
+  return foreground(async () => {
+    await flushOfflineScoutingQueues();
+    const pit = await syncScoutingKind(eventCode, "pit");
+    const qual = await syncScoutingKind(eventCode, "qual");
+    return { pit, qual };
+  });
 }
 
-function countQualEntries(teamData) {
-  if (!teamData || typeof teamData !== "object") return 0;
-
-  if (Array.isArray(teamData)) {
-    return teamData.length;
+async function performScoutingKindSync(eventCode, kind, forceFullRefresh) {
+  const read = kind === "pit" ? readPitScoutingFromIDB : readQualScoutingFromIDB;
+  const write = kind === "pit" ? writePitScoutingToIDB : writeQualScoutingToIDB;
+  const local = forceFullRefresh ? {} : await read({}, eventCode);
+  const records = flattenScouting(local, kind);
+  const known = await scoutingRevisions(records);
+  const pendingAtStart = readQueue(kind === "pit" ? PIT_QUEUE_KEY : QUAL_QUEUE_KEY);
+  const response = await postApi("/api/syncScouting", { event: eventCode, kind, known });
+  if (!response.ok) throw new Error(`Scouting sync failed: ${response.status}`);
+  const delta = await response.json();
+  const combined = applyScoutingDelta(records, delta, kind);
+  // Pending local submissions must survive server deletions until acknowledged.
+  for (const item of [...pendingAtStart, ...readQueue(kind === "pit" ? PIT_QUEUE_KEY : QUAL_QUEUE_KEY)]) {
+    if ((item.event || localStorage.getItem("eventCode")) !== eventCode) continue;
+    const team = String(item.team || item.teamNumber || item.Team || "");
+    const { payload } = ensureEntryPayload(item.formData || item, item.entryId);
+    if (kind === "pit") combined[team] = appendUniqueEntry(combined[team], payload);
+    else {
+      const match = String(item.match || item.Match);
+      combined[team] ||= {};
+      combined[team][match] = appendUniqueEntry(combined[team][match], payload);
+    }
   }
-
-  if (teamData.Match != null || teamData.match != null) {
-    return 1;
+  await write(combined, eventCode);
+  if (kind === "pit") {
+    for (const team of new Set([...Object.keys(local), ...Object.keys(combined)])) {
+      await setIndexedDBStore("retrievePit", { key: `team:${eventCode}:${team}`, value: combined[team] || [] });
+    }
   }
-
-  let total = 0;
-  for (const matchData of Object.values(teamData)) {
-    total += normalizeEntries(matchData).length;
-  }
-  return total;
+  return combined;
 }
 
-export async function syncSelectedEventData(eventCode, { forceFullRefresh = false } = {}) {
+const eventSyncFlights = new Map();
+export function syncSelectedEventData(eventCode, options = {}) {
+  if (!eventSyncFlights.has(eventCode)) {
+    eventSyncFlights.set(eventCode, foreground(() => performEventSync(eventCode, options))
+      .finally(() => eventSyncFlights.delete(eventCode)));
+  }
+  return eventSyncFlights.get(eventCode);
+}
+
+async function performEventSync(eventCode, { forceFullRefresh = false } = {}) {
   if (!eventCode) {
     throw new Error("No event selected");
   }
@@ -865,51 +991,9 @@ export async function syncSelectedEventData(eventCode, { forceFullRefresh = fals
     await setIndexedDBStore("scoutingData", { rows: newData });
   }
 
-  const localPit = forceFullRefresh ? {} : await readPitScoutingFromIDB({});
-  const pitCounts = {};
-  for (const [team, entries] of Object.entries(localPit)) {
-    pitCounts[team] = countPitEntries(entries);
-  }
-
-  const pitRes = await fetchPitScouting(eventCode, pitCounts);
-  if (!pitRes.ok) {
-    throw new Error(`Failed to fetch pit scouting: HTTP ${pitRes.status}`);
-  }
-  const newPitData = await parseResponseJson(pitRes, {});
-  const combinedPit = { ...localPit };
-  for (const [team, incomingEntries] of Object.entries(newPitData || {})) {
-    combinedPit[team] = mergeEntries(combinedPit[team], incomingEntries);
-  }
-  await writePitScoutingToIDB(combinedPit);
-
-  const localQual = forceFullRefresh ? {} : await readQualScoutingFromIDB({});
-  const qualCounts = {};
-  for (const team in localQual) {
-    qualCounts[team] = countQualEntries(localQual[team]);
-  }
-
-  const qualRes = await fetchQualitativeScouting(eventCode, qualCounts);
-  if (!qualRes.ok) {
-    throw new Error(`Failed to fetch qualitative scouting: HTTP ${qualRes.status}`);
-  }
-  const newQualData = await parseResponseJson(qualRes, {});
-  const combinedQual = { ...localQual };
-  for (const team in newQualData) {
-    const localTeamData =
-      combinedQual[team] && typeof combinedQual[team] === "object" && !Array.isArray(combinedQual[team])
-        ? { ...combinedQual[team] }
-        : {};
-    const incomingTeamData =
-      newQualData[team] && typeof newQualData[team] === "object" && !Array.isArray(newQualData[team])
-        ? newQualData[team]
-        : {};
-
-    for (const [matchKey, incomingMatchData] of Object.entries(incomingTeamData)) {
-      localTeamData[matchKey] = mergeEntries(localTeamData[matchKey], incomingMatchData);
-    }
-    combinedQual[team] = localTeamData;
-  }
-  await writeQualScoutingToIDB(combinedQual);
+  await flushOfflineScoutingQueues();
+  const newPitData = await syncScoutingKind(eventCode, "pit", forceFullRefresh);
+  const newQualData = await syncScoutingKind(eventCode, "qual", forceFullRefresh);
 
   await refreshEventCaches(eventCode);
 
@@ -918,8 +1002,8 @@ export async function syncSelectedEventData(eventCode, { forceFullRefresh = fals
 
   return {
     scoutingRowsAdded: newData.length,
-    pitTeamsUpdated: Object.keys(newPitData || {}).length,
-    qualTeamsUpdated: Object.keys(newQualData || {}).length,
+    pitTeamsCached: Object.keys(newPitData || {}).length,
+    qualTeamsCached: Object.keys(newQualData || {}).length,
   };
 }
 

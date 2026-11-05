@@ -18,15 +18,21 @@ vi.mock('echarts', () => ({
     })
 }));
 
+vi.mock('../../utils/pageLoader.js', () => ({ routes: [], warmPages: vi.fn() }));
+
 // Mock global API responses
 vi.mock('../../utils/api.js', () => ({
     fetchEvents: vi.fn().mockResolvedValue({ ok: true, json: async () => ([]) }),
     fetchTeams: vi.fn().mockResolvedValue({ _teams: {}, _teamNumbers: [] }),
     readPitScoutingFromIDB: vi.fn().mockResolvedValue({}),
+    readQualScoutingFromIDB: vi.fn().mockResolvedValue({}),
     fetchAvailableTeams: vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [] }) }),
     fetchAllData: vi.fn().mockResolvedValue({ ok: true, json: async () => ({ data: [] }) }),
     fetchSingleMetric: vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
     fetchQualitativeScouting: vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
+    fetchPitTeam: vi.fn().mockResolvedValue([]),
+    readPitTeam: vi.fn().mockResolvedValue(null),
+    warmPitTeams: vi.fn(),
     fetchPitScouting: vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
     fetchGracePage: vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
     fetchAnanthPage: vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),

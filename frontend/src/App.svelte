@@ -7,39 +7,12 @@
 
   import Navbar from "./components/Navbar.svelte";
   import ToastContainer from "./components/ToastContainer.svelte";
-  import Home from "./pages/Home.svelte";
-  import DebugPage from "./pages/DebugPage.svelte";
-  import InfoPage from "./pages/Infopage.svelte";
-  import AnanthPage from "./pages/datapages/ananthPage.svelte";
-  import GracePage from "./pages/datapages/gracePage.svelte";
-  import MarchMadness from "./pages/datapages/marchMadness.svelte";
-  import MatchPreview from "./pages/datapages/matchPreview.svelte";
-  import PickLists from "./pages/datapages/pickLists.svelte";
-  import PitScouting from "./pages/datapages/pitScouting.svelte";
-  import QualPage from "./pages/datapages/qualPage.svelte";
-  import SingleMetric from "./pages/datapages/singleMetric.svelte";
-  import TeamView from "./pages/datapages/teamView.svelte";
-  import QualDataView from "./pages/datapages/qualDataView.svelte";
-
-  const routes = [
-    { path: "/", component: Home },
-    { path: "/info", component: InfoPage },
-    { path: "/debug", component: DebugPage },
-    { path: "/pickLists", component: PickLists },
-    { path: "/singleMetric", component: SingleMetric },
-    { path: "/teamView", component: TeamView },
-    { path: "/pitScouting", component: PitScouting },
-    { path: "/gracePage", component: GracePage },
-    { path: "/ananthPage", component: AnanthPage },
-    { path: "/marchMadness", component: MarchMadness },
-    { path: "/matchPreview", component: MatchPreview },
-    { path: "/qualPage", component: QualPage },
-    { path: "/qualDataView", component: QualDataView },
-  ];
+  import { routes, warmPages } from "./utils/pageLoader";
 
   onMount(() => {
+    warmPages();
+    window.addEventListener("online", warmPages);
     let autoSyncInFlight = false;
-    let lastAutoSyncedEventCode = null;
     let lastAutoSyncErrorAt = 0;
 
     const runGlobalAutoSync = async () => {
@@ -59,9 +32,7 @@
 
       autoSyncInFlight = true;
       try {
-        const isNewEvent = lastAutoSyncedEventCode !== eventCode;
-        await syncSelectedEventData(eventCode, { forceFullRefresh: isNewEvent });
-        lastAutoSyncedEventCode = eventCode;
+        await syncSelectedEventData(eventCode);
         pushToast("Data automatically populated.", "success", 3000);
       } catch (error) {
         console.error("Global auto data sync failed:", error);
@@ -89,6 +60,7 @@
 
     return () => {
       stopQueueSync();
+      window.removeEventListener("online", warmPages);
       clearInterval(autoSyncTimer);
       window.removeEventListener("auto-sync-now", autoSyncNowHandler);
     };

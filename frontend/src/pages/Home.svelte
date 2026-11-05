@@ -5,7 +5,9 @@
         fetchEvents,
         fetchMatchAlliances,
         syncSelectedEventData,
+        downloadEventPhotos,
     } from "../utils/api";
+    import { downloadOfflineAssets } from "../utils/offline";
     import { clearAllStores } from '../utils/indexedDB';
     import { pushToast } from "../stores/toasts";
     
@@ -13,6 +15,8 @@
     let eventCode = localStorage.getItem("eventCode");
     let isLoading = false;
     let isAutoSyncing = false;
+    let downloadingOffline = false;
+    let offlineProgress = "";
     let scheduleLoading = false;
     let autoDataRefreshEnabled = Boolean(parseStoredJson("homeAutoDataRefreshEnabled", false));
 
@@ -251,12 +255,36 @@
             if (isAutomatic && didLoad) {
                 pushToast("Data automatically populated.", "success", 3000);
             }
+            return didLoad;
         } finally {
             isAutoSyncing = false;
         }
     }
 
-    let dbEvents = [];
+    async function downloadEventOffline() {
+        if (!eventCode || downloadingOffline || isAutoSyncing) return;
+        downloadingOffline = true;
+        offlineProgress = "Downloading event data...";
+        try {
+            if (!(await syncEventData())) throw new Error("Event data download failed. Please retry.");
+            await downloadEventPhotos(eventCode, (completed, total) => {
+                offlineProgress = `Saving robot photos: ${completed}/${total}`;
+            });
+            offlineProgress = "Downloading pages and images...";
+            await downloadOfflineAssets((completed, total) => {
+                offlineProgress = `Saving offline files: ${completed}/${total}`;
+            });
+            localStorage.setItem(`offlineReady:${eventCode}`, new Date().toISOString());
+            offlineProgress = `${eventCode} is ready for offline use on this device.`;
+            pushToast(offlineProgress, "success");
+        } catch (error) {
+            offlineProgress = error.message;
+            pushToast(offlineProgress, "error");
+        } finally { downloadingOffline = false; }
+    }
+
+    let dbEvents = Object.entries(parseStoredJson("eventCodeToName", {}))
+        .map(([eventCode, name]) => ({ eventCode, name }));
 
     async function loadDbEvents() {
         await withLoading(async () => {
@@ -345,6 +373,12 @@
             <span>Auto Get Data every minute</span>
         </label>
 
+        <button class="offline-download" onclick={downloadEventOffline}
+            disabled={!eventCode || downloadingOffline || isLoading || isAutoSyncing}>
+            {downloadingOffline ? "Downloading..." : "Download event for offline use"}
+        </button>
+        <p class="offline-progress" aria-live="polite">{offlineProgress}</p>
+
         <div class="match-schedule-panel">
             <h3>Match Schedule</h3>
             {#if scheduleLoading}
@@ -361,6 +395,17 @@
 </div>
 
 <style>
+    .offline-download {
+        margin-top: 0.75rem;
+        padding: 0.65rem 1rem;
+        border: 1px solid #c81b00;
+        border-radius: 0.5rem;
+        background: #c81b00;
+        color: white;
+        cursor: pointer;
+    }
+    .offline-download:disabled { opacity: 0.6; cursor: default; }
+    .offline-progress { font-size: 0.85rem; margin: 0.5rem 0; }
     :root {
         --frc-190-red: #c81b00;
         --wpi-gray: #a9b0b7;
@@ -427,6 +472,8 @@
     }
 
     .event-selector-panel {
+        min-height: 0;
+        overflow-y: auto;
         display: flex;
         flex-direction: column;
         gap: 0.75rem;

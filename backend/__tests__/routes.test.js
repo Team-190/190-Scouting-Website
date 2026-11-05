@@ -54,6 +54,7 @@ require('../index');
 describe('API Routes', () => {
     beforeEach(() => {
         jest.clearAllMocks();
+        database.readJSONFile.mockReset().mockResolvedValue({});
     });
 
     describe('GET /api/getEvents', () => {
@@ -81,9 +82,9 @@ describe('API Routes', () => {
 
     describe('GET /api/getTeams', () => {
         it('transforms fetched teams into API payload shape', async () => {
-            externalApi.fetchTeams.mockResolvedValueOnce([
+            database.readJSONFile.mockResolvedValue({ test: [
                 { team_number: 190, nickname: 'Gompei' }
-            ]);
+            ] });
 
             const res = await request(appInstance).get('/api/getTeams?eventCode=test');
             expect(res.status).toBe(200);
@@ -94,7 +95,7 @@ describe('API Routes', () => {
         });
         
         it('returns an empty payload when external API response is malformed', async () => {
-            externalApi.fetchTeams.mockResolvedValueOnce({ not: 'an array' });
+            database.readJSONFile.mockResolvedValue({ test: { not: 'an array' } });
 
             const res = await request(appInstance).get('/api/getTeams?eventCode=test');
             expect(res.status).toBe(200);
@@ -126,5 +127,37 @@ describe('API Routes', () => {
             expect(res.status).toBe(200);
             expect(database.writeJSONFile).toHaveBeenCalled();
         });
+    });
+});
+
+
+describe('Low-bandwidth routes', () => {
+    beforeEach(() => { jest.clearAllMocks(); database.readJSONFile.mockReset(); });
+    it('returns just the selected pit team without photos', async () => {
+        database.readJSONFile.mockResolvedValue({ test: {
+            '190': [{ _entryId: 'a', capacity: 40, robotPicturePreview: 'big-image' }],
+            '8': [{ capacity: 20 }],
+        } });
+        const response = await request(appInstance).get('/api/getPitScoutingTeam?eventCode=test&team=190');
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual([{ _entryId: 'a', capacity: 40 }]);
+        const cached = await request(appInstance).get('/api/getPitScoutingTeam?eventCode=test&team=190')
+            .set('If-None-Match', response.headers.etag);
+        expect(cached.status).toBe(304);
+    });
+    it('accepts a compressed manifest and sends deletions with changed entries', async () => {
+        database.readJSONFile.mockResolvedValue({ test: { '190': { '3': [{ _entryId: 'new' }] } } });
+        const payload = { event: 'test', kind: 'qual', known: { removed: 'old-hash' } };
+        const data = require('pako').gzip(JSON.stringify(payload));
+        const response = await request(appInstance).post('/api/syncScouting').send({
+            __compressed: true, __version: 2, data: Buffer.from(data).toString('base64'),
+        });
+        expect(response.status).toBe(200);
+        expect(response.body.deleted).toEqual(['removed']);
+        expect(Object.values(response.body.upserts)).toEqual([{ _entryId: 'new' }]);
+    });
+    it('rejects invalid manifests and missing events', async () => {
+        expect((await request(appInstance).post('/api/syncScouting').send({ event: 'test', kind: 'qual', known: [] })).status).toBe(400);
+        expect((await request(appInstance).post('/api/syncScouting').send({ kind: 'qual' })).status).toBe(403);
     });
 });

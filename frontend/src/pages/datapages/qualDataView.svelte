@@ -7,8 +7,7 @@
   } from "../../utils/pageUtils.js";
   import {
     fetchTeams,
-    fetchQualitativeScouting,
-    fetchPitScouting,
+    refreshScoutingData,
     readPitScoutingFromIDB,
     readQualScoutingFromIDB,
   } from "../../utils/api.js";
@@ -118,38 +117,6 @@
       return [value];
     }
     return [];
-  }
-
-  function mergeEntries(localValue: any, incomingValue: any): any[] {
-    const merged = [...normalizeEntries(localValue)];
-    const seenIds = new Set(
-      merged.map((entry) => String(entry?._entryId || "")).filter(Boolean),
-    );
-
-    for (const entry of normalizeEntries(incomingValue)) {
-      const entryId = String(entry?._entryId || "");
-      if (entryId && seenIds.has(entryId)) continue;
-      if (entryId) seenIds.add(entryId);
-      merged.push(entry);
-    }
-
-    return merged;
-  }
-
-  function countQualEntries(teamData: any): number {
-    if (!teamData || typeof teamData !== "object") return 0;
-    if (Array.isArray(teamData)) return teamData.length;
-    if (teamData.Match != null || teamData.match != null) return 1;
-
-    let total = 0;
-    for (const matchData of Object.values(teamData)) {
-      total += normalizeEntries(matchData).length;
-    }
-    return total;
-  }
-
-  function countPitEntries(teamData: any): number {
-    return normalizeEntries(teamData).length;
   }
 
   function normalizeQualRows(teamKey: string, teamData: any): any[] {
@@ -696,149 +663,38 @@
   }
 
   // ─── Mount ────────────────────────────────────────────────────────────────────
-  onMount(async () => {
-    isLoading = true;
+  async function displayCachedScouting() {
+    const [localPit, localQual] = await Promise.all([
+      readPitScoutingFromIDB({}, eventCode),
+      readQualScoutingFromIDB({}, eventCode),
+    ]);
+    qualDataByTeam = Object.fromEntries(Object.entries(localQual).map(([team, data]) =>
+      [normalizeTeamKey(team), normalizeQualRows(team, data)]));
+    pitDataByTeam = Object.fromEntries(Object.entries(localPit).map(([team, data]) =>
+      [normalizeTeamKey(team), normalizePitEntries(data)]));
+    teamNumbers = [...new Set([...teamNumbers, ...Object.keys(localQual).map(Number), ...Object.keys(localPit).map(Number)])];
+  }
+
+  onMount(() => {
+    let active = true;
     fieldImg = new Image();
     fieldImg.src = fieldImageSrc;
-
     loadPicklists();
-
-    try {
-      const teamsResult = await fetchTeams(eventCode);
-      teamsMap = new Map(
-        Object.entries(teamsResult._teams).map(([k, v]) => [
-          Number(k),
-          v as string,
-        ]),
-      );
-      teamNumbers = teamsResult._teamNumbers as number[];
-
-      const localPit = await readPitScoutingFromIDB({});
-      const localPitCounts: Record<string, number> = {};
-      for (const [team, entries] of Object.entries(localPit)) {
-        localPitCounts[team] = countPitEntries(entries);
-      }
-
-      const localQual = await readQualScoutingFromIDB({});
-      const localCounts: Record<string, number> = {};
-      for (const [team, matches] of Object.entries(localQual)) {
-        localCounts[team] = countQualEntries(matches);
-      }
-
-      const qualResponse = await fetchQualitativeScouting(
-        eventCode,
-        localCounts,
-      );
-      const qualRaw = await qualResponse.json();
-      const pitResponse = await fetchPitScouting(eventCode, localPitCounts);
-      const pitRaw = await pitResponse.json();
-
-      const mergedQualRaw: Record<string, any> = {};
-      const qualSources = [qualRaw, localQual];
-      for (const source of qualSources) {
-        if (!source || typeof source !== "object") continue;
-
-        if (Array.isArray(source)) {
-          for (const row of source) {
-            const teamKey = normalizeTeamKey(row?.Team ?? row?.team ?? "");
-            const matchKey = String(row?.Match ?? row?.match ?? "");
-            if (!teamKey || !matchKey) continue;
-            if (!mergedQualRaw[teamKey]) mergedQualRaw[teamKey] = {};
-            mergedQualRaw[teamKey][matchKey] = mergeEntries(
-              mergedQualRaw[teamKey][matchKey],
-              row,
-            );
-          }
-          continue;
-        }
-
-        for (const [teamKey, teamData] of Object.entries(source)) {
-          const normalizedTeamKey = normalizeTeamKey(teamKey);
-          if (!mergedQualRaw[normalizedTeamKey])
-            mergedQualRaw[normalizedTeamKey] = {};
-
-          if (!teamData || typeof teamData !== "object") continue;
-
-          if (Array.isArray(teamData)) {
-            for (const row of teamData) {
-              const matchKey = String(row?.Match ?? row?.match ?? "");
-              if (!matchKey) continue;
-              mergedQualRaw[normalizedTeamKey][matchKey] = mergeEntries(
-                mergedQualRaw[normalizedTeamKey][matchKey],
-                row,
-              );
-            }
-            continue;
-          }
-
-          if (
-            (teamData as any).Match != null ||
-            (teamData as any).match != null
-          ) {
-            const matchKey = String(
-              (teamData as any).Match ?? (teamData as any).match ?? "",
-            );
-            if (matchKey) {
-              mergedQualRaw[normalizedTeamKey][matchKey] = mergeEntries(
-                mergedQualRaw[normalizedTeamKey][matchKey],
-                teamData,
-              );
-            }
-            continue;
-          }
-
-          for (const [matchKey, matchData] of Object.entries(
-            teamData as Record<string, any>,
-          )) {
-            mergedQualRaw[normalizedTeamKey][matchKey] = mergeEntries(
-              mergedQualRaw[normalizedTeamKey][matchKey],
-              matchData,
-            );
-          }
-        }
-      }
-
-      qualDataByTeam = Object.fromEntries(
-        Object.entries(mergedQualRaw).map(([teamKey, teamData]) => [
-          teamKey,
-          normalizeQualRows(teamKey, teamData),
-        ]),
-      );
-
-      const mergedPitRaw: Record<string, any[]> = {};
-      for (const source of [pitRaw, localPit]) {
-        if (!source || typeof source !== "object") continue;
-
-        if (Array.isArray(source)) {
-          for (const row of source) {
-            const teamKey = normalizeTeamKey(
-              row?.Team ?? row?.team ?? row?.teamNumber ?? "",
-            );
-            if (!teamKey) continue;
-            mergedPitRaw[teamKey] = mergeEntries(mergedPitRaw[teamKey], row);
-          }
-          continue;
-        }
-
-        for (const [teamKey, teamData] of Object.entries(source)) {
-          const normalizedTeamKey = normalizeTeamKey(teamKey);
-          mergedPitRaw[normalizedTeamKey] = mergeEntries(
-            mergedPitRaw[normalizedTeamKey],
-            normalizePitEntries(teamData),
-          );
-        }
-      }
-
-      pitDataByTeam = mergedPitRaw;
-
-      qualDataByTeam = { ...qualDataByTeam };
-      (window as any).__qualData = qualDataByTeam;
-      pitDataByTeam = { ...pitDataByTeam };
-    } catch (error) {
-      console.error("Error fetching scouting data:", error);
-    } finally {
-      isLoading = false;
-    }
+    void (async () => {
+      try {
+        const teamsResult = await fetchTeams(eventCode);
+        if (!active) return;
+        teamsMap = new Map(Object.entries(teamsResult._teams).map(([key, value]) => [Number(key), value as string]));
+        teamNumbers = teamsResult._teamNumbers;
+        await displayCachedScouting();
+        isLoading = false;
+        await refreshScoutingData(eventCode);
+        if (active) await displayCachedScouting();
+      } catch (error) {
+        console.warn("Scouting refresh deferred; using cached data", error);
+      } finally { if (active) isLoading = false; }
+    })();
+    return () => { active = false; };
   });
 
   $: teamsWithData = teamNumbers.filter(

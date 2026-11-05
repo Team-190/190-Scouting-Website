@@ -56,6 +56,7 @@ describe('Navbar Component', () => {
 
         render(Navbar);
 
+        await fireEvent.click(screen.getByRole('button', { name: /View Data/i }));
         const teamViewBtn = screen.getByText('Team View').closest('button');
         await fireEvent.click(teamViewBtn);
 

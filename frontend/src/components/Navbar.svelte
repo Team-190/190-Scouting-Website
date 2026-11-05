@@ -276,7 +276,6 @@
                   <div class="orbit-star">⭐</div>
                 </div>
               {/each}
-            
 
             <!-- Screen flash overlay -->
             <div class="flash-overlay"></div>
@@ -465,22 +464,6 @@
     object-fit: contain;
     flex-shrink: 0;
     display: block;
-  }
-
-  .logo-text {
-    text-align: center;
-    transition: opacity 0.3s ease;
-  }
-
-  .brand-text {
-    font-size: 1.2rem;
-    font-weight: bold;
-    line-height: 1.2;
-  }
-
-  .brand-subtext {
-    font-size: 0.9rem;
-    color: #aaa;
   }
 
   .nav-links {
@@ -836,134 +819,6 @@
     }
     to {
       transform: translateX(-50%) rotate(-360deg);
-    }
-  }
-
-  /* ── Lightning bolts ── */
-  .lightning {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    font-size: 18px;
-    pointer-events: none;
-    z-index: 5;
-    animation: lightningStrike 0.6s ease-out calc(0.1s + var(--li) * 0.12s) both;
-    color: #ffe066;
-    text-shadow:
-      0 0 10px #fff,
-      0 0 20px #ffd700,
-      0 0 40px #ff8800;
-    transform-origin: center;
-  }
-
-  @keyframes lightningStrike {
-    0% {
-      transform: translate(
-          calc(-50% + cos(calc(var(--li) * 60deg)) * 5px),
-          calc(-50% + sin(calc(var(--li) * 60deg)) * 5px)
-        )
-        scale(3) rotate(calc(var(--li) * 30deg));
-      opacity: 1;
-    }
-    40% {
-      opacity: 0.9;
-    }
-    100% {
-      transform: translate(
-          calc(-50% + cos(calc(var(--li) * 60deg)) * 70px),
-          calc(-50% + sin(calc(var(--li) * 60deg)) * 70px)
-        )
-        scale(0.3) rotate(calc(var(--li) * 60deg + 180deg));
-      opacity: 0;
-    }
-  }
-
-  /* ── Sparkles ── */
-  .sparkle-container {
-    position: absolute;
-    inset: -16px;
-    pointer-events: none;
-    z-index: 2;
-  }
-
-  .sparkle {
-    position: absolute;
-    font-size: 14px;
-    color: gold;
-    text-shadow:
-      0 0 6px gold,
-      0 0 14px #ffd700,
-      0 0 22px orange;
-    animation: sparklePop calc(1s + var(--i) * 0.16s) ease-in-out
-      calc(var(--i) * 0.1s) infinite;
-    transform: translate(-50%, -50%);
-  }
-
-  .sparkle:nth-child(1) {
-    top: -5%;
-    left: 50%;
-  }
-  .sparkle:nth-child(2) {
-    top: 5%;
-    left: 82%;
-  }
-  .sparkle:nth-child(3) {
-    top: 50%;
-    left: 108%;
-  }
-  .sparkle:nth-child(4) {
-    top: 95%;
-    left: 82%;
-  }
-  .sparkle:nth-child(5) {
-    top: 105%;
-    left: 50%;
-  }
-  .sparkle:nth-child(6) {
-    top: 95%;
-    left: 18%;
-  }
-  .sparkle:nth-child(7) {
-    top: 50%;
-    left: -8%;
-  }
-  .sparkle:nth-child(8) {
-    top: 5%;
-    left: 18%;
-  }
-  .sparkle:nth-child(9) {
-    top: -10%;
-    left: 30%;
-  }
-  .sparkle:nth-child(10) {
-    top: -10%;
-    left: 70%;
-  }
-  .sparkle:nth-child(11) {
-    top: 110%;
-    left: 30%;
-  }
-  .sparkle:nth-child(12) {
-    top: 110%;
-    left: 70%;
-  }
-
-  @keyframes sparklePop {
-    0% {
-      opacity: 0;
-      transform: translate(-50%, -50%) scale(0.3) rotate(0deg);
-    }
-    35% {
-      opacity: 1;
-      transform: translate(-50%, -50%) scale(1.5) rotate(60deg);
-    }
-    65% {
-      opacity: 1;
-      transform: translate(-50%, -50%) scale(1.1) rotate(90deg);
-    }
-    100% {
-      opacity: 0;
-      transform: translate(-50%, -50%) scale(0.3) rotate(180deg);
     }
   }
 

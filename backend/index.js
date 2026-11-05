@@ -19,9 +19,11 @@ const runtimeConstants = require("../runtime/constants");
 const { decompressData, isCompressedEnvelope } = require("./compression.js");
 require('dotenv').config({ path: path.resolve(__dirname, '../.env'), override: true });
 
+const { delta } = require("./scoutingSync");
 const app = express();
 
-const logFilePath = "./logs/testing.csv";
+const logFilePath = path.join(__dirname, "logs", "testing.csv");
+fs.mkdirSync(path.dirname(logFilePath), { recursive: true });
 
 app.use((req, res, next) => {
     let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
@@ -50,7 +52,7 @@ const fileMutationLocks = new Map();
 // ─── HELPER FUNCTIONS ───────────────────────────────────────────────────────
 
 const validateEventCode = (req, res, next) => {
-  const code = req.query.eventCode || req.body.event;
+  const code = req.query.eventCode || req.body?.event;
   if (!code) return res.sendStatus(403);
   req.eventCode = code;
   next();
@@ -350,7 +352,7 @@ if (typeof refreshTimer.unref === "function") {
   refreshTimer.unref();
 }
 
-app.use(express.json());
+app.use(express.json({ limit: "5mb" }));
 
 // Decompress any compressed payloads before processing
 app.use((req, res, next) => {
@@ -359,7 +361,7 @@ app.use((req, res, next) => {
   if (isCompressedEnvelope(req.body)) {
     const decompressed = decompressData(req.body);
     req.body = decompressed;
-    console.log(`[Decompression] Decompressed POST ${req.path}`, decompressed);
+
   }
   
   next();
@@ -407,10 +409,20 @@ app.use(
 
 // Serve static frontend files in production (catch-all is at the bottom)
 if (SHOULD_SERVE_FRONTEND) {
-    app.use(express.static(FRONTEND_DIST));
+    app.use(express.static(FRONTEND_DIST, {
+      setHeaders(res, filename) {
+        const hashed = /[\\/]assets[\\/]/.test(filename);
+        res.setHeader("Cache-Control", hashed ? "public, max-age=31536000, immutable" : "no-cache");
+      },
+    }));
 }
 
 // ─── INTERNAL API ROUTES ────────────────────────────────────────────────────
+
+app.use("/api", (req, res, next) => {
+  if (req.method === "GET") res.setHeader("Cache-Control", "private, no-cache");
+  next();
+});
 
 app.get("/api/health", (req, res) => {
   res.json({ ok: true, timestamp: Date.now() });
@@ -431,6 +443,25 @@ app.get("/api/getAvailableTeams", validateEventCode, async (req, res) => {
   const { eventCode } = req;
   let result = await database.getAvailableTeams(eventCode);
   res.send(result);
+});
+
+app.post("/api/syncScouting", validateEventCode, async (req, res) => {
+  const { kind, known = {} } = req.body;
+  if (!["pit", "qual"].includes(kind) || !known || typeof known !== "object" || Array.isArray(known)) {
+    return res.status(400).json({ error: "Invalid scouting sync request" });
+  }
+  const filename = kind === "pit" ? "pitScoutingData" : "qualitativeScoutingData";
+  const data = await getEventData(filename, req.eventCode);
+  res.setHeader("Cache-Control", "no-store");
+  res.json(delta(data, kind, known));
+});
+
+app.get("/api/getPitScoutingTeam", validateEventCode, async (req, res) => {
+  const team = String(req.query.team || "");
+  if (!/^\d+$/.test(team)) return res.sendStatus(400);
+  const data = await getEventData("pitScoutingData", req.eventCode);
+  const entries = normalizeEntries(data[team]).map(({ robotPicturePreview, ...rest }) => rest);
+  res.json(entries);
 });
 
 app.get("/api/getQualitativeScouting", validateEventCode, async (req, res) => {
@@ -810,7 +841,7 @@ app.post("/api/postPitScouting", validateEventCode, async (req, res) => {
     return res.sendStatus(400);
   }
 
-  console.log("Pit scouting data:", formData);
+
   await mutateEventFile("pitScoutingData", (fileData) => {
     fileData[event] ||= {};
     fileData[event][team] = appendUniqueEntry(fileData[event][team], formData);
@@ -829,7 +860,7 @@ app.post("/api/postQualitativeScouting", validateEventCode, async (req, res) => 
     return res.sendStatus(400);
   }
 
-  console.log("Qual scouting data:", formData);
+
   await mutateEventFile("qualitativeScoutingData", (fileData) => {
     fileData[event] ||= {};
     fileData[event][team] ||= {};
@@ -860,6 +891,7 @@ if (SHOULD_SERVE_FRONTEND) {
         if (!fs.existsSync(indexPath)) {
             return res.status(500).send(`Missing frontend build at ${indexPath}`);
         }
+        res.setHeader("Cache-Control", "no-cache");
         return res.sendFile(indexPath);
     });
 }

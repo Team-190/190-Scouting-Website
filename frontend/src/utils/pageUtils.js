@@ -11,12 +11,12 @@
  */
 export function getAnanthRatings() {
   return [
-    new URL("../images/AnanthRatings/valentine.png", import.meta.url).href,
-    new URL("../images/AnanthRatings/celtics-shaq.png", import.meta.url).href,
-    new URL("../images/AnanthRatings/image.png", import.meta.url).href,
-    new URL("../images/AnanthRatings/jr-smith.jpg", import.meta.url).href,
-    new URL("../images/AnanthRatings/leborn.png", import.meta.url).href,
-    new URL("../images/AnanthRatings/horse.png", import.meta.url).href,
+    new URL("../images/AnanthRatings/valentine.webp", import.meta.url).href,
+    new URL("../images/AnanthRatings/celtics-shaq.webp", import.meta.url).href,
+    new URL("../images/AnanthRatings/image.webp", import.meta.url).href,
+    new URL("../images/AnanthRatings/jr-smith.webp", import.meta.url).href,
+    new URL("../images/AnanthRatings/leborn.webp", import.meta.url).href,
+    new URL("../images/AnanthRatings/horse.webp", import.meta.url).href,
   ];
 }
 
@@ -26,14 +26,14 @@ export function getAnanthRatings() {
  */
 export function getGraceRatings() {
   return [
-    new URL("../images/GraceRatings/DNP.png", import.meta.url).href,
-    new URL("../images/GraceRatings/ProbNo.png", import.meta.url).href,
-    new URL("../images/GraceRatings/NeutralBad.jpg", import.meta.url).href,
-    new URL("../images/GraceRatings/NeutralGood.png", import.meta.url).href,
-    new URL("../images/GraceRatings/PrettyGood.gif", import.meta.url).href,
-    new URL("../images/GraceRatings/AHHHHH.png", import.meta.url).href,
-    new URL("../images/GraceRatings/FIRSTpick.gif", import.meta.url).href,
-    new URL("../images/GraceRatings/horse.png", import.meta.url).href,
+    new URL("../images/GraceRatings/DNP.webp", import.meta.url).href,
+    new URL("../images/GraceRatings/ProbNo.webp", import.meta.url).href,
+    new URL("../images/GraceRatings/NeutralBad.webp", import.meta.url).href,
+    new URL("../images/GraceRatings/NeutralGood.webp", import.meta.url).href,
+    new URL("../images/GraceRatings/PrettyGood.webp", import.meta.url).href,
+    new URL("../images/GraceRatings/AHHHHH.webp", import.meta.url).href,
+    new URL("../images/GraceRatings/FIRSTpick.webp", import.meta.url).href,
+    new URL("../images/GraceRatings/horse.webp", import.meta.url).href,
   ];
 }
 
@@ -44,7 +44,7 @@ export function getGraceRatings() {
  * @returns {string} Event code or empty string
  */
 export function getEventCode() {
-   return sessionStorage.getItem("eventCode") ?? localStorage.getItem("eventCode");
+  return sessionStorage.getItem("eventCode") ?? localStorage.getItem("eventCode") ?? "";
 }
 
 /**

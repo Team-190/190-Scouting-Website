@@ -2,12 +2,26 @@
   import { onMount } from "svelte";
   import fieldImageSrc from "../../images/FieldImage.png";
   import {
-    fetchPitScouting,
+    fetchPitTeam,
+    readPitTeam,
+    warmPitTeams,
     flushQualitativeScoutingQueue,
     queueQualitativeScoutingForSync,
   } from "../../utils/api";
   import { getEventCode } from "../../utils/pageUtils";
   import { getIndexedDBStore } from "../../utils/indexedDB";
+
+  import {
+    SCOUT_STATIONS,
+    STARTING_LOCATIONS,
+    DEFENSE_TYPE_OPTIONS,
+    MATCH_EVENT_OPTIONS,
+    getDefaultQuestions,
+    resolveAssignedTeam,
+    type Phase,
+    type ScoutingQuestions,
+    type MatchAssignment,
+  } from "../../utils/qualitativeScouting";
 
   const ROBOT_STROKE_COLOR = "#ffffff";
   const ALLIANCE_BORDER_COLORS: Record<string, string> = {
@@ -19,47 +33,6 @@
   const SCOUT_STATION_KEY = "qualScoutStation";
   const MATCH_NUMBER_KEY = "qualMatchNumber";
   const PHASE_KEY = "qualPagePhase";
-  const SCOUT_STATIONS = ["R1", "R2", "R3", "B1", "B2", "B3"];
-  const STARTING_LOCATIONS = ["Far Trench", "Far Bump", "Hub", "Near Bump", "Near Trench"];
-
-  const DEFENSE_TYPE_OPTIONS = [
-    "Pushing (hitting a robot to disrupt their aim)",
-    "Pinning (Stopping robots from moving so they couldn't aim)",
-    "Blocking (Getting in their way preventing motion across zones)",
-  ];
-
-  const MATCH_EVENT_OPTIONS = [
-    "Lost mechanism",
-    "Stopped moving (full match)",
-    "Stopped moving (5+ seconds)",
-    "Tipped over",
-    "Yellow card",
-    "Red card",
-    "No Show",
-  ];
-
-  const STATION_LOOKUP: Record<string, { alliance: string; index: number }> = {
-    R1: { alliance: "red", index: 0 },
-    R2: { alliance: "red", index: 1 },
-    R3: { alliance: "red", index: 2 },
-    B1: { alliance: "blue", index: 0 },
-    B2: { alliance: "blue", index: 1 },
-    B3: { alliance: "blue", index: 2 },
-  };
-
-  type Phase = "auto" | "teleop" | "questions" | "done";
-
-  type ScoutingQuestions = {
-    defenseTypes: string[];
-    defenseEffectiveness: number;
-    defenseComments: string;
-    avoidanceTypes: string[];
-    avoidanceEffectiveness: number;
-    avoidanceComments: string;
-    matchEvents: string[];
-    otherComments: string;
-  };
-
   let phase: Phase = loadSavedPhase();
   let matchNumber = loadSavedMatchNumber();
   let availableMatchNumbers = [1];
@@ -68,7 +41,7 @@
   let scouterName = loadSavedScouterInitials();
   let selectedStation = loadSavedScoutStation();
   let assignedTeamNumber = "";
-  let matchAlliances: any[] = [];
+  let matchAlliances: MatchAssignment[] = [];
   let loadingAssignments = true;
   let autoStartPosition = "";
 
@@ -96,19 +69,6 @@
   let submitting = false;
 
   let submitStatus: null | { type: "local" | "server" | "partial"; message: string } = null;
-
-  function getDefaultQuestions(): ScoutingQuestions {
-    return {
-      defenseTypes: [],
-      defenseEffectiveness: null,
-      defenseComments: "",
-      avoidanceTypes: [],
-      avoidanceEffectiveness: null,
-      avoidanceComments: "",
-      matchEvents: [],
-      otherComments: "",
-    };
-  }
 
   function loadSavedScouterInitials() {
     try {
@@ -177,21 +137,6 @@
     } catch {}
   }
 
-  function resolveAssignedTeam(matchNum: number, station: string, allMatches: any[]) {
-    const stationConfig = STATION_LOOKUP[station];
-    if (!stationConfig || !Array.isArray(allMatches) || allMatches.length === 0) return "";
-
-    const qualMatch = allMatches.find(
-      (m) => m?.comp_level === "qm" && Number(m?.match_number) === Number(matchNum),
-    );
-    if (!qualMatch) return "";
-
-    const teamKey = qualMatch?.alliances?.[stationConfig.alliance]?.team_keys?.[stationConfig.index];
-    if (typeof teamKey !== "string") return "";
-
-    return teamKey.replace(/^frc/i, "");
-  }
-
   async function loadMatchAlliances() {
     try {
       matchAlliances = (await getIndexedDBStore("matchAlliances")) || [];
@@ -210,44 +155,33 @@
     }
   }
 
-  async function loadPitData(teamNumber: string) {
-    if (!teamNumber) {
-      pitData = null;
-      return;
-    }
-
+  let pitRequestId = 0;
+  async function loadPitData(team: string) {
+    const requestId = ++pitRequestId;
+    pitData = null;
+    if (!team) { loadingPitData = false; return; }
     loadingPitData = true;
+    const apply = (entries: any) => {
+      if (requestId !== pitRequestId) return;
+      // Show the latest submission in the compact scouting reference panel.
+      pitData = Array.isArray(entries) ? entries.at(-1) || null : entries;
+    };
     try {
-      const response = await fetchPitScouting(eventCode, {});
-      const data = await response.json();
-      
-      console.log("Pit data loaded:", data);
-      console.log("Looking for team:", teamNumber);
-      
-      // Find pit data for this team - handle both string and number keys
-      if (data && typeof data === 'object') {
-        // Try direct team number match first
-        pitData = data[teamNumber] || data[String(teamNumber)] || null;
-        
-        // If not found, try looking through all entries
-        if (!pitData) {
-          for (const [key, value] of Object.entries(data)) {
-            if (key === teamNumber || key === String(teamNumber)) {
-              pitData = value;
-              break;
-            }
-          }
-        }
-        
-        console.log("Found pit data for team:", pitData);
-      } else {
-        pitData = null;
-      }
+      const cached = await readPitTeam(eventCode, team);
+      apply(cached);
+      if (cached !== null) loadingPitData = false;
+      apply(await fetchPitTeam(eventCode, team));
     } catch (error) {
-      console.error("Error loading pit data:", error);
-      pitData = null;
+      console.warn("Pit data refresh deferred; using cached data", error);
     } finally {
-      loadingPitData = false;
+      if (requestId === pitRequestId) {
+        loadingPitData = false;
+        const teams = matchAlliances.flatMap(match => [
+          ...(match.alliances?.red?.team_keys || []),
+          ...(match.alliances?.blue?.team_keys || []),
+        ]).map(key => key.replace(/^frc/i, ""));
+        warmPitTeams(eventCode, teams);
+      }
     }
   }
 
@@ -262,7 +196,7 @@
   $: assignedTeamNumber = resolveAssignedTeam(matchNumber, selectedStation, matchAlliances);
   $: teamNumber = assignedTeamNumber || "";
   $: alliance = selectedStation.startsWith("B") ? "Blue" : "Red";
-  $: if (teamNumber) loadPitData(teamNumber);
+  $: loadPitData(teamNumber);
 
   function initCanvas(node: HTMLCanvasElement) {
     canvasEl = node;
@@ -479,18 +413,10 @@
     key: "defenseEffectiveness" | "avoidanceEffectiveness",
     value: number,
   ) {
-    // Toggle off if clicking the same value again
-    if (scoutingQuestions[key] === value) {
-      scoutingQuestions = {
-        ...scoutingQuestions,
-        [key]: null, // Clear selection completely
-      };
-    } else {
-      scoutingQuestions = {
-        ...scoutingQuestions,
-        [key]: value,
-      };
-    }
+    scoutingQuestions = {
+      ...scoutingQuestions,
+      [key]: scoutingQuestions[key] === value ? null : value,
+    };
   }
 
   function proceedToTeleop() {
