@@ -1,4 +1,5 @@
 <script lang="ts">
+  import LoadingSection from "../../components/LoadingSection.svelte";
   import { onMount, tick } from "svelte";
   import * as barGraph from "../../pages/graphcode/bar.js";
   import * as lineGraph from "../../pages/graphcode/line.js";
@@ -826,11 +827,7 @@
 
 <!-- ─── Template ──────────────────────────────────────────────────────────────── -->
 
-{#if isLoading}
-  <div class="loading-spinner-overlay">
-    <div class="loading-spinner"></div>
-  </div>
-{/if}
+
 
 <div class="page-wrapper">
   <div class="header-section">
@@ -840,9 +837,9 @@
 
   <div class="controls">
     <div>
-      <label for="match-select">Match:</label>
+      <label for="matchPreview-match-select">Match:</label>
       <select
-        id="match-select"
+        id="matchPreview-match-select"
         bind:value={selectedMatch}
         on:change={onMatchChange}
       >
@@ -861,9 +858,9 @@
       </select>
     </div>
     <div>
-      <label for="colorblind-select">Colorblind Mode:</label>
+      <label for="matchPreview-colorblind-select">Colorblind Mode:</label>
       <select
-        id="colorblind-select"
+        id="matchPreview-colorblind-select"
         bind:value={colorblindMode}
         on:change={onColorblindChange}
       >
@@ -874,6 +871,8 @@
     </div>
   </div>
 
+  <div class="data-region" aria-busy={isLoading}>
+    {#if isLoading}<div class="section-loading"><LoadingSection label="Loading match data" /></div>{/if}
   <div class="statbotics-banner">
     <span class="statbotics-label">Statbotics Win%</span>
     {#if statboticsRedWinProb !== null}
@@ -1260,6 +1259,7 @@
     </div>
   </div>
 </div>
+</div>
 
 <style>
   :root {
@@ -1271,26 +1271,6 @@
     --dark3: #3a3a3a;
   }
 
-  .loading-spinner-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999;
-  }
-  .loading-spinner {
-    border: 8px solid rgba(255, 255, 255, 0.3);
-    border-left-color: var(--frc-190-red);
-    border-radius: 50%;
-    width: 50px;
-    height: 50px;
-    animation: spin 1s linear infinite;
-  }
   @keyframes spin {
     to {
       transform: rotate(360deg);

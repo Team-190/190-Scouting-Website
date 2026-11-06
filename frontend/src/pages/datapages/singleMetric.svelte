@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { gridSortIcons } from "../../utils/gridIcons";
+  import { refreshOnReturn } from "../../utils/pageRefresh";
+  import LoadingSection from "../../components/LoadingSection.svelte";
   import { onDestroy, onMount, tick } from "svelte";
   import { v4 as uuidv4 } from "uuid";
   import * as barGraph from "../../pages/graphcode/bar.js";
@@ -728,7 +731,7 @@
     qLabels = Array.from({ length: maxMatchCount }, (_, i) => `Q${i + 1}`);
 
     rowData = availableTeams
-    
+
       .map((team) => {
         const rows = getTeamRowsForGrid(team);
         const row: any = {
@@ -881,6 +884,7 @@
       );
       ModuleRegistry.registerModules([AllCommunityModule]);
       efsGridApi = createGrid(node, {
+        icons: gridSortIcons,
         rowData: data,
         columnDefs,
         rowHeight: ROW_HEIGHT,
@@ -891,7 +895,7 @@
           resizable: false,
           sortable: false,
           suppressMovable: true,
-          cellStyle: { 
+          cellStyle: {
             fontSize: "18px",
             whiteSpace: "normal",
             wordWrap: "break-word",
@@ -922,12 +926,13 @@
     // Calculate height to show all rows while maintaining scroll performance
     // ag-Grid's row virtualization will handle rendering efficiency internally
     efsGridHeight = data.length * ROW_HEIGHT + HEADER_HEIGHT + 6;
-    
+
     if (efsGridApi) {
       efsGridApi.setGridOption("columnDefs", columnDefs);
       efsGridApi.setGridOption("rowData", data);
     } else {
       efsGridApi = createGrid(efsGridNode, {
+        icons: gridSortIcons,
         rowData: data,
         columnDefs,
         rowHeight: ROW_HEIGHT,
@@ -938,7 +943,7 @@
           resizable: false,
           sortable: false,
           suppressMovable: true,
-          cellStyle: { 
+          cellStyle: {
             fontSize: "18px",
             whiteSpace: "normal",
             wordWrap: "break-word",
@@ -986,7 +991,7 @@
         const matches = getTeamRowsForGrid(team);
         const row: any = { team, hasData: false };
         const efsValues: number[] = [];
-        
+
         // Note: EFS computation could be offloaded to efsWorker for better UI responsiveness
         // Currently running on main thread. Consider using worker for large datasets.
         await Promise.all(
@@ -1186,7 +1191,7 @@
     const rawStored = (await getIndexedDBStore("scoutingData")) || [];
     // Unwrap the value property if it exists (from compressed storage)
     const unwrapped = (rawStored || []).map(item => item.value !== undefined ? item.value : item);
-    const dataAuto = extractValues(unwrapped, true);  
+    const dataAuto = extractValues(unwrapped, true);
     const dataTeleop = extractValues(unwrapped, false);
     const maxMatchCount = getMaxMatchCount();
     const efsQLabels = Array.from(
@@ -1506,10 +1511,10 @@
   function onMetricChange(e: Event) {
     // Debounce metric changes to batch updates (100ms delay)
     const newMetric = (e.target as HTMLSelectElement).value;
-    
+
     clearTimeout(metricChangeTimer);
     pendingMetricChange = newMetric;
-    
+
     metricChangeTimer = setTimeout(() => {
       selectedMetric = pendingMetricChange;
       dataMetric = resolveDataKey(selectedMetric);
@@ -1937,7 +1942,7 @@
     window.addEventListener("storage", handleStorageEvent);
     // Initialize Web Worker for EFS computation (optimization for slow devices)
     initEFSWorker();
-    
+
     try {
       // ─── Check cache first ─────────────────────────────────────────────────
       const cacheData = singleMetricCache.get(eventCode);
@@ -1950,7 +1955,7 @@
         teamCOPRs = { ...cacheData.teamCOPRs };
         metrics = [...cacheData.metrics];
         allMetricsList = getAllMetrics();
-        
+
         if (!allMetricsList.length) {
           error = "Team data loaded, but no metrics were found.";
           loading = false;
@@ -2004,7 +2009,7 @@
         loading = false;
         return;
       }
-      
+
       // ─── Cache the data ────────────────────────────────────────────────────
       singleMetricCache.setData(
         eventCode,
@@ -2016,7 +2021,7 @@
         teamCOPRs
       );
       console.log("[Cache] Saved singleMetric data to cache");
-      
+
       selectedMetric = getInitialMetric(allMetricsList);
       dataMetric = resolveDataKey(selectedMetric);
       loading = false;
@@ -2036,22 +2041,20 @@
       console.log("[EFS Worker] Web Worker terminated");
     }
   });
+  onDestroy(() => charts.forEach(chart => chart.instance?.dispose()));
+  onMount(() => refreshOnReturn("/singleMetric", eventCode, onAutoOnlyChange));
 </script>
 
 <!-- ─── Template ──────────────────────────────────────────────────────────────── -->
 
-{#if loading || efsLoading}
-  <div class="loading-spinner-overlay">
-    <div class="loading-spinner"></div>
-  </div>
-{/if}
+
 
 <div class="page-wrapper">
   <div class="header-section">
     <h1>Event View</h1>
     <p class="subtitle">FRC Team 190 - Scouting Data Analysis</p>
   </div>
-  
+
   <div class="top-controls">
     {#if loading}
       <span style="color: transparent;">Loading team data...</span>
@@ -2071,9 +2074,9 @@
         </select>
       </div>
       <div>
-        <label for="colorblind-select">Colorblind Mode:</label>
+        <label for="singleMetric-colorblind-select">Colorblind Mode:</label>
         <select
-          id="colorblind-select"
+          id="singleMetric-colorblind-select"
           bind:value={colorblindMode}
           on:change={onColorblindChange}
         >
@@ -2083,10 +2086,10 @@
         </select>
       </div>
       <div class="auto-only-toggle">
-        <label for="auto-only-checkbox">
+        <label for="singleMetric-auto-only-checkbox">
           <input
             type="checkbox"
-            id="auto-only-checkbox"
+            id="singleMetric-auto-only-checkbox"
             bind:checked={autoOnly}
             on:change={onAutoOnlyChange}
           />
@@ -2096,6 +2099,8 @@
     {/if}
   </div>
 
+    <div class="data-region" aria-busy={loading || efsLoading}>
+    {#if loading || efsLoading}<div class="section-loading"><LoadingSection label="Loading analysis" /></div>{/if}
   <!-- Normal metric grid via EventGrid component -->
   {#if !loading && !error && selectedMetric !== OPR_DISPLAY && selectedMetric !== DPR_DISPLAY && selectedMetric !== CCWM_DISPLAY}
     <EventGrid
@@ -2113,7 +2118,7 @@
 
   <!-- Power ratings use their own ag-grid instance with custom columns -->
   {#if !loading && !error && (selectedMetric === OPR_DISPLAY || selectedMetric === DPR_DISPLAY || selectedMetric === CCWM_DISPLAY)}
-    <div
+  <div
       class="grid-container ag-theme-quartz"
       bind:this={efsGridNode}
       style="height: {efsGridHeight}px;"
@@ -2287,6 +2292,7 @@
     </div>
   </div>
 </div>
+</div>
 
 <!-- svelte-ignore css_unused_selector -->
 <style>
@@ -2296,26 +2302,6 @@
     --frc-190-black: #4d4d4d;
   }
 
-  .loading-spinner-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999;
-  }
-  .loading-spinner {
-    border: 8px solid rgba(255, 255, 255, 0.3);
-    border-left-color: var(--frc-190-red);
-    border-radius: 50%;
-    width: 50px;
-    height: 50px;
-    animation: spin 1s linear infinite;
-  }
   @keyframes spin {
     to {
       transform: rotate(360deg);

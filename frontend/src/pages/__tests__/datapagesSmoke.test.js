@@ -18,7 +18,7 @@ vi.mock('echarts', () => ({
     })
 }));
 
-vi.mock('../../utils/pageLoader.js', () => ({ routes: [], warmPages: vi.fn() }));
+vi.mock('../../utils/pageLoader.js', () => ({ routes: [], warmPages: vi.fn(), loadPage: vi.fn().mockRejectedValue(new Error('not loaded in smoke test')) }));
 
 // Mock global API responses
 vi.mock('../../utils/api.js', () => ({

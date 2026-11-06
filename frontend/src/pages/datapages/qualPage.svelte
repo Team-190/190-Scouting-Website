@@ -1,4 +1,6 @@
 <script lang="ts">
+  import LoadingSection from "../../components/LoadingSection.svelte";
+  import { createDraft, readDraft } from "../../utils/drafts";
   import { onMount } from "svelte";
   import fieldImageSrc from "../../images/FieldImage.png";
   import {
@@ -29,30 +31,32 @@
     Blue: "#1f4eb8",
   };
   const eventCode = getEventCode();
+  const savedDraft = readDraft("qual", eventCode);
+  const draft = createDraft("qual", eventCode);
   const SCOUTER_INITIALS_KEY = "qualScouterInitials";
   const SCOUT_STATION_KEY = "qualScoutStation";
   const MATCH_NUMBER_KEY = "qualMatchNumber";
   const PHASE_KEY = "qualPagePhase";
-  let phase: Phase = loadSavedPhase();
-  let matchNumber = loadSavedMatchNumber();
+  let phase: Phase = savedDraft?.phase || loadSavedPhase();
+  let matchNumber = savedDraft?.matchNumber || loadSavedMatchNumber();
   let availableMatchNumbers = [1];
   let alliance = "Red";
   let teamNumber = "";
   let scouterName = loadSavedScouterInitials();
-  let selectedStation = loadSavedScoutStation();
+  let selectedStation = savedDraft?.selectedStation || loadSavedScoutStation();
   let assignedTeamNumber = "";
   let matchAlliances: MatchAssignment[] = [];
   let loadingAssignments = true;
-  let autoStartPosition = "";
+  let autoStartPosition = savedDraft?.autoStartPosition || "";
 
   let canvasEl: HTMLCanvasElement | null = null;
   let ctx: CanvasRenderingContext2D | null = null;
   let isDrawing = false;
-  let drawnPaths: Array<Array<{ x: number; y: number }>> = [];
+  let drawnPaths: Array<Array<{ x: number; y: number }>> = savedDraft?.drawnPaths || [];
   let currentPath: Array<{ x: number; y: number }> = [];
   let tool = "draw";
   let fieldImg: HTMLImageElement | null = null;
-  let fieldFlipped = false;
+  let fieldFlipped = savedDraft?.fieldFlipped || false;
 
   let quantCounters = {
     shootingBalls: 0,
@@ -60,15 +64,16 @@
     trenchFeedingBalls: 0,
     trenchCycles: 0,
     bumpCycles: 0,
+    ...savedDraft?.quantCounters,
   };
 
-  let scoutingQuestions: ScoutingQuestions = getDefaultQuestions();
+  let scoutingQuestions: ScoutingQuestions = { ...getDefaultQuestions(), ...savedDraft?.scoutingQuestions };
 
   let pitData: any = null;
   let loadingPitData = false;
   let submitting = false;
 
-  let submitStatus: null | { type: "local" | "server" | "partial"; message: string } = null;
+  let submitStatus: null | { type: "local" | "server" | "partial" | "error"; message: string } = null;
 
   function loadSavedScouterInitials() {
     try {
@@ -144,7 +149,7 @@
       availableMatchNumbers =
         totalEntries > 0 ? Array.from({ length: totalEntries }, (_, i) => i + 1) : [1];
 
-      if (!availableMatchNumbers.includes(Number(matchNumber))) {
+      if (!savedDraft && !availableMatchNumbers.includes(Number(matchNumber))) {
         matchNumber = availableMatchNumbers[0];
       }
     } catch {
@@ -187,7 +192,10 @@
 
   onMount(() => {
     loadMatchAlliances();
+    return draft.start();
   });
+  $: draft.schedule({ phase, matchNumber, selectedStation, autoStartPosition, drawnPaths,
+    fieldFlipped, quantCounters, scoutingQuestions });
 
   $: saveScouterInitials(scouterName);
   $: saveScoutStation(selectedStation);
@@ -430,6 +438,7 @@
   async function submitScouting() {
     if (submitting) return; // Prevent duplicate submissions
     submitting = true;
+    try {
 
     const normalizedPaths = fieldFlipped
       ? drawnPaths.map((path) => path.map((pt) => ({ x: 1200 - pt.x, y: pt.y })))
@@ -498,7 +507,10 @@
     submitting = false;
     
     // Scroll to top of page after submission
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    } catch (error) {
+      submitStatus = { type: "error", message: "Could not finish saving. Your draft is still here; please retry." };
+    } finally { submitting = false; }
   }
 
   function resetForm() {
@@ -527,6 +539,8 @@
     <h1>Qualitative Scouting</h1>
     <p class="subtitle">FRC Team 190 — Qual + Quant Match Scouting</p>
   </div>
+
+  {#if submitStatus?.type === "error"}<p role="alert" class="save-error">{submitStatus.message}</p>{/if}
 
   {#if phase === "auto"}
     <div class="auto-layout">
@@ -561,8 +575,8 @@
           </div>
 
           <div class="field-group">
-            <label for="match-select">Match Number</label>
-            <select id="match-select" bind:value={matchNumber} class="styled-select">
+            <label for="qualPage-match-select">Match Number</label>
+            <select id="qualPage-match-select" bind:value={matchNumber} class="styled-select">
               {#each availableMatchNumbers as num}
                 <option value={num}>Match {num}</option>
               {/each}
@@ -720,7 +734,7 @@
         </div>
       {:else if loadingPitData}
         <div class="pit-data-section">
-          <h3 class="pit-data-title">Loading pit data...</h3>
+          <LoadingSection label="Loading pit data" compact />
         </div>
       {:else if teamNumber}
         <div class="pit-data-section">

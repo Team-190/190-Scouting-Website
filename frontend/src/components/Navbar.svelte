@@ -1,5 +1,5 @@
 <script>
-  import { goto } from "@mateothegreat/svelte5-router";
+  import { goto } from "../utils/navigation";
   import { onMount } from "svelte";
   import logo from "../images/frc190_Logo.png";
   import { isSidebarOpen } from "../stores/sidebarState.js";

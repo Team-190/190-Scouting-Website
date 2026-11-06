@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { gridSortIcons } from "../utils/gridIcons";
   import {
     AllCommunityModule,
     createGrid,
@@ -56,7 +57,7 @@
 
   let gridInstance: any = null;
   let domNode: HTMLElement;
-  let gridHeight = 400;
+
   let selectedDuplicateIndexByMatch: Record<number, number> = {};
 
   // Per-metric global stats computed from allTeamsData + matches.
@@ -533,10 +534,11 @@
       },
     ];
 
-    gridHeight = rowData.length * ROW_HEIGHT + HEADER_HEIGHT;
+
 
     if (gridInstance) gridInstance.destroy();
     gridInstance = createGrid(domNode, {
+        icons: gridSortIcons,
   rowData,
   columnDefs,
   rowHeight: ROW_HEIGHT,
@@ -611,10 +613,16 @@
 <div
   class="team-grid-container ag-theme-quartz"
   bind:this={domNode}
-  style="min-height: {gridHeight}px;"
+
 ></div>
 
 <style>
+  /* Auto-height grids should fit their rows, including tables shorter than 150px. */
+  .team-grid-container :global(.ag-center-cols-viewport),
+  .team-grid-container :global(.ag-center-cols-container) {
+    min-height: 0 !important;
+  }
+
   .team-grid-container {
     width: 100%;
     background: var(--frc-190-black, #4d4d4d);

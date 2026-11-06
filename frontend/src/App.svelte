@@ -1,5 +1,6 @@
 <script>
-  import { Router } from "@mateothegreat/svelte5-router";
+  import PageHost from "./components/navigation/PageHost.svelte";
+  import SaveStatus from "./components/SaveStatus.svelte";
   import { onMount } from "svelte";
   import { isSidebarOpen } from "./stores/sidebarState.js";
   import { pushToast } from "./stores/toasts.js";
@@ -7,7 +8,7 @@
 
   import Navbar from "./components/Navbar.svelte";
   import ToastContainer from "./components/ToastContainer.svelte";
-  import { routes, warmPages } from "./utils/pageLoader";
+  import { warmPages } from "./utils/pageLoader";
 
   onMount(() => {
     warmPages();
@@ -33,7 +34,7 @@
       autoSyncInFlight = true;
       try {
         await syncSelectedEventData(eventCode);
-        pushToast("Data automatically populated.", "success", 3000);
+
       } catch (error) {
         console.error("Global auto data sync failed:", error);
         const now = Date.now();
@@ -70,9 +71,10 @@
 <!-- Navbar is fixed, so we need padding on main content -->
 <Navbar />
 <main class="page-content" class:sidebar-collapsed={!$isSidebarOpen}>
-  <Router {routes} />
+  <PageHost />
 </main>
 <ToastContainer />
+<SaveStatus />
 
 <style>
   /* Adjust for sidebar navbar */

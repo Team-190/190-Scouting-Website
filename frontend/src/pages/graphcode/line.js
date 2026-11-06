@@ -1,7 +1,7 @@
-import * as echarts from 'echarts';
+import { createDeferredChart } from '../../utils/deferredChart';
 
 export function createChart(container) {
-  const myChart = echarts.init(container);
+  const myChart = createDeferredChart(container);
   const option = {
     xAxis: { type: 'category', data: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] },
     yAxis: { type: 'value' },

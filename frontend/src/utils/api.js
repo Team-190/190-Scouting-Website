@@ -488,6 +488,7 @@ function readLocalJson(key, fallback) {
 function writeLocalJson(key, value) {
   if (!canUseLocalStorage()) return;
   localStorage.setItem(key, JSON.stringify(value));
+  if (key === PIT_QUEUE_KEY || key === QUAL_QUEUE_KEY) window.dispatchEvent(new Event("scouting-queue-changed"));
 }
 
 // Version migration: Clear stale cache when IndexedDB version bumps
@@ -643,6 +644,7 @@ export async function queuePitScoutingForSync(event, team, formData) {
   queue.push({ event, team: String(team), formData: payload, entryId });
   writeLocalJson(PIT_QUEUE_KEY, queue);
   await updatePitMirror(team, payload, event);
+  window.dispatchEvent(new CustomEvent("event-data-updated", { detail: { eventCode: event } }));
   return queue.length;
 }
 
@@ -663,6 +665,7 @@ export async function queueQualitativeScoutingForSync(
   });
   writeLocalJson(QUAL_QUEUE_KEY, queue);
   await updateQualMirror(team, match, payload, event);
+  window.dispatchEvent(new CustomEvent("event-data-updated", { detail: { eventCode: event } }));
   return queue.length;
 }
 
@@ -784,7 +787,11 @@ async function performQualQueueFlush() {
 const queueFlights = new Map();
 function flushOnce(key, task) {
   if (!queueFlights.has(key)) {
-    queueFlights.set(key, foreground(task).finally(() => queueFlights.delete(key)));
+    window.dispatchEvent(new CustomEvent("queue-sync-status", { detail: { syncing: true } }));
+    queueFlights.set(key, foreground(task).finally(() => {
+      queueFlights.delete(key);
+      window.dispatchEvent(new CustomEvent("queue-sync-status", { detail: { syncing: queueFlights.size > 0 } }));
+    }));
   }
   return queueFlights.get(key);
 }
@@ -925,6 +932,7 @@ export function refreshScoutingData(eventCode) {
     await flushOfflineScoutingQueues();
     const pit = await syncScoutingKind(eventCode, "pit");
     const qual = await syncScoutingKind(eventCode, "qual");
+    window.dispatchEvent(new CustomEvent("event-data-updated", { detail: { eventCode } }));
     return { pit, qual };
   });
 }
@@ -997,6 +1005,7 @@ async function performEventSync(eventCode, { forceFullRefresh = false } = {}) {
 
   await refreshEventCaches(eventCode);
 
+  window.dispatchEvent(new CustomEvent("event-data-updated", { detail: { eventCode } }));
   localStorage.setItem("timestamp", new Date(Date.now()).toLocaleString());
   localStorage.setItem("eventCode", eventCode);
 

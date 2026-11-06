@@ -1,8 +1,12 @@
 <script lang="ts">
+  import { refreshOnReturn } from "../../utils/pageRefresh";
+  import LoadingSection from "../../components/LoadingSection.svelte";
   import {
       AllCommunityModule,
       ModuleRegistry
   } from "ag-grid-community";
+  import { createDeferredChart } from "../../utils/deferredChart";
+  import { onDestroy } from "svelte";
   import { onMount, tick } from "svelte";
   import { v4 as uuidv4 } from "uuid";
   import fieldImageSrc from "../../images/FieldImage.png";
@@ -616,7 +620,7 @@
         teamEFS2 = null;
         return;
       }
-      
+
       const data = teamViewData
         .filter((el) => {
         const raw = el.Team || el.team;
@@ -627,7 +631,7 @@
         })
         .sort((a, b) => Number(a.Match || 0) - Number(b.Match || 0));
       const firstByMatch = getFirstRowsByMatch(data);
-      
+
       console.log(`loadTeamData: Found ${data.length} rows for team ${teamNumber}`);
       console.log(`loadTeamData: Reduced to ${firstByMatch.length} unique match rows for TeamGrid`);
 
@@ -1105,8 +1109,8 @@
     const { barOption } = await compareWithMean();
     if (avoidanceChartEl) {
       if (!avoidanceChartInstance) {
-        const echarts = await import("echarts");
-        avoidanceChartInstance = echarts.init(avoidanceChartEl);
+
+        avoidanceChartInstance = createDeferredChart(avoidanceChartEl);
       }
       avoidanceChartInstance.setOption(barOption, true);
     }
@@ -1273,7 +1277,7 @@
 
   $: if (selectedAutoPathMatch !== null) {
     redrawAutoPathCanvas(autoPathAnimationState.progress);
-    
+
     // Initialize animation state if not already done
     if (!autoPathAnimationState.frameId) {
       autoPathAnimationState.isAnimating = false;
@@ -1752,15 +1756,17 @@
       isLoading = false;
     }
   });
+  onDestroy(() => {
+    charts.forEach(chart => chart.instance?.dispose());
+    avoidanceChartInstance?.dispose();
+    if (autoPathAnimationState.frameId) cancelAnimationFrame(autoPathAnimationState.frameId);
+  });
+  onMount(() => refreshOnReturn("/teamView", eventCode, onAutoOnlyChange));
 </script>
 
 <!-- ─── Template ──────────────────────────────────────────────────────────────── -->
 
-{#if isLoading}
-  <div class="loading-spinner-overlay">
-    <div class="loading-spinner"></div>
-  </div>
-{/if}
+
 
 <div class="page-wrapper">
   <div class="header-section">
@@ -1793,9 +1799,9 @@
       </select>
     </div>
     <div>
-      <label for="colorblind-select">Colorblind Mode:</label>
+      <label for="teamView-colorblind-select">Colorblind Mode:</label>
       <select
-        id="colorblind-select"
+        id="teamView-colorblind-select"
         bind:value={colorblindMode}
         on:change={onColorblindChange}
       >
@@ -1805,10 +1811,10 @@
       </select>
     </div>
     <div class="auto-only-toggle">
-      <label for="auto-only-checkbox">
+      <label for="teamView-auto-only-checkbox">
         <input
           type="checkbox"
-          id="auto-only-checkbox"
+          id="teamView-auto-only-checkbox"
           bind:checked={autoOnly}
           on:change={onAutoOnlyChange}
         />
@@ -1833,6 +1839,8 @@
     </div>
   </div>
 
+  <div class="data-region" aria-busy={isLoading}>
+    {#if isLoading}<div class="section-loading"><LoadingSection label="Loading team data" /></div>{/if}
   {#if selectedTeam}
     <p class="team-name-display">
       {teamsMap.get(selectedTeam) ? `${selectedTeam} - ${teamsMap.get(selectedTeam)}` : ""}
@@ -1962,7 +1970,7 @@
                 const now = Date.now();
                 const elapsed = now - autoPathAnimationState.lastTime;
                 autoPathAnimationState.lastTime = now;
-                
+
                 if (autoPathAnimationState.isAnimating) {
                   autoPathAnimationState.progress += elapsed / autoPathAnimationDuration;
                   if (autoPathAnimationState.progress >= 1) {
@@ -1970,7 +1978,7 @@
                   }
                   autoPathProgress = autoPathAnimationState.progress;
                 }
-                
+
                 redrawAutoPathCanvas(autoPathAnimationState.progress);
                 autoPathAnimationState.frameId = requestAnimationFrame(animate);
               };
@@ -2201,6 +2209,7 @@
     </div>
   </div>
 </div>
+</div>
 
 <style>
   :root {
@@ -2209,26 +2218,6 @@
     --frc-190-black: #4d4d4d;
   }
 
-  .loading-spinner-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999;
-  }
-  .loading-spinner {
-    border: 0.5rem solid rgba(255, 255, 255, 0.3);
-    border-left-color: var(--frc-190-red);
-    border-radius: 50%;
-    width: 3.125rem;
-    height: 3.125rem;
-    animation: spin 1s linear infinite;
-  }
   @keyframes spin {
     to {
       transform: rotate(360deg);

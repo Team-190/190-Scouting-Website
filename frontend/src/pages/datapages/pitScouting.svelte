@@ -1,4 +1,5 @@
 <script lang="ts">
+    import { createDraft, readDraft } from "../../utils/drafts";
     import { onMount } from "svelte";
     import {
         fetchTeams,
@@ -13,6 +14,10 @@
     const boolFields = ["overBump", "throughTrench", "climbDuringAuto", "canUseHP", "canUseDepot", "canFeed"] as const;
     const plainFields = ["climbLevels", "quantityBallsHopper", "avgIntakeSpeed", "avgShootSpeed", "accuracy", "framesize", "startingHeight", "fullExtensionHeight"] as const;
 
+    const eventCode = getEventCode();
+    const savedDraft = readDraft("pit", eventCode);
+    const draft = createDraft("pit", eventCode);
+
     // Form data
     const defaultFormData = {
         teamNumber: "",
@@ -23,7 +28,7 @@
         otherNotes: "",
     };
 
-    let formData = structuredClone(defaultFormData);
+    let formData = { ...structuredClone(defaultFormData), ...savedDraft?.formData };
     let imageCompressionStatus = ""; // "compressing", "success", "done"
     let imageSize = ""; // Display compressed image size
 
@@ -32,10 +37,11 @@
 
     let fileInputNode;
 
-    const eventCode = getEventCode();
-
-    let selectedTeam = "Select a team";
+    let selectedTeam = savedDraft?.selectedTeam || "Select a team";
     let allTeams = [];
+
+    onMount(() => draft.start());
+    $: draft.schedule({ selectedTeam, formData: { ...formData, robotPicture: null } });
 
     onMount(async () => {
         const { _teamNumbers } = await fetchTeams(eventCode);
@@ -100,12 +106,14 @@
     }
 
     async function handleSubmit() {
+        if (submitting) return;
         if (!selectedTeam || selectedTeam === "Select a team") {
             submitStatus = { type: "error", message: "Please select a team number." };
             return;
         }
 
         submitting = true;
+        try {
 
         // Helper to convert boolean to Y/N
         const boolToYN = (val) => val === true ? "Y" : val === false ? "N" : "";
@@ -118,7 +126,8 @@
 
         const apiFormDataWithImage = {
             ...apiFormData,
-            ...(formData.robotPicture
+            otherNotes: formData.otherNotes,
+            ...(formData.robotPicturePreview
                 ? { robotPicturePreview: formData.robotPicturePreview }
                 : { robotPicturePreview: "" })
         };
@@ -148,7 +157,9 @@
             submitStatus = { type: "local", message: `✓ Data saved. Will upload when connection is restored.` };
         }
         clearForm();
-        submitting = false;
+        } catch (error) {
+            submitStatus = { type: "error", message: "Could not finish saving. Your draft is still here; please retry." };
+        } finally { submitting = false; }
     }
 
 </script>
@@ -176,7 +187,7 @@
             <div class="form-group">
                 <label for="team-number">Team Number</label>
 
-                <select id="teams" name="teams" bind:value={selectedTeam}>
+                <select id="pitScouting-teams" name="teams" bind:value={selectedTeam}>
                     <option value="Select a team">Select a team</option>
                     {#each allTeams as team}
                         <option value={team.number}>{team.number}{team.hasData ? "  ✅" : ""}</option>

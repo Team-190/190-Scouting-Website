@@ -103,8 +103,8 @@
 </script>
 
 <div class="inputSection">
-  <label for="teams">Choose a Team:</label>
-  <select id="teams" name="teams" bind:value={selectedTeam}>
+  <label for="ananthPage-teams">Choose a Team:</label>
+  <select id="ananthPage-teams" name="teams" bind:value={selectedTeam}>
     <option value="Select a team">Select a team</option>
     {#each allTeams as team}
       <option value={team}>{team}</option>

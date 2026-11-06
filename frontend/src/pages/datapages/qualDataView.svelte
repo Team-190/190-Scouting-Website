@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { refreshOnReturn } from "../../utils/pageRefresh";
+  import LoadingSection from "../../components/LoadingSection.svelte";
   import { onMount } from "svelte";
   import {
     COLOR_MODES,
@@ -287,7 +289,7 @@
 
     // Handle both old and new data structures
     let autoPath = null;
-    
+
     // New nested structure
     if (matchRow?.qual?.auto?.path && Array.isArray(matchRow.qual.auto.path)) {
       autoPath = matchRow.qual.auto.path;
@@ -296,7 +298,7 @@
     else if (matchRow?.AutoPath && Array.isArray(matchRow.AutoPath)) {
       autoPath = matchRow.AutoPath;
     }
-    
+
     if (autoPath) {
       const allPaths = autoPath.filter(
         (path: any[]) => Array.isArray(path) && path.length >= 2,
@@ -488,7 +490,7 @@
     defenseEffectiveness: "Defense Effectiveness",
     defenseComments: "Defense Comments",
     avoidanceTypes: "Avoidance Types",
-    avoidanceEffectiveness: "Avoidance Effectiveness", 
+    avoidanceEffectiveness: "Avoidance Effectiveness",
     avoidanceComments: "Avoidance Comments",
     matchEvents: "Match Events",
     otherNotes: "Notes",
@@ -499,7 +501,7 @@
     "defenseTypes",
     "defenseEffectiveness",
     "defenseComments",
-    "avoidanceTypes", 
+    "avoidanceTypes",
     "avoidanceEffectiveness",
     "avoidanceComments",
     "matchEvents",
@@ -558,7 +560,7 @@
     // Handle new nested structure with qual/quant sections
     if (row.qual && typeof row.qual === 'object') {
       const normalized: Record<string, any> = {};
-      
+
       // Extract qual section data only
       if (row.qual.auto && typeof row.qual.auto === 'object') {
         if (row.qual.auto.startPosition) {
@@ -568,7 +570,7 @@
           normalized.AutoPath = row.qual.auto.path;
         }
       }
-      
+
       if (row.qual.defense && typeof row.qual.defense === 'object') {
         if (row.qual.defense.types && Array.isArray(row.qual.defense.types)) {
           normalized.defenseTypes = row.qual.defense.types;
@@ -580,7 +582,7 @@
           normalized.defenseComments = row.qual.defense.comments;
         }
       }
-      
+
       if (row.qual.avoidance && typeof row.qual.avoidance === 'object') {
         if (row.qual.avoidance.types && Array.isArray(row.qual.avoidance.types)) {
           normalized.avoidanceTypes = row.qual.avoidance.types;
@@ -592,32 +594,32 @@
           normalized.avoidanceComments = row.qual.avoidance.comments;
         }
       }
-      
+
       if (row.qual.matchEvents && Array.isArray(row.qual.matchEvents)) {
         normalized.matchEvents = row.qual.matchEvents;
       }
-      
+
       if (row.qual.comments) {
         normalized.otherNotes = row.qual.comments;
       }
-      
+
       // DO NOT extract quant section data - we only want qual data on this page
       return normalized;
     }
-    
+
     // For old flat structure, filter out quant-related fields
     const filtered: Record<string, any> = {};
     const quantFields = [
       'fuelScored', 'feedingBalls', 'trenchFeedVolume', 'bumpFeedVolume',
       'shootingBalls', 'trenchCycles', 'bumpCycles'
     ];
-    
+
     for (const [key, value] of Object.entries(row)) {
       if (!quantFields.includes(key)) {
         filtered[key] = value;
       }
     }
-    
+
     return filtered;
   }
 
@@ -626,7 +628,7 @@
   ): Array<[string, string]> {
     // Normalize data to handle both old and new formats
     const normalizedRow = normalizeDataForDisplay(row);
-    
+
     return Object.entries(normalizedRow)
       .filter(
         ([key, value]) =>
@@ -807,18 +809,14 @@
       }
     }
   }
+  onMount(() => refreshOnReturn("/qualDataView", eventCode, displayCachedScouting));
 </script>
 
 <svelte:window on:click={handleOutsideClick} />
 
 <!-- ─── Template ──────────────────────────────────────────────────────────────── -->
 
-{#if isLoading}
-  <div class="loading-overlay">
-    <div class="spinner"></div>
-    <span class="loading-text">Loading scouting data…</span>
-  </div>
-{/if}
+
 
 <div class="page-wrapper">
   <div class="header-section">
@@ -826,6 +824,8 @@
     <p class="subtitle">FRC Team 190 — Pit & Qualitative Data</p>
   </div>
 
+  <div class="data-region" aria-busy={isLoading}>
+    {#if isLoading}<div class="section-loading"><LoadingSection label="Loading scouting data" /></div>{/if}
   {#if !isLoading}
     <!-- Controls bar -->
     <div class="controls-bar">
@@ -1294,6 +1294,7 @@
     {/if}
   {/if}
 </div>
+</div>
 
 <style>
   :root {
@@ -1318,30 +1319,6 @@
     box-sizing: border-box;
   }
 
-  .loading-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-    z-index: 9999;
-  }
-  .spinner {
-    width: 52px;
-    height: 52px;
-    border: 6px solid rgba(255, 255, 255, 0.2);
-    border-left-color: var(--red);
-    border-radius: 50%;
-    animation: spin 0.9s linear infinite;
-  }
-  .loading-text {
-    color: white;
-    font-size: 1rem;
-    font-weight: 600;
-  }
   @keyframes spin {
     to {
       transform: rotate(360deg);

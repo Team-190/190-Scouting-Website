@@ -37,12 +37,14 @@ const server = http.createServer(async (req, res) => {
         if (body.__compressed) body = JSON.parse(gunzipSync(Buffer.from(body.data, 'base64')).toString());
         if (url.pathname === '/api/syncScouting') {
           const upserts = body.kind === 'pit' ? Object.fromEntries(teams.map(team =>
-            [JSON.stringify([team, '', `pit-${team}`]), pit[team][0]])) : {};
+            [JSON.stringify([team, '', `pit-${team}`]), pit[team][0]])) : Object.fromEntries(teams.map((team, index) =>
+            [JSON.stringify([team, '1', `qual-${team}`]), { _entryId: `qual-${team}`, Team: team, Match: 1, quant: { bumpCycles: index + 1, shootingBalls: index * 5 } }]));
           value = { upserts, deleted: [] };
         }
       } else {
         if (url.pathname === '/api/getEvents') value = [{ eventCode: '2026test', name: 'Offline Test Event' }];
         if (url.pathname === '/api/getAllData') value = { data: [] };
+        if (url.pathname === '/api/getOPR') value = { oprs: Object.fromEntries(teams.map((team, index) => [`frc${team}`, 100 + index])), dprs: {}, ccwms: {} };
         if (url.pathname === '/api/getTeams') value = { _teams: Object.fromEntries(teams.map(team => [team, `Team ${team}`])), _teamNumbers: teams.map(Number) };
         if (url.pathname === '/api/getMatchAlliances') value = matches;
         if (url.pathname === '/api/getPitScoutingTeam') { pitTeamsFetched.add(url.searchParams.get('team')); value = pit[url.searchParams.get('team')] || []; }
@@ -125,9 +127,84 @@ try {
   await evaluate(`document.querySelector('.offline-download').click()`);
   await waitFor(`document.querySelector('.offline-progress')?.textContent.includes('ready for offline use')`, 'offline preparation');
   console.log('PASS active page loaded first and explicit offline download completed under throttling');
+  await evaluate(`document.querySelector('[aria-label="Toggle sidebar"]').click()`);
+  await evaluate(`[...document.querySelectorAll('nav button')].find(button => button.textContent.includes('View Data')).click()`);
+  await evaluate(`[...document.querySelectorAll('nav .dropdown-item')].find(button => button.textContent.trim() === 'Event View').click()`);
+  await waitFor(`!!document.querySelector('#metric-select')`, 'metric selector');
+  await evaluate(`(() => { const select = document.querySelector('#metric-select'); select.value = 'bumpCycles'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await waitFor(`!!document.querySelector('.route-page:not([hidden]) .event-grid-container .ag-row')`, 'event table');
+  const tableWidth = await evaluate(`(() => {
+    const page = document.querySelector('.route-page:not([hidden]) .page-wrapper');
+    const table = page.querySelector('.event-grid-container');
+    const team = table.querySelector('.ag-cell[col-id="team"]');
+    return { table: table.getBoundingClientRect().width, available: page.clientWidth - 40, team: team.getBoundingClientRect().width };
+  })()`);
+  assert.ok(tableWidth.table >= tableWidth.available * 0.95, 'Event table must fill the available page width');
+  assert.ok(tableWidth.team >= 100, 'Team numbers must retain their minimum column width');
+  console.log('PASS Event View table fills the page width and preserves readable team columns');
+  await evaluate(`(() => { const select = document.querySelector('#metric-select'); select.value = [...select.options].find(option => option.value.startsWith('OPR (')).value; select.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await waitFor(`!!document.querySelector('.route-page:not([hidden]) .ag-header-cell[col-id="opr"][aria-sort="descending"] svg')`, 'descending sort arrow');
+  const sortPath = async () => evaluate(`[...document.querySelectorAll('.route-page:not([hidden]) .ag-header-cell[col-id="opr"] .ag-sort-indicator-container svg')].find(svg => svg.getClientRects().length > 0).querySelector('path').getAttribute('d')`);
+  assert.equal(await sortPath(), 'M8 13V3M3 8l5-5 5 5');
+  await evaluate(`document.querySelector('.route-page:not([hidden]) .ag-header-cell[col-id="opr"] .ag-header-cell-label').click()`);
+  await waitFor(`!!document.querySelector('.route-page:not([hidden]) .ag-header-cell[col-id="opr"][aria-sort="ascending"] svg')`, 'ascending sort arrow');
+  assert.equal(await sortPath(), 'M8 3v10M3 8l5 5 5-5');
+  console.log('PASS sortable column shows clear SVG arrows for descending and ascending order');
+  await evaluate(`document.querySelector('[aria-label="Toggle sidebar"]').click()`);
+  await evaluate(`[...document.querySelectorAll('nav button')].find(button => button.textContent.includes('View Data')).click()`);
+  await evaluate(`[...document.querySelectorAll('nav .dropdown-item')].find(button => button.textContent.trim() === 'Team View').click()`);
+  await waitFor(`document.querySelector('.route-page:not([hidden]) .team-grid-container .ag-center-cols-container')?.children.length >= 4`, 'team table');
+  const teamHeight = await evaluate(`(() => {
+    const grid = document.querySelector('.route-page:not([hidden]) .team-grid-container');
+    const rows = [...grid.querySelectorAll('.ag-center-cols-container .ag-row')];
+    const lastRow = rows.reduce((bottom, row) => Math.max(bottom, row.getBoundingClientRect().bottom), 0);
+    return { bottomGap: grid.getBoundingClientRect().bottom - lastRow };
+  })()`);
+  assert.ok(teamHeight.bottomGap <= 22, 'Team table must end after its rows and optional scrollbar, without a blank body');
+  console.log('PASS Team View table fits its rows without an empty area below');
+  const navigateScouting = async label => {
+    await evaluate(`document.querySelector('[aria-label="Toggle sidebar"]').click()`);
+    await evaluate(`[...document.querySelectorAll('nav button')].find(button => button.textContent.includes('Data Collection')).click()`);
+    await evaluate(`[...document.querySelectorAll('nav .dropdown-item')].find(button => button.textContent.trim() === ${JSON.stringify(label)}).click()`);
+    const destination = label === 'Qual Scouting' ? '/qualPage' : '/pitScouting';
+    await waitFor(`location.pathname === '${destination}' && !!document.querySelector('.route-page:not([hidden]) input')`, 'scouting navigation');
+  };
+  await navigateScouting('Qual Scouting');
+  await waitFor(`document.querySelector('.route-page:not([hidden]) .assignment-note')?.textContent.includes('190')`, 'robot assignment');
+  await evaluate(`(() => {
+    const input = document.querySelector('#scouter-name'); input.value = 'QA'; input.dispatchEvent(new Event('input', { bubbles: true }));
+    const start = document.querySelector('#auto-start'); start.value = 'Near Trench'; start.dispatchEvent(new Event('change', { bubbles: true }));
+    const canvas = document.querySelector('.route-page:not([hidden]) canvas'); const rect = canvas.getBoundingClientRect();
+    for (const [type, offset] of [['mousedown', 30], ['mousemove', 60], ['mouseup', 60]]) {
+      canvas.dispatchEvent(new MouseEvent(type, { clientX: rect.left + offset, clientY: rect.top + 30, bubbles: true, cancelable: true }));
+    }
+    window.scrollTo(0, 250);
+  })()`);
+  await waitFor(`JSON.parse(localStorage.getItem('draft:qual:2026test') || '{}').drawnPaths?.length > 0`, 'drawing draft save');
+  const previousScroll = await evaluate('window.scrollY');
+  await navigateScouting('Pit Scouting');
+  await evaluate(`(() => { const input = document.querySelector('#other-notes'); input.value = 'Retained pit notes'; input.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await navigateScouting('Qual Scouting');
+  assert.equal(await evaluate(`document.querySelector('#scouter-name').value`), 'QA');
+  assert.equal(await evaluate(`document.querySelector('#auto-start').value`), 'Near Trench');
+  assert.ok(Math.abs(await evaluate('window.scrollY') - previousScroll) < 3, 'Restore the previous scroll position');
+  await evaluate('history.back()');
+  await waitFor(`location.pathname === '/pitScouting' && !document.querySelector('#other-notes').closest('[hidden]')`, 'back navigation');
+  assert.equal(await evaluate(`document.querySelector('#other-notes').value`), 'Retained pit notes');
+  await evaluate('history.forward()');
+  await waitFor(`location.pathname === '/qualPage' && !document.querySelector('#scouter-name').closest('[hidden]')`, 'forward navigation');
+  console.log('PASS page switching and Back/Forward preserve drafts, drawing, controls, and scroll');
+  await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+  await evaluate(`window.pageFadeCalls = 0; window.originalAnimate = Element.prototype.animate; Element.prototype.animate = function(...args) { window.pageFadeCalls++; return window.originalAnimate.apply(this, args); };`);
+  await navigateScouting('Pit Scouting'); await navigateScouting('Qual Scouting');
+  assert.equal(await evaluate('window.pageFadeCalls'), 0, 'Reduced motion disables page fades');
+  await evaluate('Element.prototype.animate = window.originalAnimate');
+  console.log('PASS reduced-motion preference disables page transitions');
   await send('Network.emulateNetworkConditions', { offline: true, latency: 0, downloadThroughput: 0, uploadThroughput: 0 });
   await send('Page.navigate', { url: `${origin}/qualPage` });
   await waitFor(`!!document.querySelector('canvas') && document.body.textContent.includes('190')`, 'offline scouting page');
+  assert.equal(await evaluate(`document.querySelector('#scouter-name').value`), 'QA');
+  assert.equal(await evaluate(`document.querySelector('#auto-start').value`), 'Near Trench');
   assert.equal(apiRequests.includes('/api/getPitScouting'), false, 'Scouting must not fetch all-event pit data');
   assert.equal(errors.length, 0, errors.join('; '));
   console.log('PASS offline deep link loads the scouting form with cached match assignment');

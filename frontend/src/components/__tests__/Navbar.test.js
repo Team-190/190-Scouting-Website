@@ -1,12 +1,12 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/svelte';
 import { vi } from 'vitest';
 import Navbar from '../Navbar.svelte';
-import { goto } from '@mateothegreat/svelte5-router';
+import { goto } from '../../utils/navigation';
 import { isSidebarOpen } from '../../stores/sidebarState.js';
 import * as api from '../../utils/api.js';
 
 // Mock the router goto
-vi.mock('@mateothegreat/svelte5-router', () => ({
+vi.mock('../../utils/navigation', () => ({
     goto: vi.fn()
 }));
 

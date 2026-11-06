@@ -1,4 +1,5 @@
 <script>
+
     import { onMount, tick } from "svelte";
     import {
         fetchEventDetails,
@@ -10,7 +11,6 @@
     import { downloadOfflineAssets } from "../utils/offline";
     import { clearAllStores } from '../utils/indexedDB';
     import { pushToast } from "../stores/toasts";
-    
 
     let eventCode = localStorage.getItem("eventCode");
     let isLoading = false;
@@ -181,7 +181,7 @@
                 matchesUntilOurs: matchesUntil,
                 minutesUntilOurMatch: ourNextMatch ? minutesUntil(getScheduledTimestamp(ourNextMatch)) : "—",
                 status: ourNextMatch
-                    ? `Using ${details?.name || eventCode} schedule from TBA cache. (Made by Atharv)`
+                    ? `Using ${details?.name || eventCode} schedule from TBA cache.`
                     : "Team 190 is not in this event schedule.",
             };
         } catch (error) {
@@ -291,14 +291,14 @@
             const res = await fetchEvents();
             if (res.ok) {
                 const eventsFromDb = await res.json();
-                
+
                 // Save event code -> name mapping to localStorage for offline reference
                 const eventMapping = {};
                 eventsFromDb.forEach(event => {
                     eventMapping[event.eventCode] = event.name;
                 });
                 localStorage.setItem("eventCodeToName", JSON.stringify(eventMapping));
-                
+
                 dbEvents = eventsFromDb;
             } else {
                 throw new Error("Failed to fetch events");
@@ -329,11 +329,7 @@
     });
 </script>
 
-{#if isLoading}
-    <div class="loading-spinner-overlay">
-        <div class="loading-spinner"></div>
-    </div>
-{/if}
+
 
 <div class="container">
     <div class="button-container">
@@ -373,6 +369,7 @@
             <span>Auto Get Data every minute</span>
         </label>
 
+        <div class="home-work-status" role="status" aria-live="polite">{isLoading ? "Refreshing event data..." : ""}</div>
         <button class="offline-download" onclick={downloadEventOffline}
             disabled={!eventCode || downloadingOffline || isLoading || isAutoSyncing}>
             {downloadingOffline ? "Downloading..." : "Download event for offline use"}
@@ -395,6 +392,7 @@
 </div>
 
 <style>
+    .home-work-status { min-height: 1.25rem; font-size: .85rem; }
     .offline-download {
         margin-top: 0.75rem;
         padding: 0.65rem 1rem;
@@ -563,34 +561,11 @@
         color: #333 !important;
     }
 
-    .loading-spinner-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.5);
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        z-index: 9999;
-    }
-
-    .loading-spinner {
-        border: 0.5rem solid rgba(255, 255, 255, 0.3);
-        border-left-color: var(--frc-190-red);
-        border-radius: 50%;
-        width: 3.125rem;
-        height: 3.125rem;
-        animation: spin 1s linear infinite;
-    }
-
     @keyframes spin {
         to {
             transform: rotate(360deg);
         }
     }
-
 
     .button-container {
         display: flex;

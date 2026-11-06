@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { gridSortIcons } from "../utils/gridIcons";
   import {
     AllCommunityModule,
     createGrid,
@@ -301,7 +302,7 @@
       field: "team",
       pinned: "left",
       width: 100,
-      minwidth: 100,
+      minWidth: 100,
       headerClass: "header-center",
       cellClass: "cell-center",
       cellStyle: (params: any) => ({
@@ -620,6 +621,7 @@
       gridApi.setGridOption("rowData", rowData);
     } else {
       gridApi = createGrid(domNode, {
+        icons: gridSortIcons,
         rowData,
         columnDefs,
         rowHeight: ROW_HEIGHT,

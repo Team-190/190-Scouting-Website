@@ -1,4 +1,5 @@
 <script>
+  import LoadingSection from "../components/LoadingSection.svelte";
   import { decompressData } from "../utils/compression.js";
   import { flushOfflineScoutingQueues, syncServerEventJsons } from "../utils/api";
   import { pushToast } from "../stores/toasts";
@@ -130,10 +131,10 @@
 
     try {
         isLoading = true;
-        
+
         // Set a flag to indicate we're clearing (prevents auto-fetch on reload)
         localStorage.setItem("__clearingData", "true");
-        
+
         // Close both open connections
         if (db && typeof db.close === "function") {
             db.close();
@@ -154,13 +155,13 @@
                         // Retry logic for blocked deletes
                         let retries = 0;
                         const maxRetries = 5;
-                        
+
                         while (retries < maxRetries) {
                             try {
                                 await new Promise((resolve, reject) => {
                                     const request = indexedDB.deleteDatabase(dbInfo.name);
                                 let resolved = false;
-                                
+
                                 // Timeout: if blocked for too long, assume it will complete eventually
                                 const timeout = setTimeout(() => {
                                     if (!resolved) {
@@ -169,7 +170,7 @@
                                         resolve();
                                     }
                                 }, 1000);
-                                
+
                                 request.onsuccess = () => {
                                     if (!resolved) {
                                         resolved = true;
@@ -178,7 +179,7 @@
                                         resolve();
                                     }
                                 };
-                                
+
                                 request.onerror = () => {
                                     if (!resolved) {
                                         resolved = true;
@@ -187,12 +188,12 @@
                                         reject(request.error);
                                     }
                                 };
-                                
+
                                 request.onblocked = () => {
                                     console.warn(`Delete blocked for ${dbInfo.name}, will retry...`);
                                 };
                             });
-                            
+
                             break; // Success, exit retry loop
                         } catch (err) {
                             retries++;
@@ -215,13 +216,13 @@
                 // Fallback: delete known database
                 let retries = 0;
                 const maxRetries = 5;
-                
+
                 while (retries < maxRetries) {
                     try {
                         await new Promise((resolve, reject) => {
                             const request = indexedDB.deleteDatabase("scoutingDB");
                             let resolved = false;
-                            
+
                             // Timeout: if blocked for too long, assume it will complete eventually
                             const timeout = setTimeout(() => {
                                 if (!resolved) {
@@ -230,7 +231,7 @@
                                     resolve();
                                 }
                             }, 1000);
-                            
+
                             request.onsuccess = () => {
                                 if (!resolved) {
                                     resolved = true;
@@ -239,7 +240,7 @@
                                     resolve();
                                 }
                             };
-                            
+
                             request.onerror = () => {
                                 if (!resolved) {
                                     resolved = true;
@@ -267,7 +268,7 @@
         const eventCode = localStorage.getItem("eventCode");
         localStorage.clear();
         sessionStorage.clear();
-        
+
         // Restore the clearing flag
         localStorage.setItem("__clearingData", "true");
         if (eventCode) localStorage.setItem("__clearedEventCode", eventCode);
@@ -457,9 +458,7 @@
 
 <div class="debug-page">
   {#if isLoading}
-    <div class="loading-spinner-overlay">
-      <div class="loading-spinner"></div>
-    </div>
+    <LoadingSection label="Working" compact />
   {/if}
   <header>
     <h1>Debug Page</h1>
@@ -736,26 +735,6 @@
     border: 1px solid rgba(200, 27, 0, 0.35);
   }
 
-  .loading-spinner-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 9999;
-  }
-  .loading-spinner {
-    border: 0.5rem solid rgba(255, 255, 255, 0.3);
-    border-left-color: var(--frc-190-red);
-    border-radius: 50%;
-    width: 3.125rem;
-    height: 3.125rem;
-    animation: spin 1s linear infinite;
-  }
   @keyframes spin {
     to {
       transform: rotate(360deg);

@@ -207,3 +207,26 @@ button:focus-visible {
     font-size: 2rem;
   }
 }
+
+/* Comfortable touch controls and clear keyboard focus across scouting pages. */
+#app { padding-bottom: 40px; }
+button, input, select, textarea { touch-action: manipulation; }
+button:active:not(:disabled), [role="button"]:active { filter: brightness(.9); }
+:where(button, input, select, textarea, a):focus-visible { outline: 3px solid #e9aa3c; outline-offset: 3px; }
+@media (pointer: coarse) {
+  button, select, input:not([type="checkbox"]):not([type="radio"]), [role="button"] { min-height: 44px; }
+  button, [role="button"] { min-width: 44px; }
+  input[type="checkbox"], input[type="radio"] { width: 24px; height: 24px; }
+}
+@media (max-width: 768px) {
+  .submit-section { position: sticky; bottom: 40px; z-index: 20; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+@media (max-width: 768px) {
+  .teleop-actions { position: sticky; bottom: 40px; z-index: 20; background: #242424; padding: .7rem; border-radius: .5rem; }
+}
+.data-region { position: relative; width: 100%; min-width: 0; min-height: 160px; }
+.section-loading { position: absolute; inset: 0 0 auto; z-index: 2; pointer-events: none; }
+.section-loading .loading-section { margin: 0; background: #303030; color: #fafafa; }
